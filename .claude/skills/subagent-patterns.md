@@ -1,5 +1,10 @@
 # Coordinate Subagents
 
+> **Note:** Some examples below reference archived PowerShell starter-kit
+> scripts (`Find-*.ps1`, `pwsh -File scripts/...`). The methodology is
+> current; the specific commands are not — swap them for `motherbrain`
+> CLI equivalents in practice.
+
 When a workflow has multiple independent concerns, spawn subagents to run them in parallel
 rather than serializing. This skill documents the three spawn patterns used in this project,
 when to use them vs. running inline, and how to handle convergence.

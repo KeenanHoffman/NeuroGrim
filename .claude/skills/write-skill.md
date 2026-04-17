@@ -1,5 +1,10 @@
 # Write a Skill
 
+> **Note:** Some examples below reference archived PowerShell starter-kit
+> scripts (`Find-*.ps1`, `pwsh -File scripts/...`). The methodology is
+> current; the specific commands are not — swap them for `motherbrain`
+> CLI equivalents in practice.
+
 Use this skill when creating a new skill file or substantially revising an existing one.
 Writing a well-structured skill ensures future agents (and humans) can reliably trigger,
 understand, and follow the guidance it contains.

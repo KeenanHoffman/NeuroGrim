@@ -1,5 +1,10 @@
 # Plan Critic
 
+> **Note:** Some examples below reference archived PowerShell starter-kit
+> scripts (`Find-*.ps1`, `pwsh -File scripts/...`). The methodology is
+> current; the specific commands are not — swap them for `motherbrain`
+> CLI equivalents in practice.
+
 Use this skill before implementing any plan. The plan critic performs an adversarial review
 of a plan file — surfacing pitfalls, missing rollback paths, gate gaps, and compatibility
 risks before a single line of code is written or a single `apply` is run.

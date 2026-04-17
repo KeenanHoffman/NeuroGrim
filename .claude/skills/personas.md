@@ -1,5 +1,10 @@
 # Agent Personas
 
+> **Note:** Some examples below reference archived PowerShell starter-kit
+> scripts (`Find-*.ps1`, `pwsh -File scripts/...`). The methodology is
+> current; the specific commands are not — swap them for `motherbrain`
+> CLI equivalents in practice.
+
 Use this skill when an agent needs to adopt a named operational mode for a specific task —
 or when you want to understand why an agent is communicating in a particular way. Personas
 make the operator agent's mindset explicit and predictable, especially when subagents need to
