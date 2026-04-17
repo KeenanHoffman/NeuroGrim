@@ -337,6 +337,14 @@ impl JsonRpcTransport {
     }
 }
 
+// Shared error message for all three Transport methods on JsonRpcTransport.
+// Returning a typed error (rather than `todo!()` panicking) means a caller
+// that constructs this variant by mistake gets a recoverable failure instead
+// of a process abort. The spec permits JSON-RPC (§13.5) but doesn't require
+// an implementation; v1 ships HTTP+SSE only.
+const JSONRPC_UNIMPL: &str =
+    "JSON-RPC transport (spec §13.5) is Permitted but not implemented in v1; use HTTP+SSE";
+
 #[async_trait]
 impl Transport for JsonRpcTransport {
     async fn post_task(
@@ -344,7 +352,7 @@ impl Transport for JsonRpcTransport {
         _endpoint: &Url,
         _envelope: &A2aEnvelope,
     ) -> Result<TaskAccepted, A2aError> {
-        todo!("JSON-RPC transport is a v1 stub; spec §13.5 marks it Permitted, not RECOMMENDED")
+        Err(A2aError::Transport(JSONRPC_UNIMPL.to_string()))
     }
 
     async fn poll_task(
@@ -352,7 +360,7 @@ impl Transport for JsonRpcTransport {
         _endpoint: &Url,
         _task_id: &str,
     ) -> Result<Option<A2aEnvelope>, A2aError> {
-        todo!("JSON-RPC transport is a v1 stub")
+        Err(A2aError::Transport(JSONRPC_UNIMPL.to_string()))
     }
 
     async fn stream_task(
@@ -361,10 +369,9 @@ impl Transport for JsonRpcTransport {
         _task_id: &str,
     ) -> Result<EnvelopeStream, A2aError> {
         // JSON-RPC has no native streaming semantics; spec G.6 only defines
-        // `a2a.tasks.create` and `a2a.tasks.get`. A real impl would likely
-        // return an immediate "not supported" error rather than todo!(), but
-        // v1 treats the whole transport as a placeholder.
-        todo!("JSON-RPC transport is a v1 stub; no streaming in spec G.6")
+        // `a2a.tasks.create` and `a2a.tasks.get`. Return a typed error rather
+        // than panic so a misconfigured caller gets a recoverable failure.
+        Err(A2aError::Transport(JSONRPC_UNIMPL.to_string()))
     }
 }
 
@@ -385,6 +392,27 @@ mod tests {
     fn jsonrpc_transport_constructs() {
         let _t = JsonRpcTransport::new();
         let _t2 = JsonRpcTransport::default();
+    }
+
+    #[tokio::test]
+    async fn jsonrpc_transport_returns_typed_error_not_panic() {
+        // Regression guard: earlier revisions used `todo!()` here, which
+        // panicked and aborted the process. The v1 stub must return a typed
+        // error so a misconfigured caller gets a recoverable failure.
+        use crate::envelope::MessageType;
+        let t = JsonRpcTransport::new();
+        let endpoint = Url::parse("http://peer.example/").unwrap();
+        let env = A2aEnvelope::new(
+            "test-brain",
+            MessageType::SnapshotRequested,
+            serde_json::json!({}),
+        );
+        let res = t.post_task(&endpoint, &env).await;
+        assert!(matches!(res, Err(A2aError::Transport(_))));
+        let res = t.poll_task(&endpoint, "id").await;
+        assert!(matches!(res, Err(A2aError::Transport(_))));
+        let res = t.stream_task(&endpoint, "id").await;
+        assert!(matches!(res, Err(A2aError::Transport(_))));
     }
 
     #[test]

@@ -22,11 +22,11 @@ tools, cross-domain correlation, trajectory intelligence, and gated governance.
 ```bash
 # Rust Brain engine tests (primary test suite)
 cd motherbrain
-cargo test
+cargo test --workspace --all-targets
 
-# Legacy PowerShell starter kit tests
-cd starter-kit
-pwsh -NonInteractive -Command "Invoke-Pester scripts/verify/starter-kit.Tests.ps1 -Output Detailed"
+# Python SDK tests
+cd ../sdk-python
+py -3 -m pytest tests/
 ```
 
 ## Skills Index
