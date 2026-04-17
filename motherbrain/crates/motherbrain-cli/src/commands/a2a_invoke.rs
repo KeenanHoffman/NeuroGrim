@@ -39,11 +39,7 @@ pub fn parse_message_type(s: &str) -> Result<MessageType> {
 }
 
 /// Entry point for the `a2a-invoke` subcommand.
-pub async fn run(
-    peer_url: String,
-    message_type: String,
-    payload: Option<String>,
-) -> Result<()> {
+pub async fn run(peer_url: String, message_type: String, payload: Option<String>) -> Result<()> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -51,8 +47,7 @@ pub async fn run(
         )
         .try_init();
 
-    let url = Url::parse(&peer_url)
-        .with_context(|| format!("invalid peer URL {peer_url:?}"))?;
+    let url = Url::parse(&peer_url).with_context(|| format!("invalid peer URL {peer_url:?}"))?;
 
     let mt = parse_message_type(&message_type)?;
     let payload_value: serde_json::Value = match payload {

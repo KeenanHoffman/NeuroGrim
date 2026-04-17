@@ -10,7 +10,10 @@ pub async fn run(registry_path: &str) -> Result<()> {
     registry.validate()?;
 
     let registry_dir = Path::new(registry_path).parent().unwrap_or(Path::new("."));
-    let project_root = registry_dir.parent().unwrap_or(Path::new(".")).to_path_buf();
+    let project_root = registry_dir
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf();
 
     let server = BrainServer::new(registry, project_root);
     eprintln!("MotherBrain MCP server starting on stdio...");

@@ -154,42 +154,48 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Score { registry, plain, hat, persona } => {
-            commands::score::run(&registry, plain, hat, persona).await
-        }
-        Commands::Agent { registry, hat, persona } => {
-            commands::agent::run(&registry, hat, persona).await
-        }
-        Commands::Health { registry, plain, hat, persona } => {
-            commands::health::run(&registry, hat, persona, plain).await
-        }
-        Commands::Trend { registry, plain } => {
-            commands::trend::run(&registry, plain).await
-        }
-        Commands::Validate { registry } => {
-            commands::validate::run(&registry).await
-        }
-        Commands::Serve { registry } => {
-            commands::serve::run(&registry).await
-        }
-        Commands::Sensory { name, project_root } => {
-            run_sensory(&name, &project_root).await
-        }
-        Commands::Init { project_root, output, yes } => {
-            commands::init::run(&project_root, &output, yes).await
-        }
-        Commands::Awareness { project_root, subcommand } => {
-            commands::awareness::run(&project_root, subcommand).await
-        }
-        Commands::A2aServe { port, bind, project_root, agent_card } => {
-            commands::a2a_serve::run(port, bind, project_root, agent_card).await
-        }
-        Commands::A2aInvoke { peer_url, message_type, payload } => {
-            commands::a2a_invoke::run(peer_url, message_type, payload).await
-        }
-        Commands::A2aDiscover { peer_url } => {
-            commands::a2a_discover::run(peer_url).await
-        }
+        Commands::Score {
+            registry,
+            plain,
+            hat,
+            persona,
+        } => commands::score::run(&registry, plain, hat, persona).await,
+        Commands::Agent {
+            registry,
+            hat,
+            persona,
+        } => commands::agent::run(&registry, hat, persona).await,
+        Commands::Health {
+            registry,
+            plain,
+            hat,
+            persona,
+        } => commands::health::run(&registry, hat, persona, plain).await,
+        Commands::Trend { registry, plain } => commands::trend::run(&registry, plain).await,
+        Commands::Validate { registry } => commands::validate::run(&registry).await,
+        Commands::Serve { registry } => commands::serve::run(&registry).await,
+        Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
+        Commands::Init {
+            project_root,
+            output,
+            yes,
+        } => commands::init::run(&project_root, &output, yes).await,
+        Commands::Awareness {
+            project_root,
+            subcommand,
+        } => commands::awareness::run(&project_root, subcommand).await,
+        Commands::A2aServe {
+            port,
+            bind,
+            project_root,
+            agent_card,
+        } => commands::a2a_serve::run(port, bind, project_root, agent_card).await,
+        Commands::A2aInvoke {
+            peer_url,
+            message_type,
+            payload,
+        } => commands::a2a_invoke::run(peer_url, message_type, payload).await,
+        Commands::A2aDiscover { peer_url } => commands::a2a_discover::run(peer_url).await,
     }
 }
 

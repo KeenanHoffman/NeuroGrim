@@ -31,7 +31,11 @@ impl Default for ConfidenceConfig {
 /// - Age 0: confidence 100
 /// - Age very_stale_days: confidence 25
 /// - Missing data: confidence 0
-pub fn exponential_decay(updated_at: Option<DateTime<Utc>>, now: DateTime<Utc>, config: &ConfidenceConfig) -> Confidence {
+pub fn exponential_decay(
+    updated_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+    config: &ConfidenceConfig,
+) -> Confidence {
     let updated_at = match updated_at {
         Some(ts) => ts,
         None => return Confidence::zero(), // Missing data = 0 confidence
@@ -105,7 +109,11 @@ mod tests {
         let one_day_ago = now - Duration::days(1);
         let conf = exponential_decay(Some(one_day_ago), now, &config());
         // Spec says ~82 at 1 day with default config
-        assert!((conf.value() as i16 - 82).abs() <= 1, "Expected ~82, got {}", conf.value());
+        assert!(
+            (conf.value() as i16 - 82).abs() <= 1,
+            "Expected ~82, got {}",
+            conf.value()
+        );
     }
 
     #[test]
@@ -113,7 +121,11 @@ mod tests {
         let now = Utc::now();
         let three_days_ago = now - Duration::days(3);
         let conf = exponential_decay(Some(three_days_ago), now, &config());
-        assert!((conf.value() as i16 - 55).abs() <= 1, "Expected ~55, got {}", conf.value());
+        assert!(
+            (conf.value() as i16 - 55).abs() <= 1,
+            "Expected ~55, got {}",
+            conf.value()
+        );
     }
 
     #[test]
@@ -130,7 +142,11 @@ mod tests {
         let fourteen_days_ago = now - Duration::days(14);
         let conf = exponential_decay(Some(fourteen_days_ago), now, &config());
         // At 14 days: confidence = 100 * e^(-ln(4)/7 * 14) = 100 * e^(-2*ln(4)) = 100/16 ≈ 6
-        assert!(conf.value() >= 1 && conf.value() <= 10, "Expected ~6, got {}", conf.value());
+        assert!(
+            conf.value() >= 1 && conf.value() <= 10,
+            "Expected ~6, got {}",
+            conf.value()
+        );
     }
 
     #[test]
@@ -155,7 +171,11 @@ mod tests {
         let half_day_ago = now - Duration::hours(12);
         let conf = exponential_decay(Some(half_day_ago), now, &config());
         // e^(-ln(4)/7 * 0.5) ≈ 0.905 → ~91
-        assert!((conf.value() as i16 - 91).abs() <= 1, "Expected ~91, got {}", conf.value());
+        assert!(
+            (conf.value() as i16 - 91).abs() <= 1,
+            "Expected ~91, got {}",
+            conf.value()
+        );
     }
 
     #[test]
@@ -163,10 +183,22 @@ mod tests {
         let now = Utc::now();
 
         assert_eq!(freshness_multiplier(Some(now), now), 1.0);
-        assert_eq!(freshness_multiplier(Some(now - Duration::hours(12)), now), 1.0);
-        assert_eq!(freshness_multiplier(Some(now - Duration::days(2)), now), 0.75);
-        assert_eq!(freshness_multiplier(Some(now - Duration::days(5)), now), 0.5);
-        assert_eq!(freshness_multiplier(Some(now - Duration::days(10)), now), 0.25);
+        assert_eq!(
+            freshness_multiplier(Some(now - Duration::hours(12)), now),
+            1.0
+        );
+        assert_eq!(
+            freshness_multiplier(Some(now - Duration::days(2)), now),
+            0.75
+        );
+        assert_eq!(
+            freshness_multiplier(Some(now - Duration::days(5)), now),
+            0.5
+        );
+        assert_eq!(
+            freshness_multiplier(Some(now - Duration::days(10)), now),
+            0.25
+        );
         assert_eq!(freshness_multiplier(None, now), 0.25);
     }
 }

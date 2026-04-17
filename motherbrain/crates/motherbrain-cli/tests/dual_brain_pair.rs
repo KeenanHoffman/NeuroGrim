@@ -58,9 +58,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use motherbrain_core::agent_output::AgentOutput;
-use motherbrain_core::ecosystem::{
-    ChildEntry, ChildStatus, ChildTransport, EcosystemRegistry,
-};
+use motherbrain_core::ecosystem::{ChildEntry, ChildStatus, ChildTransport, EcosystemRegistry};
 use motherbrain_ecosystem::score_ecosystem;
 use serde_json::json;
 use url::Url;
@@ -129,12 +127,8 @@ impl Drop for ChildGuard {
 /// That's proposed as future work — not implemented here to keep this patch
 /// scoped to the test harness.
 fn find_free_loopback_port() -> u16 {
-    let listener = StdTcpListener::bind("127.0.0.1:0")
-        .expect("bind loopback ephemeral port");
-    let port = listener
-        .local_addr()
-        .expect("read local_addr")
-        .port();
+    let listener = StdTcpListener::bind("127.0.0.1:0").expect("bind loopback ephemeral port");
+    let port = listener.local_addr().expect("read local_addr").port();
     drop(listener);
     port
 }
@@ -287,15 +281,13 @@ fn drain_stderr_nonblocking(child: &mut Child) -> String {
 /// Matches the format in `commands/a2a_serve.rs` so tests don't drift if
 /// the server's endpoint convention changes.
 fn endpoint_for_port(port: u16) -> Url {
-    Url::parse(&format!("http://127.0.0.1:{port}/a2a/v1/"))
-        .expect("static URL must parse")
+    Url::parse(&format!("http://127.0.0.1:{port}/a2a/v1/")).expect("static URL must parse")
 }
 
 /// Authority root URL — what we hand to `wait_for_ready` to hit the
 /// well-known agent card location.
 fn authority_root_for_port(port: u16) -> Url {
-    Url::parse(&format!("http://127.0.0.1:{port}/"))
-        .expect("static URL must parse")
+    Url::parse(&format!("http://127.0.0.1:{port}/")).expect("static URL must parse")
 }
 
 /// Build a minimal parent `AgentOutput` for use as the "parent" side of
@@ -357,15 +349,12 @@ async fn fractal_composition_end_to_end_over_loopback() {
     let alpha_root = authority_root_for_port(port_alpha);
     let beta_root = authority_root_for_port(port_beta);
     if let Err(e) = wait_for_ready(&alpha_root, 10).await {
-        let stderr = drain_stderr_nonblocking(
-            guard_alpha.as_mut().unwrap().child.as_mut().unwrap(),
-        );
+        let stderr =
+            drain_stderr_nonblocking(guard_alpha.as_mut().unwrap().child.as_mut().unwrap());
         panic!("alpha peer never became ready: {e}\n---stderr---\n{stderr}");
     }
     if let Err(e) = wait_for_ready(&beta_root, 10).await {
-        let stderr = drain_stderr_nonblocking(
-            guard_beta.as_mut().unwrap().child.as_mut().unwrap(),
-        );
+        let stderr = drain_stderr_nonblocking(guard_beta.as_mut().unwrap().child.as_mut().unwrap());
         panic!("beta peer never became ready: {e}\n---stderr---\n{stderr}");
     }
 
@@ -406,12 +395,10 @@ async fn fractal_composition_end_to_end_over_loopback() {
     // On error, surface both stderrs so the failure report names what the
     // subprocesses actually said.
     if let Err(e) = &result {
-        let alpha_stderr = drain_stderr_nonblocking(
-            guard_alpha.as_mut().unwrap().child.as_mut().unwrap(),
-        );
-        let beta_stderr = drain_stderr_nonblocking(
-            guard_beta.as_mut().unwrap().child.as_mut().unwrap(),
-        );
+        let alpha_stderr =
+            drain_stderr_nonblocking(guard_alpha.as_mut().unwrap().child.as_mut().unwrap());
+        let beta_stderr =
+            drain_stderr_nonblocking(guard_beta.as_mut().unwrap().child.as_mut().unwrap());
         panic!(
             "score_ecosystem failed: {e}\n\
              ---alpha stderr---\n{alpha_stderr}\n\
@@ -519,9 +506,8 @@ async fn dual_brain_peer_unreachable_is_reported_cleanly() {
 
     let alive_root = authority_root_for_port(port_alive);
     if let Err(e) = wait_for_ready(&alive_root, 10).await {
-        let stderr = drain_stderr_nonblocking(
-            guard_alive.as_mut().unwrap().child.as_mut().unwrap(),
-        );
+        let stderr =
+            drain_stderr_nonblocking(guard_alive.as_mut().unwrap().child.as_mut().unwrap());
         panic!("alive peer never became ready: {e}\n---stderr---\n{stderr}");
     }
 
@@ -612,8 +598,7 @@ async fn dual_brain_envelope_validates_against_schema_at_every_hop() {
 
     let root = authority_root_for_port(port);
     if let Err(e) = wait_for_ready(&root, 10).await {
-        let stderr =
-            drain_stderr_nonblocking(guard.as_mut().unwrap().child.as_mut().unwrap());
+        let stderr = drain_stderr_nonblocking(guard.as_mut().unwrap().child.as_mut().unwrap());
         panic!("peer never became ready: {e}\n---stderr---\n{stderr}");
     }
 
@@ -650,8 +635,8 @@ async fn dual_brain_envelope_validates_against_schema_at_every_hop() {
 
     // `scored_at` is RFC 3339 — the aggregator relies on this to compute
     // freshness. A malformed value would surface as a child Error.
-    let scored_at = chrono::DateTime::parse_from_rfc3339(&child_output.scored_at)
-        .unwrap_or_else(|e| {
+    let scored_at =
+        chrono::DateTime::parse_from_rfc3339(&child_output.scored_at).unwrap_or_else(|e| {
             panic!(
                 "scored_at must be RFC 3339; got {:?}, err: {e}",
                 child_output.scored_at
@@ -661,9 +646,7 @@ async fn dual_brain_envelope_validates_against_schema_at_every_hop() {
     // fires, the child's clock is drifting or the scoring pipeline is
     // reporting stale output. Either is a real bug, not test flakiness.
     let now = Utc::now();
-    let delta = (now - scored_at.with_timezone(&Utc))
-        .num_seconds()
-        .abs();
+    let delta = (now - scored_at.with_timezone(&Utc)).num_seconds().abs();
     assert!(
         delta < 300,
         "scored_at should be within 5 minutes of now; delta={delta}s"

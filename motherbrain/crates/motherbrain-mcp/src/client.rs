@@ -1,8 +1,8 @@
 //! MCP client — discovers and invokes sensory tool servers.
 
-use motherbrain_core::scoring::CmdbData;
 use chrono::{DateTime, Utc};
 use motherbrain_core::registry::SensoryServerConfig;
+use motherbrain_core::scoring::CmdbData;
 use rmcp::model::*;
 use rmcp::transport::TokioChildProcess;
 use rmcp::{ClientHandler, ServiceExt};
@@ -43,19 +43,28 @@ async fn invoke_single_server(
     config: &SensoryServerConfig,
     project_root: &str,
 ) -> anyhow::Result<Vec<SensoryResult>> {
-    let command = config.command.as_deref()
+    let command = config
+        .command
+        .as_deref()
         .ok_or_else(|| anyhow::anyhow!("No command for sensory server '{}'", name))?;
 
     tracing::info!("Connecting to sensory server: {}", name);
 
     let parts: Vec<&str> = command.split_whitespace().collect();
-    let (program, cmd_args) = parts.split_first()
+    let (program, cmd_args) = parts
+        .split_first()
         .ok_or_else(|| anyhow::anyhow!("Empty command for '{}'", name))?;
 
     let mut cmd = Command::new(program);
-    for a in cmd_args { cmd.arg(a); }
-    for a in &config.args { cmd.arg(a); }
-    for (k, v) in &config.env { cmd.env(k, v); }
+    for a in cmd_args {
+        cmd.arg(a);
+    }
+    for a in &config.args {
+        cmd.arg(a);
+    }
+    for (k, v) in &config.env {
+        cmd.env(k, v);
+    }
 
     let transport = TokioChildProcess::new(cmd)?;
     let client = SensoryClient;
@@ -67,12 +76,23 @@ async fn invoke_single_server(
 
     let mut results = Vec::new();
     for tool in &tools_resp.tools {
-        if !tool.name.starts_with("check_") { continue; }
-        let domain = tool.name.strip_prefix("check_").unwrap_or(&tool.name).replace('_', "-");
+        if !tool.name.starts_with("check_") {
+            continue;
+        }
+        let domain = tool
+            .name
+            .strip_prefix("check_")
+            .unwrap_or(&tool.name)
+            .replace('_', "-");
 
         let call = CallToolRequestParam {
             name: tool.name.clone(),
-            arguments: Some(serde_json::json!({"project_root": project_root}).as_object().unwrap().clone()),
+            arguments: Some(
+                serde_json::json!({"project_root": project_root})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
         };
 
         match peer.call_tool(call).await {
@@ -98,10 +118,19 @@ async fn invoke_single_server(
 
 fn parse_cmdb_response(json_str: &str) -> anyhow::Result<CmdbData> {
     let cmdb: serde_json::Value = serde_json::from_str(json_str)?;
-    let score = cmdb.get("score").and_then(|v| v.as_u64()).ok_or_else(|| anyhow::anyhow!("Missing score"))?;
-    let ts_str = cmdb.get("updated_at").and_then(|v| v.as_str()).ok_or_else(|| anyhow::anyhow!("Missing updated_at"))?;
+    let score = cmdb
+        .get("score")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| anyhow::anyhow!("Missing score"))?;
+    let ts_str = cmdb
+        .get("updated_at")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing updated_at"))?;
     let ts: DateTime<Utc> = ts_str.parse()?;
-    Ok(CmdbData { score: score.min(100) as u8, updated_at: ts })
+    Ok(CmdbData {
+        score: score.min(100) as u8,
+        updated_at: ts,
+    })
 }
 
 #[cfg(test)]

@@ -60,11 +60,7 @@ fn extract_raw_score(
     domain_weights: &HashMap<String, f64>,
 ) -> f64 {
     match domain {
-        Some(d) => snap
-            .domains
-            .get(d)
-            .map(|ds| ds.score as f64)
-            .unwrap_or(0.0),
+        Some(d) => snap.domains.get(d).map(|ds| ds.score as f64).unwrap_or(0.0),
         None => {
             // Weighted average of raw domain scores
             let mut raw_sum = 0.0;
@@ -157,7 +153,8 @@ fn stddev(values: &[f64]) -> f64 {
         return 0.0;
     }
     let mean = avg(values);
-    let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (values.len() - 1) as f64;
+    let variance =
+        values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (values.len() - 1) as f64;
     variance.sqrt()
 }
 
@@ -230,9 +227,15 @@ mod tests {
         // Use small increments so stddev stays below volatile_stddev (10)
         // Window of 2N=10 scores: stddev of [60..69] ≈ 3.0
         let history: Vec<ScoreSnapshot> = vec![
-            make_snapshot(60), make_snapshot(61), make_snapshot(62),
-            make_snapshot(63), make_snapshot(64), make_snapshot(65),
-            make_snapshot(66), make_snapshot(67), make_snapshot(68),
+            make_snapshot(60),
+            make_snapshot(61),
+            make_snapshot(62),
+            make_snapshot(63),
+            make_snapshot(64),
+            make_snapshot(65),
+            make_snapshot(66),
+            make_snapshot(67),
+            make_snapshot(68),
             make_snapshot(69),
         ];
         let result = compute_trajectory(&history, &default_config(), None, &default_weights());
@@ -243,9 +246,15 @@ mod tests {
     #[test]
     fn degrading_with_falling_scores() {
         let history: Vec<ScoreSnapshot> = vec![
-            make_snapshot(69), make_snapshot(68), make_snapshot(67),
-            make_snapshot(66), make_snapshot(65), make_snapshot(64),
-            make_snapshot(63), make_snapshot(62), make_snapshot(61),
+            make_snapshot(69),
+            make_snapshot(68),
+            make_snapshot(67),
+            make_snapshot(66),
+            make_snapshot(65),
+            make_snapshot(64),
+            make_snapshot(63),
+            make_snapshot(62),
+            make_snapshot(61),
             make_snapshot(60),
         ];
         let result = compute_trajectory(&history, &default_config(), None, &default_weights());
@@ -281,12 +290,7 @@ mod tests {
             make_domain_snapshot("a", 67),
             make_domain_snapshot("a", 69),
         ];
-        let result = compute_trajectory(
-            &history,
-            &default_config(),
-            Some("a"),
-            &default_weights(),
-        );
+        let result = compute_trajectory(&history, &default_config(), Some("a"), &default_weights());
         assert_eq!(result.classification, TrajectoryClassification::Improving);
         assert!(result.velocity > 0.0);
     }
@@ -313,9 +317,21 @@ mod tests {
         // current_velocity = 70 - 50 = 20
         // acceleration = 20 - 20 = 0
         let history: Vec<ScoreSnapshot> = vec![
-            make_snapshot(10), make_snapshot(20), make_snapshot(30), make_snapshot(40), make_snapshot(50),
-            make_snapshot(50), make_snapshot(50), make_snapshot(50), make_snapshot(50), make_snapshot(50),
-            make_snapshot(50), make_snapshot(60), make_snapshot(70), make_snapshot(80), make_snapshot(90),
+            make_snapshot(10),
+            make_snapshot(20),
+            make_snapshot(30),
+            make_snapshot(40),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(60),
+            make_snapshot(70),
+            make_snapshot(80),
+            make_snapshot(90),
         ];
         let result = compute_trajectory(&history, &default_config(), None, &default_weights());
         assert_eq!(result.acceleration, 0.0);
@@ -328,9 +344,21 @@ mod tests {
         // recent: [50,50,50,50,50] avg=50, cur_vel=30
         // acceleration = 30 - 10 = 20
         let history: Vec<ScoreSnapshot> = vec![
-            make_snapshot(10), make_snapshot(10), make_snapshot(10), make_snapshot(10), make_snapshot(10),
-            make_snapshot(20), make_snapshot(20), make_snapshot(20), make_snapshot(20), make_snapshot(20),
-            make_snapshot(50), make_snapshot(50), make_snapshot(50), make_snapshot(50), make_snapshot(50),
+            make_snapshot(10),
+            make_snapshot(10),
+            make_snapshot(10),
+            make_snapshot(10),
+            make_snapshot(10),
+            make_snapshot(20),
+            make_snapshot(20),
+            make_snapshot(20),
+            make_snapshot(20),
+            make_snapshot(20),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(50),
+            make_snapshot(50),
         ];
         let result = compute_trajectory(&history, &default_config(), None, &default_weights());
         assert_eq!(result.acceleration, 20.0);

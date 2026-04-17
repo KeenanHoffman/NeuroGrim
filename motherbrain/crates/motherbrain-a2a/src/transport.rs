@@ -74,11 +74,7 @@ pub trait Transport: Send + Sync {
     /// Open the peer's SSE progress stream for this task (spec §13.3 step 3).
     /// Each yielded envelope is one SSE `data:` event. The stream closes when
     /// the peer sends the terminal envelope.
-    async fn stream_task(
-        &self,
-        endpoint: &Url,
-        task_id: &str,
-    ) -> Result<EnvelopeStream, A2aError>;
+    async fn stream_task(&self, endpoint: &Url, task_id: &str) -> Result<EnvelopeStream, A2aError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -225,11 +221,7 @@ impl Transport for HttpSseTransport {
         Ok(Some(env))
     }
 
-    async fn stream_task(
-        &self,
-        endpoint: &Url,
-        task_id: &str,
-    ) -> Result<EnvelopeStream, A2aError> {
+    async fn stream_task(&self, endpoint: &Url, task_id: &str) -> Result<EnvelopeStream, A2aError> {
         // SSE parsing is hand-rolled on top of reqwest's byte stream. The v1
         // implementation handles the single-terminal-event case (spec G.6:
         // "Each SSE event: `data: <a2a-envelope-json>\n\n`") and is
@@ -450,10 +442,7 @@ mod tests {
         );
 
         let task = HttpSseTransport::task_url(&endpoint, "xyz").unwrap();
-        assert_eq!(
-            task.as_str(),
-            "http://127.0.0.1:18421/a2a/v1/tasks/xyz"
-        );
+        assert_eq!(task.as_str(), "http://127.0.0.1:18421/a2a/v1/tasks/xyz");
 
         let events = HttpSseTransport::events_url(&endpoint, "xyz").unwrap();
         assert_eq!(

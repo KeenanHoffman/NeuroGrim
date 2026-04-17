@@ -1,6 +1,6 @@
-use anyhow::Result;
 use super::context::BrainContext;
 use crate::output::json;
+use anyhow::Result;
 
 pub async fn run(registry_path: &str, hat: Option<String>, persona: Option<String>) -> Result<()> {
     let ctx = BrainContext::load(registry_path, hat, persona).await?;

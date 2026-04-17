@@ -101,11 +101,11 @@ pub fn build_domain_recommendations(
 /// Urgency multiplier based on trajectory classification.
 fn trajectory_urgency(c: TrajectoryClassification) -> f64 {
     match c {
-        TrajectoryClassification::Degrading  => 2.0,
-        TrajectoryClassification::Volatile   => 1.5,
-        TrajectoryClassification::NoData     => 1.2,
-        TrajectoryClassification::Stable     => 1.0,
-        TrajectoryClassification::Improving  => 0.6,
+        TrajectoryClassification::Degrading => 2.0,
+        TrajectoryClassification::Volatile => 1.5,
+        TrajectoryClassification::NoData => 1.2,
+        TrajectoryClassification::Stable => 1.0,
+        TrajectoryClassification::Improving => 0.6,
     }
 }
 
@@ -167,7 +167,10 @@ fn derive_command(domain_key: &str, registry: &BrainConfig) -> String {
     }
 
     // 4. Generic fallback
-    format!("# Improve {} — see motherbrain health for details", domain_key)
+    format!(
+        "# Improve {} — see motherbrain health for details",
+        domain_key
+    )
 }
 
 /// Build the human-readable description for a recommendation.
@@ -178,11 +181,11 @@ fn build_description(
     trajectory: Option<&TrajectoryResult>,
 ) -> String {
     let traj_label = match classification {
-        TrajectoryClassification::Degrading  => "degrading",
-        TrajectoryClassification::Volatile   => "volatile",
-        TrajectoryClassification::Improving  => "improving",
-        TrajectoryClassification::Stable     => "stable",
-        TrajectoryClassification::NoData     => "no trajectory data",
+        TrajectoryClassification::Degrading => "degrading",
+        TrajectoryClassification::Volatile => "volatile",
+        TrajectoryClassification::Improving => "improving",
+        TrajectoryClassification::Stable => "stable",
+        TrajectoryClassification::NoData => "no trajectory data",
     };
 
     if let Some(t) = trajectory {
@@ -312,7 +315,10 @@ pub fn parse_autonomy_config(
     let mut hat_bias = std::collections::HashMap::new();
 
     // Parse action type defaults
-    if let Some(types) = autonomy_json.get("action_types").and_then(|v| v.as_object()) {
+    if let Some(types) = autonomy_json
+        .get("action_types")
+        .and_then(|v| v.as_object())
+    {
         for (action, config) in types {
             if let Some(level_str) = config.get("default_level").and_then(|v| v.as_str()) {
                 if let Some(level) = parse_level(level_str) {
@@ -430,8 +436,14 @@ mod tests {
     fn default_levels_used_without_hat() {
         let config = default_config();
         let no_data = ProposalConfidence::default();
-        assert_eq!(resolve_autonomy("clear-gate", &config, &no_data), AutonomyLevel::Notify);
-        assert_eq!(resolve_autonomy("deploy", &config, &no_data), AutonomyLevel::Approve);
+        assert_eq!(
+            resolve_autonomy("clear-gate", &config, &no_data),
+            AutonomyLevel::Notify
+        );
+        assert_eq!(
+            resolve_autonomy("deploy", &config, &no_data),
+            AutonomyLevel::Approve
+        );
     }
 
     #[test]
@@ -443,7 +455,10 @@ mod tests {
             sample_count: 100,
             success_count: 100,
         };
-        assert_eq!(resolve_autonomy("destroy", &config, &high_conf), AutonomyLevel::Blocked);
+        assert_eq!(
+            resolve_autonomy("destroy", &config, &high_conf),
+            AutonomyLevel::Blocked
+        );
     }
 
     #[test]
@@ -462,9 +477,14 @@ mod tests {
     #[test]
     fn hat_bias_overrides_default() {
         let mut config = default_config();
-        config.hat_bias.insert("clear-gate".to_string(), AutonomyLevel::Auto);
+        config
+            .hat_bias
+            .insert("clear-gate".to_string(), AutonomyLevel::Auto);
         let no_data = ProposalConfidence::default();
-        assert_eq!(resolve_autonomy("clear-gate", &config, &no_data), AutonomyLevel::Auto);
+        assert_eq!(
+            resolve_autonomy("clear-gate", &config, &no_data),
+            AutonomyLevel::Auto
+        );
     }
 
     #[test]
@@ -479,7 +499,10 @@ mod tests {
         // Step 3: max(auto, notify) = notify (notify is more restrictive)
         // Wait - AutonomyLevel ordering: Auto < Notify < Approve < Blocked
         // So max(Auto, Notify) = Notify
-        assert_eq!(resolve_autonomy("refresh-snapshot", &config, &high), AutonomyLevel::Auto);
+        assert_eq!(
+            resolve_autonomy("refresh-snapshot", &config, &high),
+            AutonomyLevel::Auto
+        );
     }
 
     #[test]
@@ -492,7 +515,10 @@ mod tests {
         };
         // refresh-snapshot default is auto, but low confidence → approve
         // Step 3: max(auto, approve) = approve
-        assert_eq!(resolve_autonomy("refresh-snapshot", &config, &low), AutonomyLevel::Approve);
+        assert_eq!(
+            resolve_autonomy("refresh-snapshot", &config, &low),
+            AutonomyLevel::Approve
+        );
     }
 
     #[test]
@@ -501,7 +527,10 @@ mod tests {
         config.global_override = Some("all_manual".to_string());
         let no_data = ProposalConfidence::default();
         // refresh-snapshot would be auto, but all_manual tightens to approve
-        assert_eq!(resolve_autonomy("refresh-snapshot", &config, &no_data), AutonomyLevel::Approve);
+        assert_eq!(
+            resolve_autonomy("refresh-snapshot", &config, &no_data),
+            AutonomyLevel::Approve
+        );
     }
 
     #[test]
@@ -587,62 +616,112 @@ mod tests {
             ("deploy-readiness", 80, 0.30),
         ]);
         let trajs: HashMap<String, TrajectoryResult> = [
-            ("code-quality".to_string(), make_traj(TrajectoryClassification::Stable, 0.0)),
-            ("test-health".to_string(), make_traj(TrajectoryClassification::Improving, 2.0)),
-            ("deploy-readiness".to_string(), make_traj(TrajectoryClassification::Stable, 0.0)),
-        ].into();
+            (
+                "code-quality".to_string(),
+                make_traj(TrajectoryClassification::Stable, 0.0),
+            ),
+            (
+                "test-health".to_string(),
+                make_traj(TrajectoryClassification::Improving, 2.0),
+            ),
+            (
+                "deploy-readiness".to_string(),
+                make_traj(TrajectoryClassification::Stable, 0.0),
+            ),
+        ]
+        .into();
         let recs = build_domain_recommendations(
-            &scorecard, &trajs, &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &trajs,
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
-        assert!(recs.is_empty(), "healthy domains should produce no recommendations");
+        assert!(
+            recs.is_empty(),
+            "healthy domains should produce no recommendations"
+        );
     }
 
     #[test]
     fn declining_domain_ranked_above_lower_stable_domain() {
         // degrading@65 vs stable@55 — degrading should rank first despite higher score
         let scorecard = make_scorecard_with(vec![
-            ("a", 65, 0.5),  // degrading
-            ("b", 55, 0.5),  // stable
+            ("a", 65, 0.5), // degrading
+            ("b", 55, 0.5), // stable
         ]);
         let trajs: HashMap<String, TrajectoryResult> = [
-            ("a".to_string(), make_traj(TrajectoryClassification::Degrading, -3.0)),
-            ("b".to_string(), make_traj(TrajectoryClassification::Stable, 0.0)),
-        ].into();
+            (
+                "a".to_string(),
+                make_traj(TrajectoryClassification::Degrading, -3.0),
+            ),
+            (
+                "b".to_string(),
+                make_traj(TrajectoryClassification::Stable, 0.0),
+            ),
+        ]
+        .into();
         let recs = build_domain_recommendations(
-            &scorecard, &trajs, &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &trajs,
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
         assert_eq!(recs.len(), 2);
-        assert_eq!(recs[0].domain, "a", "degrading domain should be ranked first");
+        assert_eq!(
+            recs[0].domain, "a",
+            "degrading domain should be ranked first"
+        );
         assert_eq!(recs[1].domain, "b");
     }
 
     #[test]
     fn improving_domain_deprioritized_below_stable() {
         // improving@60 should rank below stable@62
-        let scorecard = make_scorecard_with(vec![
-            ("improving", 60, 0.5),
-            ("stable", 62, 0.5),
-        ]);
+        let scorecard = make_scorecard_with(vec![("improving", 60, 0.5), ("stable", 62, 0.5)]);
         let trajs: HashMap<String, TrajectoryResult> = [
-            ("improving".to_string(), make_traj(TrajectoryClassification::Improving, 3.0)),
-            ("stable".to_string(), make_traj(TrajectoryClassification::Stable, 0.0)),
-        ].into();
+            (
+                "improving".to_string(),
+                make_traj(TrajectoryClassification::Improving, 3.0),
+            ),
+            (
+                "stable".to_string(),
+                make_traj(TrajectoryClassification::Stable, 0.0),
+            ),
+        ]
+        .into();
         let recs = build_domain_recommendations(
-            &scorecard, &trajs, &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &trajs,
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
         assert_eq!(recs.len(), 2);
-        assert_eq!(recs[0].domain, "stable", "stable@62 should rank above improving@60");
+        assert_eq!(
+            recs[0].domain, "stable",
+            "stable@62 should rank above improving@60"
+        );
         assert_eq!(recs[1].domain, "improving");
     }
 
     #[test]
     fn max_count_limits_output() {
         let scorecard = make_scorecard_with(vec![
-            ("a", 40, 0.2), ("b", 45, 0.2), ("c", 50, 0.2),
-            ("d", 55, 0.2), ("e", 60, 0.1), ("f", 65, 0.1),
+            ("a", 40, 0.2),
+            ("b", 45, 0.2),
+            ("c", 50, 0.2),
+            ("d", 55, 0.2),
+            ("e", 60, 0.1),
+            ("f", 65, 0.1),
         ]);
         let recs = build_domain_recommendations(
-            &scorecard, &HashMap::new(), &empty_registry(), &no_effectiveness(), 3,
+            &scorecard,
+            &HashMap::new(),
+            &empty_registry(),
+            &no_effectiveness(),
+            3,
         );
         assert_eq!(recs.len(), 3);
     }
@@ -650,13 +729,20 @@ mod tests {
     #[test]
     fn advisory_domains_excluded() {
         let scorecard = make_scorecard_with(vec![
-            ("jira", 20, 0.0),   // advisory — must be excluded
+            ("jira", 20, 0.0), // advisory — must be excluded
             ("test-health", 50, 1.0),
         ]);
         let recs = build_domain_recommendations(
-            &scorecard, &HashMap::new(), &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &HashMap::new(),
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
-        assert!(!recs.iter().any(|r| r.domain == "jira"), "advisory domain must be excluded");
+        assert!(
+            !recs.iter().any(|r| r.domain == "jira"),
+            "advisory domain must be excluded"
+        );
         assert_eq!(recs.len(), 1);
     }
 
@@ -664,7 +750,11 @@ mod tests {
     fn command_derived_for_builtin_tools() {
         let scorecard = make_scorecard_with(vec![("test-health", 30, 1.0)]);
         let recs = build_domain_recommendations(
-            &scorecard, &HashMap::new(), &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &HashMap::new(),
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
         assert_eq!(recs.len(), 1);
         assert!(
@@ -677,21 +767,35 @@ mod tests {
     fn command_fallback_for_custom_domain() {
         let scorecard = make_scorecard_with(vec![("my-custom", 30, 1.0)]);
         let recs = build_domain_recommendations(
-            &scorecard, &HashMap::new(), &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &HashMap::new(),
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
         assert_eq!(recs.len(), 1);
-        assert!(recs[0].command.contains("my-custom"), "fallback command should name the domain");
+        assert!(
+            recs[0].command.contains("my-custom"),
+            "fallback command should name the domain"
+        );
     }
 
     #[test]
     fn description_field_populated() {
         let scorecard = make_scorecard_with(vec![("test-health", 30, 1.0)]);
         let recs = build_domain_recommendations(
-            &scorecard, &HashMap::new(), &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &HashMap::new(),
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
         assert!(recs[0].description.is_some());
         let desc = recs[0].description.as_ref().unwrap();
-        assert!(desc.contains("test-health"), "description must mention domain");
+        assert!(
+            desc.contains("test-health"),
+            "description must mention domain"
+        );
         assert!(desc.contains("30"), "description must include score");
     }
 
@@ -702,9 +806,14 @@ mod tests {
         let trajs: HashMap<String, TrajectoryResult> = [(
             "code-quality".to_string(),
             make_traj(TrajectoryClassification::Degrading, -4.0),
-        )].into();
+        )]
+        .into();
         let recs = build_domain_recommendations(
-            &scorecard, &trajs, &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &trajs,
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
         assert_eq!(recs.len(), 1);
         assert_eq!(recs[0].status, "declining");
@@ -714,7 +823,11 @@ mod tests {
     fn gate_is_synthetic_identifier() {
         let scorecard = make_scorecard_with(vec![("test-health", 40, 1.0)]);
         let recs = build_domain_recommendations(
-            &scorecard, &HashMap::new(), &empty_registry(), &no_effectiveness(), 5,
+            &scorecard,
+            &HashMap::new(),
+            &empty_registry(),
+            &no_effectiveness(),
+            5,
         );
         assert_eq!(recs[0].gate, "test-health-score-improvement");
     }

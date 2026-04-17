@@ -446,18 +446,23 @@ mod tests {
 
     #[test]
     fn parse_three_domain_registry() {
-        let registry = BrainRegistry::from_json(THREE_DOMAIN_FIXTURE).expect("Failed to parse registry");
+        let registry =
+            BrainRegistry::from_json(THREE_DOMAIN_FIXTURE).expect("Failed to parse registry");
 
         assert_eq!(registry.meta.schema_version, "2");
         assert_eq!(registry.config.domain_weights.len(), 3);
         assert!(registry.config.domain_weights.contains_key("code-quality"));
         assert!(registry.config.domain_weights.contains_key("test-health"));
-        assert!(registry.config.domain_weights.contains_key("deploy-readiness"));
+        assert!(registry
+            .config
+            .domain_weights
+            .contains_key("deploy-readiness"));
     }
 
     #[test]
     fn validate_three_domain_registry() {
-        let registry = BrainRegistry::from_json(THREE_DOMAIN_FIXTURE).expect("Failed to parse registry");
+        let registry =
+            BrainRegistry::from_json(THREE_DOMAIN_FIXTURE).expect("Failed to parse registry");
         registry.validate().expect("Registry validation failed");
     }
 
@@ -476,8 +481,15 @@ mod tests {
     #[test]
     fn floor_config_parsed() {
         let registry = BrainRegistry::from_json(THREE_DOMAIN_FIXTURE).unwrap();
-        let test_health = registry.config.domain_definitions.get("test-health").unwrap();
-        let floor = test_health.floor.as_ref().expect("test-health should have a floor");
+        let test_health = registry
+            .config
+            .domain_definitions
+            .get("test-health")
+            .unwrap();
+        let floor = test_health
+            .floor
+            .as_ref()
+            .expect("test-health should have a floor");
         assert_eq!(floor.min_score, 25);
         assert_eq!(floor.unified_cap, 50);
     }

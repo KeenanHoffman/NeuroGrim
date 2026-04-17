@@ -64,8 +64,7 @@ async fn cli_client_path_discovers_and_invokes_local_server() {
             "incident_patterns": [],
             "skipped_temporal": []
         });
-        let mut resp =
-            A2aEnvelope::new("cli-test-brain", MessageType::SnapshotDelivered, payload);
+        let mut resp = A2aEnvelope::new("cli-test-brain", MessageType::SnapshotDelivered, payload);
         resp.reply_to = Some(req.message_id);
         Ok(resp)
     });

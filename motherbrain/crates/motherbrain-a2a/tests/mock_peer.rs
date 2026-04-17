@@ -44,8 +44,11 @@ async fn client_invokes_mock_peer_end_to_end() {
     // ---- Arrange: mock peer that answers snapshot.requested ----
     let mut server = TaskServer::new(mock_card());
     server.register_handler(MessageType::SnapshotRequested, |req| async move {
-        let mut resp =
-            A2aEnvelope::new("mock-peer", MessageType::SnapshotDelivered, json!({"score": 77}));
+        let mut resp = A2aEnvelope::new(
+            "mock-peer",
+            MessageType::SnapshotDelivered,
+            json!({"score": 77}),
+        );
         resp.reply_to = Some(req.message_id);
         Ok(resp)
     });

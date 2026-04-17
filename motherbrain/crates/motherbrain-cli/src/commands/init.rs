@@ -178,7 +178,16 @@ fn walk_dir(
                 *has_ci = true;
             }
             // Recurse
-            walk_dir(root, &path, depth + 1, max_depth, signals, evidence, has_tests, has_ci);
+            walk_dir(
+                root,
+                &path,
+                depth + 1,
+                max_depth,
+                signals,
+                evidence,
+                has_tests,
+                has_ci,
+            );
         } else if path.is_file() {
             // Test file detection
             let lower_name = name.to_lowercase();
@@ -207,7 +216,12 @@ fn classify_file(
 
     // Terraform: any .tf file
     if lower.ends_with(".tf") {
-        add_signal(signals, evidence, ProjectSignal::Terraform, rel_path.to_string());
+        add_signal(
+            signals,
+            evidence,
+            ProjectSignal::Terraform,
+            rel_path.to_string(),
+        );
         return;
     }
 
@@ -228,7 +242,12 @@ fn classify_file(
         lower.as_str(),
         "pyproject.toml" | "pipfile" | "requirements.txt" | "setup.py"
     ) {
-        add_signal(signals, evidence, ProjectSignal::Python, rel_path.to_string());
+        add_signal(
+            signals,
+            evidence,
+            ProjectSignal::Python,
+            rel_path.to_string(),
+        );
         return;
     }
 
@@ -240,13 +259,23 @@ fn classify_file(
 
     // Rust project (skip if inside the motherbrain workspace itself)
     if lower == "cargo.toml" && !rel_path.to_lowercase().contains("motherbrain") {
-        add_signal(signals, evidence, ProjectSignal::RustProject, rel_path.to_string());
+        add_signal(
+            signals,
+            evidence,
+            ProjectSignal::RustProject,
+            rel_path.to_string(),
+        );
         return;
     }
 
     // Proto
     if lower.ends_with(".proto") {
-        add_signal(signals, evidence, ProjectSignal::Proto, rel_path.to_string());
+        add_signal(
+            signals,
+            evidence,
+            ProjectSignal::Proto,
+            rel_path.to_string(),
+        );
         return;
     }
 
@@ -407,10 +436,7 @@ fn default_personas() -> Value {
 }
 
 /// Generate a complete, valid brain-registry.json for the given project.
-pub fn generate_registry(
-    candidates: &[DomainCandidate],
-    project_name: &str,
-) -> Value {
+pub fn generate_registry(candidates: &[DomainCandidate], project_name: &str) -> Value {
     let mut domain_weights = Map::new();
     domain_weights.insert("code-quality".to_string(), json!(0.35));
     domain_weights.insert("test-health".to_string(), json!(0.35));
@@ -506,7 +532,9 @@ pub async fn run(project_root: &str, output: &str, yes: bool) -> Result<()> {
     if !root.is_dir() {
         bail!("Project root '{}' is not a directory.", project_root);
     }
-    let root = root.canonicalize().context("Cannot canonicalize project root")?;
+    let root = root
+        .canonicalize()
+        .context("Cannot canonicalize project root")?;
 
     let output_path = PathBuf::from(output);
     if output_path.exists() {
@@ -592,7 +620,11 @@ pub async fn run(project_root: &str, output: &str, yes: bool) -> Result<()> {
     tokio::fs::create_dir_all(&brain_dir).await?;
 
     // Write empty ledger files
-    for ledger_file in &["score-history.json", "incident-ledger.json", "proposal-ledger.json"] {
+    for ledger_file in &[
+        "score-history.json",
+        "incident-ledger.json",
+        "proposal-ledger.json",
+    ] {
         let ledger_path = brain_dir.join(ledger_file);
         if !ledger_path.exists() {
             tokio::fs::write(&ledger_path, "[]").await?;
@@ -754,7 +786,11 @@ mod tests {
     #[test]
     fn scan_detects_jira_hint_in_readme() {
         let tmp = TempDir::new().unwrap();
-        fs::write(tmp.path().join("README.md"), "Track issues in JIRA board XYZ").unwrap();
+        fs::write(
+            tmp.path().join("README.md"),
+            "Track issues in JIRA board XYZ",
+        )
+        .unwrap();
         let result = scan_project(tmp.path());
         assert!(result.signals.contains(&ProjectSignal::JiraHint));
     }
@@ -788,7 +824,10 @@ mod tests {
             evidence: HashMap::new(),
         };
         let candidates = signals_to_domain_candidates(&scan);
-        let dep_count = candidates.iter().filter(|c| c.key == "dependency-health").count();
+        let dep_count = candidates
+            .iter()
+            .filter(|c| c.key == "dependency-health")
+            .count();
         assert_eq!(dep_count, 1, "dependency-health should appear only once");
     }
 
@@ -809,7 +848,11 @@ mod tests {
         let registry = generate_registry(&[], "my-project");
         let weights = registry["config"]["domain_weights"].as_object().unwrap();
         let sum: f64 = weights.values().filter_map(|v| v.as_f64()).sum();
-        assert!((sum - 1.0).abs() < 0.001, "weights should sum to 1.0, got {}", sum);
+        assert!(
+            (sum - 1.0).abs() < 0.001,
+            "weights should sum to 1.0, got {}",
+            sum
+        );
     }
 
     #[test]
@@ -859,8 +902,13 @@ mod tests {
             sensory_hint: "hint".to_string(),
         }];
         let registry = generate_registry(&candidates, "my-project");
-        let defs = registry["config"]["domain_definitions"].as_object().unwrap();
-        assert!(defs.contains_key("_todo_go-health"), "_todo_ comment key must be present");
+        let defs = registry["config"]["domain_definitions"]
+            .as_object()
+            .unwrap();
+        assert!(
+            defs.contains_key("_todo_go-health"),
+            "_todo_ comment key must be present"
+        );
         let todo_val = defs["_todo_go-health"].as_str().unwrap();
         assert!(todo_val.contains("go-health") || todo_val.contains("Go Health"));
     }

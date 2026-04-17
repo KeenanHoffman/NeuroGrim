@@ -300,11 +300,8 @@ mod tests {
     }
 
     fn mk_response(reply_to: &str) -> A2aEnvelope {
-        let mut env = A2aEnvelope::new(
-            "peer",
-            MessageType::SnapshotDelivered,
-            json!({"score": 80}),
-        );
+        let mut env =
+            A2aEnvelope::new("peer", MessageType::SnapshotDelivered, json!({"score": 80}));
         env.reply_to = Some(reply_to.into());
         env
     }

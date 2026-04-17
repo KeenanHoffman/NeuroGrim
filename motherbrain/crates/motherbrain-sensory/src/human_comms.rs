@@ -16,10 +16,9 @@
 
 use crate::cmdb::{build_cmdb, Finding};
 use rmcp::{
-    ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
-    schemars, tool, tool_router,
+    schemars, tool, tool_router, ServerHandler,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -31,7 +30,9 @@ pub struct HumanCommsServer {
 }
 impl HumanCommsServer {
     pub fn new() -> Self {
-        Self { tool_router: Self::tool_router() }
+        Self {
+            tool_router: Self::tool_router(),
+        }
     }
 }
 
@@ -42,10 +43,12 @@ pub struct CheckHumanCommsParams {
 
 #[tool_router]
 impl HumanCommsServer {
-    #[tool(description = "Check human communication preferences: reads ~/.claude/human-comms.yaml \
+    #[tool(
+        description = "Check human communication preferences: reads ~/.claude/human-comms.yaml \
         (user-scoped defaults) and {project_root}/.claude/human-comms.yaml (project-scoped \
         overrides), merges them, and scores preference completeness. Returns CMDB-envelope JSON \
-        with all preferences flattened as domain variables.")]
+        with all preferences flattened as domain variables."
+    )]
     async fn check_human_comms(&self, Parameters(p): Parameters<CheckHumanCommsParams>) -> String {
         serde_json::to_string_pretty(&analyze_human_comms(&p.project_root).await)
             .unwrap_or_default()
@@ -77,7 +80,9 @@ pub async fn analyze_human_comms(project_root: &str) -> Value {
     // ── Step 1: Locate and load both preference files ─────────────────────────
 
     let user_home_path = user_home();
-    let user_yaml_path = user_home_path.as_ref().map(|h| h.join(".claude/human-comms.yaml"));
+    let user_yaml_path = user_home_path
+        .as_ref()
+        .map(|h| h.join(".claude/human-comms.yaml"));
     let project_yaml_path = root.join(".claude/human-comms.yaml");
 
     let (user_prefs, has_user_defaults) = load_yaml(user_yaml_path.as_deref()).await;
@@ -87,46 +92,64 @@ pub async fn analyze_human_comms(project_root: &str) -> Value {
     let merged = deep_merge(user_prefs, project_prefs);
 
     // ── Step 3: Score completeness — 25 pts per defined block ─────────────────
-    let comm_block    = merged.get("communication");
-    let format_block  = merged.get("format");
+    let comm_block = merged.get("communication");
+    let format_block = merged.get("format");
     let signals_block = merged.get("signals");
     let interact_block = merged.get("interaction");
 
-    let comm_defined    = block_has_keys(comm_block);
-    let format_defined  = block_has_keys(format_block);
+    let comm_defined = block_has_keys(comm_block);
+    let format_defined = block_has_keys(format_block);
     let signals_defined = block_has_keys(signals_block);
     let interact_defined = block_has_keys(interact_block);
 
-    if comm_defined    { score += 25; } else {
+    if comm_defined {
+        score += 25;
+    } else {
         findings.push(Finding {
             name: "communication_preferences".into(),
             status: "undefined".into(),
             points: 0,
-            detail: Some("No communication preferences set. Add `communication:` block to human-comms.yaml.".into()),
+            detail: Some(
+                "No communication preferences set. Add `communication:` block to human-comms.yaml."
+                    .into(),
+            ),
         });
     }
-    if format_defined  { score += 25; } else {
+    if format_defined {
+        score += 25;
+    } else {
         findings.push(Finding {
             name: "format_preferences".into(),
             status: "undefined".into(),
             points: 0,
-            detail: Some("No format preferences set. Add `format:` block to human-comms.yaml.".into()),
+            detail: Some(
+                "No format preferences set. Add `format:` block to human-comms.yaml.".into(),
+            ),
         });
     }
-    if signals_defined { score += 25; } else {
+    if signals_defined {
+        score += 25;
+    } else {
         findings.push(Finding {
             name: "signal_preferences".into(),
             status: "undefined".into(),
             points: 0,
-            detail: Some("No signal preferences set. Add `signals:` block to human-comms.yaml.".into()),
+            detail: Some(
+                "No signal preferences set. Add `signals:` block to human-comms.yaml.".into(),
+            ),
         });
     }
-    if interact_defined { score += 25; } else {
+    if interact_defined {
+        score += 25;
+    } else {
         findings.push(Finding {
             name: "interaction_preferences".into(),
             status: "undefined".into(),
             points: 0,
-            detail: Some("No interaction preferences set. Add `interaction:` block to human-comms.yaml.".into()),
+            detail: Some(
+                "No interaction preferences set. Add `interaction:` block to human-comms.yaml."
+                    .into(),
+            ),
         });
     }
 
@@ -136,23 +159,29 @@ pub async fn analyze_human_comms(project_root: &str) -> Value {
 
     // communication block
     let include_urls = get_bool(&merged, "communication", "include_urls", false);
-    let verbosity    = get_str(&merged, "communication", "verbosity", "standard");
-    let lead_with    = get_str(&merged, "communication", "lead_with", "answer");
+    let verbosity = get_str(&merged, "communication", "verbosity", "standard");
+    let lead_with = get_str(&merged, "communication", "lead_with", "answer");
 
     // format block
-    let code_blocks    = get_str(&merged, "format", "code_blocks", "always");
+    let code_blocks = get_str(&merged, "format", "code_blocks", "always");
     let lists_vs_prose = get_str(&merged, "format", "lists_vs_prose", "lists");
-    let emoji          = get_str(&merged, "format", "emoji", "never");
+    let emoji = get_str(&merged, "format", "emoji", "never");
 
     // signals block
     let proactive_hat_suggestions = get_bool(&merged, "signals", "proactive_hat_suggestions", true);
     let alert_on_correlation_fire = get_bool(&merged, "signals", "alert_on_correlation_fire", true);
-    let include_why_context       = get_bool(&merged, "signals", "include_why_context", true);
+    let include_why_context = get_bool(&merged, "signals", "include_why_context", true);
 
     // interaction block
-    let ask_one_question           = get_bool(&merged, "interaction", "ask_one_question", true);
-    let confirm_completed_steps    = get_bool(&merged, "interaction", "confirm_completed_steps", false);
-    let acknowledge_hat_announcements = get_bool(&merged, "interaction", "acknowledge_hat_announcements", true);
+    let ask_one_question = get_bool(&merged, "interaction", "ask_one_question", true);
+    let confirm_completed_steps =
+        get_bool(&merged, "interaction", "confirm_completed_steps", false);
+    let acknowledge_hat_announcements = get_bool(
+        &merged,
+        "interaction",
+        "acknowledge_hat_announcements",
+        true,
+    );
 
     // per_hat block (kept as nested JSON object)
     let per_hat = merged.get("per_hat").cloned().unwrap_or(json!({}));
@@ -177,34 +206,51 @@ pub async fn analyze_human_comms(project_root: &str) -> Value {
     // ── Step 6: Assemble extras ───────────────────────────────────────────────
 
     // Provenance
-    extras.push(("has_user_defaults",     Value::Bool(has_user_defaults)));
+    extras.push(("has_user_defaults", Value::Bool(has_user_defaults)));
     extras.push(("has_project_overrides", Value::Bool(has_project_overrides)));
-    extras.push(("preferences_complete",  Value::Bool(preferences_complete)));
+    extras.push(("preferences_complete", Value::Bool(preferences_complete)));
 
     // communication
     extras.push(("include_urls", Value::Bool(include_urls)));
-    extras.push(("verbosity",    Value::String(verbosity)));
-    extras.push(("lead_with",    Value::String(lead_with)));
+    extras.push(("verbosity", Value::String(verbosity)));
+    extras.push(("lead_with", Value::String(lead_with)));
 
     // format
-    extras.push(("code_blocks",    Value::String(code_blocks)));
+    extras.push(("code_blocks", Value::String(code_blocks)));
     extras.push(("lists_vs_prose", Value::String(lists_vs_prose)));
-    extras.push(("emoji",          Value::String(emoji)));
+    extras.push(("emoji", Value::String(emoji)));
 
     // signals
-    extras.push(("proactive_hat_suggestions", Value::Bool(proactive_hat_suggestions)));
-    extras.push(("alert_on_correlation_fire", Value::Bool(alert_on_correlation_fire)));
-    extras.push(("include_why_context",       Value::Bool(include_why_context)));
+    extras.push((
+        "proactive_hat_suggestions",
+        Value::Bool(proactive_hat_suggestions),
+    ));
+    extras.push((
+        "alert_on_correlation_fire",
+        Value::Bool(alert_on_correlation_fire),
+    ));
+    extras.push(("include_why_context", Value::Bool(include_why_context)));
 
     // interaction
-    extras.push(("ask_one_question",            Value::Bool(ask_one_question)));
-    extras.push(("confirm_completed_steps",     Value::Bool(confirm_completed_steps)));
-    extras.push(("acknowledge_hat_announcements", Value::Bool(acknowledge_hat_announcements)));
+    extras.push(("ask_one_question", Value::Bool(ask_one_question)));
+    extras.push((
+        "confirm_completed_steps",
+        Value::Bool(confirm_completed_steps),
+    ));
+    extras.push((
+        "acknowledge_hat_announcements",
+        Value::Bool(acknowledge_hat_announcements),
+    ));
 
     // per_hat (nested, not a domain variable — for agent consumption)
     extras.push(("per_hat", per_hat));
 
-    build_cmdb("check-human-comms", score.clamp(0, 100) as u8, findings, Some(extras))
+    build_cmdb(
+        "check-human-comms",
+        score.clamp(0, 100) as u8,
+        findings,
+        Some(extras),
+    )
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -286,7 +332,9 @@ fn merge_objects(base: Value, over: Value) -> Value {
 
 /// Returns true if the value is a non-empty JSON object.
 fn block_has_keys(v: Option<&Value>) -> bool {
-    v.and_then(|v| v.as_object()).map(|o| !o.is_empty()).unwrap_or(false)
+    v.and_then(|v| v.as_object())
+        .map(|o| !o.is_empty())
+        .unwrap_or(false)
 }
 
 /// Extract a bool from `merged[block][field]`, with a default.

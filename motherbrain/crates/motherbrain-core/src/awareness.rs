@@ -198,7 +198,12 @@ mod tests {
     #[test]
     fn upsert_adds_new_fact() {
         let mut a = LocalAwareness::empty();
-        a.upsert_fact("cargo_path", "/usr/bin/cargo", AwarenessCategory::ToolPaths, None);
+        a.upsert_fact(
+            "cargo_path",
+            "/usr/bin/cargo",
+            AwarenessCategory::ToolPaths,
+            None,
+        );
         assert_eq!(a.facts.len(), 1);
         assert_eq!(a.facts[0].key, "cargo_path");
         assert_eq!(a.facts[0].value, "/usr/bin/cargo");
@@ -208,8 +213,18 @@ mod tests {
     #[test]
     fn upsert_replaces_existing_fact() {
         let mut a = LocalAwareness::empty();
-        a.upsert_fact("cargo_path", "/old/path", AwarenessCategory::ToolPaths, None);
-        a.upsert_fact("cargo_path", "/new/path", AwarenessCategory::ToolPaths, Some("updated"));
+        a.upsert_fact(
+            "cargo_path",
+            "/old/path",
+            AwarenessCategory::ToolPaths,
+            None,
+        );
+        a.upsert_fact(
+            "cargo_path",
+            "/new/path",
+            AwarenessCategory::ToolPaths,
+            Some("updated"),
+        );
         assert_eq!(a.facts.len(), 1, "should not duplicate");
         assert_eq!(a.facts[0].value, "/new/path");
         assert_eq!(a.facts[0].note.as_deref(), Some("updated"));
@@ -218,7 +233,10 @@ mod tests {
     #[test]
     fn add_note_appends_to_notes_not_facts() {
         let mut a = LocalAwareness::empty();
-        a.add_note("cargo exits 1 on Windows — expected", AwarenessCategory::Patterns);
+        a.add_note(
+            "cargo exits 1 on Windows — expected",
+            AwarenessCategory::Patterns,
+        );
         assert!(a.facts.is_empty());
         assert_eq!(a.notes.len(), 1);
         assert_eq!(a.notes[0].category, AwarenessCategory::Patterns);
@@ -227,7 +245,12 @@ mod tests {
     #[test]
     fn get_fact_returns_correct_value() {
         let mut a = LocalAwareness::empty();
-        a.upsert_fact("tool_paths.cargo", "C:\\cargo.exe", AwarenessCategory::ToolPaths, None);
+        a.upsert_fact(
+            "tool_paths.cargo",
+            "C:\\cargo.exe",
+            AwarenessCategory::ToolPaths,
+            None,
+        );
         a.upsert_fact("other", "x", AwarenessCategory::General, None);
         let f = a.get_fact("tool_paths.cargo").unwrap();
         assert_eq!(f.value, "C:\\cargo.exe");
@@ -235,9 +258,18 @@ mod tests {
 
     #[test]
     fn category_from_str_aliases() {
-        assert_eq!("tools".parse::<AwarenessCategory>().unwrap(), AwarenessCategory::ToolPaths);
-        assert_eq!("env".parse::<AwarenessCategory>().unwrap(), AwarenessCategory::Environment);
-        assert_eq!("unknown".parse::<AwarenessCategory>().unwrap(), AwarenessCategory::General);
+        assert_eq!(
+            "tools".parse::<AwarenessCategory>().unwrap(),
+            AwarenessCategory::ToolPaths
+        );
+        assert_eq!(
+            "env".parse::<AwarenessCategory>().unwrap(),
+            AwarenessCategory::Environment
+        );
+        assert_eq!(
+            "unknown".parse::<AwarenessCategory>().unwrap(),
+            AwarenessCategory::General
+        );
     }
 
     #[test]

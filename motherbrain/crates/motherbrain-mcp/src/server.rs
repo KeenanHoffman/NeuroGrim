@@ -13,10 +13,9 @@ use motherbrain_core::types::ScoreSnapshot;
 
 use chrono::{DateTime, Utc};
 use rmcp::{
-    ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
-    schemars, tool, tool_router,
+    schemars, tool, tool_router, ServerHandler,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -55,9 +54,18 @@ impl BrainServer {
                             if let Ok(cmdb) = serde_json::from_str::<serde_json::Value>(json_str) {
                                 let sf = source.score_field.as_deref().unwrap_or("score");
                                 let uf = source.updated_at_field.as_deref().unwrap_or("updated_at");
-                                if let (Some(score), Some(ts_str)) = (cmdb.get(sf).and_then(|v| v.as_u64()), cmdb.get(uf).and_then(|v| v.as_str())) {
+                                if let (Some(score), Some(ts_str)) = (
+                                    cmdb.get(sf).and_then(|v| v.as_u64()),
+                                    cmdb.get(uf).and_then(|v| v.as_str()),
+                                ) {
                                     if let Ok(ts) = ts_str.parse::<DateTime<Utc>>() {
-                                        data.insert(domain_key.clone(), CmdbData { score: score.min(100) as u8, updated_at: ts });
+                                        data.insert(
+                                            domain_key.clone(),
+                                            CmdbData {
+                                                score: score.min(100) as u8,
+                                                updated_at: ts,
+                                            },
+                                        );
                                     }
                                 }
                             }
@@ -71,12 +79,20 @@ impl BrainServer {
 
     async fn load_score_history(&self) -> Vec<ScoreSnapshot> {
         let path = self.project_root.join(".claude/brain/score-history.json");
-        tokio::fs::read_to_string(&path).await.ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+        tokio::fs::read_to_string(&path)
+            .await
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
     }
 
     async fn load_incident_ledger(&self) -> Vec<IncidentLedgerEntry> {
         let path = self.project_root.join(".claude/brain/incident-ledger.json");
-        tokio::fs::read_to_string(&path).await.ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+        tokio::fs::read_to_string(&path)
+            .await
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
     }
 
     async fn run_scoring(&self, hat: Option<String>, persona: Option<String>) -> AgentOutput {
@@ -84,7 +100,10 @@ impl BrainServer {
         let cmdb_data = self.load_cmdb_from_disk().await;
         let history = self.load_score_history().await;
         let incident_ledger = self.load_incident_ledger().await;
-        { let mut cache = self.cmdb_cache.write().await; *cache = cmdb_data.clone(); }
+        {
+            let mut cache = self.cmdb_cache.write().await;
+            *cache = cmdb_data.clone();
+        }
 
         let scorecard = build_scorecard(&self.registry, &cmdb_data, now);
 
@@ -94,31 +113,86 @@ impl BrainServer {
             if let Some(ref src) = def.scoring_source {
                 if let Some(ref p) = src.path {
                     if let Ok(s) = tokio::fs::read_to_string(self.project_root.join(p)).await {
-                        if let Ok(v) = serde_json::from_str(&s) { raw_cmdbs.insert(dk.clone(), v); }
+                        if let Ok(v) = serde_json::from_str(&s) {
+                            raw_cmdbs.insert(dk.clone(), v);
+                        }
                     }
                 }
             }
         }
-        let exported: HashMap<String, HashMap<String, ExportedVariable>> = self.registry.config.domain_definitions.iter()
-            .filter(|(_, d)| !d.exported_variables.is_empty()).map(|(k, d)| (k.clone(), d.exported_variables.clone())).collect();
+        let exported: HashMap<String, HashMap<String, ExportedVariable>> = self
+            .registry
+            .config
+            .domain_definitions
+            .iter()
+            .filter(|(_, d)| !d.exported_variables.is_empty())
+            .map(|(k, d)| (k.clone(), d.exported_variables.clone()))
+            .collect();
         let domain_variables = extract_domain_variables(&raw_cmdbs, &exported);
 
-        let unified_traj = compute_trajectory(&history, &self.registry.config.trajectory, None, &self.registry.config.domain_weights);
+        let unified_traj = compute_trajectory(
+            &history,
+            &self.registry.config.trajectory,
+            None,
+            &self.registry.config.domain_weights,
+        );
         let mut dom_trajs = HashMap::new();
         for dk in self.registry.config.domain_weights.keys() {
-            dom_trajs.insert(dk.clone(), compute_trajectory(&history, &self.registry.config.trajectory, Some(dk), &self.registry.config.domain_weights));
+            dom_trajs.insert(
+                dk.clone(),
+                compute_trajectory(
+                    &history,
+                    &self.registry.config.trajectory,
+                    Some(dk),
+                    &self.registry.config.domain_weights,
+                ),
+            );
         }
 
-        let corrs: Vec<CorrelationFired> = self.registry.config.correlations.iter().filter_map(|c| {
-            let name = c.get("name")?.as_str()?;
-            let desc = c.get("description").and_then(|v| v.as_str()).unwrap_or("");
-            if let Some(ct) = c.get("condition_tree") { if !evaluate_condition(ct, &domain_variables, &history) { return None; } }
-            Some(CorrelationFired { id: name.to_string(), description: desc.to_string(), skill: None })
-        }).collect();
+        let corrs: Vec<CorrelationFired> = self
+            .registry
+            .config
+            .correlations
+            .iter()
+            .filter_map(|c| {
+                let name = c.get("name")?.as_str()?;
+                let desc = c.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                if let Some(ct) = c.get("condition_tree") {
+                    if !evaluate_condition(ct, &domain_variables, &history) {
+                        return None;
+                    }
+                }
+                Some(CorrelationFired {
+                    id: name.to_string(),
+                    description: desc.to_string(),
+                    skill: None,
+                })
+            })
+            .collect();
 
-        let (incidents, skipped) = evaluate_incident_patterns(&self.registry.config.incident_patterns, &domain_variables, &history, &incident_ledger, &self.registry.config.severity_thresholds);
+        let (incidents, skipped) = evaluate_incident_patterns(
+            &self.registry.config.incident_patterns,
+            &domain_variables,
+            &history,
+            &incident_ledger,
+            &self.registry.config.severity_thresholds,
+        );
 
-        build_agent_output(&scorecard, &domain_variables, vec![], vec![], vec![], corrs, incidents, skipped, Some(unified_traj), dom_trajs, None, hat, persona)
+        build_agent_output(
+            &scorecard,
+            &domain_variables,
+            vec![],
+            vec![],
+            vec![],
+            corrs,
+            incidents,
+            skipped,
+            Some(unified_traj),
+            dom_trajs,
+            None,
+            hat,
+            persona,
+        )
     }
 }
 
@@ -173,16 +247,26 @@ pub struct TrajectoryParams {
 
 #[tool_router]
 impl BrainServer {
-    #[tool(description = "Get the unified health score with domain breakdown, trajectory, and cross-domain analysis. Returns full agent-mode JSON.")]
+    #[tool(
+        description = "Get the unified health score with domain breakdown, trajectory, and cross-domain analysis. Returns full agent-mode JSON."
+    )]
     async fn get_health_score(&self, Parameters(p): Parameters<HealthParams>) -> String {
         let output = self.run_scoring(p.hat, p.persona).await;
-        serde_json::to_string_pretty(&output).unwrap_or_else(|e| format!("{{\"error\": \"{}\"}}", e))
+        serde_json::to_string_pretty(&output)
+            .unwrap_or_else(|e| format!("{{\"error\": \"{}\"}}", e))
     }
 
-    #[tool(description = "Get trajectory analysis (velocity, acceleration, classification) for the unified score or a specific domain.")]
+    #[tool(
+        description = "Get trajectory analysis (velocity, acceleration, classification) for the unified score or a specific domain."
+    )]
     async fn get_trajectory(&self, Parameters(p): Parameters<TrajectoryParams>) -> String {
         let history = self.load_score_history().await;
-        let traj = compute_trajectory(&history, &self.registry.config.trajectory, p.domain.as_deref(), &self.registry.config.domain_weights);
+        let traj = compute_trajectory(
+            &history,
+            &self.registry.config.trajectory,
+            p.domain.as_deref(),
+            &self.registry.config.domain_weights,
+        );
         serde_json::to_string_pretty(&traj).unwrap_or_default()
     }
 
@@ -195,7 +279,10 @@ impl BrainServer {
     #[tool(description = "Re-invoke sensory tools and return updated scores.")]
     async fn refresh_sensory(&self) -> String {
         let cmdb_data = self.load_cmdb_from_disk().await;
-        { let mut cache = self.cmdb_cache.write().await; *cache = cmdb_data; }
+        {
+            let mut cache = self.cmdb_cache.write().await;
+            *cache = cmdb_data;
+        }
         let output = self.run_scoring(None, None).await;
         serde_json::to_string_pretty(&output).unwrap_or_default()
     }
@@ -208,10 +295,12 @@ impl BrainServer {
         }
     }
 
-    #[tool(description = "Get local machine-specific awareness: tool paths not on PATH, OS quirks, \
+    #[tool(
+        description = "Get local machine-specific awareness: tool paths not on PATH, OS quirks, \
         known behavioral patterns. This data is machine-local and gitignored — it persists facts \
         agents discover about the local environment so they are not forgotten across sessions. \
-        Use 'motherbrain awareness add' to record new facts.")]
+        Use 'motherbrain awareness add' to record new facts."
+    )]
     async fn get_local_awareness(
         &self,
         Parameters(_p): Parameters<LocalAwarenessParams>,
@@ -226,16 +315,22 @@ impl BrainServer {
             .unwrap_or_else(|e| format!("{{\"error\": \"{}\"}}", e))
     }
 
-    #[tool(description = "Record a subagent invocation outcome for subagent-health scoring. \
+    #[tool(
+        description = "Record a subagent invocation outcome for subagent-health scoring. \
         Call this after processing every subagent response, success or failure. \
         Appends one line to .claude/brain/subagent-outcomes.jsonl and recomputes \
-        .claude/brain/subagent-health-cmdb.json from the last 20 outcomes.")]
+        .claude/brain/subagent-health-cmdb.json from the last 20 outcomes."
+    )]
     async fn record_subagent_outcome(
         &self,
         Parameters(p): Parameters<SubagentOutcomeParams>,
     ) -> String {
-        let log_path = self.project_root.join(".claude/brain/subagent-outcomes.jsonl");
-        let cmdb_path = self.project_root.join(".claude/brain/subagent-health-cmdb.json");
+        let log_path = self
+            .project_root
+            .join(".claude/brain/subagent-outcomes.jsonl");
+        let cmdb_path = self
+            .project_root
+            .join(".claude/brain/subagent-health-cmdb.json");
 
         // Build outcome line
         let ts = Utc::now().to_rfc3339();
@@ -278,7 +373,9 @@ impl BrainServer {
 
         // Read last 20 lines and recompute CMDB
         let window = 20usize;
-        let all_text = tokio::fs::read_to_string(&log_path).await.unwrap_or_default();
+        let all_text = tokio::fs::read_to_string(&log_path)
+            .await
+            .unwrap_or_default();
         let lines: Vec<&str> = all_text.lines().rev().take(window).collect();
         let total_invocations = all_text.lines().count();
         let window_count = lines.len();
@@ -291,27 +388,66 @@ impl BrainServer {
 
         for line in &lines {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
-                if v.get("envelope_found").and_then(|x| x.as_bool()).unwrap_or(false) { envelope_found_count += 1; }
-                if v.get("schema_conformant").and_then(|x| x.as_bool()).unwrap_or(false) { schema_conformant_count += 1; }
-                if v.get("hat_compliant").and_then(|x| x.as_bool()).unwrap_or(false) { hat_compliant_count += 1; }
+                if v.get("envelope_found")
+                    .and_then(|x| x.as_bool())
+                    .unwrap_or(false)
+                {
+                    envelope_found_count += 1;
+                }
+                if v.get("schema_conformant")
+                    .and_then(|x| x.as_bool())
+                    .unwrap_or(false)
+                {
+                    schema_conformant_count += 1;
+                }
+                if v.get("hat_compliant")
+                    .and_then(|x| x.as_bool())
+                    .unwrap_or(false)
+                {
+                    hat_compliant_count += 1;
+                }
                 let conf = v.get("confidence").and_then(|x| x.as_f64()).unwrap_or(0.0);
                 confidence_sum += conf;
                 if let Some(cap) = v.get("capability").and_then(|x| x.as_str()) {
                     let entry = by_capability.entry(cap.to_string()).or_insert((0, 0, 0.0));
                     entry.0 += 1;
-                    if v.get("schema_conformant").and_then(|x| x.as_bool()).unwrap_or(false) { entry.1 += 1; }
+                    if v.get("schema_conformant")
+                        .and_then(|x| x.as_bool())
+                        .unwrap_or(false)
+                    {
+                        entry.1 += 1;
+                    }
                     entry.2 += conf;
                 }
             }
         }
 
         let wf = window_count as f64;
-        let envelope_completeness_rate = if window_count > 0 { envelope_found_count as f64 / wf } else { 0.0 };
-        let schema_conformance_rate = if window_count > 0 { schema_conformant_count as f64 / wf } else { 0.0 };
-        let hat_compliance_rate = if window_count > 0 { hat_compliant_count as f64 / wf } else { 0.0 };
-        let avg_confidence = if window_count > 0 { confidence_sum / wf } else { 0.0 };
+        let envelope_completeness_rate = if window_count > 0 {
+            envelope_found_count as f64 / wf
+        } else {
+            0.0
+        };
+        let schema_conformance_rate = if window_count > 0 {
+            schema_conformant_count as f64 / wf
+        } else {
+            0.0
+        };
+        let hat_compliance_rate = if window_count > 0 {
+            hat_compliant_count as f64 / wf
+        } else {
+            0.0
+        };
+        let avg_confidence = if window_count > 0 {
+            confidence_sum / wf
+        } else {
+            0.0
+        };
 
-        let score = (envelope_completeness_rate * 50.0 + hat_compliance_rate * 30.0 + schema_conformance_rate * 20.0).floor() as u8;
+        let score = (envelope_completeness_rate * 50.0
+            + hat_compliance_rate * 30.0
+            + schema_conformance_rate * 20.0)
+            .floor() as u8;
         let confidence_cmdb = (window_count as f64 / window as f64).min(1.0);
 
         let by_cap_json: serde_json::Value = by_capability.iter().map(|(k, (inv, conf_cnt, cs))| {
@@ -335,7 +471,12 @@ impl BrainServer {
             "by_capability": by_cap_json,
         });
 
-        if let Err(e) = tokio::fs::write(&cmdb_path, serde_json::to_string_pretty(&cmdb).unwrap_or_default()).await {
+        if let Err(e) = tokio::fs::write(
+            &cmdb_path,
+            serde_json::to_string_pretty(&cmdb).unwrap_or_default(),
+        )
+        .await
+        {
             return serde_json::json!({"error": format!("failed to write subagent-health cmdb: {}", e)}).to_string();
         }
 
@@ -344,7 +485,8 @@ impl BrainServer {
             "total_invocations": total_invocations,
             "window_invocations": window_count,
             "current_score": score,
-        }).to_string()
+        })
+        .to_string()
     }
 }
 

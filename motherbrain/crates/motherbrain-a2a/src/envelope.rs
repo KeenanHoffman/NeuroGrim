@@ -94,7 +94,11 @@ mod tests {
 
     #[test]
     fn envelope_roundtrip_preserves_fields() {
-        let env = A2aEnvelope::new("test-brain", MessageType::ScoreUpdated, json!({"score": 72}));
+        let env = A2aEnvelope::new(
+            "test-brain",
+            MessageType::ScoreUpdated,
+            json!({"score": 72}),
+        );
         let serialized = serde_json::to_string(&env).unwrap();
         let parsed: A2aEnvelope = serde_json::from_str(&serialized).unwrap();
         assert_eq!(env, parsed);

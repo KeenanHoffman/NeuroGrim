@@ -8,10 +8,9 @@
 
 use crate::cmdb::{build_cmdb, Finding};
 use rmcp::{
-    ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
-    schemars, tool, tool_router,
+    schemars, tool, tool_router, ServerHandler,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -22,19 +21,31 @@ pub struct SecurityStandardsServer {
     tool_router: ToolRouter<Self>,
 }
 impl SecurityStandardsServer {
-    pub fn new() -> Self { Self { tool_router: Self::tool_router() } }
+    pub fn new() -> Self {
+        Self {
+            tool_router: Self::tool_router(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct CheckSecurityStandardsParams { pub project_root: String }
+pub struct CheckSecurityStandardsParams {
+    pub project_root: String,
+}
 
 #[tool_router]
 impl SecurityStandardsServer {
-    #[tool(description = "Check security standards compliance evidence: SOC2 CC, ISO27001 Annex A, NIST CSF. \
+    #[tool(
+        description = "Check security standards compliance evidence: SOC2 CC, ISO27001 Annex A, NIST CSF. \
         Scans for vulnerability disclosure policy, secrets management, dependency scanning, \
-        access controls, and SAST tooling. Returns CMDB-envelope JSON.")]
-    async fn check_security_standards(&self, Parameters(p): Parameters<CheckSecurityStandardsParams>) -> String {
-        serde_json::to_string_pretty(&analyze_security_standards(&p.project_root).await).unwrap_or_default()
+        access controls, and SAST tooling. Returns CMDB-envelope JSON."
+    )]
+    async fn check_security_standards(
+        &self,
+        Parameters(p): Parameters<CheckSecurityStandardsParams>,
+    ) -> String {
+        serde_json::to_string_pretty(&analyze_security_standards(&p.project_root).await)
+            .unwrap_or_default()
     }
 }
 
@@ -84,8 +95,8 @@ pub async fn analyze_security_standards(project_root: &str) -> Value {
 
     // ── Group 1: Vulnerability Disclosure Policy (CC2.2, CC9.1) ─────────────
     // ISO27001: A.5.1, A.6.8 | NIST CSF: GV.RM-01, RS.CO-02
-    let has_security_policy = root.join("SECURITY.md").exists()
-        || root.join(".github/SECURITY.md").exists();
+    let has_security_policy =
+        root.join("SECURITY.md").exists() || root.join(".github/SECURITY.md").exists();
     extras.push(("has_security_policy", Value::Bool(has_security_policy)));
     if has_security_policy {
         score += 20;
@@ -110,13 +121,26 @@ pub async fn analyze_security_standards(project_root: &str) -> Value {
         || root.join(".env.template").exists()
         || root.join(".env.sample").exists();
 
-    let secret_patterns = ["*.pem", "*.key", ".env", "credentials", "*.secret", "*.pfx", "*.p12"];
-    let gitignore_excludes_secrets = secret_patterns.iter().any(|p| gitignore_content.contains(p));
+    let secret_patterns = [
+        "*.pem",
+        "*.key",
+        ".env",
+        "credentials",
+        "*.secret",
+        "*.pfx",
+        "*.p12",
+    ];
+    let gitignore_excludes_secrets = secret_patterns
+        .iter()
+        .any(|p| gitignore_content.contains(p));
 
-    let secrets_score = if has_env_template { 10 } else { 0 }
-        + if gitignore_excludes_secrets { 10 } else { 0 };
+    let secrets_score =
+        if has_env_template { 10 } else { 0 } + if gitignore_excludes_secrets { 10 } else { 0 };
     let has_secrets_management = secrets_score > 0;
-    extras.push(("has_secrets_management", Value::Bool(has_secrets_management)));
+    extras.push((
+        "has_secrets_management",
+        Value::Bool(has_secrets_management),
+    ));
     score += secrets_score;
 
     if has_env_template {
@@ -158,14 +182,27 @@ pub async fn analyze_security_standards(project_root: &str) -> Value {
         || root.join("renovate.json5").exists()
         || root.join(".github/renovate.json").exists();
 
-    let dep_audit_patterns = ["audit", "trivy", "snyk", "grype", "pip-audit",
-                               "cargo audit", "npm audit", "yarn audit", "osv-scanner"];
-    let has_dep_scanning_ci = dep_audit_patterns.iter().any(|p| workflow_content.contains(p));
+    let dep_audit_patterns = [
+        "audit",
+        "trivy",
+        "snyk",
+        "grype",
+        "pip-audit",
+        "cargo audit",
+        "npm audit",
+        "yarn audit",
+        "osv-scanner",
+    ];
+    let has_dep_scanning_ci = dep_audit_patterns
+        .iter()
+        .any(|p| workflow_content.contains(p));
 
-    let dep_score = if has_dep_tool { 10 } else { 0 }
-        + if has_dep_scanning_ci { 10 } else { 0 };
+    let dep_score = if has_dep_tool { 10 } else { 0 } + if has_dep_scanning_ci { 10 } else { 0 };
     let has_dependency_management = dep_score > 0;
-    extras.push(("has_dependency_management", Value::Bool(has_dependency_management)));
+    extras.push((
+        "has_dependency_management",
+        Value::Bool(has_dependency_management),
+    ));
     score += dep_score;
 
     if has_dep_tool {
@@ -241,8 +278,18 @@ pub async fn analyze_security_standards(project_root: &str) -> Value {
 
     // ── Group 5: Static Security Analysis / SAST (CC7.1) ────────────────────
     // ISO27001: A.7.3, A.8.25 | NIST CSF: PR.DS-08, DE.CM-01
-    let sast_patterns = ["codeql", "semgrep", "sast", "sonarqube", "sonarcloud",
-                          "checkmarx", "veracode", "snyk code", "bearer", "horusec"];
+    let sast_patterns = [
+        "codeql",
+        "semgrep",
+        "sast",
+        "sonarqube",
+        "sonarcloud",
+        "checkmarx",
+        "veracode",
+        "snyk code",
+        "bearer",
+        "horusec",
+    ];
     let has_sast = sast_patterns.iter().any(|p| workflow_content.contains(p));
     extras.push(("has_sast", Value::Bool(has_sast)));
     if has_sast {
@@ -269,37 +316,48 @@ pub async fn analyze_security_standards(project_root: &str) -> Value {
         has_dependency_management,
         has_codeowners || has_workflow_files,
         has_sast,
-    ].iter().filter(|&&v| v).count() as u8;
+    ]
+    .iter()
+    .filter(|&&v| v)
+    .count() as u8;
     extras.push(("controls_evidenced", Value::from(controls_evidenced)));
 
     // ── Control references map (SOC2 / ISO27001 / NIST CSF) ──────────────────
-    extras.push(("control_references", json!({
-        "vulnerability_disclosure": {
-            "soc2":     ["CC2.2", "CC9.1"],
-            "iso27001": ["A.5.1", "A.6.8"],
-            "nist_csf": ["GV.RM-01", "RS.CO-02"]
-        },
-        "secrets_management": {
-            "soc2":     ["CC6.1"],
-            "iso27001": ["A.7.1", "A.8.20"],
-            "nist_csf": ["PR.AA-01", "PR.DS-02"]
-        },
-        "dependency_management": {
-            "soc2":     ["CC7.1"],
-            "iso27001": ["A.7.3", "A.8.8"],
-            "nist_csf": ["ID.RA-01", "PR.PS-06"]
-        },
-        "access_control": {
-            "soc2":     ["CC6.3", "CC8.1"],
-            "iso27001": ["A.5.3", "A.8.2"],
-            "nist_csf": ["PR.AA-05", "PR.PS-04"]
-        },
-        "sast": {
-            "soc2":     ["CC7.1"],
-            "iso27001": ["A.7.3", "A.8.25"],
-            "nist_csf": ["PR.DS-08", "DE.CM-01"]
-        }
-    })));
+    extras.push((
+        "control_references",
+        json!({
+            "vulnerability_disclosure": {
+                "soc2":     ["CC2.2", "CC9.1"],
+                "iso27001": ["A.5.1", "A.6.8"],
+                "nist_csf": ["GV.RM-01", "RS.CO-02"]
+            },
+            "secrets_management": {
+                "soc2":     ["CC6.1"],
+                "iso27001": ["A.7.1", "A.8.20"],
+                "nist_csf": ["PR.AA-01", "PR.DS-02"]
+            },
+            "dependency_management": {
+                "soc2":     ["CC7.1"],
+                "iso27001": ["A.7.3", "A.8.8"],
+                "nist_csf": ["ID.RA-01", "PR.PS-06"]
+            },
+            "access_control": {
+                "soc2":     ["CC6.3", "CC8.1"],
+                "iso27001": ["A.5.3", "A.8.2"],
+                "nist_csf": ["PR.AA-05", "PR.PS-04"]
+            },
+            "sast": {
+                "soc2":     ["CC7.1"],
+                "iso27001": ["A.7.3", "A.8.25"],
+                "nist_csf": ["PR.DS-08", "DE.CM-01"]
+            }
+        }),
+    ));
 
-    build_cmdb("check-security-standards", score.clamp(0, 100) as u8, findings, Some(extras))
+    build_cmdb(
+        "check-security-standards",
+        score.clamp(0, 100) as u8,
+        findings,
+        Some(extras),
+    )
 }

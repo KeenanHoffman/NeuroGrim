@@ -19,8 +19,7 @@ pub async fn run(peer_url: String) -> Result<()> {
         )
         .try_init();
 
-    let url = Url::parse(&peer_url)
-        .with_context(|| format!("invalid peer URL {peer_url:?}"))?;
+    let url = Url::parse(&peer_url).with_context(|| format!("invalid peer URL {peer_url:?}"))?;
 
     let client = TaskClient::new_http();
     let card = client

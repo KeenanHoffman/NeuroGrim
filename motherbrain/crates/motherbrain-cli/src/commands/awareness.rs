@@ -76,8 +76,7 @@ async fn load(project_root: &Path) -> Result<LocalAwareness> {
     let s = tokio::fs::read_to_string(&path)
         .await
         .with_context(|| format!("Failed to read {}", path.display()))?;
-    serde_json::from_str(&s)
-        .with_context(|| format!("Failed to parse {}", path.display()))
+    serde_json::from_str(&s).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
 /// Save the awareness store back to disk.
@@ -102,8 +101,20 @@ pub async fn run(project_root: &str, subcommand: Option<AwarenessCmd>) -> Result
     let root = std::path::PathBuf::from(project_root);
     match subcommand {
         None => cmd_list(&root).await,
-        Some(AwarenessCmd::Add { key, value, category, note }) => {
-            cmd_add(&root, &key, &value, parse_category(category.as_deref()), note.as_deref()).await
+        Some(AwarenessCmd::Add {
+            key,
+            value,
+            category,
+            note,
+        }) => {
+            cmd_add(
+                &root,
+                &key,
+                &value,
+                parse_category(category.as_deref()),
+                note.as_deref(),
+            )
+            .await
         }
         Some(AwarenessCmd::Note { content, category }) => {
             cmd_note(&root, &content, parse_category(category.as_deref())).await
@@ -146,7 +157,11 @@ async fn cmd_list(root: &Path) -> Result<()> {
     }
 
     if let Some(ts) = a.updated_at {
-        println!("{} {}", "Last updated:".dimmed(), ts.format("%Y-%m-%dT%H:%M:%SZ").to_string().dimmed());
+        println!(
+            "{} {}",
+            "Last updated:".dimmed(),
+            ts.format("%Y-%m-%dT%H:%M:%SZ").to_string().dimmed()
+        );
     }
 
     Ok(())
@@ -212,7 +227,9 @@ mod tests {
 
     async fn temp_root() -> TempDir {
         let dir = TempDir::new().unwrap();
-        tokio::fs::create_dir_all(dir.path().join(".claude/brain")).await.unwrap();
+        tokio::fs::create_dir_all(dir.path().join(".claude/brain"))
+            .await
+            .unwrap();
         dir
     }
 
@@ -232,7 +249,8 @@ mod tests {
         .unwrap();
         let path = dir.path().join(AWARENESS_FILE);
         assert!(path.exists(), "awareness file should be created");
-        let a: LocalAwareness = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let a: LocalAwareness =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         assert_eq!(a.facts[0].key, "tool_paths.cargo");
     }
 
@@ -320,7 +338,10 @@ mod tests {
         let a = load(dir.path()).await.unwrap();
         assert!(a.facts.is_empty());
         assert_eq!(a.notes.len(), 1);
-        assert_eq!(a.notes[0].category, motherbrain_core::awareness::AwarenessCategory::Patterns);
+        assert_eq!(
+            a.notes[0].category,
+            motherbrain_core::awareness::AwarenessCategory::Patterns
+        );
     }
 
     #[tokio::test]

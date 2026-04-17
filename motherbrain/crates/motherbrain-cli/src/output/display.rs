@@ -45,13 +45,23 @@ pub fn display_score(output: &AgentOutput, plain: bool) {
             String::new()
         };
 
-        println!("  {} {} raw:{} eff:{}{}", domain_icon(d.effective_score), name, d.score, colored_eff, conf_note);
+        println!(
+            "  {} {} raw:{} eff:{}{}",
+            domain_icon(d.effective_score),
+            name,
+            d.score,
+            colored_eff,
+            conf_note
+        );
     }
 
     // Trajectory
     if let Some(ref traj) = output.trajectory {
         let class_str = classification_display(&traj.classification);
-        println!("  Trajectory: {} (velocity: {:+.1}, samples: {})", class_str, traj.velocity, traj.samples);
+        println!(
+            "  Trajectory: {} (velocity: {:+.1}, samples: {})",
+            class_str, traj.velocity, traj.samples
+        );
     }
 
     // Floor constraint
@@ -60,7 +70,11 @@ pub fn display_score(output: &AgentOutput, plain: bool) {
 
 /// Display the full health dashboard.
 pub fn display_health(output: &AgentOutput, plain: bool) {
-    let divider = if plain { "---" } else { "───────────────────────────────────" };
+    let divider = if plain {
+        "---"
+    } else {
+        "───────────────────────────────────"
+    };
 
     println!("{}", divider);
     display_score(output, plain);
@@ -83,13 +97,32 @@ pub fn display_health(output: &AgentOutput, plain: bool) {
         println!("\nIncident Patterns:");
         for inc in &output.incident_patterns {
             if plain {
-                let sev = match inc.severity.as_str() { "critical" => "CRITICAL", "warning" => "WARNING", _ => "INFO" };
+                let sev = match inc.severity.as_str() {
+                    "critical" => "CRITICAL",
+                    "warning" => "WARNING",
+                    _ => "INFO",
+                };
                 println!("  [{}] {} (x{})", sev, inc.name, inc.recurrence_count);
             } else {
                 match inc.severity.as_str() {
-                    "critical" => println!("  [{}] {} (x{})", "CRITICAL".red().bold(), inc.name, inc.recurrence_count),
-                    "warning" => println!("  [{}] {} (x{})", "WARNING".yellow().bold(), inc.name, inc.recurrence_count),
-                    _ => println!("  [{}] {} (x{})", "INFO".dimmed(), inc.name, inc.recurrence_count),
+                    "critical" => println!(
+                        "  [{}] {} (x{})",
+                        "CRITICAL".red().bold(),
+                        inc.name,
+                        inc.recurrence_count
+                    ),
+                    "warning" => println!(
+                        "  [{}] {} (x{})",
+                        "WARNING".yellow().bold(),
+                        inc.name,
+                        inc.recurrence_count
+                    ),
+                    _ => println!(
+                        "  [{}] {} (x{})",
+                        "INFO".dimmed(),
+                        inc.name,
+                        inc.recurrence_count
+                    ),
                 };
             }
             if !inc.hypothesis.is_empty() {
@@ -115,7 +148,13 @@ pub fn display_health(output: &AgentOutput, plain: bool) {
     if !output.top_recommendations.is_empty() {
         println!("\nRecommendations:");
         for (i, rec) in output.top_recommendations.iter().enumerate() {
-            println!("  {}. [{}] {} — {}", i + 1, rec.status, rec.gate, rec.command);
+            println!(
+                "  {}. [{}] {} — {}",
+                i + 1,
+                rec.status,
+                rec.gate,
+                rec.command
+            );
         }
     }
 
@@ -134,8 +173,10 @@ pub fn display_trend(output: &AgentOutput, _plain: bool) {
     // Unified
     if let Some(ref traj) = output.trajectory {
         let class_str = classification_display(&traj.classification);
-        println!("  Unified: {} (velocity: {:+.1}, acceleration: {:+.1}, samples: {})",
-            class_str, traj.velocity, traj.acceleration, traj.samples);
+        println!(
+            "  Unified: {} (velocity: {:+.1}, acceleration: {:+.1}, samples: {})",
+            class_str, traj.velocity, traj.acceleration, traj.samples
+        );
     } else {
         println!("  Unified: no trajectory data");
     }
@@ -147,8 +188,10 @@ pub fn display_trend(output: &AgentOutput, _plain: bool) {
     for (name, d) in &domains {
         if let Some(ref traj) = d.trajectory {
             let class_str = classification_display(&traj.classification);
-            println!("  {}: {} (velocity: {:+.1}, acceleration: {:+.1}, samples: {})",
-                name, class_str, traj.velocity, traj.acceleration, traj.samples);
+            println!(
+                "  {}: {} (velocity: {:+.1}, acceleration: {:+.1}, samples: {})",
+                name, class_str, traj.velocity, traj.acceleration, traj.samples
+            );
         } else {
             println!("  {}: no data", name);
         }
@@ -156,9 +199,13 @@ pub fn display_trend(output: &AgentOutput, _plain: bool) {
 }
 
 fn domain_icon(score: u8) -> &'static str {
-    if score >= 75 { "+" }
-    else if score >= 50 { "~" }
-    else { "-" }
+    if score >= 75 {
+        "+"
+    } else if score >= 50 {
+        "~"
+    } else {
+        "-"
+    }
 }
 
 fn classification_display(c: &TrajectoryClassification) -> String {

@@ -15,10 +15,9 @@
 
 use crate::cmdb::{build_cmdb, Finding};
 use rmcp::{
-    ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
-    schemars, tool, tool_router,
+    schemars, tool, tool_router, ServerHandler,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -72,7 +71,9 @@ pub struct SecretRefsServer {
 }
 impl SecretRefsServer {
     pub fn new() -> Self {
-        Self { tool_router: Self::tool_router() }
+        Self {
+            tool_router: Self::tool_router(),
+        }
     }
 }
 
@@ -83,10 +84,12 @@ pub struct CheckSecretRefsParams {
 
 #[tool_router]
 impl SecretRefsServer {
-    #[tool(description = "Check secret references manifest: reads .claude/secret-refs.yaml, \
+    #[tool(
+        description = "Check secret references manifest: reads .claude/secret-refs.yaml, \
         resolves reference patterns for each catalogued secret via built-in or custom providers, \
         and scans .env* files for undocumented credentials. Returns CMDB-envelope JSON with \
-        secret_catalog (safe for agents — no values, only reference patterns).")]
+        secret_catalog (safe for agents — no values, only reference patterns)."
+    )]
     async fn check_secret_refs(&self, Parameters(p): Parameters<CheckSecretRefsParams>) -> String {
         serde_json::to_string_pretty(&analyze_secret_refs(&p.project_root).await)
             .unwrap_or_default()
@@ -127,14 +130,14 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
                 points: 0,
                 detail: Some("Create .claude/secret-refs.yaml to catalog this project's secrets. See .claude/skills/secret-refs.md.".into()),
             });
-            extras.push(("has_manifest",          Value::Bool(false)));
-            extras.push(("secrets_documented",    Value::from(0u32)));
+            extras.push(("has_manifest", Value::Bool(false)));
+            extras.push(("secrets_documented", Value::from(0u32)));
             extras.push(("undocumented_env_vars", Value::from(0u32)));
             extras.push(("all_secrets_described", Value::Bool(false)));
             extras.push(("all_secrets_have_rotation", Value::Bool(false)));
-            extras.push(("env_vars_detected",     Value::from(0u32)));
-            extras.push(("secret_catalog",        json!([])));
-            extras.push(("undocumented_secrets",  json!([])));
+            extras.push(("env_vars_detected", Value::from(0u32)));
+            extras.push(("secret_catalog", json!([])));
+            extras.push(("undocumented_secrets", json!([])));
             return build_cmdb("check-secret-refs", 0, findings, Some(extras));
         }
     };
@@ -148,14 +151,14 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
                 points: 0,
                 detail: Some(format!(".claude/secret-refs.yaml parse error: {e}")),
             });
-            extras.push(("has_manifest",          Value::Bool(true)));
-            extras.push(("secrets_documented",    Value::from(0u32)));
+            extras.push(("has_manifest", Value::Bool(true)));
+            extras.push(("secrets_documented", Value::from(0u32)));
             extras.push(("undocumented_env_vars", Value::from(0u32)));
             extras.push(("all_secrets_described", Value::Bool(false)));
             extras.push(("all_secrets_have_rotation", Value::Bool(false)));
-            extras.push(("env_vars_detected",     Value::from(0u32)));
-            extras.push(("secret_catalog",        json!([])));
-            extras.push(("undocumented_secrets",  json!([])));
+            extras.push(("env_vars_detected", Value::from(0u32)));
+            extras.push(("secret_catalog", json!([])));
+            extras.push(("undocumented_secrets", json!([])));
             return build_cmdb("check-secret-refs", 0, findings, Some(extras));
         }
     };
@@ -167,17 +170,25 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
         .unwrap_or("env")
         .to_string();
 
-    let secrets_map = manifest.get("secrets").and_then(|v| v.as_object()).cloned().unwrap_or_default();
-    let custom_providers = manifest.get("providers").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+    let secrets_map = manifest
+        .get("secrets")
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    let custom_providers = manifest
+        .get("providers")
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
 
     // ── Step 3: Build merged provider template map ───────────────────────────
     // Start with built-ins; custom providers (from manifest) override by name.
     let mut provider_templates: HashMap<String, String> = HashMap::from([
-        ("gcp".into(),   GCP_TEMPLATE.into()),
-        ("aws".into(),   AWS_TEMPLATE.into()),
+        ("gcp".into(), GCP_TEMPLATE.into()),
+        ("aws".into(), AWS_TEMPLATE.into()),
         ("azure".into(), AZURE_TEMPLATE.into()),
         ("vault".into(), VAULT_TEMPLATE.into()),
-        ("env".into(),   ENV_TEMPLATE.into()),
+        ("env".into(), ENV_TEMPLATE.into()),
     ]);
     for (name, spec) in &custom_providers {
         if let Some(tmpl) = spec.get("reference_template").and_then(|v| v.as_str()) {
@@ -186,18 +197,28 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
     }
 
     // ── Step 4: Scan .env* files for env var names ───────────────────────────
-    let env_file_names = [".env", ".env.example", ".env.local", ".env.template", ".env.sample"];
+    let env_file_names = [
+        ".env",
+        ".env.example",
+        ".env.local",
+        ".env.template",
+        ".env.sample",
+    ];
     let mut detected_env_vars: HashSet<String> = HashSet::new();
     for fname in &env_file_names {
         let fpath = root.join(fname);
         if let Ok(content) = tokio::fs::read_to_string(&fpath).await {
             for line in content.lines() {
                 let line = line.trim();
-                if line.starts_with('#') || line.is_empty() { continue; }
+                if line.starts_with('#') || line.is_empty() {
+                    continue;
+                }
                 if let Some(eq_pos) = line.find('=') {
                     let key = line[..eq_pos].trim().to_string();
                     // Only collect names that look like env vars (uppercase, underscores, digits)
-                    if key.chars().all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit())
+                    if key
+                        .chars()
+                        .all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit())
                         && !key.is_empty()
                     {
                         detected_env_vars.insert(key);
@@ -214,18 +235,37 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
     let mut all_have_rotation = true;
 
     for (id, entry) in &secrets_map {
-        let description = entry.get("description").and_then(|v| v.as_str()).unwrap_or("");
-        let env_var     = entry.get("env_var").and_then(|v| v.as_str()).unwrap_or("");
-        let provider    = entry.get("provider").and_then(|v| v.as_str()).unwrap_or(&default_provider).to_string();
-        let secret_path = entry.get("secret_path").and_then(|v| v.as_str()).unwrap_or(env_var);
-        let vault_url   = entry.get("vault_url").and_then(|v| v.as_str()).unwrap_or("https://vault.example.com");
-        let rotation    = entry.get("rotation_days");
-        let used_by     = entry.get("used_by").cloned().unwrap_or(json!([]));
-        let tags        = entry.get("tags").cloned().unwrap_or(json!([]));
+        let description = entry
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let env_var = entry.get("env_var").and_then(|v| v.as_str()).unwrap_or("");
+        let provider = entry
+            .get("provider")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&default_provider)
+            .to_string();
+        let secret_path = entry
+            .get("secret_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or(env_var);
+        let vault_url = entry
+            .get("vault_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("https://vault.example.com");
+        let rotation = entry.get("rotation_days");
+        let used_by = entry.get("used_by").cloned().unwrap_or(json!([]));
+        let tags = entry.get("tags").cloned().unwrap_or(json!([]));
 
-        if description.is_empty() { all_described = false; }
-        if rotation.is_none()     { all_have_rotation = false; }
-        if !env_var.is_empty()    { documented_env_vars.insert(env_var.to_string()); }
+        if description.is_empty() {
+            all_described = false;
+        }
+        if rotation.is_none() {
+            all_have_rotation = false;
+        }
+        if !env_var.is_empty() {
+            documented_env_vars.insert(env_var.to_string());
+        }
 
         // Render reference pattern
         let template = provider_templates
@@ -263,8 +303,8 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
         .collect();
 
     let secrets_count = secrets_map.len() as u32;
-    let env_detected  = detected_env_vars.len() as u32;
-    let undoc_count   = undocumented.len() as u32;
+    let env_detected = detected_env_vars.len() as u32;
+    let undoc_count = undocumented.len() as u32;
 
     // ── Step 7: Score ─────────────────────────────────────────────────────────
     if secrets_count > 0 {
@@ -297,7 +337,9 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
             name: "missing_descriptions".into(),
             status: "warning".into(),
             points: 0,
-            detail: Some("Some secrets lack descriptions. Add a `description:` field to each entry.".into()),
+            detail: Some(
+                "Some secrets lack descriptions. Add a `description:` field to each entry.".into(),
+            ),
         });
     }
     if !all_have_rotation && secrets_count > 0 {
@@ -305,7 +347,10 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
             name: "missing_rotation_policy".into(),
             status: "warning".into(),
             points: 0,
-            detail: Some("Some secrets have no `rotation_days` defined. Document your rotation policy.".into()),
+            detail: Some(
+                "Some secrets have no `rotation_days` defined. Document your rotation policy."
+                    .into(),
+            ),
         });
     }
     for var in &undocumented {
@@ -320,14 +365,25 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
     }
 
     // ── Step 9: Assemble extras ───────────────────────────────────────────────
-    extras.push(("has_manifest",              Value::Bool(true)));
-    extras.push(("secrets_documented",        Value::from(secrets_count)));
-    extras.push(("all_secrets_described",     Value::Bool(all_described && secrets_count > 0)));
-    extras.push(("all_secrets_have_rotation", Value::Bool(all_have_rotation && secrets_count > 0)));
-    extras.push(("env_vars_detected",         Value::from(env_detected)));
-    extras.push(("undocumented_env_vars",     Value::from(undoc_count)));
-    extras.push(("secret_catalog",            Value::Array(catalog)));
-    extras.push(("undocumented_secrets",      json!(undocumented)));
+    extras.push(("has_manifest", Value::Bool(true)));
+    extras.push(("secrets_documented", Value::from(secrets_count)));
+    extras.push((
+        "all_secrets_described",
+        Value::Bool(all_described && secrets_count > 0),
+    ));
+    extras.push((
+        "all_secrets_have_rotation",
+        Value::Bool(all_have_rotation && secrets_count > 0),
+    ));
+    extras.push(("env_vars_detected", Value::from(env_detected)));
+    extras.push(("undocumented_env_vars", Value::from(undoc_count)));
+    extras.push(("secret_catalog", Value::Array(catalog)));
+    extras.push(("undocumented_secrets", json!(undocumented)));
 
-    build_cmdb("check-secret-refs", score.clamp(0, 100) as u8, findings, Some(extras))
+    build_cmdb(
+        "check-secret-refs",
+        score.clamp(0, 100) as u8,
+        findings,
+        Some(extras),
+    )
 }

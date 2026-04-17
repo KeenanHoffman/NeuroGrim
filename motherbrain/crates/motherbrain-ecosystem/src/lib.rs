@@ -137,9 +137,7 @@ pub enum EcosystemError {
 /// is fewer surprises.
 pub async fn invoke_child(entry: &ChildEntry) -> Result<AgentOutput, EcosystemError> {
     match &entry.transport {
-        ChildTransport::Subprocess { brain_path } => {
-            invoke_subprocess(&entry.id, brain_path).await
-        }
+        ChildTransport::Subprocess { brain_path } => invoke_subprocess(&entry.id, brain_path).await,
         ChildTransport::A2A {
             a2a_endpoint,
             agent_card_url,
@@ -213,12 +211,11 @@ async fn invoke_subprocess(
     // Deserialize — per the crate docs, this IS the schema validation. Any
     // field shape mismatch surfaces as serde_json::Error with a helpful
     // location pointer.
-    let agent_output: AgentOutput = serde_json::from_slice(&output.stdout).map_err(|e| {
-        EcosystemError::InvalidOutput {
+    let agent_output: AgentOutput =
+        serde_json::from_slice(&output.stdout).map_err(|e| EcosystemError::InvalidOutput {
             child: child_id.into(),
             source: e,
-        }
-    })?;
+        })?;
     Ok(agent_output)
 }
 
@@ -264,7 +261,11 @@ async fn invoke_a2a(
     // here rather than relying on a 405 response because the spec calls for
     // pre-flight validation — and because surfacing a typed error is kinder
     // than a generic transport failure.
-    if !card.capabilities.accepts.contains(&MessageType::SnapshotRequested) {
+    if !card
+        .capabilities
+        .accepts
+        .contains(&MessageType::SnapshotRequested)
+    {
         return Err(EcosystemError::CapabilityMismatch {
             brain_id: card.id,
             missing: "snapshot.requested".into(),
@@ -308,9 +309,7 @@ async fn invoke_a2a(
         other => {
             return Err(EcosystemError::UnexpectedA2aResponse {
                 child: child_id.into(),
-                message: format!(
-                    "expected score.updated or snapshot.delivered, got {other:?}"
-                ),
+                message: format!("expected score.updated or snapshot.delivered, got {other:?}"),
             });
         }
     }
@@ -352,15 +351,12 @@ pub async fn score_ecosystem(
     let alive = enabled_only(&registry.children);
     // Disabled children still appear in child_statuses — so collect them
     // separately and feed them in as `disabled: true` contributions.
-    let disabled: Vec<&ChildEntry> = registry
-        .children
-        .iter()
-        .filter(|c| !c.enabled)
-        .collect();
+    let disabled: Vec<&ChildEntry> = registry.children.iter().filter(|c| !c.enabled).collect();
 
     let ordered = topological_sort(&alive)?;
 
-    let mut contributions: Vec<ChildContribution> = Vec::with_capacity(ordered.len() + disabled.len());
+    let mut contributions: Vec<ChildContribution> =
+        Vec::with_capacity(ordered.len() + disabled.len());
     for entry in &ordered {
         let result = invoke_child(entry).await;
         let output = match result {
@@ -388,7 +384,12 @@ pub async fn score_ecosystem(
     }
 
     let now = chrono::Utc::now();
-    Ok(aggregate(&parent_output, parent_weight, &contributions, now))
+    Ok(aggregate(
+        &parent_output,
+        parent_weight,
+        &contributions,
+        now,
+    ))
 }
 
 /// Expose the cross-project variable merge from the core for adopters who

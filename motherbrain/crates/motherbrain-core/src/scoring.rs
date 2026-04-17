@@ -8,7 +8,13 @@ use std::collections::HashMap;
 ///
 /// Multiplier model: effective = floor(raw * confidence / 100)
 /// Floor model: effective = min(raw, ceiling) when confidence < threshold, else raw
-pub fn effective_score(raw: Score, confidence: Confidence, model: ScoringModel, floor_threshold: u8, floor_ceiling: u8) -> Score {
+pub fn effective_score(
+    raw: Score,
+    confidence: Confidence,
+    model: ScoringModel,
+    floor_threshold: u8,
+    floor_ceiling: u8,
+) -> Score {
     match model {
         ScoringModel::Multiplier => {
             let value = (raw.value() as f64 * confidence.value() as f64 / 100.0).floor() as i64;
@@ -123,7 +129,13 @@ pub fn build_scorecard(
         };
 
         let confidence = exponential_decay(updated_at, now, &confidence_config);
-        let eff = effective_score(raw, confidence, scoring_model, floor_threshold, floor_ceiling);
+        let eff = effective_score(
+            raw,
+            confidence,
+            scoring_model,
+            floor_threshold,
+            floor_ceiling,
+        );
 
         domain_scores.insert(
             domain_key.clone(),

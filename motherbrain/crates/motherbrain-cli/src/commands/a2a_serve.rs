@@ -169,9 +169,11 @@ pub async fn run(
                 registry_path.display()
             )
         })?;
-    let registry = BrainRegistry::from_json(&registry_text)
-        .context("failed to parse brain-registry.json")?;
-    registry.validate().context("brain-registry.json is invalid")?;
+    let registry =
+        BrainRegistry::from_json(&registry_text).context("failed to parse brain-registry.json")?;
+    registry
+        .validate()
+        .context("brain-registry.json is invalid")?;
 
     // Keep the registry path as a String so the async handler closures can
     // clone it cheaply on each peer invocation. Path::to_string_lossy loses

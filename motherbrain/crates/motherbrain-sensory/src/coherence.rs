@@ -17,10 +17,9 @@
 use crate::cmdb::{build_cmdb, Finding};
 use motherbrain_core::correlation::evaluate_condition;
 use rmcp::{
-    ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
-    schemars, tool, tool_router,
+    schemars, tool, tool_router, ServerHandler,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -33,7 +32,9 @@ pub struct CoherenceServer {
 }
 impl CoherenceServer {
     pub fn new() -> Self {
-        Self { tool_router: Self::tool_router() }
+        Self {
+            tool_router: Self::tool_router(),
+        }
     }
 }
 
@@ -44,13 +45,14 @@ pub struct CheckCoherenceParams {
 
 #[tool_router]
 impl CoherenceServer {
-    #[tool(description = "Check cross-domain coherence: evaluates the correlations defined in \
+    #[tool(
+        description = "Check cross-domain coherence: evaluates the correlations defined in \
         brain-registry.json against live domain CMDBs. Scores relationship health — \
         how many cross-domain correlations are in healthy (non-firing) configurations. \
-        Returns CMDB-envelope JSON.")]
+        Returns CMDB-envelope JSON."
+    )]
     async fn check_coherence(&self, Parameters(p): Parameters<CheckCoherenceParams>) -> String {
-        serde_json::to_string_pretty(&analyze_coherence(&p.project_root).await)
-            .unwrap_or_default()
+        serde_json::to_string_pretty(&analyze_coherence(&p.project_root).await).unwrap_or_default()
     }
 }
 
@@ -79,7 +81,10 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
     let registry_str = match tokio::fs::read_to_string(&registry_path).await {
         Ok(s) => s,
         Err(_) => {
-            extras.push(("coherence_error", Value::String("brain-registry.json not found — run from project root".into())));
+            extras.push((
+                "coherence_error",
+                Value::String("brain-registry.json not found — run from project root".into()),
+            ));
             extras.push(("correlations_evaluated", Value::from(0u8)));
             extras.push(("correlations_fired", Value::from(0u8)));
             extras.push(("highest_severity", Value::String("none".into())));
@@ -91,7 +96,10 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
     let registry: Value = match serde_json::from_str(&registry_str) {
         Ok(v) => v,
         Err(e) => {
-            extras.push(("coherence_error", Value::String(format!("brain-registry.json parse error: {e}"))));
+            extras.push((
+                "coherence_error",
+                Value::String(format!("brain-registry.json parse error: {e}")),
+            ));
             extras.push(("correlations_evaluated", Value::from(0u8)));
             extras.push(("correlations_fired", Value::from(0u8)));
             extras.push(("highest_severity", Value::String("none".into())));
@@ -153,7 +161,10 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
         if let Some(obj) = cmdb.as_object() {
             for (field, value) in obj {
                 // Skip structural / nested fields
-                if matches!(field.as_str(), "meta" | "findings" | "control_references" | "correlation_details") {
+                if matches!(
+                    field.as_str(),
+                    "meta" | "findings" | "control_references" | "correlation_details"
+                ) {
                     continue;
                 }
                 match value {
@@ -170,17 +181,17 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
     let deduction_for = |sev: &str| -> i32 {
         match sev {
             "critical" => 35,
-            "warning"  => 20,
-            _          => 5,  // info / unrecognised
+            "warning" => 20,
+            _ => 5, // info / unrecognised
         }
     };
 
     let severity_rank = |sev: &str| -> u8 {
         match sev {
             "critical" => 3,
-            "warning"  => 2,
-            "info"     => 1,
-            _          => 0,
+            "warning" => 2,
+            "info" => 1,
+            _ => 0,
         }
     };
 
@@ -190,15 +201,25 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
     let mut correlation_details: Vec<Value> = Vec::new();
 
     for corr in &correlations {
-        let id = corr.get("id")
+        let id = corr
+            .get("id")
             .or_else(|| corr.get("name"))
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        let corr_type    = corr.get("type").and_then(|v| v.as_str()).unwrap_or("reinforcing");
-        let severity     = corr.get("severity").and_then(|v| v.as_str()).unwrap_or("info");
-        let description  = corr.get("description").and_then(|v| v.as_str()).unwrap_or("");
-        let insight      = corr.get("insight").and_then(|v| v.as_str()).unwrap_or("");
-        let domains_val  = corr.get("domains").cloned().unwrap_or(json!([]));
+        let corr_type = corr
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("reinforcing");
+        let severity = corr
+            .get("severity")
+            .and_then(|v| v.as_str())
+            .unwrap_or("info");
+        let description = corr
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let insight = corr.get("insight").and_then(|v| v.as_str()).unwrap_or("");
+        let domains_val = corr.get("domains").cloned().unwrap_or(json!([]));
 
         let fired = match corr.get("condition_tree") {
             Some(ct) if !ct.is_null() => evaluate_condition(ct, &vars, &[]),
@@ -220,7 +241,11 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
                 name: id.to_string(),
                 status: format!("fired:{}", corr_type),
                 points: -deduction,
-                detail: Some(if !insight.is_empty() { insight.to_string() } else { description.to_string() }),
+                detail: Some(if !insight.is_empty() {
+                    insight.to_string()
+                } else {
+                    description.to_string()
+                }),
             });
         }
 
@@ -238,10 +263,18 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
     let correlations_evaluated = correlations.len() as u8;
 
     // ── Step 7: Assemble CMDB ─────────────────────────────────────────────────
-    extras.push(("correlations_evaluated", Value::from(correlations_evaluated)));
-    extras.push(("correlations_fired",     Value::from(correlations_fired_count)));
-    extras.push(("highest_severity",       Value::String(highest_severity)));
-    extras.push(("correlation_details",    Value::Array(correlation_details)));
+    extras.push((
+        "correlations_evaluated",
+        Value::from(correlations_evaluated),
+    ));
+    extras.push(("correlations_fired", Value::from(correlations_fired_count)));
+    extras.push(("highest_severity", Value::String(highest_severity)));
+    extras.push(("correlation_details", Value::Array(correlation_details)));
 
-    build_cmdb("check-coherence", score.clamp(0, 100) as u8, findings, Some(extras))
+    build_cmdb(
+        "check-coherence",
+        score.clamp(0, 100) as u8,
+        findings,
+        Some(extras),
+    )
 }

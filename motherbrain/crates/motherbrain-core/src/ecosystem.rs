@@ -628,10 +628,7 @@ mod tests {
     #[test]
     fn topo_cycle_returns_error() {
         // A -> B -> A (mutual dependency).
-        let nodes = [
-            child("a", &["b"], 1.0),
-            child("b", &["a"], 1.0),
-        ];
+        let nodes = [child("a", &["b"], 1.0), child("b", &["a"], 1.0)];
         let err = topological_sort(&nodes).unwrap_err();
         match err {
             EcosystemTopologyError::Cycle { involved } => {
@@ -819,7 +816,9 @@ mod tests {
     fn cross_project_variables_are_prefixed() {
         let now = Utc::now();
         let mut out_a = fixture_output(50, 100, now);
-        out_a.domain_variables.insert("deploy_blocking".into(), json!(3));
+        out_a
+            .domain_variables
+            .insert("deploy_blocking".into(), json!(3));
         out_a
             .domain_variables
             .insert("any_stale".into(), json!(true));
@@ -937,7 +936,10 @@ mod tests {
         let out_fresh = fixture_output(80, 100, now);
         let out_stale = fixture_output(80, 100, now - Duration::days(10));
 
-        assert_eq!(classify_child(false, None, None, now), ChildStatus::Disabled);
+        assert_eq!(
+            classify_child(false, None, None, now),
+            ChildStatus::Disabled
+        );
         assert_eq!(
             classify_child(true, None, Some("x"), now),
             ChildStatus::Error

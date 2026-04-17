@@ -28,11 +28,14 @@ use crate::agent_card::AgentCard;
 use crate::envelope::{A2aEnvelope, MessageType};
 use crate::error::A2aError;
 use axum::{
-    Json, Router,
     extract::{Path, State},
     http::StatusCode,
-    response::{IntoResponse, sse::{Event, Sse}},
+    response::{
+        sse::{Event, Sse},
+        IntoResponse,
+    },
     routing::{get, post},
+    Json, Router,
 };
 use futures::stream::{self, Stream};
 use std::collections::HashMap;
@@ -302,11 +305,7 @@ mod tests {
         server.register_handler(MessageType::SnapshotRequested, |env| async move {
             Ok(A2aEnvelope {
                 reply_to: Some(env.message_id),
-                ..A2aEnvelope::new(
-                    "peer",
-                    MessageType::SnapshotDelivered,
-                    json!({"score": 72}),
-                )
+                ..A2aEnvelope::new("peer", MessageType::SnapshotDelivered, json!({"score": 72}))
             })
         });
         let got = server.handler_for(MessageType::SnapshotRequested);
@@ -325,11 +324,8 @@ mod tests {
     async fn post_then_get_roundtrip() {
         let mut server = TaskServer::new(minimal_card());
         server.register_handler(MessageType::SnapshotRequested, |env| async move {
-            let mut resp = A2aEnvelope::new(
-                "peer",
-                MessageType::SnapshotDelivered,
-                json!({"score": 80}),
-            );
+            let mut resp =
+                A2aEnvelope::new("peer", MessageType::SnapshotDelivered, json!({"score": 80}));
             resp.reply_to = Some(env.message_id);
             Ok(resp)
         });
@@ -392,11 +388,8 @@ mod tests {
             let c = counter_for_handler.clone();
             async move {
                 c.fetch_add(1, Ordering::SeqCst);
-                let mut resp = A2aEnvelope::new(
-                    "peer",
-                    MessageType::SnapshotDelivered,
-                    json!({"score": 90}),
-                );
+                let mut resp =
+                    A2aEnvelope::new("peer", MessageType::SnapshotDelivered, json!({"score": 90}));
                 resp.reply_to = Some(env.message_id);
                 Ok(resp)
             }
@@ -413,18 +406,8 @@ mod tests {
         let request = A2aEnvelope::new("caller", MessageType::SnapshotRequested, json!({}));
         let post_url = format!("http://{addr}/a2a/v1/tasks");
 
-        let _ = client
-            .post(&post_url)
-            .json(&request)
-            .send()
-            .await
-            .unwrap();
-        let _ = client
-            .post(&post_url)
-            .json(&request)
-            .send()
-            .await
-            .unwrap();
+        let _ = client.post(&post_url).json(&request).send().await.unwrap();
+        let _ = client.post(&post_url).json(&request).send().await.unwrap();
 
         assert_eq!(
             counter.load(Ordering::SeqCst),

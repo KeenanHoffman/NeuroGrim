@@ -114,11 +114,7 @@ fn validate_accepts_minimal_registry() {
     )
     .unwrap();
     let (code, stdout, stderr) = run(
-        &[
-            "validate",
-            "--registry",
-            registry_path.to_str().unwrap(),
-        ],
+        &["validate", "--registry", registry_path.to_str().unwrap()],
         None,
     );
     assert_eq!(
@@ -133,11 +129,7 @@ fn validate_rejects_malformed_json() {
     let registry_path = tmp.path().join("bad.json");
     std::fs::write(&registry_path, "{ this is not json }").unwrap();
     let (code, _stdout, stderr) = run(
-        &[
-            "validate",
-            "--registry",
-            registry_path.to_str().unwrap(),
-        ],
+        &["validate", "--registry", registry_path.to_str().unwrap()],
         None,
     );
     assert_ne!(code, 0, "validate should fail on broken JSON");

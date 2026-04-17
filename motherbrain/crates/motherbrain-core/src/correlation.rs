@@ -57,11 +57,7 @@ pub fn extract_domain_variables(
 ///
 /// Supports: and, or, not, comparison operators (>=, >, ==, <, <=, !=),
 /// and temporal operators (duration_above, delta_in_window, recurrence_count).
-pub fn evaluate_condition(
-    node: &Value,
-    vars: &DomainVariables,
-    history: &[ScoreSnapshot],
-) -> bool {
+pub fn evaluate_condition(node: &Value, vars: &DomainVariables, history: &[ScoreSnapshot]) -> bool {
     if node.is_null() {
         return false;
     }
@@ -152,7 +148,10 @@ fn eval_comparison(op: &str, args: &Value, vars: &DomainVariables) -> bool {
 /// duration_above: check if variable stayed >= threshold across entire time window.
 fn eval_duration_above(config: &Value, _vars: &DomainVariables, history: &[ScoreSnapshot]) -> bool {
     let var_name = config.get("var").and_then(|v| v.as_str()).unwrap_or("");
-    let threshold = config.get("threshold").and_then(|v| as_f64(v)).unwrap_or(0.0);
+    let threshold = config
+        .get("threshold")
+        .and_then(|v| as_f64(v))
+        .unwrap_or(0.0);
     let hours = config.get("hours").and_then(|v| as_f64(v)).unwrap_or(0.0);
 
     if history.is_empty() {
@@ -160,10 +159,7 @@ fn eval_duration_above(config: &Value, _vars: &DomainVariables, history: &[Score
     }
 
     let cutoff = Utc::now() - chrono::Duration::hours(hours as i64);
-    let in_window: Vec<&ScoreSnapshot> = history
-        .iter()
-        .filter(|s| s.scored_at >= cutoff)
-        .collect();
+    let in_window: Vec<&ScoreSnapshot> = history.iter().filter(|s| s.scored_at >= cutoff).collect();
 
     if in_window.is_empty() {
         return false;
@@ -186,7 +182,10 @@ fn eval_duration_above(config: &Value, _vars: &DomainVariables, history: &[Score
 fn eval_delta_in_window(config: &Value, vars: &DomainVariables, history: &[ScoreSnapshot]) -> bool {
     let var_name = config.get("var").and_then(|v| v.as_str()).unwrap_or("");
     let delta = config.get("delta").and_then(|v| as_f64(v)).unwrap_or(0.0);
-    let snapshots = config.get("snapshots").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let snapshots = config
+        .get("snapshots")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as usize;
 
     if history.len() < snapshots {
         return false;
@@ -210,7 +209,11 @@ fn eval_delta_in_window(config: &Value, vars: &DomainVariables, history: &[Score
 }
 
 /// recurrence_count: check if pattern has recurred N times in window.
-fn eval_recurrence_count(config: &Value, _vars: &DomainVariables, _history: &[ScoreSnapshot]) -> bool {
+fn eval_recurrence_count(
+    config: &Value,
+    _vars: &DomainVariables,
+    _history: &[ScoreSnapshot],
+) -> bool {
     // This would check the incident ledger for recurrence count.
     // For now, returns false (no ledger access in pure core).
     let _pattern_id = config.get("pattern_id").and_then(|v| v.as_str());
@@ -289,11 +292,11 @@ pub fn evaluate_incident_patterns(
             .unwrap_or("info");
 
         // Check if pattern has temporal operators requiring history
-        let condition = pattern.get("condition_tree").or_else(|| pattern.get("conditions"));
+        let condition = pattern
+            .get("condition_tree")
+            .or_else(|| pattern.get("conditions"));
 
-        let has_temporal = condition
-            .map(|c| has_temporal_operator(c))
-            .unwrap_or(false);
+        let has_temporal = condition.map(|c| has_temporal_operator(c)).unwrap_or(false);
 
         if has_temporal && history.is_empty() {
             skipped_temporal.push(id.to_string());
@@ -302,7 +305,9 @@ pub fn evaluate_incident_patterns(
 
         // Evaluate the condition
         let fired = match condition {
-            Some(cond) if !cond.is_null() && cond.as_object().map(|o| !o.is_empty()).unwrap_or(false) => {
+            Some(cond)
+                if !cond.is_null() && cond.as_object().map(|o| !o.is_empty()).unwrap_or(false) =>
+            {
                 evaluate_condition(cond, vars, history)
             }
             _ => {
@@ -312,7 +317,8 @@ pub fn evaluate_incident_patterns(
         };
 
         if fired {
-            let recurrence = count_recurrence(id, existing_ledger, severity_config.recurrence_window_days);
+            let recurrence =
+                count_recurrence(id, existing_ledger, severity_config.recurrence_window_days);
             let total = recurrence + 1;
             let severity = escalate_severity(severity_base, total, severity_config);
 
@@ -386,14 +392,21 @@ mod tests {
     use super::*;
 
     fn make_vars(pairs: &[(&str, Value)]) -> DomainVariables {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     // --- Condition Tree Tests ---
 
     #[test]
     fn null_condition_returns_false() {
-        assert!(!evaluate_condition(&Value::Null, &DomainVariables::new(), &[]));
+        assert!(!evaluate_condition(
+            &Value::Null,
+            &DomainVariables::new(),
+            &[]
+        ));
     }
 
     #[test]
@@ -422,10 +435,7 @@ mod tests {
 
     #[test]
     fn and_all_true() {
-        let vars = make_vars(&[
-            ("a", Value::from(10)),
-            ("b", Value::from(20)),
-        ]);
+        let vars = make_vars(&[("a", Value::from(10)), ("b", Value::from(20))]);
         let node = serde_json::json!({
             "and": [
                 {">=": ["a", 5]},
@@ -437,10 +447,7 @@ mod tests {
 
     #[test]
     fn and_one_false() {
-        let vars = make_vars(&[
-            ("a", Value::from(10)),
-            ("b", Value::from(5)),
-        ]);
+        let vars = make_vars(&[("a", Value::from(10)), ("b", Value::from(5))]);
         let node = serde_json::json!({
             "and": [
                 {">=": ["a", 5]},
@@ -452,10 +459,7 @@ mod tests {
 
     #[test]
     fn or_one_true() {
-        let vars = make_vars(&[
-            ("a", Value::from(10)),
-            ("b", Value::from(5)),
-        ]);
+        let vars = make_vars(&[("a", Value::from(10)), ("b", Value::from(5))]);
         let node = serde_json::json!({
             "or": [
                 {">=": ["a", 5]},
@@ -467,10 +471,7 @@ mod tests {
 
     #[test]
     fn or_none_true() {
-        let vars = make_vars(&[
-            ("a", Value::from(1)),
-            ("b", Value::from(2)),
-        ]);
+        let vars = make_vars(&[("a", Value::from(1)), ("b", Value::from(2))]);
         let node = serde_json::json!({
             "or": [
                 {">=": ["a", 5]},
@@ -564,7 +565,8 @@ mod tests {
             "severity_base": "info"
         })];
         let config = crate::registry::SeverityConfig::default();
-        let (matched, _) = evaluate_incident_patterns(&patterns, &DomainVariables::new(), &[], &[], &config);
+        let (matched, _) =
+            evaluate_incident_patterns(&patterns, &DomainVariables::new(), &[], &[], &config);
         assert_eq!(matched.len(), 1);
         assert_eq!(matched[0].id, "test");
     }

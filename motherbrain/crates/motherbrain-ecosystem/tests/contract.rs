@@ -20,9 +20,7 @@ use motherbrain_a2a::{
     A2aEnvelope, AgentCard, MessageType, TaskServer,
 };
 use motherbrain_core::agent_output::AgentOutput;
-use motherbrain_core::ecosystem::{
-    ChildEntry, ChildStatus, ChildTransport, EcosystemRegistry,
-};
+use motherbrain_core::ecosystem::{ChildEntry, ChildStatus, ChildTransport, EcosystemRegistry};
 use motherbrain_ecosystem::{invoke_child, score_ecosystem};
 use serde_json::{json, Value};
 use std::io::Write;
@@ -169,8 +167,11 @@ async fn invoke_child_subprocess_and_a2a_return_identical_output() {
     server.register_handler(MessageType::SnapshotRequested, move |env| {
         let payload = canned_for_handler.clone();
         async move {
-            let mut resp =
-                A2aEnvelope::new("contract-test-child", MessageType::SnapshotDelivered, payload);
+            let mut resp = A2aEnvelope::new(
+                "contract-test-child",
+                MessageType::SnapshotDelivered,
+                payload,
+            );
             resp.reply_to = Some(env.message_id);
             Ok(resp)
         }
@@ -374,8 +375,7 @@ async fn two_children_mixed_transports_hand_computed_aggregate() {
     server.register_handler(MessageType::SnapshotRequested, move |env| {
         let payload = a2a_for_handler.clone();
         async move {
-            let mut resp =
-                A2aEnvelope::new("child-a2a", MessageType::SnapshotDelivered, payload);
+            let mut resp = A2aEnvelope::new("child-a2a", MessageType::SnapshotDelivered, payload);
             resp.reply_to = Some(env.message_id);
             Ok(resp)
         }
@@ -405,7 +405,9 @@ async fn two_children_mixed_transports_hand_computed_aggregate() {
             ChildEntry {
                 id: "sub".into(),
                 display_name: None,
-                transport: ChildTransport::Subprocess { brain_path: sub_cmd },
+                transport: ChildTransport::Subprocess {
+                    brain_path: sub_cmd,
+                },
                 interface_version: "1".into(),
                 depends_on: vec![],
                 weight: 1.0,

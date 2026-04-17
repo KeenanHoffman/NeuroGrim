@@ -83,20 +83,16 @@ async fn code_quality_runs_on_minimal_cargo_project() {
     .unwrap();
     std::fs::create_dir_all(tmp.path().join("src")).unwrap();
     std::fs::write(tmp.path().join("src/lib.rs"), "").unwrap();
-    let env = motherbrain_sensory::code_quality::analyze_code_quality(
-        tmp.path().to_str().unwrap(),
-    )
-    .await;
+    let env =
+        motherbrain_sensory::code_quality::analyze_code_quality(tmp.path().to_str().unwrap()).await;
     assert_envelope_healthy("code_quality", &env);
 }
 
 #[tokio::test]
 async fn test_results_runs_on_empty_project() {
     let tmp = TempDir::new().unwrap();
-    let env = motherbrain_sensory::test_results::analyze_test_health(
-        tmp.path().to_str().unwrap(),
-    )
-    .await;
+    let env =
+        motherbrain_sensory::test_results::analyze_test_health(tmp.path().to_str().unwrap()).await;
     assert_envelope_healthy("test_results", &env);
 }
 
@@ -140,10 +136,7 @@ async fn coherence_runs_with_one_stub_cmdb() {
         }"#,
     )
     .unwrap();
-    let env = motherbrain_sensory::coherence::analyze_coherence(
-        tmp.path().to_str().unwrap(),
-    )
-    .await;
+    let env = motherbrain_sensory::coherence::analyze_coherence(tmp.path().to_str().unwrap()).await;
     assert_envelope_healthy("coherence", &env);
 }
 
@@ -153,10 +146,8 @@ async fn human_comms_runs_with_empty_manifest() {
     let claude_dir = tmp.path().join(".claude");
     std::fs::create_dir_all(&claude_dir).unwrap();
     std::fs::write(claude_dir.join("human-comms.yaml"), "").unwrap();
-    let env = motherbrain_sensory::human_comms::analyze_human_comms(
-        tmp.path().to_str().unwrap(),
-    )
-    .await;
+    let env =
+        motherbrain_sensory::human_comms::analyze_human_comms(tmp.path().to_str().unwrap()).await;
     assert_envelope_healthy("human_comms", &env);
 }
 
@@ -166,10 +157,8 @@ async fn secret_refs_runs_with_empty_manifest() {
     let claude_dir = tmp.path().join(".claude");
     std::fs::create_dir_all(&claude_dir).unwrap();
     std::fs::write(claude_dir.join("secret-refs.yaml"), "").unwrap();
-    let env = motherbrain_sensory::secret_refs::analyze_secret_refs(
-        tmp.path().to_str().unwrap(),
-    )
-    .await;
+    let env =
+        motherbrain_sensory::secret_refs::analyze_secret_refs(tmp.path().to_str().unwrap()).await;
     assert_envelope_healthy("secret_refs", &env);
 }
 
@@ -185,9 +174,7 @@ async fn git_health_runs_on_initialized_repo() {
         .status()
         .expect("`git` must be on PATH for git_health fixture");
     assert!(status.success(), "git init failed");
-    match motherbrain_sensory::git_health::analyze_git_health(tmp.path().to_str().unwrap())
-        .await
-    {
+    match motherbrain_sensory::git_health::analyze_git_health(tmp.path().to_str().unwrap()).await {
         Ok(env) => assert_envelope_healthy("git_health", &env),
         Err(e) => panic!("git_health on a just-initialized repo should not error: {e}"),
     }
@@ -199,10 +186,8 @@ async fn git_health_produces_envelope_without_git_dir() {
     // produce an envelope (score likely 0), not panic. A sensor that
     // panics on missing state defeats the whole observability layer.
     let tmp = TempDir::new().unwrap();
-    let result = motherbrain_sensory::git_health::analyze_git_health(
-        tmp.path().to_str().unwrap(),
-    )
-    .await;
+    let result =
+        motherbrain_sensory::git_health::analyze_git_health(tmp.path().to_str().unwrap()).await;
     // Either an Ok envelope or a typed anyhow error — NOT a panic. If the
     // sensor's contract is "error on missing .git", that's legitimate; we
     // just assert it didn't abort the process.

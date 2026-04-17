@@ -165,10 +165,7 @@ pub fn build_agent_output(
 }
 
 /// Build incident signals from domain variables.
-fn build_incident_signals(
-    _pattern_id: &str,
-    vars: &DomainVariables,
-) -> HashMap<String, Value> {
+fn build_incident_signals(_pattern_id: &str, vars: &DomainVariables) -> HashMap<String, Value> {
     // Include all domain variables as signals
     // In a full implementation, this would filter to only variables
     // referenced by the pattern's condition tree
@@ -179,10 +176,7 @@ fn build_incident_signals(
 }
 
 /// Build a human-readable narrative for an incident.
-fn build_incident_narrative(
-    incident: &IncidentMatch,
-    signals: &HashMap<String, Value>,
-) -> String {
+fn build_incident_narrative(incident: &IncidentMatch, signals: &HashMap<String, Value>) -> String {
     let mut parts = Vec::new();
 
     if let Some(ref hyp) = incident.hypothesis {

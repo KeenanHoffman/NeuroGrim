@@ -47,7 +47,11 @@ fn display_executive(output: &AgentOutput, _plain: bool) {
     }
 
     if !output.incident_patterns.is_empty() {
-        let critical_count = output.incident_patterns.iter().filter(|i| i.severity == "critical").count();
+        let critical_count = output
+            .incident_patterns
+            .iter()
+            .filter(|i| i.severity == "critical")
+            .count();
         if critical_count > 0 {
             println!("Incidents: {} critical", critical_count);
         }
@@ -64,20 +68,32 @@ fn display_manager(output: &AgentOutput, _plain: bool) {
 
     println!("Domains:");
     for (name, d) in &domains {
-        let trend = d.trajectory.as_ref().map(|t| format!(" [{}]", match t.classification {
-            motherbrain_core::types::TrajectoryClassification::Improving => "^",
-            motherbrain_core::types::TrajectoryClassification::Degrading => "v",
-            motherbrain_core::types::TrajectoryClassification::Stable => "=",
-            motherbrain_core::types::TrajectoryClassification::Volatile => "~",
-            motherbrain_core::types::TrajectoryClassification::NoData => "?",
-        })).unwrap_or_default();
+        let trend = d
+            .trajectory
+            .as_ref()
+            .map(|t| {
+                format!(
+                    " [{}]",
+                    match t.classification {
+                        motherbrain_core::types::TrajectoryClassification::Improving => "^",
+                        motherbrain_core::types::TrajectoryClassification::Degrading => "v",
+                        motherbrain_core::types::TrajectoryClassification::Stable => "=",
+                        motherbrain_core::types::TrajectoryClassification::Volatile => "~",
+                        motherbrain_core::types::TrajectoryClassification::NoData => "?",
+                    }
+                )
+            })
+            .unwrap_or_default();
         println!("  {} {}/100{}", name, d.effective_score, trend);
     }
 
     if !output.incident_patterns.is_empty() {
         println!("\nIncidents:");
         for inc in &output.incident_patterns {
-            println!("  [{}] {} (x{})", inc.severity, inc.name, inc.recurrence_count);
+            println!(
+                "  [{}] {} (x{})",
+                inc.severity, inc.name, inc.recurrence_count
+            );
         }
     }
 
@@ -89,7 +105,9 @@ fn display_manager(output: &AgentOutput, _plain: bool) {
 /// Specialist: single-domain deep dive. Shows all detail for one domain.
 fn display_specialist(output: &AgentOutput, _plain: bool) {
     // Find the most interesting domain (lowest scoring)
-    let focus_domain = output.domains.iter()
+    let focus_domain = output
+        .domains
+        .iter()
         .min_by_key(|(_, d)| d.effective_score)
         .map(|(n, _)| n.clone());
 
@@ -103,13 +121,17 @@ fn display_specialist(output: &AgentOutput, _plain: bool) {
         println!("  Weight: {:.2}", d.weight);
 
         if let Some(ref traj) = d.trajectory {
-            println!("  Trajectory: velocity={:+.1}, accel={:+.1}, class={:?}",
-                traj.velocity, traj.acceleration, traj.classification);
+            println!(
+                "  Trajectory: velocity={:+.1}, accel={:+.1}, class={:?}",
+                traj.velocity, traj.acceleration, traj.classification
+            );
         }
 
         // Related domain variables
         let prefix = format!("{}:", domain_name);
-        let related_vars: Vec<_> = output.domain_variables.iter()
+        let related_vars: Vec<_> = output
+            .domain_variables
+            .iter()
             .filter(|(k, _)| k.starts_with(&prefix))
             .collect();
         if !related_vars.is_empty() {
@@ -138,7 +160,9 @@ fn display_pm(output: &AgentOutput, _plain: bool) {
     if let Some(ref traj) = output.trajectory {
         let direction = match traj.classification {
             motherbrain_core::types::TrajectoryClassification::Improving => "improving",
-            motherbrain_core::types::TrajectoryClassification::Degrading => "DEGRADING - needs attention",
+            motherbrain_core::types::TrajectoryClassification::Degrading => {
+                "DEGRADING - needs attention"
+            }
             _ => "stable",
         };
         println!("Trend: {}", direction);
