@@ -87,3 +87,21 @@ jobs:
         # (CI here is MotherBrain-only). Ecosystem CI exercises the cross-repo
         # path end-to-end.
         run: pytest tests/ -v
+
+  compose-smoke:
+    name: docker compose smoke
+    runs-on: ubuntu-latest
+    # Only run on pushes to main (not every PR) — the compose build +
+    # container startup takes ~3-4 min. On PRs, the cargo test job
+    # already covers the dual_brain_pair in-process equivalent.
+    # Switch to `always` if a regression sneaks in via compose-only.
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      # Docker Buildx is pre-installed on ubuntu-latest runners; enable
+      # the builder so compose builds use it + benefit from layer caching.
+      - uses: docker/setup-buildx-action@v3
+
+      - name: docker compose smoke test
+        run: ./scripts/verify-compose.sh
