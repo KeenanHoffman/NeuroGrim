@@ -164,3 +164,80 @@ fn sensory_deploy_readiness_produces_cmdb_json() {
     let score = parsed["score"].as_u64().expect("score not integer");
     assert!(score <= 100, "score {score} out of range");
 }
+
+#[test]
+fn score_outputs_numeric_score_for_minimal_project() {
+    // End-to-end smoke: write a minimal registry + a CMDB the registry
+    // points at, then run `motherbrain score`. Exercises the full path
+    // through BrainContext::load + scoring pipeline + display, which
+    // is otherwise only covered by unit tests per-module.
+    let tmp = TempDir::new().unwrap();
+    let claude_dir = tmp.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+
+    // One CMDB with a known score.
+    std::fs::write(
+        claude_dir.join("smoke-cmdb.json"),
+        r#"{
+          "meta": {
+            "schema_version": "1",
+            "updated_by": "fixture",
+            "updated_at": "2026-04-17T00:00:00Z"
+          },
+          "score": 85,
+          "updated_at": "2026-04-17T00:00:00Z",
+          "findings": []
+        }"#,
+    )
+    .unwrap();
+
+    let registry = serde_json::json!({
+        "meta": {
+            "schema_version": "2",
+            "updated_by": "smoke-test",
+            "project": "smoke-test-fixture"
+        },
+        "tools": {},
+        "data_sources": {},
+        "config": {
+            "domain_weights": { "smoke": 1.0 },
+            "advisory_domains": [],
+            "domain_definitions": {
+                "smoke": {
+                    "scoring_source": {
+                        "type": "cmdb",
+                        "path": ".claude/smoke-cmdb.json"
+                    }
+                }
+            }
+        }
+    });
+    let registry_path = claude_dir.join("brain-registry.json");
+    std::fs::write(
+        &registry_path,
+        serde_json::to_string_pretty(&registry).unwrap(),
+    )
+    .unwrap();
+
+    let (code, stdout, stderr) = run(
+        &[
+            "score",
+            "--plain",
+            "--registry",
+            registry_path.to_str().unwrap(),
+        ],
+        Some(tmp.path()),
+    );
+    assert_eq!(
+        code, 0,
+        "`motherbrain score` should exit 0 with a valid registry. stdout={stdout} stderr={stderr}"
+    );
+    // The display layer owns exact formatting; we just assert that
+    // SOMETHING numeric (the score itself, probably 85 here) made it to
+    // stdout. A regression that dropped the score from the output would
+    // produce all-letters or empty stdout and fail this.
+    assert!(
+        stdout.chars().any(|c| c.is_ascii_digit()),
+        "score output should contain digits; got stdout={stdout:?}"
+    );
+}
