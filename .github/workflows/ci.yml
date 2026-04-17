@@ -1,0 +1,62 @@
+name: CI
+
+# Spec §3.8 "Testing Discipline" — every push and PR runs the full suite
+# so drift surfaces at commit time rather than at manual validation later.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust:
+    name: cargo test (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: motherbrain
+
+      # Primary gate — every unit + integration test across the workspace.
+      # Includes sensor_behavior.rs (Tier-A), cli_smoke.rs, dual_brain_pair.rs,
+      # schema_conformance.rs (skips silently without LSP-Brains sibling,
+      # which is fine — CI here is MotherBrain-only; ecosystem CI covers the
+      # cross-repo schema check).
+      # cargo fmt + clippy can be added in a follow-on once we've verified
+      # the codebase passes them locally (rustfmt wasn't installed on the
+      # dev machine at time of writing).
+      - name: cargo test --workspace
+        working-directory: motherbrain
+        run: cargo test --workspace --all-targets
+
+  python-sdk:
+    name: python SDK pytest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: install SDK + test deps
+        working-directory: sdk-python
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: pytest
+        working-directory: sdk-python
+        # The SDK's schema-conformance test loads the canonical schema from
+        # a sibling LSP-Brains path when available; here it skips gracefully
+        # (CI here is MotherBrain-only). Ecosystem CI exercises the cross-repo
+        # path end-to-end.
+        run: pytest tests/ -v
