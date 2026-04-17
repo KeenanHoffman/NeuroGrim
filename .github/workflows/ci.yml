@@ -10,6 +10,36 @@ on:
     branches: [main]
 
 jobs:
+  rust-lint:
+    name: cargo fmt + clippy (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: motherbrain
+
+      # Style gate — baseline landed via `cargo fmt --all` in a dedicated
+      # commit. Further drift is caught here.
+      - name: cargo fmt --check
+        working-directory: motherbrain
+        run: cargo fmt --all -- --check
+
+      # Lint gate — NOT `-D warnings` yet. The workspace emits ~40 warnings
+      # (mostly rmcp macro's unread `tool_router` field + a few `Default`-
+      # impl suggestions) that we accept for now. Running clippy here at
+      # least documents the current warning set and catches NEW issues in
+      # PR diffs via the usual GitHub annotations. Tightening to
+      # `-D warnings` is a follow-on once the baseline noise is cleaned.
+      - name: cargo clippy
+        working-directory: motherbrain
+        run: cargo clippy --workspace --all-targets
+
   rust:
     name: cargo test (ubuntu)
     runs-on: ubuntu-latest
@@ -27,9 +57,6 @@ jobs:
       # schema_conformance.rs (skips silently without LSP-Brains sibling,
       # which is fine — CI here is MotherBrain-only; ecosystem CI covers the
       # cross-repo schema check).
-      # cargo fmt + clippy can be added in a follow-on once we've verified
-      # the codebase passes them locally (rustfmt wasn't installed on the
-      # dev machine at time of writing).
       - name: cargo test --workspace
         working-directory: motherbrain
         run: cargo test --workspace --all-targets
