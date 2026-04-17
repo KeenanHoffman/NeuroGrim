@@ -24,3 +24,7 @@ motherbrain-core = { workspace = true }
 # Full JSON Schema (draft-07) validator; same contract the Python SDK
 # test enforces.
 jsonschema = "0.17"
+# Tier-A sensor behavioral fixtures — each analyze_* runs against a
+# programmatically populated TempDir; tempfile handles cleanup.
+tempfile = "3"
+tokio = { workspace = true }
