@@ -1,10 +1,5 @@
 # Write a Skill
 
-> **Note:** Some examples below reference archived PowerShell starter-kit
-> scripts (`Find-*.ps1`, `pwsh -File scripts/...`). The methodology is
-> current; the specific commands are not — swap them for `motherbrain`
-> CLI equivalents in practice.
-
 Use this skill when creating a new skill file or substantially revising an existing one.
 Writing a well-structured skill ensures future agents (and humans) can reliably trigger,
 understand, and follow the guidance it contains.
@@ -84,12 +79,12 @@ gate state when the skill is read. Skills with `reference`, `meta`, `planning`, 
 `philosophy`, `configuration`, or `ci-cd` roles that don't govern specific files should omit it.
 
 ```markdown
-Governs: scripts/verify/smoke-infra.ps1
+Governs: motherbrain/crates/motherbrain-sensory/src/git_health.rs
 ```
 
 Or for multiple files:
 ```markdown
-Governs: scripts/deploy/apply-foundation.ps1, scripts/deploy/apply-infra.ps1
+Governs: motherbrain-core/src/scoring.rs, motherbrain-core/src/agent_output.rs
 ```
 
 ### 4. Trigger Phrases
@@ -183,14 +178,13 @@ Read `archived/gate-status.md` first if you haven't set up gates yet.
 Use backtick filename format. Do NOT use markdown links — filenames are enough.
 
 **Commands:**
-- Use `bash` or `powershell` code fences (not generic ` ``` `)
+- Use an explicit language tag on code fences (`bash`, `rust`, `python`) — not generic ` ``` `
 - Always include the full command, not just the flags
 - Add comments explaining non-obvious flags
-- For PowerShell, use `pwsh -File scripts/...` format (not relative paths)
 
 **Variables in commands:**
 ```bash
-gcloud run services describe <service-name> --project=laas-489115
+motherbrain sensory code-quality --project-root <path-to-project>
 # Use <angle-brackets> for user-supplied values
 # Use $VARIABLE for env vars
 ```
@@ -333,10 +327,12 @@ After writing the skill file, complete these three steps:
 
 Add an entry to the appropriate category section in `archived/skill-index.md`.
 
-### 3. Add a gate (if the skill covers a testable operation)
+### 3. Add a test (if the skill covers a behavior worth regression-guarding)
 
-If the skill describes a task that can be gated (e.g., an e2e test, a drift check, a Pester
-suite), add a corresponding entry to `.claude/test-gates.json`.
+If the skill describes a task that can be covered by an automated test (e.g., a sensor
+behavioral test, a CLI smoke test, a schema conformance check), add a corresponding entry
+in the appropriate `tests/` tree. See spec §3.8 "Testing Discipline" for the
+SHOULD-level expectation on sensory tools specifically.
 
 ---
 

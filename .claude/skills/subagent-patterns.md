@@ -1,10 +1,5 @@
 # Coordinate Subagents
 
-> **Note:** Some examples below reference archived PowerShell starter-kit
-> scripts (`Find-*.ps1`, `pwsh -File scripts/...`). The methodology is
-> current; the specific commands are not — swap them for `motherbrain`
-> CLI equivalents in practice.
-
 When a workflow has multiple independent concerns, spawn subagents to run them in parallel
 rather than serializing. This skill documents the three spawn patterns used in this project,
 when to use them vs. running inline, and how to handle convergence.
@@ -161,16 +156,18 @@ independent. Both feed the deploy/abort decision.
 
 ```
 Agent A prompt (Preflight):
-"Read .claude/skills/preflight.md. Run check-preflight.ps1 for project laas-489115.
-Return: {\"passed\": bool, \"error\": null | \"<summary of failures>\",
-\"failures\": [{\"item\": \"<check name>\", \"message\": \"<detail>\"}]}"
+"Run `motherbrain validate --registry <path>` and `motherbrain health --plain`
+against project <project-root>. Return:
+  {\"passed\": bool, \"error\": null | \"<summary of failures>\",
+   \"failures\": [{\"item\": \"<check name>\", \"message\": \"<detail>\"}]}"
 
-Agent B prompt (Plan Review):
-"Read .claude/skills/review-plan.md. Parse the terraform plan output for the module
-being applied. Return: {\"passed\": bool, \"error\": null,
-\"risk_level\": \"low|medium|high|critical\",
-\"destructive_resources\": [\"<address>\"], \"iam_changes\": [\"<description>\"],
-\"summary\": \"<1-sentence summary of what changes\"}"
+Agent B prompt (Change Review):
+"Diff the pending change against the current working tree. Return:
+  {\"passed\": bool, \"error\": null,
+   \"risk_level\": \"low|medium|high|critical\",
+   \"destructive_paths\": [\"<path>\"],
+   \"capability_changes\": [\"<description>\"],
+   \"summary\": \"<1-sentence summary of what changes\"}"
 ```
 
 **Convergence (Stage 2 — inline decision):**
@@ -542,50 +539,48 @@ failing services. The hook observed and reported; the agent decided and acted.
 
 ---
 
-## Pattern 5 — LSP Fan-Out
+## Pattern 5 — Sensor Fan-Out
 
-N independent `Find-*Symbol.ps1` domain queries are bucketed into ≤5 subagents by speed
-tier. The parent collects all results, then runs synthesizers (`Find-Brain`,
-`Find-SessionContext`) inline. Orchestrators never go in a bucket.
+N independent `motherbrain sensory <name>` queries are bucketed into ≤5 subagents by
+expected latency. The parent collects all results, then runs a synthesizer
+(`motherbrain score` or `motherbrain agent`) inline. Orchestrators never go in a bucket.
 
 ```
   Parent
-   ├── Bucket 1: Tier A tools (GateSymbol + ArtifactSymbol + TFStateSymbol)  ──┐
-   ├── Bucket 2: Tier A tools (TopoSymbol + TreeSymbol + WorkflowSymbol)      ──┤
-   ├── Bucket 3: Tier A + B   (SkillSymbol + ShellSymbol + TFSymbol)          ──┼── simultaneous
-   ├── Bucket 4: Tier B + C   (Symbol + PySymbol)                             ──┤
-   └── Bucket 5: Tier C × 2  (TSSymbol + SCASymbol)                          ──┘
-         ↓ (converge: all domain results collected)
-   Parent: Find-Brain.ps1 -Mode score -Plain          (inline)
-   Parent: Find-SessionContext.ps1 -Action <mode> -Plain  (inline)
+   ├── Bucket 1: fast sensors   (git-health + deploy-readiness)              ──┐
+   ├── Bucket 2: fast sensors   (coherence + human-comms + secret-refs)      ──┤
+   ├── Bucket 3: medium sensor  (code-quality)                               ──┼── simultaneous
+   ├── Bucket 4: medium sensor  (security-standards)                         ──┤
+   └── Bucket 5: slow sensor    (test-health — may exec cargo test)          ──┘
+         ↓ (converge: all sensor CMDBs written)
+   Parent: motherbrain score --plain          (inline synthesizer)
+   Parent: motherbrain agent                  (inline, if full JSON needed)
 ```
 
-**LaaS example — Bucket 1 subagent prompt:**
+**Bucket 1 subagent prompt (example):**
 ```
-You are an lsp-reader subagent. Read-only LSP queries only.
-Do NOT edit files. Do NOT call Find-Brain or Find-SessionContext. Pass -Plain to every command.
+You are a source-reader subagent. Read-only sensor queries only.
+Do NOT edit files. Do NOT run motherbrain score or motherbrain agent.
+Pass --plain to every command so output is mergeable.
 Run:
-  pwsh -NonInteractive -File scripts/dev/Find-GateSymbol.ps1 -Check -Plain
-  pwsh -NonInteractive -File scripts/dev/Find-ArtifactSymbol.ps1 -Check -Plain
-  pwsh -NonInteractive -File scripts/dev/Find-TFStateSymbol.ps1 -Check -Plain
+  motherbrain sensory git-health --project-root <path>
+  motherbrain sensory deploy-readiness --project-root <path>
 Return: {"passed": bool, "error": null|"<summary>",
-  "results": {"gates": {"exit_code": 0, "output": "..."},
-              "artifacts": {"exit_code": 0, "output": "..."},
-              "tf_state": {"exit_code": 0, "output": "..."}}}
+  "results": {"git-health":       {"exit_code": 0, "cmdb": {...}},
+              "deploy-readiness": {"exit_code": 0, "cmdb": {...}}}}
 ```
-(Buckets 2–5 follow the same template with their assigned tools.)
+(Buckets 2–5 follow the same template with their assigned sensors.)
 
-**When to use:** Delegation only pays when at least one slow tool (Tier C: PySymbol,
-TSSymbol, SCASymbol) is in the batch, OR when 5+ queries are needed. All-Tier-A batches
-under 5 tools are faster inline (serial ~800ms < subagent spawn ~5–15s).
+**When to use:** Delegation pays when the batch includes at least one slow sensor
+(test-health, code-quality on a large tree) OR when 5+ queries are needed. Small batches
+of fast sensors finish faster inline (total runtime < subagent spawn overhead).
 
-**Time saving:** ~20–25s vs. ~40–50s serial for the full 11-tool health scan. Critical
-path is Bucket 5 (~15–25s); parallelism caps total time at the slowest bucket.
+**Time saving:** roughly N× for independent sensors, capped at the slowest bucket. The
+critical path is whichever bucket contains the slowest sensor.
 
-**Companion hook:** `suggest-lsp-subagents.sh` nudges after 3 sequential direct
-`Find-*Symbol.ps1` calls, pointing to `archived/lsp-subagent-queries.md`.
-
-See `archived/lsp-subagent-queries.md` for bucketing rules, full prompt template, and convergence logic.
+**Observability:** each bucket's output is a CMDB envelope. The synthesizer (`motherbrain
+score`) reads them all and produces the unified score — see spec §4.6 for the aggregation
+formula and §3.8 for the CMDB contract.
 
 ---
 
@@ -626,16 +621,16 @@ Before composing any message to the user, apply this filter:
 
 **Status update (after completing work):**
 ```
-Tests: 145/145 passing
-PR: owner/repo#63
-Changed: correlation.ps1 (+660), modes-display.ps1 (+126), 5 more files
-Risk: low — no scoring or gate interface changes
+Tests: 295/295 passing
+Commit: owner/repo@abc1234
+Changed: motherbrain-core/src/correlation.rs (+660), motherbrain-cli/src/commands/agent.rs (+126), 5 more files
+Risk: low — no public API or schema interface changes
 ```
 
 **Decision request (when blocked):**
 ```
-Gateway apply will delete 2 URL map entries: /docs/*, /storybook/*
-These routes serve live traffic. Proceed? [plan output: terraform/gateway/plan.txt:42]
+Registry update will remove 2 domain_definitions: `gate-status`, `operational-memory`.
+Downstream skills reference these — removal is a breaking change. Proceed? [see impact audit]
 ```
 
 **Milestone (after a phase completes):**
@@ -698,9 +693,6 @@ independent concerns simultaneously" survives — only the Agent tool invocation
 - `post-deploy-verify.md` — Parallel Fan-Out (Pattern 1) example: Parallel Execution section
 - `incident-response.md` — Staged Convergence (Pattern 2): Parallel Diagnosis Option section
 - `archived/skill-chain.md` — Chains 14, 15, 16 show parallel chain notation
-- `archived/hooks-reference.md` — hook system boundary documentation
-- `archived/devops-philosophy.md` — Fail Fast / Shift Left and Defense in Depth principles
-- `archived/lsp-subagent-queries.md` — Pattern 5 (LSP Fan-Out) full reference: bucketing rules, prompt template, convergence logic
-
-Companion hook for Pattern 5: `suggest-lsp-subagents.sh` — fires after 3+ direct
-Find-*Symbol calls in a session; nudges agent to use Pattern 5 delegation.
+- `archived/hooks-reference.md` — hook system boundary documentation (historical reference)
+- `archived/devops-philosophy.md` — Fail Fast / Shift Left and Defense in Depth principles (historical reference)
+- `archived/lsp-subagent-queries.md` — original LSP-specific fan-out pattern that inspired Pattern 5 (historical reference; not load-bearing)

@@ -1,10 +1,5 @@
 # Plan Critic
 
-> **Note:** Some examples below reference archived PowerShell starter-kit
-> scripts (`Find-*.ps1`, `pwsh -File scripts/...`). The methodology is
-> current; the specific commands are not — swap them for `motherbrain`
-> CLI equivalents in practice.
-
 Use this skill before implementing any plan. The plan critic performs an adversarial review
 of a plan file — surfacing pitfalls, missing rollback paths, gate gaps, and compatibility
 risks before a single line of code is written or a single `apply` is run.
@@ -83,11 +78,11 @@ regardless of file type — invoke the full adversary.
 **The rule:** Use the full protocol when either question points to broad impact or high novelty.
 When both are narrow, a light scan (operator agent inline, no subagents) is sufficient.
 
-**Grounding example:** The personas + plan-critic work was all `.md` files — no scripts, no
-terraform — yet it clearly warranted full adversary: it established new patterns that every
+**Grounding example:** The personas + plan-critic work was all `.md` files — no code, no
+schemas — yet it clearly warranted full adversary: it established new patterns that every
 future planning session would follow (broad impact) and introduced abstractions that didn't
-exist in the skill system (high novelty). A single-line PS syntax fix is narrow on both
-axes — light scan.
+exist in the skill system (high novelty). A single-line syntax fix with a known safe pattern
+is narrow on both axes — light scan.
 
 ### Light mode (narrow + low novelty)
 
@@ -126,32 +121,32 @@ checklist from `personas.md` to decide which categories apply.
 
 | Category | What to look for |
 |----------|-----------------|
-| **PS compatibility** | Any new or modified `.ps1` files — check for `return if (...)` ternary, `??=` assignment, `ForEach-Object -Parallel`, or other PS 7+ syntax. CI uses PS 5.1. |
-| **Gate coverage** | New scripts or behaviors — are they covered by a gate in `test-gates.json`? New infra behaviors — does drift detection cover them? |
-| **Idempotency** | Steps that modify state — can each `apply` step run twice without error or side effects? |
+| **Language-version compatibility** | Any new/modified source files using language features that post-date the CI toolchain — e.g., Rust `let else` needs 1.65+, Python match-statements need 3.10+. Verify the project's pinned toolchain supports every syntax choice. |
+| **Test coverage** | New code paths or behaviors — are they covered by unit / integration / smoke tests? New sensors — is there a behavioral fixture? |
+| **Idempotency** | Steps that modify state — can each step run twice without error or side effects? |
 | **Ordering** | Steps that create resources — does any step depend on a resource created in a later step? |
-| **Scope safety** | Any apply/destroy — does the plan risk touching prod or a peer environment? |
+| **Scope safety** | Any deploy / migration / data-mutation — does the plan risk touching production or a peer environment? |
 | **Rollback path** | Steps that are hard to reverse — does the plan explain how to recover if step N fails? |
 | **Secret safety** | Any new secret or env var handling — could it end up in a URL parameter, a log line, or a committed file? |
-| **Destroy guard** | Any destroy operation — is the `LAAS_ALLOW_DESTROY=yes` guard mentioned? |
-| **Symbol impact** | Any rename/removal of a function, variable, skill, gate, or TF resource — find all callers via LSP or Grep; verify no silent breaks |
+| **Destroy guard** | Any destructive operation — is the confirmation / dry-run / explicit-flag guard mentioned? |
+| **Symbol impact** | Any rename/removal of a function, variable, skill, crate export, or schema field — find all callers via `grep` / `cargo check`; verify no silent breaks |
 
 ### 2b. Symbol Impact Audit (when plan renames or removes symbols)
 
 Spawn this subagent when the plan **renames or removes** any of the following:
-- A PowerShell function, variable, or parameter
-- A Terraform resource or module name
-- A TypeScript export or type
+- A function, struct, enum variant, trait method, or module (Rust / Python / TS)
+- A schema field or JSON / YAML registry key
 - A skill file (rename or retirement)
-- A gate entry from `test-gates.json`
+- A CLI command or subcommand name
+- A sensor domain key
 
 **Subagent briefing template:**
 
 ```
 [Persona: adversary] Symbol Impact Audit
 Research: find ALL callers/references of '{symbol}' in the codebase before it is renamed/removed.
-Symbol type: {PS function | TF resource | TS export | skill | gate}
-Relevant LSP tool: Find-SkillSymbol -Name <skill> | Find-GateSymbol | Grep across .ps1/.tf/.ts
+Symbol type: {rust function | schema field | skill | cli subcommand | sensor domain}
+Tool: `grep -rn <symbol>` across source; `cargo check` after edits to surface hard refs.
 Calibration: lean toward false positives — a missed caller means a silent runtime break.
 ```
 
@@ -159,11 +154,11 @@ Calibration: lean toward false positives — a missed caller means a silent runt
 
 | Symbol | What to verify |
 |--------|---------------|
-| **Skill rename/retire** | Cross-refs in `See Also:` sections of other skills? Entry in `archived/skill-index.md`? `Governs:` fields in other skills pointing to old path? `CLAUDE.md` table entry? |
-| **Gate removal** | Skill prose referencing the gate name? CLAUDE.md gate reference table? `test-gates.json` downstream consumers (gate-advisor thresholds)? |
-| **PS function rename** | Callers in other `.ps1` files? Pester test mocks targeting old name? Skill docs with example invocations? |
-| **TF resource rename** | `depends_on`, `data` blocks, remote state refs, or `output` values using old name? |
-| **TS export rename** | Import statements in other `.ts`/`.tsx` files? Type assertion blocks? Storybook stories? |
+| **Skill rename/retire** | Cross-refs in `See Also:` sections of other skills? `CLAUDE.md` Skills Index entries? `Governs:` fields pointing to old path? |
+| **Rust function / export rename** | `use` statements in other crates? Caller `fn` bodies (grep)? `impl` blocks pulling the renamed trait method? Doc tests in rustdoc? `cargo check` catches most hard breaks immediately. |
+| **Schema field rename** | Rust struct `#[serde(rename = ...)]` and Python pydantic/dataclass field names? All registry / CMDB files on disk that still use the old key? Schema validation errors after the change? |
+| **Sensor domain key rename** | `domain_definitions` in every `brain-registry.json`? CMDB files named after the old key on disk? Tests asserting the old domain name? |
+| **CLI subcommand rename** | Skills referencing the old subcommand? `CLAUDE.md` Run Tests section? README command examples? CI workflow invocations? |
 
 **When NOT to spawn:** The plan only adds new symbols (functions, skills, gates) without removing
 or renaming existing ones — new symbols have no existing callers to break.
@@ -261,12 +256,13 @@ After presenting the review:
 
 ---
 
-## Example: PS Compatibility Concern
+## Example: Language-version Compatibility Concern
 
 ```
-🔴 [Blocking] The new script uses `return if ($x) { 'a' } else { 'b' }` — this is
-PS 7+ syntax. CI Ubuntu runners use PS 5.1 and will fail with a parse error at the
-gate run. Rewrite as `if ($x) { return 'a' } else { return 'b' }`.
+🔴 [Blocking] The new fn uses `let Some(x) = get()? else { return Err(...) };` — this
+is `let else` syntax stabilized in Rust 1.65. The workspace's rust-toolchain pin is 1.64,
+so CI fails at parse time. Either bump the toolchain pin (with justification), or rewrite
+as `let x = match get()? { Some(x) => x, None => return Err(...) };`.
 ```
 
 ---
