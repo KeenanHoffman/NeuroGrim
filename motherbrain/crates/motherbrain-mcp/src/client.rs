@@ -90,7 +90,7 @@ async fn invoke_single_server(
             arguments: Some(
                 serde_json::json!({"project_root": project_root})
                     .as_object()
-                    .unwrap()
+                    .expect("json!({...}) with object literal always produces Value::Object")
                     .clone(),
             ),
         };
