@@ -196,3 +196,170 @@ async fn git_health_produces_envelope_without_git_dir() {
         Err(e) => eprintln!("git_health returned typed error on missing .git (acceptable): {e}"),
     }
 }
+
+// =============================================================================
+// Tier B — state-specific behavioral assertions.
+//
+// Each pair of tests below sets up two fixture states (one "worse", one
+// "better") and asserts the relative ordering of their scores. We avoid
+// absolute-score assertions because implementation details (exact point
+// deductions) should be free to change — behavioral guarantees are what
+// the sensor actually promises: "dirty repo scores lower than clean
+// repo", not "dirty repo scores exactly 82".
+//
+// This file covers three sensors as the pattern-setter: git_health,
+// code_quality, deploy_readiness. Remaining five sensors (test_results,
+// security_standards, coherence, human_comms, secret_refs) are pattern-
+// replication follow-on work.
+// =============================================================================
+
+fn git_init(dir: &std::path::Path) {
+    let status = std::process::Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(dir)
+        .status()
+        .expect("git must be on PATH for Tier-B git_health fixtures");
+    assert!(status.success(), "git init failed in {}", dir.display());
+    // Minimum identity so `git commit` works in CI environments that
+    // don't have a global user.name / user.email configured.
+    for (k, v) in [
+        ("user.email", "test@example.com"),
+        ("user.name", "Tier-B Fixture"),
+    ] {
+        let s = std::process::Command::new("git")
+            .args(["config", k, v])
+            .current_dir(dir)
+            .status()
+            .unwrap();
+        assert!(s.success(), "git config {k} failed");
+    }
+}
+
+fn git_commit_all(dir: &std::path::Path, message: &str) {
+    let s = std::process::Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .status()
+        .unwrap();
+    assert!(s.success(), "git add failed");
+    let s = std::process::Command::new("git")
+        .args(["commit", "-q", "-m", message])
+        .current_dir(dir)
+        .status()
+        .unwrap();
+    assert!(s.success(), "git commit failed");
+}
+
+#[tokio::test]
+async fn git_health_dirty_repo_scores_below_clean() {
+    // Dirty fixture: git init, commit a file, then MODIFY the tracked
+    // file so git reports it as dirty (modified tracked file, not
+    // untracked — git_dirty_count filters `??` untracked entries out).
+    // The untracked-file penalty doesn't kick in until > 5 files, so
+    // modifying a tracked file is what actually moves the score.
+    let dirty = TempDir::new().unwrap();
+    git_init(dirty.path());
+    std::fs::write(dirty.path().join("seed.txt"), "seed").unwrap();
+    git_commit_all(dirty.path(), "seed");
+    // Modify the already-committed file — this produces a "dirty" entry
+    // (` M seed.txt`) that git_dirty_count counts.
+    std::fs::write(dirty.path().join("seed.txt"), "seed modified").unwrap();
+
+    // Clean fixture: git init + one committed file, nothing modified.
+    let clean = TempDir::new().unwrap();
+    git_init(clean.path());
+    std::fs::write(clean.path().join("README.md"), "hello").unwrap();
+    git_commit_all(clean.path(), "initial");
+
+    let env_dirty =
+        motherbrain_sensory::git_health::analyze_git_health(dirty.path().to_str().unwrap())
+            .await
+            .expect("git_health on dirty repo");
+    let env_clean =
+        motherbrain_sensory::git_health::analyze_git_health(clean.path().to_str().unwrap())
+            .await
+            .expect("git_health on clean repo");
+
+    let score_dirty = env_dirty["score"].as_u64().unwrap();
+    let score_clean = env_clean["score"].as_u64().unwrap();
+    assert!(
+        score_dirty < score_clean,
+        "expected dirty < clean; got dirty={score_dirty} clean={score_clean}"
+    );
+}
+
+#[tokio::test]
+async fn code_quality_rich_project_scores_above_bare() {
+    // Bare: empty tempdir. Sensor has no files to credit.
+    let bare = TempDir::new().unwrap();
+
+    // Rich: README + .gitignore + LICENSE + .editorconfig — each worth
+    // points in the code_quality scorecard. Deliberately include the
+    // full set so the score is comfortably higher than the bare
+    // baseline without being flaky around a single file.
+    let rich = TempDir::new().unwrap();
+    for (name, content) in [
+        ("README.md", "# Fixture"),
+        (".gitignore", "target/"),
+        ("LICENSE", "MIT"),
+        (".editorconfig", "root = true"),
+        ("rustfmt.toml", ""),
+    ] {
+        std::fs::write(rich.path().join(name), content).unwrap();
+    }
+
+    let env_bare =
+        motherbrain_sensory::code_quality::analyze_code_quality(bare.path().to_str().unwrap())
+            .await;
+    let env_rich =
+        motherbrain_sensory::code_quality::analyze_code_quality(rich.path().to_str().unwrap())
+            .await;
+
+    let score_bare = env_bare["score"].as_u64().unwrap();
+    let score_rich = env_rich["score"].as_u64().unwrap();
+    assert!(
+        score_rich > score_bare,
+        "expected rich > bare; got rich={score_rich} bare={score_bare}"
+    );
+}
+
+#[tokio::test]
+async fn deploy_readiness_with_dockerfile_and_ci_scores_higher() {
+    // Bare: empty tempdir. deploy_readiness starts from 0 and adds for
+    // every present indicator.
+    let bare = TempDir::new().unwrap();
+
+    // Readier: has Dockerfile + a CI workflow file + .gitignore + .git.
+    // Each contributes points in the deploy_readiness scorecard.
+    let readier = TempDir::new().unwrap();
+    std::fs::write(readier.path().join("Dockerfile"), "FROM scratch\n").unwrap();
+    std::fs::create_dir_all(readier.path().join(".github/workflows")).unwrap();
+    std::fs::write(
+        readier.path().join(".github/workflows/ci.yml"),
+        "name: ci\non: push\njobs: {}\n",
+    )
+    .unwrap();
+    std::fs::write(readier.path().join(".gitignore"), "target/\n").unwrap();
+    std::fs::create_dir_all(readier.path().join(".git")).unwrap();
+
+    let env_bare = motherbrain_sensory::deploy_readiness::analyze_deploy_readiness(
+        bare.path().to_str().unwrap(),
+    )
+    .await;
+    let env_readier = motherbrain_sensory::deploy_readiness::analyze_deploy_readiness(
+        readier.path().to_str().unwrap(),
+    )
+    .await;
+
+    let score_bare = env_bare["score"].as_u64().unwrap();
+    let score_readier = env_readier["score"].as_u64().unwrap();
+    assert!(
+        score_readier > score_bare,
+        "expected readier > bare; got readier={score_readier} bare={score_bare}"
+    );
+    // Bare project with nothing deployable should score 0 — the base.
+    assert_eq!(
+        score_bare, 0,
+        "empty tempdir should score 0 on deploy_readiness"
+    );
+}
