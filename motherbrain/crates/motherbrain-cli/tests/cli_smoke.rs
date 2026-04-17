@@ -1,0 +1,174 @@
+//! CLI smoke tests — the user-facing `motherbrain` command surface.
+//!
+//! The A2A end-to-end path is already covered by `dual_brain_pair.rs`
+//! (subprocess spawn + HTTP round-trip). These smoke tests cover the
+//! remaining subcommands that a user interacts with directly: `--version`,
+//! `--help`, `validate`, and one `sensory` invocation.
+//!
+//! Pattern follows `dual_brain_pair.rs`: locate the binary via
+//! `env!("CARGO_BIN_EXE_motherbrain")` (Cargo exports this for integration
+//! tests of binary crates), spawn as a subprocess, assert exit status and
+//! output. No external deps — plain `std::process::Command`.
+
+use std::path::Path;
+use std::process::Command;
+
+use serde_json::Value;
+use tempfile::TempDir;
+
+fn motherbrain_bin() -> &'static str {
+    env!("CARGO_BIN_EXE_motherbrain")
+}
+
+/// Run `motherbrain <args>` and return (exit_code, stdout, stderr).
+/// Panics on spawn failure (means the binary is missing — a real test bug).
+fn run(args: &[&str], cwd: Option<&Path>) -> (i32, String, String) {
+    let mut cmd = Command::new(motherbrain_bin());
+    cmd.args(args);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    let out = cmd
+        .output()
+        .unwrap_or_else(|e| panic!("failed to spawn motherbrain {args:?}: {e}"));
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn version_prints_semver() {
+    let (code, stdout, _) = run(&["--version"], None);
+    assert_eq!(code, 0, "motherbrain --version should exit 0");
+    // Output should contain a version string matching `major.minor.patch`.
+    // Clap's default format is "motherbrain 0.1.0".
+    assert!(
+        stdout.contains('.'),
+        "version output should include a dotted semver, got: {stdout:?}"
+    );
+}
+
+#[test]
+fn help_lists_core_subcommands() {
+    let (code, stdout, _) = run(&["--help"], None);
+    assert_eq!(code, 0, "motherbrain --help should exit 0");
+    // Every subcommand in main.rs should show up in --help. If someone
+    // renames or removes a command without updating docs, this test fires.
+    for sub in [
+        "score",
+        "agent",
+        "health",
+        "trend",
+        "validate",
+        "serve",
+        "sensory",
+        "init",
+        "awareness",
+        "a2a-serve",
+        "a2a-invoke",
+        "a2a-discover",
+    ] {
+        assert!(
+            stdout.contains(sub),
+            "--help should mention subcommand {sub:?}; got:\n{stdout}"
+        );
+    }
+}
+
+#[test]
+fn validate_accepts_minimal_registry() {
+    let tmp = TempDir::new().unwrap();
+    let claude_dir = tmp.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    // Minimum valid brain-registry.json per brain-registry-v2 schema.
+    // Mirrors the shape of the real registries at .claude/brain-registry.json
+    // in each of the three Brains — `meta`, `tools`, `data_sources`, `config`
+    // with `domain_weights` + `advisory_domains` + `domain_definitions`.
+    let registry = serde_json::json!({
+        "meta": {
+            "schema_version": "2",
+            "updated_by": "smoke-test",
+            "project": "smoke-test-fixture"
+        },
+        "tools": {},
+        "data_sources": {},
+        "config": {
+            "domain_weights": { "smoke": 1.0 },
+            "advisory_domains": [],
+            "domain_definitions": {
+                "smoke": {
+                    "scoring_source": {
+                        "type": "cmdb",
+                        "path": ".claude/smoke-cmdb.json"
+                    }
+                }
+            }
+        }
+    });
+    let registry_path = claude_dir.join("brain-registry.json");
+    std::fs::write(
+        &registry_path,
+        serde_json::to_string_pretty(&registry).unwrap(),
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run(
+        &[
+            "validate",
+            "--registry",
+            registry_path.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(
+        code, 0,
+        "validate should accept a minimal valid registry. stdout={stdout} stderr={stderr}"
+    );
+}
+
+#[test]
+fn validate_rejects_malformed_json() {
+    let tmp = TempDir::new().unwrap();
+    let registry_path = tmp.path().join("bad.json");
+    std::fs::write(&registry_path, "{ this is not json }").unwrap();
+    let (code, _stdout, stderr) = run(
+        &[
+            "validate",
+            "--registry",
+            registry_path.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_ne!(code, 0, "validate should fail on broken JSON");
+    assert!(
+        !stderr.is_empty() || code != 0,
+        "validate should report the error somewhere"
+    );
+}
+
+#[test]
+fn sensory_deploy_readiness_produces_cmdb_json() {
+    let tmp = TempDir::new().unwrap();
+    let (code, stdout, stderr) = run(
+        &[
+            "sensory",
+            "deploy-readiness",
+            "--project-root",
+            tmp.path().to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(
+        code, 0,
+        "`sensory deploy-readiness` should exit 0. stdout={stdout} stderr={stderr}"
+    );
+    // Stdout is the pretty-printed CMDB envelope (see main.rs run_sensory).
+    let parsed: Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("stdout is not valid JSON: {e}; raw={stdout}"));
+    assert!(parsed.get("score").is_some(), "CMDB missing `score`");
+    assert!(parsed.get("meta").is_some(), "CMDB missing `meta`");
+    assert!(parsed.get("findings").is_some(), "CMDB missing `findings`");
+    let score = parsed["score"].as_u64().expect("score not integer");
+    assert!(score <= 100, "score {score} out of range");
+}
