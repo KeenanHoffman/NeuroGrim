@@ -27,7 +27,7 @@ class TestJiraHealthTool:
         tool = JiraHealthTool()
         result = await tool.analyze(".")
         assert result["score"] == 0
-        assert any("JIRA_BASE_URL" in f for f in result["findings"])
+        assert any("JIRA_BASE_URL" in f.get("detail", "") for f in result["findings"])
 
     @pytest.mark.asyncio
     async def test_score_formula_low_bugs(self):

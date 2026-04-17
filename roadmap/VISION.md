@@ -1,6 +1,6 @@
 # North Star: LSP Brains
 
-**Last updated:** 2026-04-17 (principle #16: right protocol for the role; principle #17: culture as substrate)
+**Last updated:** 2026-04-17 (principle #16: right protocol for the role; principle #17: culture as substrate; principle #18: sensors need sensors)
 
 ---
 
@@ -303,6 +303,19 @@ These guide every decision. When in doubt, choose the option that advances these
     communication — the same floor governs how a Brain talks to Claude Code, how a parent
     Brain coordinates with a child, and how peer Brains negotiate a handoff. See spec §14,
     `culture-manifest-v1.schema.json`, and METHODOLOGY-EVOLUTION §7.
+
+18. **Sensors need sensors.** The observing layer must itself be observable. Every
+    sensory tool is a hypothesis about project health, and without a test that validates
+    the sensor's own output, a drift in the observer looks identical to a drift in the
+    observed. Confidence decay (§4.4) eventually flags *stale* data; it cannot flag
+    *malformed* data — the Brain trusts whatever shape the sensor produced. So each
+    sensor SHOULD ship with a test that validates its CMDB against the envelope schema
+    and asserts its declared `exported_variables` are present (spec §3.8). Where the
+    sensor is part of a fractal ecosystem, an integration test at the ecosystem level
+    MAY additionally exercise the sensor against live project state and assert the
+    current expected score — a regression guard where a drop in score signals real
+    drift. Feedback loops are cheap; silent drift is expensive. See spec §3.8 and
+    METHODOLOGY-EVOLUTION §8.
 
 ---
 

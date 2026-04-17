@@ -22,17 +22,27 @@ from typing import Any
 class Finding:
     """A single observation produced by a sensory tool.
 
-    Findings appear in the CMDB envelope and are surfaced in the
-    MotherBrain health dashboard. Keep them short and actionable.
+    Serialized into the CMDB envelope as an object matching
+    `cmdb-envelope-v1.schema.json` — `{name, status, points, detail}`.
 
     Args:
-        message: Human-readable observation (e.g. "Open bugs: 12").
-        severity: Optional severity hint ("info", "warning", "critical").
-                  The Brain uses its own threshold rules; this is advisory.
+        message: Human-readable observation (e.g. "Open bugs: 12"). Maps to
+                 the schema's ``detail`` field.
+        severity: Severity hint ("info", "warning", "critical"). Maps to the
+                  schema's ``status`` field. The Brain uses its own threshold
+                  rules; this is advisory.
+        name: Explicit identifier for the finding. If omitted, the SDK
+              auto-derives one (``finding-000``, ``finding-001``, ...) when
+              serialized.
+        points: Score contribution of this finding. Defaults to 0. Only
+                meaningful for sensors whose scoring model attributes points
+                to individual findings.
     """
 
     message: str
     severity: str = "info"
+    name: str | None = None
+    points: int = 0
 
     def __str__(self) -> str:
         return self.message
@@ -48,7 +58,7 @@ class CmdbEnvelope:
     score: int
     updated_at: str
     meta: dict[str, Any]
-    findings: list[str] = field(default_factory=list)
+    findings: list[dict[str, Any]] = field(default_factory=list)
     exported_variables: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -148,10 +158,24 @@ class SensoryTool(abc.ABC):
 
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-        finding_strs: list[str] = []
+        finding_objs: list[dict[str, Any]] = []
         if findings:
-            for f in findings:
-                finding_strs.append(str(f))
+            for idx, f in enumerate(findings):
+                if isinstance(f, dict):
+                    finding_objs.append(f)
+                elif isinstance(f, str):
+                    finding_objs.append(
+                        {"name": f"finding-{idx:03d}", "status": "info", "points": 0, "detail": f}
+                    )
+                else:
+                    finding_objs.append(
+                        {
+                            "name": f.name if f.name is not None else f"finding-{idx:03d}",
+                            "status": f.severity,
+                            "points": f.points,
+                            "detail": f.message,
+                        }
+                    )
 
         envelope = CmdbEnvelope(
             score=score,
@@ -162,7 +186,7 @@ class SensoryTool(abc.ABC):
                 "source": "sensory-tool",
                 "schema_version": "1",
             },
-            findings=finding_strs,
+            findings=finding_objs,
             exported_variables=exported_variables or {},
         )
         return envelope.to_dict()

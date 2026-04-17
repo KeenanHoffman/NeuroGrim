@@ -66,8 +66,19 @@ CMDB_ENVELOPE_V1: dict[str, Any] = {
         },
         "findings": {
             "type": "array",
-            "items": {"type": "string"},
-            "description": "Human-readable observations from the analysis.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "status": {"type": "string"},
+                    "points": {"type": "integer"},
+                    "detail": {"type": "string"},
+                },
+            },
+            "description": (
+                "Array of structured observations. Each finding matches the "
+                "cmdb-envelope-v1 schema shape (name, status, points, detail)."
+            ),
         },
         "exported_variables": {
             "type": "object",
