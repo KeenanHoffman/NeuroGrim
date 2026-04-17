@@ -31,73 +31,49 @@ py -3 -m pytest tests/
 
 ## Skills Index
 
-### Peer Protocols (A2A — Stage 6)
+The skills below are the **live** inventory for the Rust Brain. Legacy
+starter-kit skills (LaaS / PowerShell era) are preserved at
+`.claude/skills/archived/` for historical reference — see that directory's
+`README.md` for provenance and closest live equivalents. Do not follow the
+archived skills; their commands and tools no longer exist.
+
+### Peer Protocols (A2A)
 
 | Task | Skill |
 |------|-------|
 | When to use A2A, invoking a peer Brain, reading Agent Cards | `a2a.md` |
 | Running Moth(er):Br+AI+n as an A2A peer (serve, discover, troubleshoot) | `peer-brain.md` |
 
-### Brain Operations
+### Brain Domains
+
+Skills corresponding to Rust Brain sensor domains:
 
 | Task | Skill |
 |------|-------|
-| Unified health score, cross-domain correlation, tool registry | `brain.md` |
-| Hat system: domain emphasis, hat suggestion, hat-tagged outcomes | `hats.md` |
-| Agent persona system (roles for operator agent) | `personas.md` |
-| Inspect and clear gate state | `gate-status.md` |
-| Gate system architecture and state machine | `gate-system-overview.md` |
-| Query historical operational data | `operational-memory.md` |
-| Terminology governance: drift scan, term lookup | `terminology-governance.md` |
 | Cross-domain correlation health and coherence scoring | `coherence.md` |
 | Human communication model: preferences, per-hat overrides | `human-comms.md` |
 | Safe secret reference catalog: providers, manifest, CMDB | `secret-refs.md` |
-| Security posture: SECURITY.md, SAST, secret scanning | `security-standards.md` |
-| Multi-agent task protocol and subagent health | `agent-protocol.md` |
+| Security posture: SOC2 / ISO27001 / NIST CSF evidence scanning | `security-standards.md` |
 
 ### Planning & Workflow
 
 | Task | Skill |
 |------|-------|
-| Prioritized action list before commit/deploy | `what-next.md` |
-| Regain focus during long or drifting sessions | `refocus.md` |
 | Adversarial plan review before implementation | `plan-critic.md` |
-| Common multi-skill sequences for complex tasks | `skill-chain.md` |
-| North star alignment check | `north-star.md` |
 | Pre-plan ideation: explore approaches conversationally | `imagination-mode.md` |
-
-### LSP & Static Analysis
-
-| Task | Skill |
-|------|-------|
-| Symbol search / LSP static analysis (PS, TF, TS, PY, SH) | `lsp.md` |
-| LSP-grounded workflow patterns | `lsp-grounded.md` |
-| Parallel multi-domain LSP queries via subagents | `lsp-subagent-queries.md` |
-| Add LSP support for a new language | `add-lsp-for-language.md` |
-
-### DevOps Concepts & Philosophy
-
-| Task | Skill |
-|------|-------|
-| DevOps concepts explained (teaching) | `devops-for-developers.md` |
-| DevOps principles / the "why" | `devops-philosophy.md` |
-| Principle-to-skill cross-reference | `philosophy-index.md` |
-| Everything as Code principles and the five EaC pillars | `everything-as-code.md` |
+| North star alignment check | `north-star.md` |
+| Rubber-duck a stuck problem with a Socratic listener | `rubber-duck.md` |
 
 ### Meta (Skills System)
 
 | Task | Skill |
 |------|-------|
-| Full skill discovery map by category | `skill-index.md` |
-| Authoring guide: template and quality checklist | `write-skill.md` |
-| Skill+hook pair catalog | `skill-hook-pairs.md` |
-| Reference for all registered hooks | `hooks-reference.md` |
+| Authoring guide for new skills | `write-skill.md` |
+| Agent persona system (adversary, architect, etc.) | `personas.md` |
+| Operator↔subagent interface protocol | `agent-protocol.md` |
 | Coordinate subagents / parallel workflows | `subagent-patterns.md` |
 | Dual-agent T+P review protocol | `dual-review.md` |
 | Iterative T+P+Code Reviewer quality loop | `review-loop.md` |
-| Worked examples of agent-skill interactions | `demo.md` |
-| Compact summary of all skills | `summarize-skills.md` |
-| Living record of missing and stale skills | `skill-gap-tracker.md` |
 | Process for retiring outdated skills | `skill-deprecation.md` |
 
 ## Key Files
