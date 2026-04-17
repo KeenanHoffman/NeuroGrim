@@ -17,3 +17,10 @@ rmcp = { workspace = true }
 schemars = { workspace = true }
 tracing = { workspace = true }
 motherbrain-core = { workspace = true }
+
+[dev-dependencies]
+# §3.8 Testing Discipline — validate CMDB envelope output against the
+# canonical cmdb-envelope-v1 JSON Schema at integration-test time.
+# Full JSON Schema (draft-07) validator; same contract the Python SDK
+# test enforces.
+jsonschema = "0.17"
