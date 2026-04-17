@@ -74,7 +74,7 @@ enum Commands {
 
     /// Run a built-in sensory tool directly (produces CMDB JSON)
     Sensory {
-        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards
+        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs
         name: String,
         /// Project root path
         #[arg(long, default_value = ".")]
