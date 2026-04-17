@@ -120,6 +120,17 @@ pub struct ScoringSource {
     pub source_type: String,
     #[serde(default)]
     pub path: Option<String>,
+    /// For `source_type = "a2a"`: base URL of the peer Brain's A2A endpoint
+    /// (e.g. `http://127.0.0.1:8421/a2a/v1/`). Ignored for other source types.
+    /// Spec §9 fractal composition — parent pulls child's AgentOutput via
+    /// snapshot.requested at score time.
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// For `source_type = "a2a"`: expected agent-output interface version
+    /// the peer emits. Used for pre-flight version negotiation (spec §6).
+    /// Defaults to "1" when unset. Ignored for other source types.
+    #[serde(default)]
+    pub interface_version: Option<String>,
     #[serde(default)]
     pub score_field: Option<String>,
     #[serde(default)]
