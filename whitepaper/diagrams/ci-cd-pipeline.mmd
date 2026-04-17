@@ -1,0 +1,26 @@
+%%{init: {"theme": "neutral"}}%%
+graph TD
+    DC["detect-changes"]
+    PT["pester-tests"]
+    BAI["build-all-images"]
+    FND["foundation"]
+    INF["infra"]
+    APP["app"]
+
+    DC --> PT
+    DC --> BAI
+    PT --> BAI
+    BAI --> FND --> INF --> APP
+
+    subgraph sub-apps [" sub-apps "]
+        CHAT["chat"]
+        DOCS["docs"]
+        SW["swagger"]
+        SB["storybook"]
+        WP["whitepaper"]
+    end
+
+    APP --> CHAT & DOCS & SW & SB & WP
+    CHAT & DOCS & SW & SB & WP --> GW["gateway"]
+    GW --> US["update-services<br/><i>parallel</i>"]
+    US --> E2E["e2e-smoke"]

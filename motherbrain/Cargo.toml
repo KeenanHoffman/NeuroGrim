@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/motherbrain-core",
+    "crates/motherbrain-sensory",
+    "crates/motherbrain-mcp",
+    "crates/motherbrain-a2a",
+    "crates/motherbrain-ecosystem",
+    "crates/motherbrain-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Keenan Hoffman"]
+license = "MIT"
+description = "MotherBrain: LSP Brains reference implementation"
+repository = "https://github.com/keenanHoffmanSparq/Moth-er-Br-AI-n"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Terminal output
+colored = "2"
+
+# MCP protocol
+rmcp = { version = "0.8", features = ["server", "client", "macros", "transport-io", "transport-child-process"] }
+schemars = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Testing
+proptest = "1"
+
+# URL parsing / validation (shared across a2a + ecosystem)
+url = { version = "2", features = ["serde"] }
+
+# Workspace crates
+motherbrain-core = { path = "crates/motherbrain-core" }
+motherbrain-sensory = { path = "crates/motherbrain-sensory" }
+motherbrain-mcp = { path = "crates/motherbrain-mcp" }
+motherbrain-a2a = { path = "crates/motherbrain-a2a" }
+motherbrain-ecosystem = { path = "crates/motherbrain-ecosystem" }

@@ -1,0 +1,24 @@
+# Human Communication Preferences — Project-scoped overrides
+#
+# This file overrides fields from ~/.claude/human-comms.yaml for this specific
+# project. Commit it to share team communication conventions with anyone who
+# works on this codebase using LSP Brains.
+#
+# Only specify what diverges from your user-scoped defaults. Anything not listed
+# here falls through to ~/.claude/human-comms.yaml, then to built-in defaults.
+#
+# Full schema reference: .claude/skills/human-comms.md
+#
+# Run to refresh the CMDB after editing:
+#   motherbrain sensory human-comms --project-root . > .claude/human-comms-cmdb.json
+
+per_hat:
+  visionary:
+    verbosity: full          # Long-form exploration welcome in Visionary hat
+    lists_vs_prose: prose    # Prose flows better for architectural thinking
+  engineer:
+    verbosity: standard      # Stay concise when in active development mode
+    lead_with: answer        # Code first, reasoning after
+  reviewer:
+    verbosity: full          # Full detail during code review
+    include_why_context: true

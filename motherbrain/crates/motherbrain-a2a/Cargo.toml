@@ -1,0 +1,38 @@
+[package]
+name = "motherbrain-a2a"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "A2A (Agent2Agent) peer protocol for MotherBrain — Brain-to-Brain communication (fractal composition + dual brain)."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+schemars = { workspace = true }
+tracing = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+# Server (HTTP + SSE) — S6-DB-1
+axum = "0.7"
+tower = "0.5"
+# Client (HTTP + streaming) — S6-DB-1.
+# `default-features = false` + `rustls-tls` drops the OpenSSL/native-tls
+# dependency. Rationale (S6-DB-5): our reference Docker image targets
+# `debian:bookworm-slim` with no libssl. `rustls` is a pure-Rust TLS stack
+# that links statically — smaller runtime image, no C shared-library
+# surface, and the wire protocol is identical. If a caller needs
+# system-trust-store behavior (corporate proxies with custom CAs), switch
+# to `rustls-tls-native-roots` — same wire, different root source.
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+# Stream trait + URL parsing for transport abstraction
+futures = "0.3"
+url = { version = "2", features = ["serde"] }
+async-trait = "0.1"
+motherbrain-core = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

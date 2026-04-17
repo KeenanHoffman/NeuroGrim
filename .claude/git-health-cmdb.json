@@ -1,0 +1,22 @@
+{
+  "branch_divergence": 0,
+  "commits_24h": 5,
+  "commits_7d": 5,
+  "findings": [
+    {
+      "detail": "13 changes",
+      "name": "uncommitted_changes",
+      "points": -30,
+      "status": "dirty"
+    }
+  ],
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-12T07:03:52.006624800+00:00",
+    "updated_by": "check-git-health"
+  },
+  "score": 60,
+  "uncommitted_changes": 13,
+  "untracked_files": 10,
+  "updated_at": "2026-04-12T07:03:52.006624800+00:00"
+}

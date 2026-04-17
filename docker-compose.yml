@@ -1,0 +1,81 @@
+# Moth(er):Br+AI+n — dual-brain reference deployment (S6-DB-5).
+#
+# Starts two containerised MotherBrain A2A peers on a shared Docker bridge
+# network. This is the Phase E `dual_brain_pair.rs` integration test running
+# as containers instead of in-process subprocesses — same wire protocol, same
+# scoring pipeline, different process-isolation boundary.
+#
+# Bring-up:   docker compose up --build
+# Tear-down:  docker compose down
+#
+# Verify from the host (assumes the local `motherbrain` binary is built):
+#   ./motherbrain/target/release/motherbrain a2a-discover http://127.0.0.1:8421/a2a/v1/
+#   ./motherbrain/target/release/motherbrain a2a-discover http://127.0.0.1:8422/a2a/v1/
+#   ./motherbrain/target/release/motherbrain a2a-invoke  http://127.0.0.1:8421/a2a/v1/
+#   ./motherbrain/target/release/motherbrain a2a-invoke  http://127.0.0.1:8422/a2a/v1/
+#
+# Or plain curl:
+#   curl -s http://127.0.0.1:8421/.well-known/agent-card.json | jq
+#   curl -s http://127.0.0.1:8422/.well-known/agent-card.json | jq
+#
+# Spec §13.6 authentication reminder: v2.1 mandates `authentication: none`.
+# This compose stack publishes both ports on the HOST — anyone who can
+# reach the host on 8421/8422 can request a scorecard. See
+# docs/EXTERNAL-BRAIN-DEPLOYMENT.md §4 for the full network-layer gating
+# recipe before exposing this outside localhost.
+
+services:
+  motherbrain-local:
+    # This service owns the build. motherbrain-external reuses the image
+    # it produces (no second rebuild), which is both faster and honest —
+    # one image, many instances, as the deployment doc claims.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: motherbrain:dev
+    container_name: motherbrain-local
+    ports:
+      # host:container — container listens on 8421 inside; we publish it
+      # on 8421 on the host for parity with the Phase E test's URL shape.
+      - "127.0.0.1:8421:8421"
+    volumes:
+      # Read-only bind-mount: the container must not be able to mutate
+      # the operator's project files. The brain's own CMDBs still update,
+      # but from the host side with the sensory tools — the container is
+      # a reader.
+      - ./motherbrain-local-project:/brain:ro
+    # Restart-on-failure is a modest safety net, not full hardening.
+    # Operators who need supervision should use Kubernetes / Nomad / a
+    # real init manager; documented in EXTERNAL-BRAIN-DEPLOYMENT.md §7.
+    restart: on-failure
+    # Logs stream to stdout/stderr via `tracing`. Tune with RUST_LOG.
+    environment:
+      - RUST_LOG=info
+
+  motherbrain-external:
+    # No `build:` — we reuse the image motherbrain-local produced.
+    # `depends_on` orders the startup so the image is guaranteed to exist
+    # before this service tries to pull it.
+    image: motherbrain:dev
+    container_name: motherbrain-external
+    depends_on:
+      - motherbrain-local
+    ports:
+      # Same internal port (8421), different host publication (8422). The
+      # Agent Card advertises `http://127.0.0.1:8421/…` — that's the
+      # container's own view. From the host we connect via 8422; from a
+      # peer container on the same Docker network we'd connect via the
+      # service name and internal port (`http://motherbrain-external:8421/…`).
+      - "127.0.0.1:8422:8421"
+    volumes:
+      - ./motherbrain-external-project:/brain:ro
+    restart: on-failure
+    environment:
+      - RUST_LOG=info
+
+# Default bridge network. Both services are on it by default; no custom
+# `networks:` block needed for this reference. Operators who want to
+# isolate the brains from each other (e.g. only the parent should reach
+# the child, not vice versa) can add a named network with selective
+# attachment. Out of scope here — the reference is two peers visible to
+# each other and to the host.

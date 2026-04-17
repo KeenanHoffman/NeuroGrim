@@ -1,0 +1,46 @@
+{
+  "acknowledge_hat_announcements": true,
+  "alert_on_correlation_fire": true,
+  "ask_one_question": true,
+  "code_blocks": "always",
+  "confirm_completed_steps": false,
+  "emoji": "never",
+  "findings": [
+    {
+      "detail": "All preference categories explicitly defined — agent has a full communication contract.",
+      "name": "communication_contract",
+      "points": 100,
+      "status": "complete"
+    }
+  ],
+  "has_project_overrides": true,
+  "has_user_defaults": true,
+  "include_urls": true,
+  "include_why_context": true,
+  "lead_with": "answer",
+  "lists_vs_prose": "lists",
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-13T18:30:49.856454300+00:00",
+    "updated_by": "check-human-comms"
+  },
+  "per_hat": {
+    "engineer": {
+      "lead_with": "answer",
+      "verbosity": "standard"
+    },
+    "reviewer": {
+      "include_why_context": true,
+      "verbosity": "full"
+    },
+    "visionary": {
+      "lists_vs_prose": "prose",
+      "verbosity": "full"
+    }
+  },
+  "preferences_complete": true,
+  "proactive_hat_suggestions": true,
+  "score": 100,
+  "updated_at": "2026-04-13T18:30:49.856454300+00:00",
+  "verbosity": "standard"
+}

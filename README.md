@@ -1,0 +1,195 @@
+# Moth(er):Br+AI+n
+
+**A language-agnostic nervous system for AI-assisted software projects.**
+
+Moth(er):Br+AI+n implements the [LSP Brains Specification](spec/LSP-BRAINS-SPEC.md) — a
+methodology for giving AI agents continuous, honest awareness of project health through
+MCP-based sensory tools, A2A-based peer coordination, cross-domain correlation,
+trajectory intelligence, and gated governance.
+
+## What's Here
+
+| Directory | Contents |
+|-----------|----------|
+| `motherbrain/` | Rust Brain engine (workspace: core, sensory, mcp, a2a [Stage 6], cli crates) |
+| `spec/` | The LSP Brains Specification v2.1 (13 sections + Appendix G), dual-brain design, methodology evolution |
+| `sdk-python/` | Python SDK for writing custom sensory tools (`lsp-brains` package) |
+| `docs/` | Domain catalog, architecture guides |
+| `whitepaper/` | LSP Brains methodology whitepaper (Markdown; prior HTML build archived 2026-04-17) |
+| `starter-kit/` | **Archived 2026-04-17** — PowerShell reference; moved to `D:\Brains\archive\Moth-er-Br-AI-n\starter-kit\` |
+| `domains/laas/` | Archived first-customer domain: LaaS (16 domains, 26 gates, 3 hats) — read-only historical reference |
+| `roadmap/` | Vision, roadmap, data architecture, dependency map, stage epics (including new S6 "Dual Brain via A2A") |
+| `.claude/skills/` | Agent skills for methodology work, brain operations, and domain authoring |
+
+## Quick Start
+
+### Run the Brain
+
+```bash
+cd motherbrain
+cargo build
+
+# Run a sensory tool
+./target/debug/motherbrain sensory test-health --project-root ..
+
+# Write its output to CMDB
+./target/debug/motherbrain sensory test-health --project-root .. > ../.claude/test-health-cmdb.json
+
+# Get your health score
+./target/debug/motherbrain health --project-root ..
+
+# Validate registry
+./target/debug/motherbrain validate -r ../.claude/brain-registry.json
+```
+
+### Run Tests
+
+```bash
+# Rust Brain engine tests
+cd motherbrain
+cargo test
+
+# Python SDK tests
+cd sdk-python
+python -m pytest tests/ -v
+```
+
+## Architecture
+
+```
+                    ┌──── MCP ────┐                                  ┌──── A2A ────┐
+ Sensory Tools  ───►│             │  Brain Engine  ──► Unified Score │             │  Peer Brains
+ (LSP, lint, git,   │  tool-call  │  ├─ Trajectory                   │  peer-agent │  (parent/child,
+  test results, ...)│             │  ├─ Correlation + Coherence      │             │   local/external)
+                    │             │  ├─ Incident detection           │             │
+ LLM Agent      ───►│             │  ├─ Gated governance             │             │
+ (Claude Code,      │             │  ├─ Human comms model            │             │
+  Cursor, ...)      │             │  └─ Secret-ref catalog           │             │
+                    └─────────────┘                                  └─────────────┘
+```
+
+The Brain reads pre-computed scores from CMDB files written by sensory tools (delivered
+via MCP). It applies confidence decay based on data freshness, computes domain weights
+and floor constraints, evaluates cross-domain correlations, fires incident patterns, and
+surfaces recommendations bounded by an attention budget. Peer Brains (fractal composition
+children, or an external dual-brain counterpart) exchange messages via A2A (Stage 6).
+
+## Protocols
+
+Two distinct protocols carry traffic across the Brain's boundary. They are orthogonal
+and must not be conflated.
+
+| Protocol | Role | Crate | Spec |
+|----------|------|-------|------|
+| **MCP** (Model Context Protocol) | Sensory tool invocation (Brain-as-MCP-client) + Brain exposure to LLM agents (Brain-as-MCP-server) | `motherbrain-mcp` | §3.7, Appendix F |
+| **A2A** (Agent2Agent Protocol) | Brain-to-Brain peer communication: fractal composition + dual brain | `motherbrain-a2a` (Stage 6) | §9, §10, §13, Appendix G |
+
+**When in doubt:** if the other end is a sensor or an LLM, use MCP. If the other end is
+another Brain, use A2A. See `spec/METHODOLOGY-EVOLUTION.md` §6 for the rationale behind
+the split.
+
+## Built-In Domains
+
+Ten domains ship with Moth(er):Br+AI+n, organized in two tiers:
+
+### Core (Weighted — contribute to unified score)
+
+| Domain | Weight | What It Measures |
+|--------|--------|-----------------|
+| `test-health` | 0.40 | Test file detection, test-to-source ratio, failing test count |
+| `code-quality` | 0.35 | Lint configs, formatting standards, quality tooling |
+| `deploy-readiness` | 0.25 | CI config, README, no secrets in tracked files |
+
+### Advisory (Weight 0.0 — visible in health output; promote when signal is trusted)
+
+| Domain | What It Measures |
+|--------|-----------------|
+| `git-health` | Uncommitted changes, branch freshness, stash count |
+| `rust-health` | Clippy lint count, cargo audit CVEs, MSRV compliance |
+| `subagent-health` | Multi-agent task completion rate, agent protocol compliance |
+| `security-standards` | SECURITY.md, SAST workflows, secret scanning |
+| `coherence` | Cross-domain relationship health — the "association cortex" |
+| `human-comms` | Persistent human communication model (preferences, per-hat overrides) |
+| `secret-refs` | Safe credential reference catalog — references only, never values |
+
+See [docs/DOMAINS.md](docs/DOMAINS.md) for full descriptions, scoring models, and a catalog
+of potential domains you can build.
+
+## Key Concepts
+
+- **Sensory Tools** — run against a project, write a CMDB JSON file with score and findings
+- **Domains** — named health dimensions; each backed by a CMDB file
+- **Confidence Decay** — `confidence = 100 × e^(−λ × age_days)` — stale data loses weight automatically
+- **Floor Constraints** — a critically low domain score caps the unified score
+- **Trajectory** — velocity and acceleration computed from raw score history
+- **Correlations** — named cross-domain patterns (compound_risk, dependency, reinforcing, blocking)
+- **Coherence** — meta-domain that scores how well all other domains relate to each other
+- **Human Model** — domain that tracks how a specific human wants agents to communicate
+- **Secret-Refs** — safe catalog of credential locations; agents generate access code without seeing values
+- **Gates** — checkpoints that block commit, merge, or deploy until conditions are met
+- **Hats** — operational lenses that amplify different domains (engineer, reviewer, operator, security)
+- **Personas** — adapted output for different stakeholders (executive, manager, developer, specialist, PM)
+- **Attention Budget** — limits displayed recommendations to prevent overload
+
+## Python SDK
+
+Write custom sensory tools in Python using the `lsp-brains` package:
+
+```bash
+pip install -e sdk-python/
+```
+
+```python
+from lsp_brains import SensoryTool, Finding, run_server
+
+class MyTool(SensoryTool):
+    name = "my-domain"
+    domain = "my-domain"
+
+    async def analyze(self, project_root: str) -> dict:
+        return self.build_cmdb(
+            score=75,
+            findings=[Finding("All checks passed")],
+        )
+
+if __name__ == "__main__":
+    run_server(MyTool())
+```
+
+Register custom secret providers:
+
+```python
+from lsp_brains import SecretProvider, SecretProviderSpec
+
+class MyVaultProvider(SecretProvider):
+    spec = SecretProviderSpec(
+        name="my-vault",
+        description="Internal HashiCorp Vault with AppRole auth",
+        reference_template=(
+            "import hvac, os\n"
+            "client = hvac.Client(url=\"{vault_url}\", token=os.environ[\"VAULT_TOKEN\"])\n"
+            "{env_var} = client.secrets.kv.v2.read_secret_version(path=\"{secret_path}\")[\"data\"][\"data\"][\"value\"]"
+        ),
+    )
+
+MyVaultProvider.register(project_root=".")
+```
+
+## Explore Further
+
+- **[Whitepaper](whitepaper/WHITEPAPER.md)** — Full methodology, architecture, and design principles
+- **[Domain Catalog](docs/DOMAINS.md)** — All 10 built-in domains + potential domains to inspire adopters
+- **[LSP Brains Spec](spec/LSP-BRAINS-SPEC.md)** — The formal specification
+- **[Vision](roadmap/VISION.md)** — Design principles and north star
+- **[Roadmap](roadmap/ROADMAP.md)** — Stage progression and current status
+- **[LaaS Reference](domains/laas/)** — Complete archived implementation (16 domains, 26 gates, 3 hats)
+
+## Repository
+
+- **Source:** https://github.com/keenanHoffmanSparq/Moth-er-Br-AI-n
+- **Spec Repo:** https://github.com/keenanHoffmanSparq/LSP-Brains
+- **Origin:** Extracted from [Lies-as-a-Service](https://github.com/sparq-doug/lies-as-a-service)
+
+## License
+
+See individual files for licensing terms.

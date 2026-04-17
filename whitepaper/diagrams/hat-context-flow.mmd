@@ -1,0 +1,25 @@
+%%{init: {"theme": "neutral"}}%%
+graph TD
+    subgraph observe["Brain: OBSERVE"]
+        signals["Raw Domain Signals<br/><small>gates, artifacts, topology, IAM,<br/>EaC, supply-chain, defense</small>"]
+    end
+
+    signals --> hatFilter{"Hat Filter<br/><small>domain emphasis<br/>multipliers</small>"}
+
+    hatFilter -->|"operator<br/>gates x2.0<br/>artifacts x1.5"| opRec["Recommendations<br/><small>1. Clear deploy gates<br/>2. Refresh stale artifacts<br/>3. Fix IAM binding</small>"]
+    hatFilter -->|"security<br/>IAM x2.0<br/>supply-chain x2.0"| secRec["Recommendations<br/><small>1. Fix IAM binding<br/>2. Patch vulnerability<br/>3. Clear deploy gates</small>"]
+    hatFilter -->|"architect<br/>EaC x2.0<br/>topology x1.5"| archRec["Recommendations<br/><small>1. Improve EaC coverage<br/>2. Update topology snapshot<br/>3. Clear deploy gates</small>"]
+
+    opRec --> opSkill["Skill: apply-infra<br/><small>deploy-focused action</small>"]
+    secRec --> secSkill["Skill: access-topology<br/><small>security-focused action</small>"]
+    archRec --> archSkill["Skill: drift-check<br/><small>governance-focused action</small>"]
+
+    classDef observe fill:#e8f4f8,stroke:#2c3e50
+    classDef hat fill:#fef9e7,stroke:#f39c12
+    classDef rec fill:#eafaf1,stroke:#27ae60
+    classDef skill fill:#f4ecf7,stroke:#8e44ad
+
+    class signals observe
+    class hatFilter hat
+    class opRec,secRec,archRec rec
+    class opSkill,secSkill,archSkill skill

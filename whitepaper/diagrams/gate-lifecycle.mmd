@@ -1,0 +1,14 @@
+%%{init: {"theme": "neutral"}}%%
+stateDiagram-v2
+    [*] --> needs_run : gate registered
+
+    needs_run --> clean : run_command passes
+    needs_run --> dirty : run_command fails
+
+    clean --> stale : expires or watch_paths changed
+    clean --> dirty : run_command fails
+
+    stale --> clean : re-run passes
+    stale --> dirty : re-run fails
+
+    dirty --> clean : fix + re-run passes

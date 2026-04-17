@@ -1,0 +1,19 @@
+%%{init: {"theme": "neutral"}}%%
+graph TD
+    subgraph Agent["Agent (fast cycle)"]
+        WORK["<b>WORK</b><br/><i>execute tasks,<br/>run gates, edit code</i>"]
+        DISTILL["<b>DISTILL</b><br/><i>what changed?<br/>what matters?<br/>what needs decision?</i>"]
+    end
+
+    subgraph Human["Human (interpretation step)"]
+        READ["<b>READ</b><br/><i>links, diffs, scores<br/>~10 sec scan</i>"]
+        DECIDE["<b>DECIDE</b><br/><i>approve, redirect,<br/>ask, or trust</i>"]
+    end
+
+    WORK --> DISTILL
+    DISTILL -->|"rich context<br/>minimal language<br/>links first"| READ
+    READ --> DECIDE
+    DECIDE -->|"intent, constraints,<br/>corrections"| WORK
+
+    style Agent fill:#f0f4ff,stroke:#4a7ccc
+    style Human fill:#fff8f0,stroke:#cc8844

@@ -1,0 +1,219 @@
+{
+  "meta": {
+    "schema_version": "2.0",
+    "description": "Meta Brain — Moth(er):Br+AI+n scoring itself. Dogfooding the LSP Brains spec.",
+    "updated_by": "motherbrain-init",
+    "project": "Moth-er-Br-AI-n",
+    "note": "Run sensory tools with: motherbrain sensory <tool> --project-root . > .claude/<tool>-cmdb.json"
+  },
+  "config": {
+    "domain_weights": {
+      "test-health": 0.40,
+      "code-quality": 0.35,
+      "deploy-readiness": 0.25,
+      "git-health": 0.0,
+      "rust-health": 0.0,
+      "security-standards": 0.0,
+      "coherence": 0.0,
+      "human-comms": 0.0,
+      "secret-refs": 0.0
+    },
+    "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
+    "domain_definitions": {
+      "_doc": "test-health, code-quality, and deploy-readiness are weighted. git-health and rust-health are advisory (weight=0.0) — visible in health output but don't affect the score until promoted.",
+      "test-health": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/test-health-cmdb.json"
+        }
+      },
+      "code-quality": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/code-quality-cmdb.json"
+        }
+      },
+      "deploy-readiness": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/deploy-readiness-cmdb.json"
+        }
+      },
+      "git-health": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/git-health-cmdb.json"
+        }
+      },
+      "_todo_rust-health": "Advisory domain for Rust-specific signals: clippy lint count, cargo audit CVEs, unused deps, MSRV compliance. Activate: add scoring_source pointing to a custom sensory tool output, set weight > 0. See sdk-python/ for writing a custom sensory tool.",
+      "security-standards": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/security-standards-cmdb.json"
+        }
+      },
+      "coherence": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/coherence-cmdb.json"
+        },
+        "exported_variables": {
+          "coherence:correlations_evaluated": { "field": "correlations_evaluated", "type": "number" },
+          "coherence:correlations_fired":     { "field": "correlations_fired",     "type": "number" },
+          "coherence:highest_severity":       { "field": "highest_severity",       "type": "string" }
+        }
+      },
+      "secret-refs": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/secret-refs-cmdb.json"
+        },
+        "exported_variables": {
+          "secret-refs:secrets_documented":    { "field": "secrets_documented",    "type": "number" },
+          "secret-refs:undocumented_env_vars": { "field": "undocumented_env_vars", "type": "number" },
+          "secret-refs:all_secrets_described": { "field": "all_secrets_described", "type": "bool"   },
+          "secret-refs:has_manifest":          { "field": "has_manifest",          "type": "bool"   }
+        }
+      },
+      "human-comms": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/human-comms-cmdb.json"
+        },
+        "exported_variables": {
+          "human-comms:verbosity":      { "field": "verbosity",      "type": "string" },
+          "human-comms:lead_with":      { "field": "lead_with",      "type": "string" },
+          "human-comms:code_blocks":    { "field": "code_blocks",    "type": "string" },
+          "human-comms:lists_vs_prose": { "field": "lists_vs_prose", "type": "string" },
+          "human-comms:emoji":          { "field": "emoji",          "type": "string" }
+        }
+      }
+    },
+    "scoring": {
+      "model": "multiplier",
+      "floor_confidence_threshold": 30,
+      "floor_score_ceiling": 30
+    },
+    "confidence_thresholds": {
+      "cmdb_fresh_days": 1,
+      "cmdb_stale_days": 3,
+      "cmdb_very_stale_days": 7
+    },
+    "trajectory": {
+      "retention_days": 30,
+      "min_samples_for_trend": 5,
+      "velocity_window": 5
+    },
+    "severity_thresholds": {
+      "warning_count": 3,
+      "critical_count": 5,
+      "recurrence_window_days": 7
+    },
+    "correlations": [
+      {
+        "id":          "deploy-without-test-baseline",
+        "name":        "deploy-without-test-baseline",
+        "type":        "compound_risk",
+        "severity":    "critical",
+        "domains":     ["test-health", "deploy-readiness"],
+        "description": "Deploy pipeline is healthy while test baseline is degraded — can ship, cannot verify.",
+        "insight":     "Raise test-health score above 40 before treating deploy-readiness as a reliable signal.",
+        "condition_tree": {
+          "and": [
+            { "<": ["test-health:score",      40] },
+            { ">": ["deploy-readiness:score", 50] }
+          ]
+        }
+      },
+      {
+        "id":          "commit-debt-with-quality-pressure",
+        "name":        "commit-debt-with-quality-pressure",
+        "type":        "reinforcing",
+        "severity":    "warning",
+        "domains":     ["git-health", "code-quality"],
+        "description": "Uncommitted changes accumulating while code quality signals are degraded — both suggest development pressure without discipline checkpoints.",
+        "insight":     "Commit in smaller increments and run lint/format before staging. Both signals share the same root cause.",
+        "condition_tree": {
+          "and": [
+            { ">": ["git-health:uncommitted_changes", 10] },
+            { "<": ["code-quality:score",             40] }
+          ]
+        }
+      },
+      {
+        "id":          "security-gate-missing-from-ci",
+        "name":        "security-gate-missing-from-ci",
+        "type":        "dependency",
+        "severity":    "warning",
+        "domains":     ["security-standards", "deploy-readiness"],
+        "description": "Deploy capability exists but security baseline is unestablished — pipeline can ship without any security validation.",
+        "insight":     "Add a SECURITY.md and at least one SAST workflow step before promoting deploy-readiness weight.",
+        "condition_tree": {
+          "and": [
+            { "<": ["security-standards:score",  20] },
+            { ">": ["deploy-readiness:score",    30] }
+          ]
+        }
+      }
+    ],
+    "incident_patterns": [],
+    "personas": {
+      "executive": {
+        "description": "C-suite and stakeholders — score + top risk only",
+        "output_level": "brief",
+        "fields": ["score", "trajectory", "top_recommendations"]
+      },
+      "manager": {
+        "description": "Engineering managers — domain breakdown + gate status",
+        "output_level": "standard",
+        "fields": ["score", "domains", "trajectory", "top_recommendations", "incident_patterns"]
+      },
+      "developer": {
+        "description": "Individual contributors — full detail",
+        "output_level": "full",
+        "fields": ["*"]
+      },
+      "specialist": {
+        "description": "Domain experts — filtered view emphasizing relevant domains",
+        "output_level": "standard",
+        "fields": ["score", "domains", "domain_variables", "top_recommendations"]
+      },
+      "product-manager": {
+        "description": "PMs — delivery risk and blockers",
+        "output_level": "standard",
+        "fields": ["score", "trajectory", "top_recommendations", "correlations_fired"]
+      }
+    },
+    "hats": {
+      "engineer": {
+        "description": "Active development — emphasize test health and build quality",
+        "domain_multipliers": {
+          "test-health": 2.0,
+          "code-quality": 1.5,
+          "deploy-readiness": 1.0
+        },
+        "suggest_when": [
+          { "variable": "test-health:failing_tests", "op": "gt", "value": 0 }
+        ]
+      },
+      "reviewer": {
+        "description": "Code review — emphasize quality and completeness",
+        "domain_multipliers": {
+          "code-quality": 2.0,
+          "test-health": 1.5,
+          "git-health": 1.5
+        },
+        "suggest_when": [
+          { "variable": "code-quality:lint_errors", "op": "gt", "value": 0 }
+        ]
+      }
+    },
+    "sensory_servers": {
+      "github": {
+        "command": "docker",
+        "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
+        "transport": "stdio"
+      }
+    }
+  }
+}

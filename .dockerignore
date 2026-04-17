@@ -1,0 +1,66 @@
+# Moth(er):Br+AI+n — .dockerignore for reference deployment (S6-DB-5).
+#
+# Goal: send the smallest possible context to the Docker daemon. Anything
+# not needed to compile the `motherbrain` binary belongs here.
+#
+# Honesty: a few of these exclusions (tests, archive) are for context
+# size — the builder runs `cargo build --release -p motherbrain-cli`
+# which doesn't need test sources or archived starter kits.
+
+# --- Build outputs ---
+# Cargo's `target/` can be multi-GB. Never ship it into the build context.
+**/target/
+target/
+
+# --- Git + local tooling ---
+.git/
+.gitignore
+.gitattributes
+
+# --- Editor / OS noise ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Runtime CMDB artifacts ---
+# These are produced by sensory tools at runtime, not part of the source
+# tree. Keeping them out of the image prevents stale health data from
+# leaking into the deployment layer.
+.claude/*-cmdb.json
+.claude/scheduled-tasks.db
+.claude/command-history.db
+.claude/conversation.db
+
+# --- Docs / reference material the binary doesn't need ---
+# The binary produces its output on stdout; it doesn't read these at run.
+whitepaper/
+docs/
+README.md
+CLAUDE.md
+*.md
+
+# --- Archived / out-of-scope directories ---
+starter-kit/
+sdk-python/
+archive/
+
+# --- Containerisation artifacts ---
+# Don't re-ship docker files into themselves; makes layer diffs noisier
+# and wastes context.
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# --- Example project roots (the deployment's fixtures) ---
+# These are mounted into the container at `/brain` at run time, not baked
+# into the image. Excluding them keeps the image small and prevents the
+# example fixture from ever leaking into a production build.
+motherbrain-local-project/
+motherbrain-external-project/
+
+# --- Verification scripts (host-side only) ---
+scripts/
+.verify-tmp/

@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "name": "test_directory",
+      "points": 30,
+      "status": "found"
+    }
+  ],
+  "has_test_config": false,
+  "has_test_directory": true,
+  "has_test_results": false,
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-12T07:03:52.091522+00:00",
+    "updated_by": "check-test-health"
+  },
+  "score": 30,
+  "updated_at": "2026-04-12T07:03:52.091522+00:00"
+}

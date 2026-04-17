@@ -1,0 +1,28 @@
+# Starter Kit — Archived
+
+The PowerShell starter kit has been moved to:
+
+**`D:\Brains\archive\Moth-er-Br-AI-n\starter-kit\`**
+
+## Why
+
+The starter kit was the v1 reference implementation (PowerShell + `.ps1` sensory tools).
+It is superseded by the Rust reference implementation under `motherbrain/` and the Python
+SDK under `sdk-python/`. The archive preserves the historical implementation as read-only
+reference material — it is **not maintained** and should not be used for new adoptions.
+
+## What Replaces It
+
+| Need | New home |
+|------|----------|
+| Quickstart | `README.md` at repo root — shows `cargo build` + `motherbrain sensory` flow |
+| Spec | [`spec/LSP-BRAINS-SPEC.md`](../spec/LSP-BRAINS-SPEC.md) (v2.1+) |
+| Write a custom sensory tool | `sdk-python/README.md` — Python SDK with `lsp-brains` package |
+| Built-in sensory tools | `motherbrain/crates/motherbrain-sensory/` (Rust) |
+| Registry template | `.claude/brain-registry.json` at repo root (the Meta Brain registry) |
+| Tutorial | [`whitepaper/WHITEPAPER.md`](../whitepaper/WHITEPAPER.md) — methodology narrative |
+
+## Historical Reference
+
+If you need to read the archived PowerShell code (e.g., to understand the v1 pattern or
+migrate a legacy deployment), it is at `D:\Brains\archive\Moth-er-Br-AI-n\starter-kit\`.

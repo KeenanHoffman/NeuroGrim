@@ -1,0 +1,48 @@
+{
+  "meta": {
+    "description": "Whitepaper diagram manifest — maps .mmd sources to rendered SVGs and whitepaper sections",
+    "render_command": "pwsh -File scripts/whitepaper/render-whitepaper-diagrams.ps1"
+  },
+  "diagrams": [
+    {
+      "id": "grounding-loop",
+      "title": "The Grounding Loop",
+      "mmd": "grounding-loop.mmd",
+      "svg": "grounding-loop.svg",
+      "section": "architecture",
+      "describes": "4-phase OBSERVE-READ-ACT-VERIFY agent operating cycle"
+    },
+    {
+      "id": "ci-cd-pipeline",
+      "title": "CI/CD Pipeline DAG",
+      "mmd": "ci-cd-pipeline.mmd",
+      "svg": "ci-cd-pipeline.svg",
+      "section": "ci",
+      "describes": "Job dependency graph from detect-changes through e2e-smoke"
+    },
+    {
+      "id": "gate-lifecycle",
+      "title": "Gate State Machine",
+      "mmd": "gate-lifecycle.mmd",
+      "svg": "gate-lifecycle.svg",
+      "section": "gates",
+      "describes": "State transitions: needs-run, clean, dirty, stale with triggers"
+    },
+    {
+      "id": "communication-loop",
+      "title": "Human-Agent Communication Loop",
+      "mmd": "communication-loop.mmd",
+      "svg": "communication-loop.svg",
+      "section": "architecture",
+      "describes": "Agent WORK-DISTILL cycle meets human READ-DECIDE cycle; communication as interface"
+    },
+    {
+      "id": "hat-context-flow",
+      "title": "Hat Context Flow",
+      "mmd": "hat-context-flow.mmd",
+      "svg": "hat-context-flow.svg",
+      "section": "brain",
+      "describes": "How operator/security/architect hats re-prioritize Brain recommendations without changing scores"
+    }
+  ]
+}

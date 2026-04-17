@@ -1,0 +1,134 @@
+{
+  "control_references": {
+    "access_control": {
+      "iso27001": [
+        "A.5.3",
+        "A.8.2"
+      ],
+      "nist_csf": [
+        "PR.AA-05",
+        "PR.PS-04"
+      ],
+      "soc2": [
+        "CC6.3",
+        "CC8.1"
+      ]
+    },
+    "dependency_management": {
+      "iso27001": [
+        "A.7.3",
+        "A.8.8"
+      ],
+      "nist_csf": [
+        "ID.RA-01",
+        "PR.PS-06"
+      ],
+      "soc2": [
+        "CC7.1"
+      ]
+    },
+    "sast": {
+      "iso27001": [
+        "A.7.3",
+        "A.8.25"
+      ],
+      "nist_csf": [
+        "PR.DS-08",
+        "DE.CM-01"
+      ],
+      "soc2": [
+        "CC7.1"
+      ]
+    },
+    "secrets_management": {
+      "iso27001": [
+        "A.7.1",
+        "A.8.20"
+      ],
+      "nist_csf": [
+        "PR.AA-01",
+        "PR.DS-02"
+      ],
+      "soc2": [
+        "CC6.1"
+      ]
+    },
+    "vulnerability_disclosure": {
+      "iso27001": [
+        "A.5.1",
+        "A.6.8"
+      ],
+      "nist_csf": [
+        "GV.RM-01",
+        "RS.CO-02"
+      ],
+      "soc2": [
+        "CC2.2",
+        "CC9.1"
+      ]
+    }
+  },
+  "controls_evidenced": 0,
+  "findings": [
+    {
+      "detail": "No SECURITY.md found — create SECURITY.md or .github/SECURITY.md [SOC2: CC2.2, CC9.1]",
+      "name": "vulnerability_disclosure_policy",
+      "points": 0,
+      "status": "missing"
+    },
+    {
+      "detail": "No .env.example found — add a template to document expected environment variables [SOC2: CC6.1]",
+      "name": "env_template",
+      "points": 0,
+      "status": "missing"
+    },
+    {
+      "detail": ".gitignore does not exclude secret file patterns — add *.pem, *.key, .env, credentials [SOC2: CC6.1]",
+      "name": "gitignore_excludes_secrets",
+      "points": 0,
+      "status": "missing"
+    },
+    {
+      "detail": "No Dependabot or Renovate config found — add .github/dependabot.yml or renovate.json [SOC2: CC7.1]",
+      "name": "dependency_update_tool",
+      "points": 0,
+      "status": "missing"
+    },
+    {
+      "detail": "No dependency audit step found in CI workflows — add trivy, snyk, or cargo/npm audit [SOC2: CC7.1]",
+      "name": "ci_dependency_audit",
+      "points": 0,
+      "status": "missing"
+    },
+    {
+      "detail": "No CODEOWNERS file — add CODEOWNERS or .github/CODEOWNERS to define required reviewers [SOC2: CC6.3, CC8.1]",
+      "name": "codeowners",
+      "points": 0,
+      "status": "missing"
+    },
+    {
+      "detail": "No CI workflow files found in .github/workflows/ [SOC2: CC8.1]",
+      "name": "ci_workflows",
+      "points": 0,
+      "status": "missing"
+    },
+    {
+      "detail": "No SAST tool found in CI workflows — add CodeQL, Semgrep, or Sonar [SOC2: CC7.1 | ISO27001: A.8.25]",
+      "name": "sast",
+      "points": 0,
+      "status": "missing"
+    }
+  ],
+  "has_codeowners": false,
+  "has_dependency_management": false,
+  "has_sast": false,
+  "has_secrets_management": false,
+  "has_security_policy": false,
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-12T08:31:21.495399500+00:00",
+    "updated_by": "check-security-standards"
+  },
+  "score": 0,
+  "updated_at": "2026-04-12T08:31:21.495399500+00:00"
+}

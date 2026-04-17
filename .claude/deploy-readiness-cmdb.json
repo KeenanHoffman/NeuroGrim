@@ -1,0 +1,11 @@
+{
+  "findings": [],
+  "has_ci": false,
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-12T07:03:52.190346100+00:00",
+    "updated_by": "check-deploy-readiness"
+  },
+  "score": 25,
+  "updated_at": "2026-04-12T07:03:52.190346100+00:00"
+}
