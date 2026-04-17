@@ -213,7 +213,7 @@ rarely names: **the cost of discarding an idea is zero; the cost of discarding h
 code is high.** Every plan in this system is written before code is written. Imagination mode
 extends that one step further — it is the thinking that happens before the plan is written.
 
-This is **Fail Fast / Shift Left** from `devops-philosophy.md` applied to design: catch the
+This is **Fail Fast / Shift Left** from `archived/devops-philosophy.md` applied to design: catch the
 wrong approach at the conversation layer, not the plan layer, not the implementation layer.
 
 ---
@@ -222,5 +222,5 @@ wrong approach at the conversation layer, not the plan layer, not the implementa
 
 - `plan-critic.md` — adversarial review of the plan that follows imagination; includes when-to-run heuristic
 - `personas.md` — full persona system; `visionary` is the pre-planning lens
-- `skill-chain.md` — skill sequences; imagination → plan → plan-critic → implement
+- `archived/skill-chain.md` — skill sequences; imagination → plan → plan-critic → implement
 - `weigh-time-risk.md` — after imagination, calibrate how much planning depth the change needs

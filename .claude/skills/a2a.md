@@ -3,7 +3,7 @@
 **When to read this:** You are about to invoke, implement, or debug peer-Brain
 communication. This covers fractal composition (parent↔child) and dual brain
 (local↔external). For sensory tools or LLM-facing Brain tools, use the MCP skills
-(`brain.md`), not this one.
+(`archived/brain.md`), not this one.
 
 ## Protocol boundary (one-line rule)
 
@@ -118,8 +118,8 @@ If A2A invocation fails, check in this order:
 
 ## Related skills
 
-- `peer-brain.md` — running Moth(er):Br+AI+n as an A2A peer (serve, discover, troubleshoot).
-- `brain.md` — Brain scoring and MCP-facing workflows.
+- `peer-archived/brain.md` — running Moth(er):Br+AI+n as an A2A peer (serve, discover, troubleshoot).
+- `archived/brain.md` — Brain scoring and MCP-facing workflows.
 - `coherence.md` — how cross-domain signals and incident patterns use A2A messages in
   dual-brain coordination.
 

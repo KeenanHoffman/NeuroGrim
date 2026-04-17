@@ -56,21 +56,21 @@ Role: diagnostic · planning
 
 | Role | Meaning | Example skills |
 |------|---------|----------------|
-| `philosophy` | Platform-agnostic principles, the "why" | `devops-philosophy.md` |
-| `teaching` | Bridges knowledge gaps for devs new to ops | `devops-for-developers.md` |
+| `philosophy` | Platform-agnostic principles, the "why" | `archived/devops-philosophy.md` |
+| `teaching` | Bridges knowledge gaps for devs new to ops | `archived/devops-for-developers.md` |
 | `operational` | Step-by-step procedures, "run this now" | `apply-infra.md`, `docker-builds.md` |
-| `diagnostic` | Detecting/reading/understanding current state | `debug-cloud-run.md`, `gate-status.md` |
+| `diagnostic` | Detecting/reading/understanding current state | `debug-cloud-run.md`, `archived/gate-status.md` |
 | `recovery` | Restoring things when broken | `incident-response.md`, `rollback-deployment.md` |
 | `planning` | Deciding what to do before acting | `weigh-time-risk.md`, `preflight.md` |
 | `validation` | Verifying correctness of code or infra | `smoke-infra.md`, `playwright-e2e.md` |
 | `reference` | Lookup tables, topology snapshots, inventories | `ci-workflows.md`, `network-topology.md` |
 | `configuration` | Setting up resources, env, auth, tooling | `setup.md`, `local-dev.md` |
 | `ci-cd` | Pipeline automation and management | `ci-testing.md` |
-| `meta` | Skills about the skill system itself | `write-skill.md`, `skill-index.md` |
+| `meta` | Skills about the skill system itself | `write-skill.md`, `archived/skill-index.md` |
 
 **Why roles matter:** When an agent needs to "roll back a broken deploy", it should immediately
 know it needs a `recovery` skill, not a `planning` one. Roles let agents filter by intent before
-reading the full file, and let humans scan `skill-index.md` by purpose rather than alphabetically.
+reading the full file, and let humans scan `archived/skill-index.md` by purpose rather than alphabetically.
 
 **`Governs:` field — required for action roles:** Skills with role `operational`, `validation`,
 `diagnostic`, or `recovery` must include a `Governs:` field listing the scripts or config files
@@ -132,7 +132,7 @@ Minimum structure: **Overview**, **Steps** (or numbered steps), **Troubleshootin
 ## Required: Why This Matters (Philosophy)
 
 Every operational skill **must** include either a `## Why This Matters` section OR a reference
-to `devops-philosophy.md` that explains *why* the practice exists — not just *how* to do it.
+to `archived/devops-philosophy.md` that explains *why* the practice exists — not just *how* to do it.
 
 **Why this is required:** Skills that only explain "how" become obsolete the moment the platform
 changes (GCP → AWS, Terraform → Pulumi). Skills that explain the underlying principle survive
@@ -143,7 +143,7 @@ Keep the section to 1–3 sentences. Link back to the relevant principle by name
 ```markdown
 ## Why This Matters
 
-This skill implements the **[Principle Name]** principle from `devops-philosophy.md`:
+This skill implements the **[Principle Name]** principle from `archived/devops-philosophy.md`:
 [one sentence on what the principle says]. [one sentence on why the specific steps in this
 skill exist — what failure mode they prevent].
 ```
@@ -154,17 +154,17 @@ Example (for `apply-infra.md`):
 ## Why This Matters
 
 This skill implements **GitOps / Single Source of Truth** and **Fail Fast / Shift Left**
-from `devops-philosophy.md`. The plan → review → apply sequence ensures the repository
+from `archived/devops-philosophy.md`. The plan → review → apply sequence ensures the repository
 state is what gets deployed, not ad-hoc console changes. The pre-apply gate checks exist
 because failures found before apply are cheaper than failures found after.
 ```
 
-Use `philosophy-index.md` to find which principle applies to a given skill area.
+Use `archived/philosophy-index.md` to find which principle applies to a given skill area.
 
 **Exempt skills** (do not need this section — they ARE the philosophy layer):
-- `devops-philosophy.md`, `philosophy-index.md`, `devops-for-developers.md`
-- Meta-skills: `skill-index.md`, `write-skill.md`, `skill-chain.md`, `skill-gap-tracker.md`,
-  `skill-deprecation.md`, `demo.md`, `session-handoff.md`, `session-recap.md`
+- `archived/devops-philosophy.md`, `archived/philosophy-index.md`, `archived/devops-for-developers.md`
+- Meta-skills: `archived/skill-index.md`, `write-skill.md`, `archived/skill-chain.md`, `archived/skill-gap-tracker.md`,
+  `skill-deprecation.md`, `archived/demo.md`, `session-handoff.md`, `session-recap.md`
 
 ---
 
@@ -173,7 +173,7 @@ Use `philosophy-index.md` to find which principle applies to a given skill area.
 **Cross-referencing other skills:**
 ```markdown
 See `rollback-deployment.md` for the full rollback procedure.
-Read `gate-status.md` first if you haven't set up gates yet.
+Read `archived/gate-status.md` first if you haven't set up gates yet.
 ```
 Use backtick filename format. Do NOT use markdown links — filenames are enough.
 
@@ -263,7 +263,7 @@ Expected output / how to verify it worked.
 
 ## Why This Matters
 
-This skill implements **[Principle from devops-philosophy.md]**.
+This skill implements **[Principle from archived/devops-philosophy.md]**.
 [Why this practice exists — what failure mode it prevents, why a new platform would still
 need an equivalent approach.]
 
@@ -302,7 +302,7 @@ hook should be proposed:
 4. **Automation:** Does this skill trigger downstream work that currently requires a
    separate manual invocation?
 
-**If any answer is "yes":** Add a proposed pair entry to `skill-hook-pairs.md`.
+**If any answer is "yes":** Add a proposed pair entry to `archived/skill-hook-pairs.md`.
 
 **If all answers are "no":** Add this note to the skill's `## See Also` section:
 ```
@@ -310,7 +310,7 @@ No companion hook needed (evaluated YYYY-MM-DD).
 ```
 
 `assess-skill-on-edit.sh` check 10 will emit an advisory if your skill has an operational/
-diagnostic/recovery/validation role but no entry in `skill-hook-pairs.md`.
+diagnostic/recovery/validation role but no entry in `archived/skill-hook-pairs.md`.
 
 ---
 
@@ -324,9 +324,9 @@ After writing the skill file, complete these three steps:
 | <task description> | `<new-skill>.md` |
 ```
 
-### 2. Add to `skill-index.md`
+### 2. Add to `archived/skill-index.md`
 
-Add an entry to the appropriate category section in `skill-index.md`.
+Add an entry to the appropriate category section in `archived/skill-index.md`.
 
 ### 3. Add a gate (if the skill covers a testable operation)
 
@@ -358,7 +358,7 @@ suite), add a corresponding entry to `.claude/test-gates.json`.
 **Problem: Skill passes structural checks but agents still pick the wrong skill**
 - Cause: Trigger phrases aren't specific enough, or the skill title doesn't match what agents
   search for.
-- Fix: Run Scenario 6 from `demo.md` (fuzzy skill search) against your trigger phrase to see
+- Fix: Run Scenario 6 from `archived/demo.md` (fuzzy skill search) against your trigger phrase to see
   which skill an agent would actually choose. Add the natural-language phrase that failed to
   the trigger phrases list.
 
@@ -378,6 +378,6 @@ suite), add a corresponding entry to `.claude/test-gates.json`.
 - [ ] **`## Why This Matters` section present** (or explicit philosophy reference) — unless skill is exempt
 - [ ] `Domain:` tag present for operational/validation/diagnostic/recovery roles (optional for meta/teaching/reference)
 - [ ] `Methodology-step: skills` present
-- [ ] Companion hook evaluated (`skill-hook-pairs.md` updated or "no hook needed" note added)
+- [ ] Companion hook evaluated (`archived/skill-hook-pairs.md` updated or "no hook needed" note added)
 - [ ] Added to `CLAUDE.md` skills index
-- [ ] Added to `skill-index.md`
+- [ ] Added to `archived/skill-index.md`

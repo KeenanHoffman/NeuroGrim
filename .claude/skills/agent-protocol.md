@@ -517,6 +517,6 @@ chain at convergence: `worn_hat != required_hat` triggers a retry.
 ## See Also
 
 - `subagent-patterns.md` — coordination patterns (fan-out, convergence, hand-off)
-- `lsp-subagent-queries.md` — investigation-type subagent for LSP symbol queries
-- `hats.md` — hat system and available hats
+- `archived/lsp-subagent-queries.md` — investigation-type subagent for LSP symbol queries
+- `archived/hats.md` — hat system and available hats
 - `personas.md` — persona definitions for synthesis-type hat selection

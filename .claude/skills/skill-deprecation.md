@@ -61,10 +61,10 @@ grep -rl "$SKILL" .claude/skills/
 # CLAUDE.md skills index entry
 grep "$SKILL" CLAUDE.md
 
-# skill-index.md entry
+# archived/skill-index.md entry
 grep "$SKILL" .claude/skills/skill-index.md
 
-# skill-chain.md references
+# archived/skill-chain.md references
 grep "$SKILL" .claude/skills/skill-chain.md
 ```
 
@@ -132,9 +132,9 @@ cause damage):
 ```bash
 # 1. Verify all cross-references have been updated (step 2)
 # 2. Remove from CLAUDE.md skills index
-# 3. Remove from skill-index.md
-# 4. Remove from skill-chain.md if referenced
-# 5. Remove from skill-gap-tracker.md if tracked there
+# 3. Remove from archived/skill-index.md
+# 4. Remove from archived/skill-chain.md if referenced
+# 5. Remove from archived/skill-gap-tracker.md if tracked there
 # 6. Delete the file
 rm .claude/skills/old-skill-name.md
 

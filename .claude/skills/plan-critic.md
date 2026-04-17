@@ -154,7 +154,7 @@ Calibration: lean toward false positives — a missed caller means a silent runt
 
 | Symbol | What to verify |
 |--------|---------------|
-| **Skill rename/retire** | Cross-refs in `See Also:` sections of other skills? Entry in `skill-index.md`? `Governs:` fields in other skills pointing to old path? `CLAUDE.md` table entry? |
+| **Skill rename/retire** | Cross-refs in `See Also:` sections of other skills? Entry in `archived/skill-index.md`? `Governs:` fields in other skills pointing to old path? `CLAUDE.md` table entry? |
 | **Gate removal** | Skill prose referencing the gate name? CLAUDE.md gate reference table? `test-gates.json` downstream consumers (gate-advisor thresholds)? |
 | **PS function rename** | Callers in other `.ps1` files? Pester test mocks targeting old name? Skill docs with example invocations? |
 | **TF resource rename** | `depends_on`, `data` blocks, remote state refs, or `output` values using old name? |
@@ -274,7 +274,7 @@ cheap; undoing a half-applied infrastructure change is expensive. The adversary 
 exists because the author of a plan is the least likely person to spot their own blind spots
 — they already believe the plan is correct. A structured adversarial pass, with targeted
 subagent research on verifiable concerns, surfaces the class of problems that optimistic
-planning consistently misses. This is **Everything is Code** from `devops-philosophy.md`
+planning consistently misses. This is **Everything is Code** from `archived/devops-philosophy.md`
 applied to planning itself: the review protocol is the code; the plan file is the artifact
 it validates.
 

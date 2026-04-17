@@ -228,7 +228,7 @@ in the implementation.**
 
 ## Why This Matters
 
-This protocol implements **Observability Before Action** from `devops-philosophy.md`.
+This protocol implements **Observability Before Action** from `archived/devops-philosophy.md`.
 A decision made with only one lens is a blind spot: technically correct but philosophically
 hollow, or principled but broken in practice. Surfacing both dimensions explicitly — and
 forcing a documented synthesis when they conflict — ensures the system's guidance is both
@@ -261,7 +261,7 @@ specific questions change.
 ## See Also
 
 - `write-skill.md` — authoring guide + companion hook evaluation
-- `devops-philosophy.md` — the 8 principles P1–P4 test against
-- `skill-hook-pairs.md` — catalog of skill↔hook pairs; new pairs should pass dual review
+- `archived/devops-philosophy.md` — the 8 principles P1–P4 test against
+- `archived/skill-hook-pairs.md` — catalog of skill↔hook pairs; new pairs should pass dual review
 - `assess-skill-on-edit.sh` — automated T/P pass that fires on every skill edit
 - `review-loop.md` — iterative T+P+Code Reviewer loop for when the work will be revised in response to findings; wraps this protocol with a structured iteration harness and exit conditions

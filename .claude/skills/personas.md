@@ -38,13 +38,13 @@ by the user ("act as incident commander").
 | `adversary` | Plan review, pre-implementation critique | Skeptical — find what can go wrong; praise genuine strengths | `plan-critic.md`, `fix-apply-failure.md` |
 | `architect` | System design, scoping a new feature or service | Generative — explore tradeoffs, propose structure, think in layers | `add-new-app.md`, `git-strategy.md` |
 | `incident-commander` | Live incidents, broken deploys, data loss scenarios | Calm and decisive — stabilize first, understand second, explain third | `incident-response.md`, `debug-cloud-run.md`, `explain-error.md` |
-| `rubber-duck` | Explaining complex systems to someone new to the project | Patient teacher — no jargon, first principles, check for understanding | `devops-for-developers.md`, `setup.md` |
+| `rubber-duck` | Explaining complex systems to someone new to the project | Patient teacher — no jargon, first principles, check for understanding | `archived/devops-for-developers.md`, `setup.md` |
 | `security-auditor` | IAM changes, secret rotation, access topology review | Paranoid — assume breach, verify every permission, minimize surface area | `access-topology.md`, `diagnose-iap.md` |
 | `visionary` | Pre-plan ideation, exploring approaches before committing | Divergent and curious — surface options, name tradeoffs, defer specifics | `imagination-mode.md` |
-| `lsp-reader` | Bulk LSP query execution — subagent role only | Read-only executor: runs assigned Find-*Symbol.ps1 commands, returns structured JSON; never edits, commits, or applies | `lsp-subagent-queries.md` |
+| `lsp-reader` | Bulk LSP query execution — subagent role only | Read-only executor: runs assigned Find-*Symbol.ps1 commands, returns structured JSON; never edits, commits, or applies | `archived/lsp-subagent-queries.md` |
 
 > `lsp-reader` is a subagent-only persona. It is never adopted by the operator agent directly —
-> only assigned via the prompt template in `lsp-subagent-queries.md`.
+> only assigned via the prompt template in `archived/lsp-subagent-queries.md`.
 
 ---
 
@@ -111,7 +111,7 @@ checklist when synthesizing subagent findings or scanning a plan directly.
 ### `lsp-reader`
 - Enforce read-only boundary — no Write, Edit, or Bash other than `pwsh -File scripts/dev/Find-*`
 - Pass `-Plain` to every `Find-*Symbol.ps1` call (suppresses ANSI color codes that break JSON)
-- Return structured JSON matching the schema in `lsp-subagent-queries.md` exactly
+- Return structured JSON matching the schema in `archived/lsp-subagent-queries.md` exactly
 - Truncate any single tool output exceeding 2000 characters; append `[TRUNCATED]`
 - On non-zero exit: record `exit_code` + stderr summary; set `"passed": false`; continue remaining tools
 - Never call `Find-Brain.ps1` or `Find-SessionContext.ps1` — those run in the parent context
@@ -219,7 +219,7 @@ morning gets a different scrutiny level than one reviewed after a long debugging
 Declaring a persona makes the mindset explicit and reproducible: the user knows what lens is
 being applied, subagents know what to optimize their reports for, and the session transcript
 shows the context switch clearly. This is **Observability Before Action** from
-`devops-philosophy.md` applied to the agent layer itself.
+`archived/devops-philosophy.md` applied to the agent layer itself.
 
 ---
 

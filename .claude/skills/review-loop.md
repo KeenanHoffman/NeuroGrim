@@ -159,7 +159,7 @@ that address the letter of the concern but not the spirit, or introduce new issu
 closing old ones. The loop closes this gap by making re-verification mandatory, not assumed.
 The 3-iteration cap and ESCALATE verdict prevent the loop from becoming a bureaucratic
 obstacle — it's a quality gate, not a roadblock. This is **Automation Over Documentation**
-from `devops-philosophy.md`: the review loop is a repeatable, structured process that
+from `archived/devops-philosophy.md`: the review loop is a repeatable, structured process that
 produces consistent quality outcomes rather than relying on reviewer memory and goodwill.
 
 ---

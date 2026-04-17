@@ -99,7 +99,7 @@ advisor — two options, one tradeoff, no preaching.
 - **`imagination-mode.md`** — conversational approach exploration. Overlaps slightly;
   imagination-mode is broader (whole design space) and the duck is narrower (one stuck
   moment). Use the duck when you're mid-execution and hit a wall.
-- **`refocus.md`** — long-session drift. Different failure mode (losing thread) vs.
+- **`archived/refocus.md`** — long-session drift. Different failure mode (losing thread) vs.
   the duck's (stuck on one thing).
 
 ## Related reading

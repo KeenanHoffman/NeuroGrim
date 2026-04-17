@@ -506,7 +506,7 @@ Apply the enforcement model from `agent-protocol.md`: retry once with a specific
 correction, then abort. Never assume success from ambiguous output. Record
 SCHEMA_MISMATCH in proposal-ledger so conformance rate is tracked over time.
 
-These rules implement **Defense in Depth** from `devops-philosophy.md` at the coordination
+These rules implement **Defense in Depth** from `archived/devops-philosophy.md` at the coordination
 layer: a convergence check that gives subagents the benefit of the doubt is a single point
 of failure.
 
@@ -578,9 +578,9 @@ under 5 tools are faster inline (serial ~800ms < subagent spawn ~5–15s).
 path is Bucket 5 (~15–25s); parallelism caps total time at the slowest bucket.
 
 **Companion hook:** `suggest-lsp-subagents.sh` nudges after 3 sequential direct
-`Find-*Symbol.ps1` calls, pointing to `lsp-subagent-queries.md`.
+`Find-*Symbol.ps1` calls, pointing to `archived/lsp-subagent-queries.md`.
 
-See `lsp-subagent-queries.md` for bucketing rules, full prompt template, and convergence logic.
+See `archived/lsp-subagent-queries.md` for bucketing rules, full prompt template, and convergence logic.
 
 ---
 
@@ -657,7 +657,7 @@ distillation question is the same. See `VISION.md` Design Principle #8.
 
 ## Why This Matters
 
-This skill implements **Fail Fast / Shift Left** from `devops-philosophy.md`. Parallelism
+This skill implements **Fail Fast / Shift Left** from `archived/devops-philosophy.md`. Parallelism
 in verification isn't about speed for its own sake — it's about closing the feedback loop
 after a deploy before the next decision point arrives. A post-deploy check that serializes
 4 independent probes takes 2–4 minutes; the same probes run in parallel take 30–60 seconds.
@@ -692,10 +692,10 @@ independent concerns simultaneously" survives — only the Agent tool invocation
 - `dual-review.md` — T+P review as Sequential Hand-Off (Pattern 3): Staged Agent Path section
 - `post-deploy-verify.md` — Parallel Fan-Out (Pattern 1) example: Parallel Execution section
 - `incident-response.md` — Staged Convergence (Pattern 2): Parallel Diagnosis Option section
-- `skill-chain.md` — Chains 14, 15, 16 show parallel chain notation
-- `hooks-reference.md` — hook system boundary documentation
-- `devops-philosophy.md` — Fail Fast / Shift Left and Defense in Depth principles
-- `lsp-subagent-queries.md` — Pattern 5 (LSP Fan-Out) full reference: bucketing rules, prompt template, convergence logic
+- `archived/skill-chain.md` — Chains 14, 15, 16 show parallel chain notation
+- `archived/hooks-reference.md` — hook system boundary documentation
+- `archived/devops-philosophy.md` — Fail Fast / Shift Left and Defense in Depth principles
+- `archived/lsp-subagent-queries.md` — Pattern 5 (LSP Fan-Out) full reference: bucketing rules, prompt template, convergence logic
 
 Companion hook for Pattern 5: `suggest-lsp-subagents.sh` — fires after 3+ direct
 Find-*Symbol calls in a session; nudges agent to use Pattern 5 delegation.

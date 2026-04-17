@@ -210,7 +210,7 @@ findings and stabilized the score above 60.
 
 ## See Also
 
-- `brain.md` — how to read the Brain score and run health checks
-- `hats.md` — wear the `reviewer` hat to emphasize security findings in recommendations
-- `lsp-subagent-queries.md` — delegate security investigation to a subagent fleet
-- `what-next.md` — get a prioritized action list after running this domain
+- `archived/brain.md` — how to read the Brain score and run health checks
+- `archived/hats.md` — wear the `reviewer` hat to emphasize security findings in recommendations
+- `archived/lsp-subagent-queries.md` — delegate security investigation to a subagent fleet
+- `archived/what-next.md` — get a prioritized action list after running this domain

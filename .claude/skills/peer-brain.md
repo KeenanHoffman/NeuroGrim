@@ -132,8 +132,8 @@ or a client generating non-unique `message_id`s. Investigate.
 ## Related skills
 
 - `a2a.md` — protocol reference and message shapes.
-- `brain.md` — health scoring and the MCP side of the interface.
-- `operational-memory.md` — where peer-exchange events land (score-history, incident-ledger).
+- `archived/brain.md` — health scoring and the MCP side of the interface.
+- `archived/operational-memory.md` — where peer-exchange events land (score-history, incident-ledger).
 - `coherence.md` — cross-domain reasoning that consumes peer signals.
 
 ## Related reading
