@@ -56,3 +56,6 @@ TestResults/
 
 # Claude Code session state (harness-managed, not source)
 .claude/settings.local.json
+
+# Cargo publish dry-run logs (ephemeral, machine-local)
+motherbrain/.dry-run-logs/
