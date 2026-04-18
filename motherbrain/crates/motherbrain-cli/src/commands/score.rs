@@ -1,4 +1,4 @@
-use super::context::{append_score_history, BrainContext};
+use super::context::{append_proposal_ledger, append_score_history, BrainContext};
 use crate::output::display;
 use anyhow::Result;
 
@@ -25,6 +25,12 @@ pub async fn run(
         ctx.registry.config.trajectory.retention_days,
     )
     .await;
+
+    // Record recommendations in the proposal ledger — closes the
+    // learning loop (principle #4). Linked-list pre_score ties this
+    // entry to the previous one's post_score so compute_all_effectiveness
+    // can credit last round's recommendations with this round's delta.
+    append_proposal_ledger(&ctx.project_root, &ctx.agent_output).await;
 
     Ok(())
 }

@@ -352,3 +352,111 @@ fn score_appends_to_score_history() {
         );
     }
 }
+
+#[test]
+fn score_appends_to_proposal_ledger_with_linked_pre_score() {
+    // Two invocations of `motherbrain score` should produce a
+    // proposal-ledger.json with 2 entries. The second entry's
+    // `pre_score` should equal the first entry's `post_score` —
+    // proving the linked-list that gives compute_all_effectiveness
+    // cause→effect signal (principle #4, closing the learning loop).
+    let tmp = TempDir::new().unwrap();
+    let claude_dir = tmp.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+
+    std::fs::write(
+        claude_dir.join("smoke-cmdb.json"),
+        r#"{
+          "meta": {
+            "schema_version": "1",
+            "updated_by": "fixture",
+            "updated_at": "2026-04-17T00:00:00Z"
+          },
+          "score": 85,
+          "updated_at": "2026-04-17T00:00:00Z",
+          "findings": []
+        }"#,
+    )
+    .unwrap();
+
+    let registry = serde_json::json!({
+        "meta": {
+            "schema_version": "2",
+            "updated_by": "smoke-test",
+            "project": "smoke-test-fixture"
+        },
+        "tools": {},
+        "data_sources": {},
+        "config": {
+            "domain_weights": { "smoke": 1.0 },
+            "advisory_domains": [],
+            "domain_definitions": {
+                "smoke": {
+                    "scoring_source": {
+                        "type": "cmdb",
+                        "path": ".claude/smoke-cmdb.json"
+                    }
+                }
+            }
+        }
+    });
+    let registry_path = claude_dir.join("brain-registry.json");
+    std::fs::write(
+        &registry_path,
+        serde_json::to_string_pretty(&registry).unwrap(),
+    )
+    .unwrap();
+
+    // Run score twice
+    for _ in 0..2 {
+        let (code, _, stderr) = run(
+            &[
+                "score",
+                "--plain",
+                "--registry",
+                registry_path.to_str().unwrap(),
+            ],
+            Some(tmp.path()),
+        );
+        assert_eq!(code, 0, "score exit failed. stderr={stderr}");
+    }
+
+    let ledger_path = claude_dir.join("brain").join("proposal-ledger.json");
+    assert!(
+        ledger_path.is_file(),
+        "expected {ledger_path:?} after two score invocations"
+    );
+    let ledger_raw = std::fs::read_to_string(&ledger_path).unwrap();
+    let ledger: Vec<Value> = serde_json::from_str(&ledger_raw)
+        .unwrap_or_else(|e| panic!("ledger not parseable: {e}; raw={ledger_raw}"));
+    assert_eq!(
+        ledger.len(),
+        2,
+        "expected 2 ledger entries; got {}",
+        ledger.len()
+    );
+    // Each entry must have the core fields
+    for (i, entry) in ledger.iter().enumerate() {
+        assert!(
+            entry.get("timestamp").is_some(),
+            "entry {i} missing timestamp"
+        );
+        assert!(
+            entry.get("post_score").is_some(),
+            "entry {i} missing post_score"
+        );
+        assert!(
+            entry.get("proposals").is_some(),
+            "entry {i} missing proposals array"
+        );
+    }
+    // The second entry's pre_score should equal the first entry's
+    // post_score — the linked-list invariant that drives effectiveness
+    // math.
+    let first_post = ledger[0]["post_score"].as_i64().unwrap();
+    let second_pre = ledger[1]["pre_score"].as_i64().unwrap();
+    assert_eq!(
+        second_pre, first_post,
+        "linked-list broken: second entry pre_score ({second_pre}) != first entry post_score ({first_post})"
+    );
+}

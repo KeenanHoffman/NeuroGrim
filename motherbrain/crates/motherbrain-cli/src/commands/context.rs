@@ -314,6 +314,86 @@ async fn load_json_file<T: serde::de::DeserializeOwned + Default>(path: &Path) -
         .unwrap_or_default()
 }
 
+/// Append a `ProposalLedgerEntry` to `.claude/brain/proposal-ledger.json`
+/// capturing the recommendations the pipeline produced on this run.
+///
+/// Linked-list `pre_score`: if the previous ledger entry has a `post_score`
+/// set, this entry's `pre_score` is that previous `post_score`. Creates a
+/// temporal chain so `compute_all_effectiveness` can credit each round's
+/// recommendations with the next round's delta. No user action required.
+///
+/// action_type is derived from `recommendation.gate` — a stable grouping
+/// key for the learning math. Falls back to `recommendation.domain` if
+/// gate is empty.
+///
+/// Best-effort; failures log a warning but don't break the enclosing
+/// command.
+pub async fn append_proposal_ledger(project_root: &Path, agent_output: &AgentOutput) {
+    use motherbrain_core::learning::{Proposal, ProposalLedgerEntry};
+
+    let brain_dir = project_root.join(".claude").join("brain");
+    if let Err(e) = tokio::fs::create_dir_all(&brain_dir).await {
+        tracing::warn!("cannot create {:?}: {e}; skipping ledger write", brain_dir);
+        return;
+    }
+    let ledger_path = brain_dir.join("proposal-ledger.json");
+
+    // Load existing ledger to find linked-list pre_score.
+    let mut ledger: Vec<ProposalLedgerEntry> = match tokio::fs::read_to_string(&ledger_path).await {
+        Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+    let pre_score = ledger.last().and_then(|e| e.post_score).or(Some(0));
+
+    // Derive proposals from top_recommendations.
+    let proposals: Vec<Proposal> = agent_output
+        .top_recommendations
+        .iter()
+        .map(|r| Proposal {
+            id: Some(format!("{}:{}", r.domain, r.gate)),
+            command: Some(r.command.clone()),
+            domain: Some(r.domain.clone()),
+            action_type: Some(if r.gate.is_empty() {
+                r.domain.clone()
+            } else {
+                r.gate.clone()
+            }),
+        })
+        .collect();
+
+    // Git HEAD resolution is best-effort; skip if git isn't available
+    // or the project isn't a repo.
+    let commit = tokio::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(project_root)
+        .output()
+        .await
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+    let entry = ProposalLedgerEntry {
+        timestamp: Utc::now().to_rfc3339(),
+        proposals,
+        pre_score,
+        post_score: Some(agent_output.score as i64),
+        commit,
+        hat: agent_output.current_hat.clone(),
+    };
+    ledger.push(entry);
+
+    match serde_json::to_string_pretty(&ledger) {
+        Ok(json) => {
+            if let Err(e) = tokio::fs::write(&ledger_path, json).await {
+                tracing::warn!("cannot write {:?}: {e}; ledger append dropped", ledger_path);
+            }
+        }
+        Err(e) => {
+            tracing::warn!("cannot serialize proposal ledger: {e}; ledger append dropped");
+        }
+    }
+}
+
 /// Append a ScoreSnapshot derived from the current `AgentOutput` to
 /// `.claude/brain/score-history.json`. Creates the `brain/` subdir if
 /// absent. Prunes entries older than `retention_days` (default 30).
