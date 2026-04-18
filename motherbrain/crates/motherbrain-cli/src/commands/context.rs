@@ -313,3 +313,78 @@ async fn load_json_file<T: serde::de::DeserializeOwned + Default>(path: &Path) -
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
+
+/// Append a ScoreSnapshot derived from the current `AgentOutput` to
+/// `.claude/brain/score-history.json`. Creates the `brain/` subdir if
+/// absent. Prunes entries older than `retention_days` (default 30).
+///
+/// Intended caller: user-facing commands (`score`, `health`) that represent
+/// "I'm checking in on project state right now." Not called from read-only
+/// view commands (`trend`, `agent`) or from `a2a-serve`'s per-request
+/// handler — those would inflate history without representing new decisions.
+///
+/// Best-effort: returns unconditionally. Failure to persist history
+/// surfaces as a tracing::warn but must not break the enclosing command.
+pub async fn append_score_history(
+    project_root: &Path,
+    agent_output: &AgentOutput,
+    retention_days: u32,
+) {
+    use motherbrain_core::types::{ScoreSnapshot, SnapshotDomain};
+
+    let scored_at = agent_output
+        .scored_at
+        .parse::<DateTime<Utc>>()
+        .unwrap_or_else(|_| Utc::now());
+    let domains = agent_output
+        .domains
+        .iter()
+        .map(|(k, d)| {
+            (
+                k.clone(),
+                SnapshotDomain {
+                    score: d.score,
+                    confidence: d.confidence,
+                },
+            )
+        })
+        .collect();
+    let snapshot = ScoreSnapshot {
+        scored_at,
+        score: agent_output.score,
+        domains,
+        hat: agent_output.current_hat.clone(),
+    };
+
+    let brain_dir = project_root.join(".claude").join("brain");
+    if let Err(e) = tokio::fs::create_dir_all(&brain_dir).await {
+        tracing::warn!("cannot create {:?}: {e}; skipping history write", brain_dir);
+        return;
+    }
+    let history_path = brain_dir.join("score-history.json");
+
+    let mut history: Vec<ScoreSnapshot> = match tokio::fs::read_to_string(&history_path).await {
+        Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+    history.push(snapshot);
+
+    // Retention pruning. Non-atomic read-modify-write; acceptable for
+    // single-user CLI use. A file lock is follow-on work.
+    let cutoff = Utc::now() - chrono::Duration::days(retention_days as i64);
+    history.retain(|s| s.scored_at >= cutoff);
+
+    match serde_json::to_string_pretty(&history) {
+        Ok(json) => {
+            if let Err(e) = tokio::fs::write(&history_path, json).await {
+                tracing::warn!(
+                    "cannot write {:?}: {e}; history append dropped",
+                    history_path
+                );
+            }
+        }
+        Err(e) => {
+            tracing::warn!("cannot serialize score history: {e}; history append dropped");
+        }
+    }
+}

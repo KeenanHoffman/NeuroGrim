@@ -241,3 +241,114 @@ fn score_outputs_numeric_score_for_minimal_project() {
         "score output should contain digits; got stdout={stdout:?}"
     );
 }
+
+#[test]
+fn score_appends_to_score_history() {
+    // Two invocations of `motherbrain score` against the same registry
+    // should produce a score-history.json with 2 entries. Regression
+    // guard for Session 6's principle #12 wire-up: the history file
+    // lives at `.claude/brain/score-history.json` and grows on each
+    // score/health invocation.
+    let tmp = TempDir::new().unwrap();
+    let claude_dir = tmp.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+
+    // Minimum valid CMDB so there's something to score
+    std::fs::write(
+        claude_dir.join("smoke-cmdb.json"),
+        r#"{
+          "meta": {
+            "schema_version": "1",
+            "updated_by": "fixture",
+            "updated_at": "2026-04-17T00:00:00Z"
+          },
+          "score": 85,
+          "updated_at": "2026-04-17T00:00:00Z",
+          "findings": []
+        }"#,
+    )
+    .unwrap();
+
+    let registry = serde_json::json!({
+        "meta": {
+            "schema_version": "2",
+            "updated_by": "smoke-test",
+            "project": "smoke-test-fixture"
+        },
+        "tools": {},
+        "data_sources": {},
+        "config": {
+            "domain_weights": { "smoke": 1.0 },
+            "advisory_domains": [],
+            "domain_definitions": {
+                "smoke": {
+                    "scoring_source": {
+                        "type": "cmdb",
+                        "path": ".claude/smoke-cmdb.json"
+                    }
+                }
+            }
+        }
+    });
+    let registry_path = claude_dir.join("brain-registry.json");
+    std::fs::write(
+        &registry_path,
+        serde_json::to_string_pretty(&registry).unwrap(),
+    )
+    .unwrap();
+
+    // First score invocation
+    let (code1, _, stderr1) = run(
+        &[
+            "score",
+            "--plain",
+            "--registry",
+            registry_path.to_str().unwrap(),
+        ],
+        Some(tmp.path()),
+    );
+    assert_eq!(code1, 0, "first score exit failed. stderr={stderr1}");
+
+    // Second invocation — should append, not overwrite
+    let (code2, _, stderr2) = run(
+        &[
+            "score",
+            "--plain",
+            "--registry",
+            registry_path.to_str().unwrap(),
+        ],
+        Some(tmp.path()),
+    );
+    assert_eq!(code2, 0, "second score exit failed. stderr={stderr2}");
+
+    // Assert the history file exists and has 2 entries
+    let history_path = claude_dir.join("brain").join("score-history.json");
+    assert!(
+        history_path.is_file(),
+        "expected {history_path:?} to exist after two score invocations"
+    );
+    let history_raw = std::fs::read_to_string(&history_path).unwrap();
+    let history: Vec<Value> = serde_json::from_str(&history_raw)
+        .unwrap_or_else(|e| panic!("history not parseable: {e}; raw={history_raw}"));
+    assert_eq!(
+        history.len(),
+        2,
+        "expected 2 snapshot entries; got {}. raw={history_raw}",
+        history.len()
+    );
+    // Each entry should have score + scored_at + domains
+    for (i, entry) in history.iter().enumerate() {
+        assert!(
+            entry.get("score").is_some(),
+            "entry {i} missing score field: {entry}"
+        );
+        assert!(
+            entry.get("scored_at").is_some(),
+            "entry {i} missing scored_at field: {entry}"
+        );
+        assert!(
+            entry.get("domains").is_some(),
+            "entry {i} missing domains field: {entry}"
+        );
+    }
+}

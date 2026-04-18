@@ -1,4 +1,4 @@
-use super::context::BrainContext;
+use super::context::{append_score_history, BrainContext};
 use crate::output::display;
 use anyhow::Result;
 
@@ -15,6 +15,16 @@ pub async fn run(
     } else {
         display::display_health(&ctx.agent_output, plain);
     }
+
+    // Record this invocation in the score-history ledger so trajectory
+    // intelligence (spec §7, principle #12) has data to work with.
+    // Best-effort — a history-write failure must not break `health`.
+    append_score_history(
+        &ctx.project_root,
+        &ctx.agent_output,
+        ctx.registry.config.trajectory.retention_days,
+    )
+    .await;
 
     Ok(())
 }
