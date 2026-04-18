@@ -70,7 +70,7 @@ Skills corresponding to Rust Brain sensor domains:
 |------|-------|
 | Authoring guide for new skills | `write-skill.md` |
 | Agent persona system (adversary, architect, etc.) | `personas.md` |
-| Operator↔subagent interface protocol | `agent-protocol.md` |
+| Pilot↔subagent interface protocol | `pilot-protocol.md` |
 | Coordinate subagents / parallel workflows | `subagent-patterns.md` |
 | Dual-agent T+P review protocol | `dual-review.md` |
 | Iterative T+P+Code Reviewer quality loop | `review-loop.md` |

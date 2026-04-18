@@ -35,14 +35,14 @@ The loop is not a replacement for dual-review — it's the iteration harness tha
 
 ## Orchestration
 
-**The operator agent is the loop orchestrator.** It:
+**The pilot agent is the loop orchestrator.** It:
 1. Spawns T and P as subagents (or runs them as sequential prompts for lower-stakes work)
 2. Receives their reports
 3. Spawns the Code Reviewer to synthesize
 4. Decides whether to iterate based on the Code Reviewer's verdict
 5. Loops back to step 1 if NEEDS-WORK, or exits if APPROVED or ESCALATE
 
-**Persona isolation:** The operator agent's current persona does not transfer to T, P, or the
+**Persona isolation:** The pilot agent's current persona does not transfer to T, P, or the
 Code Reviewer. Each reviewer runs without inherited persona unless explicitly briefed. The
 loop orchestrator remains in whatever mode it was in before the loop started — the loop
 itself is not persona-bearing.
@@ -141,7 +141,7 @@ Apply the above before iteration [N+1].
 
 ## When to Use Staged Agents vs. Sequential Prompts
 
-For lower-stakes work, T and P can run as sequential prompts within the operator agent rather
+For lower-stakes work, T and P can run as sequential prompts within the pilot agent rather
 than spawned subagents. Use spawned agents when:
 - The output is a new blocking hook (exits non-zero)
 - The change affects gate behavior or deploy order

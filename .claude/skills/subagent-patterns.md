@@ -5,7 +5,7 @@ rather than serializing. This skill documents the three spawn patterns used in t
 when to use them vs. running inline, and how to handle convergence.
 
 Role: operational · reference
-Protocol: lsp-brains/agent/1.0 (see agent-protocol.md for full envelope reference)
+Protocol: lsp-brains/agent/1.0 (see pilot-protocol.md for full envelope reference)
 
 Trigger phrases: "spawn a subagent", "run in parallel", "parallelize this workflow",
 Domain: deploy
@@ -216,7 +216,7 @@ cognitive bias toward resolving conflicts mentally before surfacing them.
 
 ## Pattern 4 — Persona-Calibrated Briefing
 
-The operator agent's current persona shapes the subagent's briefing: priority order, output
+The pilot agent's current persona shapes the subagent's briefing: priority order, output
 depth, and format. This is NOT persona inheritance — subagents don't become the persona.
 It's explicit calibration embedded in the subagent's prompt.
 
@@ -399,7 +399,7 @@ not to re-run discovery.
 
 ## Envelope Protocol Integration
 
-All subagents in this project use the LSP Brains agent protocol. See `agent-protocol.md`
+All subagents in this project use the LSP Brains agent protocol. See `pilot-protocol.md`
 for the full reference. The patterns below are orthogonal to the envelope — they describe
 coordination topology, not wire format. Every subagent prompt, regardless of pattern, must
 use the standard envelope.
@@ -409,7 +409,7 @@ use the standard envelope.
 1. Read the skill manifest for the capability → get `responsibility`, `required_hat`,
    `input_schema`, `output_schema`
 2. Build the JSON request envelope (copy `required_hat` into `wear_hat`)
-3. Construct the system prompt using the template from `agent-protocol.md`
+3. Construct the system prompt using the template from `pilot-protocol.md`
 4. Spawn the subagent
 
 **Step added to every convergence check after collecting results:**
@@ -504,7 +504,7 @@ not PASS). Fall back to running that concern inline sequentially. Log that the p
 path was not used.
 
 **Mode 3 — Subagent returns malformed output (not valid JSON, missing required fields):**
-Apply the enforcement model from `agent-protocol.md`: retry once with a specific
+Apply the enforcement model from `pilot-protocol.md`: retry once with a specific
 correction, then abort. Never assume success from ambiguous output. Record
 SCHEMA_MISMATCH in proposal-ledger so conformance rate is tracked over time.
 

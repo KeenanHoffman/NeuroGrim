@@ -76,7 +76,7 @@ that doesn't yet exist in the skill system? If yes, the plan is establishing new
 regardless of file type — invoke the full adversary.
 
 **The rule:** Use the full protocol when either question points to broad impact or high novelty.
-When both are narrow, a light scan (operator agent inline, no subagents) is sufficient.
+When both are narrow, a light scan (pilot agent inline, no subagents) is sufficient.
 
 **Grounding example:** The personas + plan-critic work was all `.md` files — no code, no
 schemas — yet it clearly warranted full adversary: it established new patterns that every
@@ -103,14 +103,14 @@ Read the plan file in `.claude/plans/` (or wherever the user points you). Note:
 
 ### 2. Spawn targeted research subagents
 
-The operator agent is the orchestrator. It spawns Explore subagents for specific verifiable
+The pilot agent is the orchestrator. It spawns Explore subagents for specific verifiable
 concerns, receives their reports, and synthesizes findings. Subagents do not inherit the
 `adversary` persona — they run without persona context but receive an explicit briefing:
 
 ```
-[Persona: adversary] The operator agent is acting as an adversarial plan reviewer.
+[Persona: adversary] The pilot agent is acting as an adversarial plan reviewer.
 Research: {specific concern}
-Framing: {what the operator agent is deciding}
+Framing: {what the pilot agent is deciding}
 Calibration: lean toward surfacing edge cases — false negatives are worse than false positives.
 ```
 
@@ -183,16 +183,16 @@ schema, test surface, and conventions, and cross-domain interaction effects are 
 [Persona: adversary] Domain review: {domain name}
 Scope: only the {domain-specific changes} in this plan
 Research: what could fail specifically within this domain's conventions, schema, or test surface?
-Calibration: lean toward edge cases — do NOT review cross-domain interactions (operator agent's job).
+Calibration: lean toward edge cases — do NOT review cross-domain interactions (pilot agent's job).
 Key schema/conventions: {paste relevant spec excerpt}
 ```
 
-**Operator agent synthesis:** After domain subagents report, the operator agent reviews cross-domain
+**Pilot agent synthesis:** After domain subagents report, the pilot agent reviews cross-domain
 interactions exclusively: does a new hook in Domain A call a script in Domain B that Domain B's
 subagent flagged as broken? Is there a circular dependency? Does a gate in Domain C watch a
 path that Domain D's changes invalidate?
 
-This step is the operator agent's exclusive responsibility — domain subagents must not attempt it.
+This step is the pilot agent's exclusive responsibility — domain subagents must not attempt it.
 
 ### 3. Synthesize findings
 

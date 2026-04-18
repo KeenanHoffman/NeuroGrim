@@ -2,7 +2,7 @@
 
 Use this skill when an agent needs to adopt a named operational mode for a specific task —
 or when you want to understand why an agent is communicating in a particular way. Personas
-make the operator agent's mindset explicit and predictable, especially when subagents need to
+make the pilot agent's mindset explicit and predictable, especially when subagents need to
 calibrate the depth and framing of their reports.
 
 Role: meta
@@ -15,14 +15,14 @@ Methodology-step: skills
 
 ## What a Persona Is
 
-A persona is a declared operational mode the operator agent announces at the start of a task.
+A persona is a declared operational mode the pilot agent announces at the start of a task.
 It sets three things:
 
 - **Mindset** — how to approach the problem (skeptical, generative, calm under pressure, etc.)
 - **Tone** — how to communicate with the user and subagents
 - **Subagent briefing** — what context subagents receive when spawned under this persona
 
-Personas are **scoped to a single task.** The operator agent returns to default mode when the
+Personas are **scoped to a single task.** The pilot agent returns to default mode when the
 task completes. They are not permanent character changes — they are deliberate lenses applied
 to specific work.
 
@@ -43,7 +43,7 @@ by the user ("act as incident commander").
 | `visionary` | Pre-plan ideation, exploring approaches before committing | Divergent and curious — surface options, name tradeoffs, defer specifics | `imagination-mode.md` |
 | `source-reader` | Bulk read-only queries — subagent role only | Read-only executor: runs assigned query commands (e.g., `motherbrain sensory <name>`), returns structured JSON; never edits, commits, or applies | `subagent-patterns.md` Pattern 5 |
 
-> `source-reader` is a subagent-only persona. It is never adopted by the operator agent directly —
+> `source-reader` is a subagent-only persona. It is never adopted by the pilot agent directly —
 > only assigned via a prompt template in the parent's briefing (see `subagent-patterns.md`).
 
 ---
@@ -127,10 +127,10 @@ checklist when synthesizing subagent findings or scanning a plan directly.
 When spawning a subagent while in a persona, use this template:
 
 ```
-[Persona: {name}] The operator agent is acting as {one-line description}.
+[Persona: {name}] The pilot agent is acting as {one-line description}.
 Hat: {hat name or "none"} — {hat description if active, or "default domain emphasis"}
 Research: {specific concern to investigate}
-Framing: {what the operator agent is deciding based on this research}
+Framing: {what the pilot agent is deciding based on this research}
 Calibration: {what kind of finding matters most — errors, options, edge cases, etc.}
 ```
 
@@ -154,7 +154,7 @@ The calibration line is what distinguishes one persona's subagents from another'
 
 `adversary` subagent (with architect hat):
 ```
-[Persona: adversary] The operator agent is acting as an adversarial plan reviewer.
+[Persona: adversary] The pilot agent is acting as an adversarial plan reviewer.
 Hat: architect — structural health focus (EaC x2.0, defense-in-depth x1.5)
 Research: whether the new script has PS 5.1 compatibility issues.
 Framing: whether this plan can proceed to implementation or needs revision.
@@ -163,7 +163,7 @@ Calibration: lean toward surfacing edge cases — false negatives are worse than
 
 `incident-commander` subagent (with operator hat):
 ```
-[Persona: incident-commander] The operator agent is coordinating incident response.
+[Persona: incident-commander] The pilot agent is coordinating incident response.
 Hat: operator — deploy readiness focus (gates x2.0, artifacts x1.5)
 Research: the last 50 Cloud Run log lines for the affected service.
 Framing: whether to roll back immediately or attempt a hot fix.
@@ -215,7 +215,7 @@ follow-up tasks.
 
 ## Why This Matters
 
-A persona is a forcing function for consistency. Without one, the operator agent's approach to
+A persona is a forcing function for consistency. Without one, the pilot agent's approach to
 a task shifts based on phrasing, session history, and recency bias — a plan reviewed in the
 morning gets a different scrutiny level than one reviewed after a long debugging session.
 Declaring a persona makes the mindset explicit and reproducible: the user knows what lens is

@@ -55,7 +55,7 @@ The Brain learns from its own recommendations.
 
 **Methodology note:** Stage 1 proved the pattern works for DevOps. PRs #67-68 named it
 "LSP Brains" and established the 6-step adoption ramp, terminology governance,
-and the operator agent / nervous system framing. These are Stage 1's proof that the pattern
+and the pilot agent / nervous system framing. These are Stage 1's proof that the pattern
 transfers — the architecture is domain-agnostic even though the first implementation is DevOps.
 
 ---

@@ -189,9 +189,9 @@ completion rates across subagents, surfaces incomplete or timed-out tasks, and c
 subagents are adhering to the LSP Brains agent protocol (typed subagent interface, structured
 JSON responses, gate compliance).
 
-This domain is most relevant in orchestrated pipelines where an operator agent spawns specialized
+This domain is most relevant in orchestrated pipelines where an pilot agent spawns specialized
 subagents for parallel work. If three of five subagents complete successfully but two time out,
-subagent-health captures that partial-failure state and gives the operator agent a clean signal
+subagent-health captures that partial-failure state and gives the pilot agent a clean signal
 to retry, reroute, or escalate — rather than silently proceeding with incomplete context.
 
 ---

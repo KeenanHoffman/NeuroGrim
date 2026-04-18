@@ -65,7 +65,7 @@ This distinction matters because:
 | Motor neurons | Skills (`.claude/skills/`) | Know how to act on what the Brain perceives |
 | Reflexes | Hooks (`.claude/settings.json`) | Automatic responses to specific stimuli |
 | World model | CMDBs (`*-cmdb.json`) | Declared state the Brain reasons over |
-| Consciousness | The operator agent + hats | Attentional bias — same signals, different salience based on current concern |
+| Consciousness | The pilot agent + hats | Attentional bias — same signals, different salience based on current concern |
 | Memory / proprioception | Proposal ledger (`.claude/brain/`) | Learn from past actions |
 | Identity recognition | Human-comms domain | Remember how this human wants to be communicated with |
 | Peripheral nervous system | Child project Brains (A2A peers) | Extend sensing to the ecosystem |

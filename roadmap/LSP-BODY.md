@@ -104,18 +104,18 @@ flowchart TD
   subgraph SKILLS["📚  Skills — Motor Neurons  (.claude/skills/)"]
     SK1["brain.md\nhow to read + invoke the Brain"]
     SK2["hats.md  ·  personas.md\nhow to wear hats + shape output depth"]
-    SK3["agent-protocol.md\nlsp-brains/agent/1.0 wire contract\nopen-form: narrative + envelope block"]
+    SK3["pilot-protocol.md\nlsp-brains/agent/1.0 wire contract\nopen-form: narrative + envelope block"]
     SK4["subagent-patterns.md\nfan-out · staged convergence · hand-off"]
     SK5["lsp.md  ·  lsp-grounded.md\nFind-*.ps1 command reference"]
     SK6["what-next.md  ·  skill-chain.md\nprioritized action + multi-skill sequences"]
   end
 
   %% ═══════════════════════════════════════════
-  %% 10 · OPERATOR AGENT  (conscious mind)
+  %% 10 · PILOT AGENT  (conscious mind)
   %% ═══════════════════════════════════════════
-  subgraph AGENT["🤖  Operator Agent — Conscious Mind"]
+  subgraph AGENT["🤖  Pilot Agent — Conscious Mind"]
 
-    OP["Operator Agent\nwears hat  ·  declares persona\nreads skills before acting\nannounces: Wear Hat: &lt;hat&gt;"]
+    OP["Pilot Agent\nwears hat  ·  declares persona\nreads skills before acting\nannounces: Wear Hat: &lt;hat&gt;"]
 
     subgraph FLEET["Subagent Fleet — Reflex Arcs  (parallel workers)"]
       SA1["Subagent A\nanalysis  ·  reviewer hat\nnarrative: structural critique"]
@@ -241,7 +241,7 @@ flowchart TD
 | **Reflex Arcs** | Subagent Fleet | Agent tool, `subagent-patterns.md` |
 | **Long-Term Memory** | Operational Memory | `score-history.json`, `incident-ledger.json`, `proposal-ledger.json` |
 | **Proprioception** | Trajectory Engine | `motherbrain-core::trajectory` |
-| **Conscious Mind** | Operator Agent + Hats + Personas | Claude Code operator |
+| **Conscious Mind** | Pilot Agent + Hats + Personas | Claude Code pilot |
 | **Peripheral Nervous System (fractal)** | Child Project Brains (A2A peers) | one registry per project |
 
 ## Peer Nervous System (v2.1+: A2A)

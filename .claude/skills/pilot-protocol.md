@@ -1,6 +1,6 @@
-# Agent Protocol
+# Pilot Protocol
 
-Defines the bidirectional interface language between the operator agent and any subagent
+Defines the bidirectional interface language between the pilot agent and any subagent
 it spawns. Schemas are defined once in skill manifests, are the authority, and are enforced
 hard. Non-conformant responses are retried once, then aborted — no silent degradation.
 
@@ -39,14 +39,14 @@ the shape of the `data` field, and what Brain component the output typically fee
 | `synthesis` | persona-aligned | Aggregate subagent outputs → unified view | agent output |
 | `validation` | `reviewer` | Check conformance/correctness → pass/fail | gate state |
 
-The type is declared in the skill manifest's `responsibility` field. The operator reads
+The type is declared in the skill manifest's `responsibility` field. The pilot reads
 the manifest to know which type to expect and which hat to request.
 
 ---
 
-## Common Request Envelope (Operator → Subagent)
+## Common Request Envelope (Pilot → Subagent)
 
-The operator constructs this before spawning the subagent:
+The pilot constructs this before spawning the subagent:
 
 ```json
 {
@@ -61,7 +61,7 @@ The operator constructs this before spawning the subagent:
   },
   "context": {
     "project_root": "<absolute path>",
-    "persona": "<operator's current persona, or null>",
+    "persona": "<pilot's current persona, or null>",
     "brain_snapshot": null
   }
 }
@@ -104,7 +104,7 @@ The reviewer lens reveals three structural concerns in this module...
 ```
 
 **Delimiter collision prevention:** The delimiter embeds the `request_id`, which is chosen
-per-invocation by the operator. The subagent echoes it. Collision with narrative prose is
+per-invocation by the pilot. The subagent echoes it. Collision with narrative prose is
 near-impossible because the `request_id` is unique to this call.
 
 **Narrative has no constraints.** Length, structure, and voice are at the subagent's
@@ -113,7 +113,7 @@ exactly as before. Narrative outside the block is not a violation — it is the 
 
 ---
 
-## Response Envelopes (Subagent → Operator)
+## Response Envelopes (Subagent → Pilot)
 
 All responses share a common wrapper. The `data` field shape differs by responsibility type.
 The wrapper is embedded in the delimited block (see Open-Form Response Format above).
@@ -139,7 +139,7 @@ The wrapper is embedded in the delimited block (see Open-Form Response Format ab
 }
 ```
 
-`symbols` is the **universal observation layer** — every type emits it. The operator
+`symbols` is the **universal observation layer** — every type emits it. The pilot
 can always scan `symbols` without knowing the capability-specific `data` schema.
 
 **Symbol shape:**
@@ -314,7 +314,7 @@ When status is `"error"`, `data` is null:
 
 ## Enforcement Model
 
-Schemas are the authority. The operator enforces this on every received response.
+Schemas are the authority. The pilot enforces this on every received response.
 Narrative outside the delimited block is expected and is never retried.
 
 ```
@@ -356,10 +356,10 @@ receive_subagent_response(raw_text, request_id, required_hat, responsibility):
 
 **One retry per violation type.** The retry names exactly what was wrong.
 After one retry, the schema wins. ABORT means: set envelope to error, record in
-proposal-ledger, surface to operator for human decision.
+proposal-ledger, surface to pilot for human decision.
 There is no "degrade gracefully" path.
 
-**The operator returns both parts:** narrative to the human reader, envelope to the Brain.
+**The pilot returns both parts:** narrative to the human reader, envelope to the Brain.
 
 ---
 
@@ -487,17 +487,17 @@ feeds_cmdb: .claude/code-quality-cmdb.json
 
 ```
 Manifest:  required_hat: "reviewer"
-    ↓ operator reads manifest
+    ↓ pilot reads manifest
 Request:   wear_hat: "reviewer"
-    ↓ operator injects into system prompt: "Wear Hat: reviewer"
+    ↓ pilot injects into system prompt: "Wear Hat: reviewer"
 Subagent executes wearing reviewer hat
     ↓
 Response:  worn_hat: "reviewer"
-    ↓ operator validates worn_hat == required_hat
+    ↓ pilot validates worn_hat == required_hat
 Findings:  finding.hat_lens: "reviewer"  (for analysis type)
 ```
 
-Every finding is traceable to the hat that produced it. The operator validates the hat
+Every finding is traceable to the hat that produced it. The pilot validates the hat
 chain at convergence: `worn_hat != required_hat` triggers a retry.
 
 ---
