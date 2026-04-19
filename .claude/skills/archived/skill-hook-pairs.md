@@ -70,7 +70,7 @@ All documented skill↔hook relationships in the system.
 | `lsp-grounded.md`, `apply-infra.md`, `sandbox.md` | `pre-apply-lsp.sh` | Detection | Before any apply-*.ps1 script, emits deploy readiness from gates.json and topology — dirty gate count, at-risk resources, estimated clear time; advisory only (exit 0) |
 | `imagination-mode.md` | *(none)* | — | Conversation-initiated ideation; there is no machine-detectable signal for "user wants to imagine". No companion hook needed (evaluated 2026-04-07). |
 | `artifact-cmdb.md` | `prewarm-artifacts.yml` | Automation | Daily schedule + `workflow_dispatch` rebuilds stale container images, updates CMDB hashes, commits to main — closes the build-skip gate circuit for the next deploy |
-| `brain.md` | `gate-completion.sh` | Detection | After every gate script completes, appends confidence-aware Moth(er):Br+AI+n score line (`Moth(er):Br+AI+n: N/100 [domain:score(confidence%) ...]`) to gate summary — surfaces cross-domain health with data completeness transparency |
+| `brain.md` | `gate-completion.sh` | Detection | After every gate script completes, appends confidence-aware NeuroGrim score line (`NeuroGrim: N/100 [domain:score(confidence%) ...]`) to gate summary — surfaces cross-domain health with data completeness transparency |
 | `start-feature.md` | `pre-pr-create.sh` | Enforcement | Before `gh pr create`, checks if branch is pushed to remote; blocks with guidance if not |
 | `sca.md` | *(none)* | — | Audits are slow and on-demand; no reliable machine-detectable trigger exists. No companion hook needed (evaluated 2026-04-08). |
 | `git-tree-cmdb.md` | `rebuild-git-tree.sh` | Automation | After any edit to gates/settings/skills/workflows/registry, rebuilds cross-reference CMDB (async) |

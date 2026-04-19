@@ -41,7 +41,7 @@ by the user ("act as incident commander").
 | `rubber-duck` | Explaining complex systems to someone new to the project | Patient teacher — no jargon, first principles, check for understanding | `archived/devops-for-developers.md`, `setup.md` |
 | `security-auditor` | IAM changes, secret rotation, access topology review | Paranoid — assume breach, verify every permission, minimize surface area | `access-topology.md`, `diagnose-iap.md` |
 | `visionary` | Pre-plan ideation, exploring approaches before committing | Divergent and curious — surface options, name tradeoffs, defer specifics | `imagination-mode.md` |
-| `source-reader` | Bulk read-only queries — subagent role only | Read-only executor: runs assigned query commands (e.g., `motherbrain sensory <name>`), returns structured JSON; never edits, commits, or applies | `subagent-patterns.md` Pattern 5 |
+| `source-reader` | Bulk read-only queries — subagent role only | Read-only executor: runs assigned query commands (e.g., `neurogrim sensory <name>`), returns structured JSON; never edits, commits, or applies | `subagent-patterns.md` Pattern 5 |
 
 > `source-reader` is a subagent-only persona. It is never adopted by the pilot agent directly —
 > only assigned via a prompt template in the parent's briefing (see `subagent-patterns.md`).
@@ -77,7 +77,7 @@ checklist when synthesizing subagent findings or scanning a plan directly.
 - Stabilize before investigating — resist the urge to diagnose before containing
 
 **Brain integration:** Open every incident with a Brain correlation check before classifying.
-- Run `motherbrain health --hat operator --plain` in Phase 2 (Assess) — before triage
+- Run `neurogrim health --hat operator --plain` in Phase 2 (Assess) — before triage
 - If `incident_patterns` fires, use the listed hypothesis as the leading theory (skip generic)
 - Correlated-variable signals (e.g., `artifacts:any_stale + gates:deploy_blocking_count >= 1`) point at the likely subsystem — read them off the correlation output, not from gut
 
@@ -95,7 +95,7 @@ checklist when synthesizing subagent findings or scanning a plan directly.
 - Drift detection — does the access topology drift check cover this binding?
 
 **Brain integration:** Quantify security posture using Brain domain variables.
-- Run `motherbrain score --hat security --plain` to aggregate the security-relevant domains (`security-standards`, `secret-refs`) with security-hat weighting
+- Run `neurogrim score --hat security --plain` to aggregate the security-relevant domains (`security-standards`, `secret-refs`) with security-hat weighting
 - Blocking-severity exported variables (e.g., `security:unreviewed_existential == true`) surface in the score output — treat them as immediate action items
 - High cumulative penalty in a security-adjacent domain means the risk is critical before any infra change
 
@@ -109,14 +109,14 @@ checklist when synthesizing subagent findings or scanning a plan directly.
 
 ### `source-reader`
 - Enforce read-only boundary — no Write / Edit / mutating Bash. Only pre-approved read-only
-  queries (e.g., `motherbrain sensory <name> --project-root <path>`) are permitted.
+  queries (e.g., `neurogrim sensory <name> --project-root <path>`) are permitted.
 - Pass language-neutral output flags consistently (`--plain` on every invocation) so the
   parent can merge subagent output without ANSI re-encoding.
 - Return structured JSON matching the schema in the parent's briefing exactly. Wrap the JSON
   in a fenced block; no extra prose unless the briefing asks for it.
 - Truncate any single tool output exceeding 2000 characters; append `[TRUNCATED]`.
 - On non-zero exit: record `exit_code` + stderr summary; set `"passed": false`; continue remaining queries.
-- Never invoke higher-level synthesizers (e.g., `motherbrain score`, `motherbrain agent`) — those run inline in the parent context after all buckets return.
+- Never invoke higher-level synthesizers (e.g., `neurogrim score`, `neurogrim agent`) — those run inline in the parent context after all buckets return.
 
 ---
 

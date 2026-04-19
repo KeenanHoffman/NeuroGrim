@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/neurogrim-core",
+    "crates/neurogrim-sensory",
+    "crates/neurogrim-mcp",
+    "crates/neurogrim-a2a",
+    "crates/neurogrim-ecosystem",
+    "crates/neurogrim-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Keenan Hoffman"]
+license = "MIT"
+description = "NeuroGrim: LSP Brains reference implementation"
+repository = "https://github.com/KeenanHoffman/NeuroGrim"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Terminal output
+colored = "2"
+
+# MCP protocol
+rmcp = { version = "0.8", features = ["server", "client", "macros", "transport-io", "transport-child-process"] }
+schemars = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Testing
+proptest = "1"
+
+# URL parsing / validation (shared across a2a + ecosystem)
+url = { version = "2", features = ["serde"] }
+
+# Workspace crates
+neurogrim-core = { path = "crates/neurogrim-core" }
+neurogrim-sensory = { path = "crates/neurogrim-sensory" }
+neurogrim-mcp = { path = "crates/neurogrim-mcp" }
+neurogrim-a2a = { path = "crates/neurogrim-a2a" }
+neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem" }

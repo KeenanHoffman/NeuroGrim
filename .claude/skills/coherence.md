@@ -45,13 +45,13 @@ relationship knowledge yet. The value of coherence grows with your registry.
 
 ```bash
 # Regenerate coherence CMDB
-motherbrain sensory coherence --project-root . > .claude/coherence-cmdb.json
+neurogrim sensory coherence --project-root . > .claude/coherence-cmdb.json
 
 # Full health with coherence row
-motherbrain health
+neurogrim health
 
 # See only correlation firings
-motherbrain health --plain | grep -A5 "Correlations:"
+neurogrim health --plain | grep -A5 "Correlations:"
 ```
 
 ---

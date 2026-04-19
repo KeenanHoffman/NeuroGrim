@@ -1,16 +1,16 @@
-# Moth(er):Br+AI+n — Agent Guide
+# NeuroGrim — Agent Guide
 
-Moth(er):Br+AI+n is the reference implementation of the LSP Brains specification: a Rust-based
+NeuroGrim is the reference implementation of the LSP Brains specification: a Rust-based
 Brain engine that gives AI agents continuous project health awareness through MCP-based sensory
 tools, cross-domain correlation, trajectory intelligence, and gated governance.
 
-**LSP Brains Specification:** https://github.com/keenanHoffmanSparq/LSP-Brains
+**LSP Brains Specification:** https://github.com/KeenanHoffman/LSP-Brains
 
 ## Repository Structure
 
 | Directory | Contents |
 |-----------|----------|
-| `motherbrain/` | Rust Brain engine (workspace with core, sensory, mcp, a2a [Stage 6], cli crates) |
+| `neurogrim/` | Rust Brain engine (workspace with core, sensory, mcp, a2a [Stage 6], cli crates) |
 | `starter-kit/` | **Archived 2026-04-17** — moved to `D:\Brains\archive\Moth-er-Br-AI-n\starter-kit\` |
 | `domains/laas/` | Archived first-customer domain: LaaS (16 domains, 26 gates, 3 hats) |
 | `whitepaper/` | LSP Brains methodology whitepaper (Markdown; HTML build archived) |
@@ -21,7 +21,7 @@ tools, cross-domain correlation, trajectory intelligence, and gated governance.
 
 ```bash
 # Rust Brain engine tests (primary test suite)
-cd motherbrain
+cd neurogrim
 cargo test --workspace --all-targets
 
 # Python SDK tests
@@ -42,7 +42,7 @@ archived skills; their commands and tools no longer exist.
 | Task | Skill |
 |------|-------|
 | When to use A2A, invoking a peer Brain, reading Agent Cards | `a2a.md` |
-| Running Moth(er):Br+AI+n as an A2A peer (serve, discover, troubleshoot) | `peer-brain.md` |
+| Running NeuroGrim as an A2A peer (serve, discover, troubleshoot) | `peer-brain.md` |
 
 ### Brain Domains
 
@@ -80,12 +80,12 @@ Skills corresponding to Rust Brain sensor domains:
 
 | File | Purpose |
 |------|---------|
-| `motherbrain/Cargo.toml` | Rust workspace root |
-| `motherbrain/crates/motherbrain-core/` | Pure scoring logic (zero I/O) |
-| `motherbrain/crates/motherbrain-sensory/` | Built-in sensory tool implementations |
-| `motherbrain/crates/motherbrain-mcp/` | MCP client + server integration (sensory + LLM-facing) |
-| `motherbrain/crates/motherbrain-a2a/` | **Stage 6:** A2A peer protocol — Agent Card, envelope, task client/server |
-| `motherbrain/crates/motherbrain-cli/` | CLI binary entry point |
+| `neurogrim/Cargo.toml` | Rust workspace root |
+| `neurogrim/crates/neurogrim-core/` | Pure scoring logic (zero I/O) |
+| `neurogrim/crates/neurogrim-sensory/` | Built-in sensory tool implementations |
+| `neurogrim/crates/neurogrim-mcp/` | MCP client + server integration (sensory + LLM-facing) |
+| `neurogrim/crates/neurogrim-a2a/` | **Stage 6:** A2A peer protocol — Agent Card, envelope, task client/server |
+| `neurogrim/crates/neurogrim-cli/` | CLI binary entry point |
 | `D:\Brains\archive\Moth-er-Br-AI-n\starter-kit\` | Archived legacy PowerShell starter (read-only) |
 | `domains/laas/brain-registry.json` | Full LaaS registry (16 domains, real-world reference) |
 | `roadmap/VISION.md` | 16 guiding principles (v2.1+: #16 "right protocol for the role") |
@@ -97,7 +97,7 @@ When wearing a hat, announce it visibly: `Wear Hat: <hat-name>`.
 
 Every task in this repo has a documented skill. Read the relevant skill before acting.
 
-The LSP Brains specification lives in its own repo (https://github.com/keenanHoffmanSparq/LSP-Brains).
+The LSP Brains specification lives in its own repo (https://github.com/KeenanHoffman/LSP-Brains).
 This repo implements the spec in Rust.
 
 The `domains/laas/` archive is read-only reference material. Do not modify it to match

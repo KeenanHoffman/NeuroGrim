@@ -16,37 +16,35 @@ is a real gate, not a formality.
 
 ---
 
-## 1. Legal / naming gate 🔴
+## 1. Legal / naming gate 🟡
 
-The plain-text name "Motherbrain" has at least two known prior uses:
+**Historical context (closed):** The original name for this project
+was "Motherbrain," which surfaced two prior-use conflicts —
+**EQT Motherbrain** (Swedish PE firm's AI deal-sourcing platform,
+same software/AI class) and **Mother Brain / Motherbrain** (Nintendo
+*Metroid* character, entertainment class). The plain-text form and
+space-variants were indistinguishable in trademark law, so the
+project rebranded to **NeuroGrim** on 2026-04-19. Every code/docs
+reference was swept in the same session — see the rebrand commits.
 
-- **EQT Motherbrain** — Swedish private-equity firm EQT's internal
-  AI-driven deal-sourcing platform. Actively used. Tech sector.
-  Highest-risk conflict: same class (software / AI).
-- **Mother Brain (Nintendo)** — character in *Super Metroid* (1994)
-  and the *Metroid* franchise. Different class (entertainment), but
-  the mark has been policed by Nintendo.
+**Remaining work (open):** An informal Google/GitHub search on
+"NeuroGrim" came up empty, but informal is not dispositive. A formal
+check is still required before public release.
 
-The space vs. no-space distinction ("Mother Brain" vs. "Motherbrain")
-is **not** meaningful in trademark law — both resolve to the same
-word mark.
-
-- [ ] **USPTO TESS search** run on "Motherbrain" across classes 9
-      (software), 42 (SaaS), 41 (entertainment), and adjacent.
+- [ ] **USPTO TESS search** on "NeuroGrim" across classes 9
+      (software), 42 (SaaS), and adjacent classes.
+- [ ] **Common-law search** — Google, GitHub, Twitter/X, LinkedIn,
+      product directories — for active unregistered use.
 - [ ] **Trademark attorney consult** — 30-minute initial review,
-      written opinion on risk of "Motherbrain" vs. alternatives.
-- [ ] **Decision recorded** on one of: (a) proceed with stylized
-      "Moth(er):Br+AI+n" as the mark, (b) rebrand before public
-      release, (c) proceed with unstylized "Motherbrain" on attorney
-      advice.
-- [ ] **If rebrand:** all crate names, repo URLs, PyPI package names,
-      README/docs, and `spec` cross-references updated. LSP-Brains
-      INTRO.md "About the name" footnote updated.
-- [ ] **domain ownership:** any `.com`/`.io`/`.dev` domains claimed
-      match the final mark decision.
+      written opinion on clearance of "NeuroGrim" for this use case.
+- [ ] **Domain ownership** — any `.com`/`.io`/`.dev`/`.ai` domains
+      claimed for the final mark.
+- [ ] **Social handles** — GitHub org (if separate from personal),
+      Twitter/X, Bluesky, etc. reserved.
 
-**Cross-reference:** `LSP-Brains/INTRO.md` "About the name" footnote
-already acknowledges this review is in progress.
+**Cross-reference:** The rebrand is documented in
+`LSP-Brains/INTRO.md` — the "About the name" footnote reflects the
+decided name.
 
 ---
 
@@ -60,18 +58,18 @@ publish.**
 
 | Crate | Status |
 |-------|--------|
-| `motherbrain` | AVAILABLE |
-| `motherbrain-core` | AVAILABLE |
-| `motherbrain-cli` | AVAILABLE |
-| `motherbrain-a2a` | AVAILABLE |
-| `motherbrain-sensory` | AVAILABLE |
-| `motherbrain-mcp` | AVAILABLE |
-| `motherbrain-ecosystem` | AVAILABLE |
+| `neurogrim` | AVAILABLE |
+| `neurogrim-core` | AVAILABLE |
+| `neurogrim-cli` | AVAILABLE |
+| `neurogrim-a2a` | AVAILABLE |
+| `neurogrim-sensory` | AVAILABLE |
+| `neurogrim-mcp` | AVAILABLE |
+| `neurogrim-ecosystem` | AVAILABLE |
 
-The CLI binary is named `motherbrain` (see
-`crates/motherbrain-cli/Cargo.toml`). The crate package name is
-`motherbrain-cli`. Reserving the plain `motherbrain` crate name (e.g.
-as an empty placeholder that re-exports from `motherbrain-cli`) is a
+The CLI binary is named `neurogrim` (see
+`crates/neurogrim-cli/Cargo.toml`). The crate package name is
+`neurogrim-cli`. Reserving the plain `neurogrim` crate name (e.g.
+as an empty placeholder that re-exports from `neurogrim-cli`) is a
 decision to make in the publish-day runbook.
 
 ### PyPI
@@ -80,7 +78,7 @@ decision to make in the publish-day runbook.
 |---------|--------|
 | `lsp-brains` | AVAILABLE |
 | `lsp_brains` | AVAILABLE |
-| `motherbrain` | AVAILABLE |
+| `neurogrim` | AVAILABLE |
 
 - [ ] **Re-check the day of publish** — names can be claimed by
       squatters at any time. A free account + `twine upload` of an
@@ -90,41 +88,42 @@ decision to make in the publish-day runbook.
 
 ## 3. Cargo dry-run gate 🔴
 
-**Status on this machine:** the Rust toolchain is not installed on
-the current development workstation. Dry-runs must be performed from
-a machine with Rust + cargo available. This is not a blocker for the
-session that documented this gate, but it IS a blocker for closing
-this gate — dry-run logs must be captured and attached below before
-publish.
+**Status on this machine (2026-04-19):** Rust + cargo ARE installed
+(`D:/rust/cargo/bin/cargo`, toolchain 1.95.0), but the machine lacks
+both MSVC build tools and mingw-w64 gcc — so linking fails. Installing
+either linker unblocks the dry-run; both are straightforward installs
+but require user action outside this session. Dry-runs can be run
+from here once a linker is present, or from any other machine with a
+working Rust toolchain.
 
 ### Required commands (bottom-up, dependency order)
 
 ```bash
-cd D:/Brains/Moth-er-Br-AI-n/motherbrain
+cd D:/Brains/NeuroGrim/neurogrim
 mkdir -p .dry-run-logs
-cargo publish -p motherbrain-core      --dry-run 2>&1 | tee .dry-run-logs/core.log
-cargo publish -p motherbrain-a2a       --dry-run 2>&1 | tee .dry-run-logs/a2a.log
-cargo publish -p motherbrain-sensory   --dry-run 2>&1 | tee .dry-run-logs/sensory.log
-cargo publish -p motherbrain-mcp       --dry-run 2>&1 | tee .dry-run-logs/mcp.log
-cargo publish -p motherbrain-ecosystem --dry-run 2>&1 | tee .dry-run-logs/ecosystem.log
-cargo publish -p motherbrain-cli       --dry-run 2>&1 | tee .dry-run-logs/cli.log
+cargo publish -p neurogrim-core      --dry-run 2>&1 | tee .dry-run-logs/core.log
+cargo publish -p neurogrim-a2a       --dry-run 2>&1 | tee .dry-run-logs/a2a.log
+cargo publish -p neurogrim-sensory   --dry-run 2>&1 | tee .dry-run-logs/sensory.log
+cargo publish -p neurogrim-mcp       --dry-run 2>&1 | tee .dry-run-logs/mcp.log
+cargo publish -p neurogrim-ecosystem --dry-run 2>&1 | tee .dry-run-logs/ecosystem.log
+cargo publish -p neurogrim-cli       --dry-run 2>&1 | tee .dry-run-logs/cli.log
 ```
 
 ### 🟡 Expected intra-workspace blocker
 
-`motherbrain-core` has no intra-workspace dependencies and should
-dry-run cleanly. The other five crates depend on `motherbrain-core`
+`neurogrim-core` has no intra-workspace dependencies and should
+dry-run cleanly. The other five crates depend on `neurogrim-core`
 (and transitively on each other) via `{ workspace = true }`. In the
 workspace `Cargo.toml` the workspace-dep entries look like:
 
 ```toml
-motherbrain-core = { path = "crates/motherbrain-core" }
+neurogrim-core = { path = "crates/neurogrim-core" }
 ```
 
 — they have a `path` but no `version`. `cargo publish` requires
 **both** for workspace members that depend on other workspace members,
 so that the published crate can resolve its deps from crates.io. Dry
--run will fail on every crate except `motherbrain-core` until this is
+-run will fail on every crate except `neurogrim-core` until this is
 fixed.
 
 - [ ] **Add `version = "0.1.0"` to every intra-workspace dep** in the
@@ -134,31 +133,22 @@ fixed.
 
 ### Checkboxes (to be filled in when dry-run actually runs)
 
-- [ ] `motherbrain-core` — dry-run exit 0, log attached
-- [ ] `motherbrain-a2a` — dry-run exit 0, log attached
-- [ ] `motherbrain-sensory` — dry-run exit 0, log attached
-- [ ] `motherbrain-mcp` — dry-run exit 0, log attached
-- [ ] `motherbrain-ecosystem` — dry-run exit 0, log attached
-- [ ] `motherbrain-cli` — dry-run exit 0, log attached
+- [ ] `neurogrim-core` — dry-run exit 0, log attached
+- [ ] `neurogrim-a2a` — dry-run exit 0, log attached
+- [ ] `neurogrim-sensory` — dry-run exit 0, log attached
+- [ ] `neurogrim-mcp` — dry-run exit 0, log attached
+- [ ] `neurogrim-ecosystem` — dry-run exit 0, log attached
+- [ ] `neurogrim-cli` — dry-run exit 0, log attached
 
 ---
 
 ## 4. Metadata gate 🟡
 
-### Repository URL mismatch
+Workspace `Cargo.toml` `repository` now points to the canonical URL:
+`https://github.com/KeenanHoffman/NeuroGrim` (updated during the
+2026-04-19 rebrand). The stale `keenanHoffmanSparq` references were
+swept in the same commit. Remaining metadata work:
 
-Current workspace `Cargo.toml` (line 18):
-```
-repository = "https://github.com/keenanHoffmanSparq/Moth-er-Br-AI-n"
-```
-
-The repo actually lives at
-`https://github.com/KeenanHoffman/Moth-er-Br-AI-n`. The current value
-may be a stale personal-account reference. **Pointing to the wrong
-repo on a published crate is a bad first impression.**
-
-- [ ] **Decide which GitHub account owns the public project.**
-- [ ] **Update `workspace.package.repository`** to the canonical URL.
 - [ ] **Add `homepage`** field — either the repo or a dedicated site.
 - [ ] **Add `readme = "README.md"`** at the workspace level (or per
       crate — cargo reads README from the crate dir).
@@ -261,7 +251,7 @@ The parent ecosystem repo is private. The Python starter submodule
 public before the starter:
 
 - [ ] **Visibility matrix documented** — which repos are public, which
-      are private, at the moment of MotherBrain's public release.
+      are private, at the moment of NeuroGrim's public release.
 - [ ] **Recursive clone warnings** — ecosystem README notes that
       `git clone --recursive` against a public ecosystem will fail
       on private children without auth.
@@ -274,29 +264,29 @@ Do not run any of these commands until every `[ ]` above is `[x]`.
 
 ```bash
 # 0. Confirm clean worktree + tag ready
-cd D:/Brains/Moth-er-Br-AI-n/motherbrain
+cd D:/Brains/NeuroGrim/neurogrim
 git status
 git tag v0.1.0
 git push origin v0.1.0
 
 # 1. Final dry-run sweep (one more time, from a clean checkout)
-for crate in motherbrain-core motherbrain-a2a motherbrain-sensory \
-             motherbrain-mcp motherbrain-ecosystem motherbrain-cli; do
+for crate in neurogrim-core neurogrim-a2a neurogrim-sensory \
+             neurogrim-mcp neurogrim-ecosystem neurogrim-cli; do
   cargo publish -p "$crate" --dry-run || exit 1
 done
 
 # 2. Real publish, bottom-up, with a pause between each
-cargo publish -p motherbrain-core
+cargo publish -p neurogrim-core
 sleep 30   # give crates.io index a moment to propagate
-cargo publish -p motherbrain-a2a
+cargo publish -p neurogrim-a2a
 sleep 30
-cargo publish -p motherbrain-sensory
+cargo publish -p neurogrim-sensory
 sleep 30
-cargo publish -p motherbrain-mcp
+cargo publish -p neurogrim-mcp
 sleep 30
-cargo publish -p motherbrain-ecosystem
+cargo publish -p neurogrim-ecosystem
 sleep 30
-cargo publish -p motherbrain-cli
+cargo publish -p neurogrim-cli
 
 # 3. Python SDK (only after TestPyPI smoke test)
 cd ../sdk-python

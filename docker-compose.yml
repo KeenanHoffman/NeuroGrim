@@ -1,6 +1,6 @@
-# Moth(er):Br+AI+n — dual-brain reference deployment (S6-DB-5).
+# NeuroGrim — dual-brain reference deployment (S6-DB-5).
 #
-# Starts two containerised MotherBrain A2A peers on a shared Docker bridge
+# Starts two containerised NeuroGrim A2A peers on a shared Docker bridge
 # network. This is the Phase E `dual_brain_pair.rs` integration test running
 # as containers instead of in-process subprocesses — same wire protocol, same
 # scoring pipeline, different process-isolation boundary.
@@ -8,11 +8,11 @@
 # Bring-up:   docker compose up --build
 # Tear-down:  docker compose down
 #
-# Verify from the host (assumes the local `motherbrain` binary is built):
-#   ./motherbrain/target/release/motherbrain a2a-discover http://127.0.0.1:8421/a2a/v1/
-#   ./motherbrain/target/release/motherbrain a2a-discover http://127.0.0.1:8422/a2a/v1/
-#   ./motherbrain/target/release/motherbrain a2a-invoke  http://127.0.0.1:8421/a2a/v1/
-#   ./motherbrain/target/release/motherbrain a2a-invoke  http://127.0.0.1:8422/a2a/v1/
+# Verify from the host (assumes the local `neurogrim` binary is built):
+#   ./neurogrim/target/release/neurogrim a2a-discover http://127.0.0.1:8421/a2a/v1/
+#   ./neurogrim/target/release/neurogrim a2a-discover http://127.0.0.1:8422/a2a/v1/
+#   ./neurogrim/target/release/neurogrim a2a-invoke  http://127.0.0.1:8421/a2a/v1/
+#   ./neurogrim/target/release/neurogrim a2a-invoke  http://127.0.0.1:8422/a2a/v1/
 #
 # Or plain curl:
 #   curl -s http://127.0.0.1:8421/.well-known/agent-card.json | jq
@@ -25,15 +25,15 @@
 # recipe before exposing this outside localhost.
 
 services:
-  motherbrain-local:
-    # This service owns the build. motherbrain-external reuses the image
+  neurogrim-local:
+    # This service owns the build. neurogrim-external reuses the image
     # it produces (no second rebuild), which is both faster and honest —
     # one image, many instances, as the deployment doc claims.
     build:
       context: .
       dockerfile: Dockerfile
-    image: motherbrain:dev
-    container_name: motherbrain-local
+    image: neurogrim:dev
+    container_name: neurogrim-local
     ports:
       # host:container — container listens on 8421 inside; we publish it
       # on 8421 on the host for parity with the Phase E test's URL shape.
@@ -43,7 +43,7 @@ services:
       # the operator's project files. The brain's own CMDBs still update,
       # but from the host side with the sensory tools — the container is
       # a reader.
-      - ./motherbrain-local-project:/brain:ro
+      - ./neurogrim-local-project:/brain:ro
     # Restart-on-failure is a modest safety net, not full hardening.
     # Operators who need supervision should use Kubernetes / Nomad / a
     # real init manager; documented in EXTERNAL-BRAIN-DEPLOYMENT.md §7.
@@ -52,23 +52,23 @@ services:
     environment:
       - RUST_LOG=info
 
-  motherbrain-external:
-    # No `build:` — we reuse the image motherbrain-local produced.
+  neurogrim-external:
+    # No `build:` — we reuse the image neurogrim-local produced.
     # `depends_on` orders the startup so the image is guaranteed to exist
     # before this service tries to pull it.
-    image: motherbrain:dev
-    container_name: motherbrain-external
+    image: neurogrim:dev
+    container_name: neurogrim-external
     depends_on:
-      - motherbrain-local
+      - neurogrim-local
     ports:
       # Same internal port (8421), different host publication (8422). The
       # Agent Card advertises `http://127.0.0.1:8421/…` — that's the
       # container's own view. From the host we connect via 8422; from a
       # peer container on the same Docker network we'd connect via the
-      # service name and internal port (`http://motherbrain-external:8421/…`).
+      # service name and internal port (`http://neurogrim-external:8421/…`).
       - "127.0.0.1:8422:8421"
     volumes:
-      - ./motherbrain-external-project:/brain:ro
+      - ./neurogrim-external-project:/brain:ro
     restart: on-failure
     environment:
       - RUST_LOG=info

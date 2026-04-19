@@ -10,7 +10,7 @@
 # Full schema reference: .claude/skills/human-comms.md
 #
 # Run to refresh the CMDB after editing:
-#   motherbrain sensory human-comms --project-root . > .claude/human-comms-cmdb.json
+#   neurogrim sensory human-comms --project-root . > .claude/human-comms-cmdb.json
 
 per_hat:
   visionary:

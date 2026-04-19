@@ -1,8 +1,8 @@
-# Moth(er):Br+AI+n
+# NeuroGrim
 
 **A language-agnostic nervous system for AI-assisted software projects.**
 
-Moth(er):Br+AI+n implements the [LSP Brains Specification](spec/LSP-BRAINS-SPEC.md) — a
+NeuroGrim implements the [LSP Brains Specification](spec/LSP-BRAINS-SPEC.md) — a
 methodology for giving AI agents continuous, honest awareness of project health through
 MCP-based sensory tools, A2A-based peer coordination, cross-domain correlation,
 trajectory intelligence, and gated governance.
@@ -11,7 +11,7 @@ trajectory intelligence, and gated governance.
 
 | Directory | Contents |
 |-----------|----------|
-| `motherbrain/` | Rust Brain engine (workspace: core, sensory, mcp, a2a [Stage 6], cli crates) |
+| `neurogrim/` | Rust Brain engine (workspace: core, sensory, mcp, a2a [Stage 6], cli crates) |
 | `spec/` | The LSP Brains Specification v2.1 (13 sections + Appendix G), dual-brain design, methodology evolution |
 | `sdk-python/` | Python SDK for writing custom sensory tools (`lsp-brains` package) |
 | `docs/` | Domain catalog, architecture guides |
@@ -26,27 +26,27 @@ trajectory intelligence, and gated governance.
 ### Run the Brain
 
 ```bash
-cd motherbrain
+cd neurogrim
 cargo build
 
 # Run a sensory tool
-./target/debug/motherbrain sensory test-health --project-root ..
+./target/debug/neurogrim sensory test-health --project-root ..
 
 # Write its output to CMDB
-./target/debug/motherbrain sensory test-health --project-root .. > ../.claude/test-health-cmdb.json
+./target/debug/neurogrim sensory test-health --project-root .. > ../.claude/test-health-cmdb.json
 
 # Get your health score
-./target/debug/motherbrain health --project-root ..
+./target/debug/neurogrim health --project-root ..
 
 # Validate registry
-./target/debug/motherbrain validate -r ../.claude/brain-registry.json
+./target/debug/neurogrim validate -r ../.claude/brain-registry.json
 ```
 
 ### Run Tests
 
 ```bash
 # Rust Brain engine tests
-cd motherbrain
+cd neurogrim
 cargo test
 
 # Python SDK tests
@@ -81,8 +81,8 @@ and must not be conflated.
 
 | Protocol | Role | Crate | Spec |
 |----------|------|-------|------|
-| **MCP** (Model Context Protocol) | Sensory tool invocation (Brain-as-MCP-client) + Brain exposure to LLM agents (Brain-as-MCP-server) | `motherbrain-mcp` | §3.7, Appendix F |
-| **A2A** (Agent2Agent Protocol) | Brain-to-Brain peer communication: fractal composition + dual brain | `motherbrain-a2a` (Stage 6) | §9, §10, §13, Appendix G |
+| **MCP** (Model Context Protocol) | Sensory tool invocation (Brain-as-MCP-client) + Brain exposure to LLM agents (Brain-as-MCP-server) | `neurogrim-mcp` | §3.7, Appendix F |
+| **A2A** (Agent2Agent Protocol) | Brain-to-Brain peer communication: fractal composition + dual brain | `neurogrim-a2a` (Stage 6) | §9, §10, §13, Appendix G |
 
 **When in doubt:** if the other end is a sensor or an LLM, use MCP. If the other end is
 another Brain, use A2A. See `spec/METHODOLOGY-EVOLUTION.md` §6 for the rationale behind
@@ -90,7 +90,7 @@ the split.
 
 ## Built-In Domains
 
-Ten domains ship with Moth(er):Br+AI+n, organized in two tiers:
+Ten domains ship with NeuroGrim, organized in two tiers:
 
 ### Core (Weighted — contribute to unified score)
 
@@ -186,8 +186,8 @@ MyVaultProvider.register(project_root=".")
 
 ## Repository
 
-- **Source:** https://github.com/keenanHoffmanSparq/Moth-er-Br-AI-n
-- **Spec Repo:** https://github.com/keenanHoffmanSparq/LSP-Brains
+- **Source:** https://github.com/KeenanHoffman/NeuroGrim
+- **Spec Repo:** https://github.com/KeenanHoffman/LSP-Brains
 - **Origin:** Extracted from [Lies-as-a-Service](https://github.com/sparq-doug/lies-as-a-service)
 
 ## License

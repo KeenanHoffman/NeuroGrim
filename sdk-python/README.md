@@ -1,6 +1,6 @@
 # lsp-brains
 
-Python SDK for writing [LSP Brains](https://github.com/keenanHoffmanSparq/LSP-Brains) sensory tools.
+Python SDK for writing [LSP Brains](https://github.com/KeenanHoffman/LSP-Brains) sensory tools.
 
 ## Quick start
 
@@ -31,7 +31,7 @@ pip install lsp-brains
 ## Concepts
 
 A **sensory tool** produces a CMDB envelope — a JSON object with a health score (0-100),
-findings, and exported variables. The MotherBrain engine discovers your tool via MCP,
+findings, and exported variables. The NeuroGrim engine discovers your tool via MCP,
 invokes it, and uses the score for confidence-weighted domain scoring.
 
 See `examples/jira_health/main.py` for a complete example.

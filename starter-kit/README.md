@@ -7,7 +7,7 @@ The PowerShell starter kit has been moved to:
 ## Why
 
 The starter kit was the v1 reference implementation (PowerShell + `.ps1` sensory tools).
-It is superseded by the Rust reference implementation under `motherbrain/` and the Python
+It is superseded by the Rust reference implementation under `neurogrim/` and the Python
 SDK under `sdk-python/`. The archive preserves the historical implementation as read-only
 reference material — it is **not maintained** and should not be used for new adoptions.
 
@@ -15,10 +15,10 @@ reference material — it is **not maintained** and should not be used for new a
 
 | Need | New home |
 |------|----------|
-| Quickstart | `README.md` at repo root — shows `cargo build` + `motherbrain sensory` flow |
+| Quickstart | `README.md` at repo root — shows `cargo build` + `neurogrim sensory` flow |
 | Spec | [`spec/LSP-BRAINS-SPEC.md`](../spec/LSP-BRAINS-SPEC.md) (v2.1+) |
 | Write a custom sensory tool | `sdk-python/README.md` — Python SDK with `lsp-brains` package |
-| Built-in sensory tools | `motherbrain/crates/motherbrain-sensory/` (Rust) |
+| Built-in sensory tools | `neurogrim/crates/neurogrim-sensory/` (Rust) |
 | Registry template | `.claude/brain-registry.json` at repo root (the Meta Brain registry) |
 | Tutorial | [`whitepaper/WHITEPAPER.md`](../whitepaper/WHITEPAPER.md) — methodology narrative |
 

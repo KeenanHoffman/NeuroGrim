@@ -152,7 +152,7 @@ clamp(0, 100)
 
 ```bash
 # Regenerate CMDB from manifest
-motherbrain sensory secret-refs --project-root . > .claude/secret-refs-cmdb.json
+neurogrim sensory secret-refs --project-root . > .claude/secret-refs-cmdb.json
 
 # View the secret catalog (safe — no values)
 cat .claude/secret-refs-cmdb.json | jq '.secret_catalog[] | {id, env_var, provider, reference_pattern}'
@@ -161,7 +161,7 @@ cat .claude/secret-refs-cmdb.json | jq '.secret_catalog[] | {id, env_var, provid
 cat .claude/secret-refs-cmdb.json | jq '.undocumented_secrets'
 
 # Full health with secret-refs row
-motherbrain health
+neurogrim health
 ```
 
 ---

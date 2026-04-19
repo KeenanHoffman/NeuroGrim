@@ -22,12 +22,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: motherbrain
+          workspaces: neurogrim
 
       # Style gate — baseline landed via `cargo fmt --all` in a dedicated
       # commit. Further drift is caught here.
       - name: cargo fmt --check
-        working-directory: motherbrain
+        working-directory: neurogrim
         run: cargo fmt --all -- --check
 
       # Lint gate — NOT `-D warnings` yet. The workspace emits ~40 warnings
@@ -37,7 +37,7 @@ jobs:
       # PR diffs via the usual GitHub annotations. Tightening to
       # `-D warnings` is a follow-on once the baseline noise is cleaned.
       - name: cargo clippy
-        working-directory: motherbrain
+        working-directory: neurogrim
         run: cargo clippy --workspace --all-targets
 
   rust:
@@ -50,15 +50,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: motherbrain
+          workspaces: neurogrim
 
       # Primary gate — every unit + integration test across the workspace.
       # Includes sensor_behavior.rs (Tier-A), cli_smoke.rs, dual_brain_pair.rs,
       # schema_conformance.rs (skips silently without LSP-Brains sibling,
-      # which is fine — CI here is MotherBrain-only; ecosystem CI covers the
+      # which is fine — CI here is NeuroGrim-only; ecosystem CI covers the
       # cross-repo schema check).
       - name: cargo test --workspace
-        working-directory: motherbrain
+        working-directory: neurogrim
         run: cargo test --workspace --all-targets
 
   python-sdk:
@@ -84,7 +84,7 @@ jobs:
         working-directory: sdk-python
         # The SDK's schema-conformance test loads the canonical schema from
         # a sibling LSP-Brains path when available; here it skips gracefully
-        # (CI here is MotherBrain-only). Ecosystem CI exercises the cross-repo
+        # (CI here is NeuroGrim-only). Ecosystem CI exercises the cross-repo
         # path end-to-end.
         run: pytest tests/ -v
 

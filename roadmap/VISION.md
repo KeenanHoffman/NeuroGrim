@@ -4,7 +4,7 @@
 
 ---
 
-> A language-agnostic specification for building agent nervous systems. Moth(er):Br+AI+n is implementation #1.
+> A language-agnostic specification for building agent nervous systems. NeuroGrim is implementation #1.
 
 ---
 
@@ -16,7 +16,7 @@ can reason about it: score it, correlate across domains, recommend actions, and 
 act autonomously within defined boundaries.
 
 This pattern — sensory tools, central scoring, declared governance, reflexive hooks — is the
-LSP Brains methodology. Moth(er):Br+AI+n is the product that implements it. DevOps is where we proved it. Any domain can absorb it.
+LSP Brains methodology. NeuroGrim is the product that implements it. DevOps is where we proved it. Any domain can absorb it.
 
 The architecture is fractal. A single project has a Brain. An ecosystem of projects has a
 parent Brain that consumes the scores of its children. The same pattern repeats at every scale.
@@ -40,12 +40,12 @@ nervous systems. It defines WHAT a Brain must do, not HOW it does it. The specif
 covers: sensory tool protocol, scoring contracts, governance model, interface contract,
 fractal composition protocol, and trajectory intelligence.
 
-**Moth(er):Br+AI+n** is the product — the first implementation of LSP Brains. Written in
+**NeuroGrim** is the product — the first implementation of LSP Brains. Written in
 Rust, integrated with Claude Code via MCP, with a Python SDK for custom sensory tools. The
 product proves the methodology works. The methodology enables other products.
 
 **The starter kit** is the legacy PowerShell reference implementation — archived, but still
-useful as a before/after comparison. The primary implementation is the Rust engine in `motherbrain/`.
+useful as a before/after comparison. The primary implementation is the Rust engine in `neurogrim/`.
 
 This distinction matters because:
 1. A Python team can implement LSP Brains without touching PowerShell
@@ -57,10 +57,10 @@ This distinction matters because:
 
 ## The Nervous System Analogy
 
-| Biological | Moth(er):Br+AI+n | Role |
+| Biological | NeuroGrim | Role |
 |------------|-------------------|------|
-| Sensory neurons | Sensory tools (`motherbrain sensory <tool>`) | Detect state in one domain |
-| Central nervous system | Brain engine (`motherbrain health`) | Integrate signals across domains |
+| Sensory neurons | Sensory tools (`neurogrim sensory <tool>`) | Detect state in one domain |
+| Central nervous system | Brain engine (`neurogrim health`) | Integrate signals across domains |
 | Association cortex | Coherence domain | Name what multiple domain signals mean together |
 | Motor neurons | Skills (`.claude/skills/`) | Know how to act on what the Brain perceives |
 | Reflexes | Hooks (`.claude/settings.json`) | Automatic responses to specific stimuli |
@@ -118,7 +118,7 @@ is **metadata proximity** — each brain manages metadata "near" it:
 - The external brain doesn't read local git status or run lint checks
 - Shared state (score history, incident ledger) is synchronized via a defined protocol
 
-The local brain is the v1 product (Moth(er):Br+AI+n today). The external brain is the v2
+The local brain is the v1 product (NeuroGrim today). The external brain is the v2
 architecture — specified in the LSP Brains spec, implemented when infrastructure is ready.
 
 ---

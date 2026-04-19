@@ -1,9 +1,9 @@
-# Moth(er):Br+AI+n
+# NeuroGrim
 
 Role: diagnostic · reference · meta
 Governs: scripts/dev/Find-Brain.ps1, .claude/brain-registry.json
 
-Trigger phrases: "brain", "motherbrain", "moth(er):br+ai+n", "system health", "unified health",
+Trigger phrases: "brain", "neurogrim", "moth(er):br+ai+n", "system health", "unified health",
 Domain: brain
 Methodology-step: skills
 "cross-domain", "tool registry", "domain score", "what's the overall health", "brain score",
@@ -18,11 +18,11 @@ Methodology-step: skills
 The Brain is Step 5 of LSP Brains — the central nervous system that integrates
 signals from all sensory tools into a unified health picture.
 
-**Moth(er):Br+AI+n** is the intelligence layer that sits above all other LSP tools. Where
-`Find-SessionContext.ps1` answers "what should I do before commit?", Moth(er):Br+AI+n answers
+**NeuroGrim** is the intelligence layer that sits above all other LSP tools. Where
+`Find-SessionContext.ps1` answers "what should I do before commit?", NeuroGrim answers
 "how healthy is the whole system right now, and what should be fixed first?"
 
-Moth(er):Br+AI+n v2 does four things:
+NeuroGrim v2 does four things:
 1. **Scores** each domain 0-100 against the 8 DevOps whitepaper principles with a weighted
    unified score and **confidence percentage** per domain, so you can see both system health
    and how much to trust each score.
@@ -33,7 +33,7 @@ Moth(er):Br+AI+n v2 does four things:
 4. **Registers** all `Find-*.ps1` tools with their file-type mappings and domain variable exports,
    discoverable and invocable through the brain rather than hardcoded paths.
 
-Moth(er):Br+AI+n complements `Find-SessionContext.ps1` — they are not redundant:
+NeuroGrim complements `Find-SessionContext.ps1` — they are not redundant:
 
 | Tool | Driven by | Answers |
 |------|-----------|---------|
@@ -146,7 +146,7 @@ Uses fast scoring (trusts stored CMDB status, partial skill reads) for speed.
 Supply-chain and workflow corpus checks are skipped (confidence=0/50).
 
 ```
-Moth(er):Br+AI+n: 64/100 [gates:80(60%) artifacts:30(25%) topology:72(85%) gitops-integrity:53(40%) defense-in-depth:45(100%) least-privilege:70(0%) everything-is-code:55(50%) supply-chain:100(0%) infrastructure:100(0%) git-tree:80(75%)]
+NeuroGrim: 64/100 [gates:80(60%) artifacts:30(25%) topology:72(85%) gitops-integrity:53(40%) defense-in-depth:45(100%) least-privilege:70(0%) everything-is-code:55(50%) supply-chain:100(0%) infrastructure:100(0%) git-tree:80(75%)]
 ```
 
 Each domain shows `score(confidence%)`. A score of `53(40%)` means "below threshold, partial data."
@@ -365,7 +365,7 @@ declarations — tools exist in the registry before their scripts are written.
 
 `gate-completion.sh` runs `-Mode score` after every gate command:
 ```
-[moth(er):br+ai+n] Moth(er):Br+AI+n: 64/100 [gates:80(60%) artifacts:30(25%) topology:72(85%) gitops-integrity:53(40%) defense-in-depth:45(100%) least-privilege:70(0%) everything-is-code:55(50%) supply-chain:100(0%) infrastructure:100(0%) git-tree:80(75%)]
+[moth(er):br+ai+n] NeuroGrim: 64/100 [gates:80(60%) artifacts:30(25%) topology:72(85%) gitops-integrity:53(40%) defense-in-depth:45(100%) least-privilege:70(0%) everything-is-code:55(50%) supply-chain:100(0%) infrastructure:100(0%) git-tree:80(75%)]
 ```
 
 The hook uses `|| true` so a missing `Find-Brain.ps1` degrades gracefully.

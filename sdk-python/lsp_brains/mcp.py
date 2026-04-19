@@ -3,7 +3,7 @@ MCP server scaffolding for LSP Brains sensory tools.
 
 This module wires a :class:`SensoryTool` into an MCP server using the
 official Python MCP SDK. The server exposes a single tool named
-``check_<domain>`` that the MotherBrain Brain engine discovers and invokes.
+``check_<domain>`` that the NeuroGrim Brain engine discovers and invokes.
 
 Usage::
 

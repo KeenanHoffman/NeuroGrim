@@ -1,10 +1,10 @@
 {
   "meta": {
     "schema_version": "2.0",
-    "description": "Meta Brain — Moth(er):Br+AI+n scoring itself. Dogfooding the LSP Brains spec.",
-    "updated_by": "motherbrain-init",
-    "project": "Moth-er-Br-AI-n",
-    "note": "Run sensory tools with: motherbrain sensory <tool> --project-root . > .claude/<tool>-cmdb.json"
+    "description": "Meta Brain — NeuroGrim scoring itself. Dogfooding the LSP Brains spec.",
+    "updated_by": "neurogrim-init",
+    "project": "NeuroGrim",
+    "note": "Run sensory tools with: neurogrim sensory <tool> --project-root . > .claude/<tool>-cmdb.json"
   },
   "config": {
     "domain_weights": {

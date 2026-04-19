@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # S6-DB-5 — verify the external-brain reference Docker deployment.
 #
-# Builds the `motherbrain:dev` image, runs a single instance bound to an
+# Builds the `neurogrim:dev` image, runs a single instance bound to an
 # unused host port, waits for readiness, invokes `snapshot.requested`,
 # and asserts the returned envelope contains a non-empty `domains` map.
 #
@@ -43,10 +43,10 @@ RESPONSE_FILE="${TMPDIR_VERIFY}/response.json"
 INVOKE_ERR_FILE="${TMPDIR_VERIFY}/invoke.err"
 
 # --- Config ---
-IMAGE_TAG="motherbrain:dev"
+IMAGE_TAG="neurogrim:dev"
 CONTAINER_NAME="mb-verify-$$"      # PID keeps parallel runs from colliding
 HOST_PORT="${VERIFY_PORT:-18499}"  # overridable for collision-avoidance
-FIXTURE_DIR="motherbrain-local-project"
+FIXTURE_DIR="neurogrim-local-project"
 READY_TIMEOUT_SECS=30
 
 # --- Script context ---
@@ -161,18 +161,18 @@ fi
 ok "agent card structure sane"
 
 # --- 5. Invoke snapshot.requested ---
-# Prefer the locally-built motherbrain binary if present — it exercises
+# Prefer the locally-built neurogrim binary if present — it exercises
 # the client path end-to-end (discover + invoke + reply validation).
 # If the binary isn't built, fall back to a raw curl POST against the
 # tasks endpoint with a hand-crafted envelope.
 log "invoking snapshot.requested"
-if [ -x "./motherbrain/target/release/motherbrain" ] || \
-   [ -x "./motherbrain/target/release/motherbrain.exe" ]; then
-    MB_BIN="./motherbrain/target/release/motherbrain"
+if [ -x "./neurogrim/target/release/neurogrim" ] || \
+   [ -x "./neurogrim/target/release/neurogrim.exe" ]; then
+    MB_BIN="./neurogrim/target/release/neurogrim"
     [ -x "${MB_BIN}.exe" ] && MB_BIN="${MB_BIN}.exe"
-elif [ -x "./motherbrain/target/debug/motherbrain" ] || \
-     [ -x "./motherbrain/target/debug/motherbrain.exe" ]; then
-    MB_BIN="./motherbrain/target/debug/motherbrain"
+elif [ -x "./neurogrim/target/debug/neurogrim" ] || \
+     [ -x "./neurogrim/target/debug/neurogrim.exe" ]; then
+    MB_BIN="./neurogrim/target/debug/neurogrim"
     [ -x "${MB_BIN}.exe" ] && MB_BIN="${MB_BIN}.exe"
 else
     MB_BIN=""
@@ -189,7 +189,7 @@ if [ -n "$MB_BIN" ]; then
         exit 3
     fi
 else
-    log "local motherbrain binary not found; skipping a2a-invoke client check"
+    log "local neurogrim binary not found; skipping a2a-invoke client check"
     log "card fetch above is sufficient readiness proof for unbuilt hosts"
     # Synthesize a response we can still shape-check so the later
     # assertions exit cleanly. We know the card was valid, so declare

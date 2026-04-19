@@ -118,7 +118,7 @@ If A2A invocation fails, check in this order:
 
 ## Related skills
 
-- `peer-archived/brain.md` — running Moth(er):Br+AI+n as an A2A peer (serve, discover, troubleshoot).
+- `peer-archived/brain.md` — running NeuroGrim as an A2A peer (serve, discover, troubleshoot).
 - `archived/brain.md` — Brain scoring and MCP-facing workflows.
 - `coherence.md` — how cross-domain signals and incident patterns use A2A messages in
   dual-brain coordination.
@@ -128,4 +128,4 @@ If A2A invocation fails, check in this order:
 - `D:\Brains\LSP-Brains\spec\LSP-BRAINS-SPEC.md` §13 + Appendix G
 - `D:\Brains\LSP-Brains\spec\DUAL-BRAIN-DESIGN.md` §5 (A2A Message Vocabulary)
 - `D:\Brains\LSP-Brains\spec\METHODOLOGY-EVOLUTION.md` §6 (rationale)
-- `D:\Brains\Moth-er-Br-AI-n\roadmap\epics\S6-dual-brain-a2a.md`
+- `D:\Brains\NeuroGrim\roadmap\epics\S6-dual-brain-a2a.md`

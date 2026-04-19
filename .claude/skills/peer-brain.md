@@ -1,6 +1,6 @@
-# Skill: Peer Brain — Running Moth(er):Br+AI+n as an A2A Peer
+# Skill: Peer Brain — Running NeuroGrim as an A2A Peer
 
-**When to read this:** You are configuring or running a Moth(er):Br+AI+n instance to
+**When to read this:** You are configuring or running a NeuroGrim instance to
 participate in a peer topology — either as a child in fractal composition, or as one
 half of a dual-brain pair. For the protocol itself, read `a2a.md` first.
 
@@ -8,19 +8,19 @@ half of a dual-brain pair. For the protocol itself, read `a2a.md` first.
 
 ```bash
 # Serve this Brain as an A2A peer on port 8421
-motherbrain a2a-serve --port 8421 --project-root .
+neurogrim a2a-serve --port 8421 --project-root .
 
 # Discover another peer's Agent Card
-motherbrain a2a-discover https://peer.example.com/a2a/v1/
+neurogrim a2a-discover https://peer.example.com/a2a/v1/
 
 # Send a one-shot A2A message to a peer
-motherbrain a2a-invoke https://peer.example.com/a2a/v1/ \
+neurogrim a2a-invoke https://peer.example.com/a2a/v1/ \
     --message-type snapshot.requested \
     --payload '{"scope": "score"}'
 ```
 
 All three subcommands land in Stage 6 (S6-DB-3). Until then, these CLI commands are
-aspirational — the plumbing exists in `motherbrain-a2a` (S6-DB-1).
+aspirational — the plumbing exists in `neurogrim-a2a` (S6-DB-1).
 
 ## Configure this Brain as a peer
 
@@ -81,7 +81,7 @@ In the parent's `ecosystem-registry.json` (or the `children` section of
 
 ### "The parent Brain can't get a score from this child."
 
-1. `motherbrain a2a-discover <child's a2a_endpoint>` — is the Agent Card reachable?
+1. `neurogrim a2a-discover <child's a2a_endpoint>` — is the Agent Card reachable?
 2. Does the child's `capabilities.accepts` list include `snapshot.requested` or
    `score.updated`?
 3. Does the child's `interface_version` match what the parent expects?
@@ -113,8 +113,8 @@ Do NOT invent an auth scheme in the payload or metadata fields — that breaks i
 
 In this codebase, these two invariants are CI-enforced:
 
-1. The `motherbrain-a2a` crate MUST NOT import from `rmcp` or `motherbrain-mcp`.
-2. The `motherbrain-mcp` crate MUST NOT import from `motherbrain-a2a` or `axum`.
+1. The `neurogrim-a2a` crate MUST NOT import from `rmcp` or `neurogrim-mcp`.
+2. The `neurogrim-mcp` crate MUST NOT import from `neurogrim-a2a` or `axum`.
 
 If you find yourself wanting to cross these boundaries, you're probably misusing one of
 the protocols. Re-read `a2a.md` and the spec's protocol boundary in §1.1.
@@ -140,4 +140,4 @@ or a client generating non-unique `message_id`s. Investigate.
 
 - `D:\Brains\LSP-Brains\spec\LSP-BRAINS-SPEC.md` §10, §13, Appendix G
 - `D:\Brains\LSP-Brains\spec\DUAL-BRAIN-DESIGN.md`
-- `D:\Brains\Moth-er-Br-AI-n\roadmap\epics\S6-dual-brain-a2a.md`
+- `D:\Brains\NeuroGrim\roadmap\epics\S6-dual-brain-a2a.md`

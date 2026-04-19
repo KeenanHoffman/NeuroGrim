@@ -1,4 +1,4 @@
-# Roadmap: LSP Brains + Moth(er):Br+AI+n
+# Roadmap: LSP Brains + NeuroGrim
 
 **North star:** `VISION.md`
 **Dependencies:** `DEPENDENCIES.md`
@@ -138,7 +138,7 @@ incident patterns fire. The fractal architecture from VISION.md becomes real.
 **Goal:** Someone adopts LSP Brains for their own project in an afternoon.
 
 This is the methodology transfer stage. LSP Brains becomes a transferable specification.
-Moth(er):Br+AI+n becomes a product teams can adopt. The adopter follows the 6-step
+NeuroGrim becomes a product teams can adopt. The adopter follows the 6-step
 absorption ramp: declare domains, write sensory tools, score health, gate actions, wire
 hooks, add hats.
 
@@ -200,8 +200,8 @@ parent/child fractal composition gains A2A as a RECOMMENDED transport alongside 
 
 | Story | Name | Status | Effort |
 |-------|------|--------|--------|
-| S6-DB-1 | motherbrain-a2a Crate Scaffold | **Complete** (19/19 tests pass, Rust+MinGW on D:\) | L |
-| S6-DB-2 | Ecosystem Refactor to A2A + Subprocess Dispatch | **Complete** (contract test proves transport equivalence; new motherbrain-ecosystem crate) | XL |
+| S6-DB-1 | neurogrim-a2a Crate Scaffold | **Complete** (19/19 tests pass, Rust+MinGW on D:\) | L |
+| S6-DB-2 | Ecosystem Refactor to A2A + Subprocess Dispatch | **Complete** (contract test proves transport equivalence; new neurogrim-ecosystem crate) | XL |
 | S6-DB-3 | Brain A2A Server (Serve Self as Peer) | **Complete** (CLI subcommands + Agent Card + real scoring pipeline wired; 2 URL bugs fixed live; 173 workspace tests green) | L |
 | S6-DB-4 | Dual Brain Pair Integration Test | **Complete** (2 real subprocesses on loopback; 3 tests; 176 workspace tests green) | M |
 | S6-DB-5 | External Brain Reference Deployment | **Complete** (local Docker; 145 MB image; dual-brain pair via compose; auth mandate documented) | L |
@@ -209,18 +209,18 @@ parent/child fractal composition gains A2A as a RECOMMENDED transport alongside 
 | S6-DB-7 | Ecosystem Brain at Session Root | **Complete** (bootstrap shipped in earlier session; ecosystem .claude/ registry + 6 domains + sync-ecosystem skill + CLAUDE.md) | L |
 
 **Stage 6 is DONE when:**
-- [ ] `motherbrain-a2a` crate exists and passes `cargo test`
-- [ ] `motherbrain-core/src/ecosystem.rs` dispatches on `ChildTransport` (subprocess / A2A)
+- [ ] `neurogrim-a2a` crate exists and passes `cargo test`
+- [ ] `neurogrim-core/src/ecosystem.rs` dispatches on `ChildTransport` (subprocess / A2A)
 - [ ] Parent Brain produces identical ecosystem score across both transports
-- [ ] `motherbrain a2a-serve` CLI subcommand serves this Brain as an A2A peer
+- [ ] `neurogrim a2a-serve` CLI subcommand serves this Brain as an A2A peer
 - [ ] Dual brain pair integration test passes in CI
 - [ ] External Brain reference deployment documented (one working example)
 - [ ] No MCP imports on the dual-brain code path (boundary enforcement via grep)
 
 **Scope:**
-- New Rust crate: `motherbrain/crates/motherbrain-a2a` (Agent Card, envelope, task client/server, transport)
-- Refactor `motherbrain-core/src/ecosystem.rs` (currently 3-line stub) with `ChildTransport` enum
-- CLI additions: `motherbrain a2a-serve`, `motherbrain a2a-invoke`, `motherbrain a2a-discover`
+- New Rust crate: `neurogrim/crates/neurogrim-a2a` (Agent Card, envelope, task client/server, transport)
+- Refactor `neurogrim-core/src/ecosystem.rs` (currently 3-line stub) with `ChildTransport` enum
+- CLI additions: `neurogrim a2a-serve`, `neurogrim a2a-invoke`, `neurogrim a2a-discover`
 - External Brain reference deployment (Cloud Run or GitHub Action)
 - Shared state synchronization semantics unchanged — A2A carries messages, not state
 

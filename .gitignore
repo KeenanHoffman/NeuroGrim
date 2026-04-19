@@ -4,8 +4,8 @@
 !domains/laas/sensory-data/*-cmdb.json
 # S6-DB-5 reference-deployment fixtures — these are committed example
 # CMDBs that ship the docker-compose demo. Not runtime output.
-!motherbrain-local-project/.claude/*-cmdb.json
-!motherbrain-external-project/.claude/*-cmdb.json
+!neurogrim-local-project/.claude/*-cmdb.json
+!neurogrim-external-project/.claude/*-cmdb.json
 
 # Brain runtime artifacts
 .claude/brain/incident-ledger.json
@@ -45,7 +45,7 @@ dist/
 venv/
 
 # Rust build artifacts
-motherbrain/target/
+neurogrim/target/
 
 # Test results
 TestResults/
@@ -58,4 +58,4 @@ TestResults/
 .claude/settings.local.json
 
 # Cargo publish dry-run logs (ephemeral, machine-local)
-motherbrain/.dry-run-logs/
+neurogrim/.dry-run-logs/

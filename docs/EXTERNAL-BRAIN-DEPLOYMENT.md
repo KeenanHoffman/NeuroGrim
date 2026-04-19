@@ -1,8 +1,8 @@
 # External Brain Reference Deployment (S6-DB-5)
 
-This is the **reference deployment** for running Moth(er):Br+AI+n as an A2A peer
-in Docker. The container runs the same `motherbrain a2a-serve` binary the
-Phase E integration test (`motherbrain/crates/motherbrain-cli/tests/dual_brain_pair.rs`)
+This is the **reference deployment** for running NeuroGrim as an A2A peer
+in Docker. The container runs the same `neurogrim a2a-serve` binary the
+Phase E integration test (`neurogrim/crates/neurogrim-cli/tests/dual_brain_pair.rs`)
 exercises — same wire protocol, same scoring pipeline, different process
 boundary. Works on any Docker host; not tied to any cloud provider.
 
@@ -14,10 +14,10 @@ locally is the same one that works anywhere."
 
 ## 1. What this is for
 
-You have a Brain engine that produces scorecards (`motherbrain score`, `motherbrain agent`,
+You have a Brain engine that produces scorecards (`neurogrim score`, `neurogrim agent`,
 etc.) and you want another agent — a parent Brain, a sibling Brain, or a human
 tool — to fetch those scorecards over HTTP using the A2A protocol (spec §13).
-`motherbrain a2a-serve` is the server that does that; this deployment just
+`neurogrim a2a-serve` is the server that does that; this deployment just
 packages it so you can run it anywhere Docker runs, without rebuilding the
 host toolchain on every machine.
 
@@ -30,27 +30,27 @@ runtime — if you need cloud specifics, write them downstream.
 ## 2. Build and run (one paste)
 
 ```bash
-cd /path/to/Moth-er-Br-AI-n
+cd /path/to/NeuroGrim
 
 # 1. Build the image (first build: ~3-5 min for dep compile; cached after).
-docker build -t motherbrain:dev .
+docker build -t neurogrim:dev .
 
 # 2. Run it, mounting the example project root read-only.
 docker run --rm -p 127.0.0.1:8421:8421 \
-  -v "$(pwd)/motherbrain-local-project:/brain:ro" \
-  motherbrain:dev
+  -v "$(pwd)/neurogrim-local-project:/brain:ro" \
+  neurogrim:dev
 
 # 3. From another terminal on the host, fetch the agent card:
 curl -s http://127.0.0.1:8421/.well-known/agent-card.json | jq
 
-# 4. Or with the local motherbrain binary:
-./motherbrain/target/release/motherbrain a2a-discover http://127.0.0.1:8421/a2a/v1/
-./motherbrain/target/release/motherbrain a2a-invoke  http://127.0.0.1:8421/a2a/v1/ \
+# 4. Or with the local neurogrim binary:
+./neurogrim/target/release/neurogrim a2a-discover http://127.0.0.1:8421/a2a/v1/
+./neurogrim/target/release/neurogrim a2a-invoke  http://127.0.0.1:8421/a2a/v1/ \
   --message-type snapshot.requested
 ```
 
 The `snapshot.requested` invocation returns the same `AgentOutput` JSON that
-`motherbrain agent` produces locally — it's the same scoring pipeline, just
+`neurogrim agent` produces locally — it's the same scoring pipeline, just
 wrapped in an A2A envelope.
 
 ---
@@ -61,8 +61,8 @@ The `docker-compose.yml` at the repo root starts two peer containers:
 
 | Container             | Host port | Project root                        | Scores (approx)    |
 |-----------------------|-----------|-------------------------------------|--------------------|
-| `motherbrain-local`   | `8421`    | `./motherbrain-local-project`       | 85 / 78 / 90       |
-| `motherbrain-external`| `8422`    | `./motherbrain-external-project`    | 60 / 72 / 55       |
+| `neurogrim-local`   | `8421`    | `./neurogrim-local-project`       | 85 / 78 / 90       |
+| `neurogrim-external`| `8422`    | `./neurogrim-external-project`    | 60 / 72 / 55       |
 
 The two fixtures have different CMDB scores so their `AgentOutput` is visibly
 distinguishable — a round-trip that returns the wrong Brain's data is caught
@@ -73,9 +73,9 @@ docker compose up --build    # first run compiles the image
 # ... wait for "A2A server starting" logs on both services ...
 
 # In another terminal, invoke each peer from the host:
-./motherbrain/target/release/motherbrain a2a-invoke http://127.0.0.1:8421/a2a/v1/ \
+./neurogrim/target/release/neurogrim a2a-invoke http://127.0.0.1:8421/a2a/v1/ \
   --message-type snapshot.requested
-./motherbrain/target/release/motherbrain a2a-invoke http://127.0.0.1:8422/a2a/v1/ \
+./neurogrim/target/release/neurogrim a2a-invoke http://127.0.0.1:8422/a2a/v1/ \
   --message-type snapshot.requested
 
 docker compose down          # tear down
@@ -126,7 +126,7 @@ explicitly for that reason.
 
 ## 5. Resource footprint
 
-**Image size:** see build output (`docker images motherbrain:dev --format '{{.Size}}'`).
+**Image size:** see build output (`docker images neurogrim:dev --format '{{.Size}}'`).
 The runtime image is `debian:bookworm-slim` plus one statically-linked-against-
 rustls binary; expect ~100–200 MB depending on whether the layer cache
 still holds the `ca-certificates` base.
@@ -145,13 +145,13 @@ pipeline is bounded by file I/O and JSON parsing, not CPU.
 
 ## 6. Logging and observability
 
-`motherbrain a2a-serve` logs via the `tracing` crate with `tracing-subscriber`
+`neurogrim a2a-serve` logs via the `tracing` crate with `tracing-subscriber`
 configured from `RUST_LOG` (defaulting to `info`). Everything lands on
 stdout/stderr, which Docker captures.
 
 ```bash
-docker logs motherbrain-local               # tail the local peer
-docker logs -f motherbrain-external         # follow the external peer
+docker logs neurogrim-local               # tail the local peer
+docker logs -f neurogrim-external         # follow the external peer
 docker compose logs -f                      # both at once
 ```
 
@@ -198,7 +198,7 @@ Any Docker-compatible runtime can run this image. Representative targets:
 
 | Runtime          | How |
 |------------------|-----|
-| Cloud Run (GCP)  | `gcloud run deploy --image motherbrain:dev --port 8421` |
+| Cloud Run (GCP)  | `gcloud run deploy --image neurogrim:dev --port 8421` |
 | Fargate (AWS)    | Publish to ECR; reference in an ECS task definition |
 | Nomad (HashiCorp)| `docker` task driver with the image tag |
 | Kubernetes       | A `Deployment` + `Service`; mount the project root as a ConfigMap or PVC |
@@ -231,9 +231,9 @@ log to inspect.
 
 ## 10. Related reading
 
-- `motherbrain/crates/motherbrain-cli/src/commands/a2a_serve.rs` — server
+- `neurogrim/crates/neurogrim-cli/src/commands/a2a_serve.rs` — server
   handler source.
-- `motherbrain/crates/motherbrain-cli/tests/dual_brain_pair.rs` — Phase E
+- `neurogrim/crates/neurogrim-cli/tests/dual_brain_pair.rs` — Phase E
   dual-brain integration test. This deployment runs the same pattern in
   containers.
 - LSP-Brains-SPEC.md §10 (Dual Brain Architecture), §13 (A2A protocol),

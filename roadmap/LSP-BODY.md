@@ -26,7 +26,7 @@ flowchart TD
     S2["check-code-quality\nlint errors · complexity · duplication"]
     S3["check-deploy-readiness\nCI state · version tags · drift"]
     S4["check-git-health\nbranch health · stale PRs · commit rate"]
-    S5["custom sensory tool\nmotherbrain sensory run &lt;tool&gt;"]
+    S5["custom sensory tool\nneurogrim sensory run &lt;tool&gt;"]
   end
 
   %% ═══════════════════════════════════════════
@@ -58,7 +58,7 @@ flowchart TD
   %% ═══════════════════════════════════════════
   %% 5 · BRAIN CORE  (central nervous system)
   %% ═══════════════════════════════════════════
-  subgraph BRAIN["🧠  Brain Core — Central Nervous System  (motherbrain-core)"]
+  subgraph BRAIN["🧠  Brain Core — Central Nervous System  (neurogrim-core)"]
     BC1["Scoring Engine\neffective = floor(raw × confidence / 100)\nunified = Σ(effective_i × weight_i)"]
     BC2["Confidence Engine\ntime-decay by CMDB freshness\nfloor: if confidence &lt; 30 → cap at 30"]
     BC3["Trajectory Engine\nvelocity · acceleration\nimproving / stable / declining / volatile"]
@@ -81,7 +81,7 @@ flowchart TD
   %% ═══════════════════════════════════════════
   %% 7 · MCP SERVER  (brainstem)
   %% ═══════════════════════════════════════════
-  subgraph MCP["⚡  MCP Server — Brainstem  (motherbrain-mcp)"]
+  subgraph MCP["⚡  MCP Server — Brainstem  (neurogrim-mcp)"]
     M1["get_health_score\npersona + hat aware\nreturns full AgentOutput JSON"]
     M2["get_trajectory\nvelocity + acceleration for domain or unified"]
     M3["get_recommendations\nprioritized action list"]
@@ -226,13 +226,13 @@ flowchart TD
 | Body Analogy | LSP Brains Component | Files |
 |---|---|---|
 | **DNA / Genome** | Brain Registry | `brain-registry.json` |
-| **Sense Organs** | Sensory Tools | `motherbrain sensory <tool>` |
-| **Peripheral Nervous System** | Sensory Layer (data collection) | `motherbrain-sensory` crate |
+| **Sense Organs** | Sensory Tools | `neurogrim sensory <tool>` |
+| **Peripheral Nervous System** | Sensory Layer (data collection) | `neurogrim-sensory` crate |
 | **Muscle Memory / World Model** | CMDBs | `*-cmdb.json` |
-| **Cerebral Cortex** | Scoring + Correlation Engine | `motherbrain-core` crate |
+| **Cerebral Cortex** | Scoring + Correlation Engine | `neurogrim-core` crate |
 | **Association Cortex** | Coherence Domain (cross-domain meaning) | `coherence-cmdb.json`, `coherence.rs` |
-| **Brainstem (tool use)** | MCP Server (always-on interface for LLM + sensory) | `motherbrain-mcp` crate |
-| **Corpus Callosum (peer coordination)** | A2A Server (Brain-to-Brain interface) | `motherbrain-a2a` crate (Stage 6) |
+| **Brainstem (tool use)** | MCP Server (always-on interface for LLM + sensory) | `neurogrim-mcp` crate |
+| **Corpus Callosum (peer coordination)** | A2A Server (Brain-to-Brain interface) | `neurogrim-a2a` crate (Stage 6) |
 | **Spinal Cord** | Agent Protocol wire format | `lsp-brains/agent/1.0` |
 | **Motor Neurons** | Skills | `.claude/skills/` |
 | **Endocrine System** | Hat System (modulates priority) | `brain-registry.json → hats` |
@@ -240,7 +240,7 @@ flowchart TD
 | **Identity Recognition** | Human-Comms Domain (per-human model) | `human-comms.yaml`, `human-comms-cmdb.json` |
 | **Reflex Arcs** | Subagent Fleet | Agent tool, `subagent-patterns.md` |
 | **Long-Term Memory** | Operational Memory | `score-history.json`, `incident-ledger.json`, `proposal-ledger.json` |
-| **Proprioception** | Trajectory Engine | `motherbrain-core::trajectory` |
+| **Proprioception** | Trajectory Engine | `neurogrim-core::trajectory` |
 | **Conscious Mind** | Pilot Agent + Hats + Personas | Claude Code pilot |
 | **Peripheral Nervous System (fractal)** | Child Project Brains (A2A peers) | one registry per project |
 
@@ -269,7 +269,7 @@ use A2A where another Brain is on the other end.
 ## Adoption Ramp
 
 ```
-Step 1 → Install Brain engine (motherbrain binary)
+Step 1 → Install Brain engine (neurogrim binary)
 Step 2 → Configure brain-registry.json (DNA: domains + weights)
 Step 3 → Run sensory tools, populate first CMDBs                     [MCP layer]
 Step 4 → Get first health score via MCP or CLI                       [MCP layer]

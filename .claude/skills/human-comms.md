@@ -5,7 +5,7 @@ information from agents across projects and sessions.
 
 The `human-comms` domain closes the gap between the Brain (world model) and the agent's
 knowledge of the human it works with. Preferences are explicit, versioned, and visible
-in `motherbrain health` — not guessed fresh each session.
+in `neurogrim health` — not guessed fresh each session.
 
 ---
 
@@ -91,13 +91,13 @@ an explicit contract over leaving the agent to guess.
 
 ```bash
 # Refresh both layers and write CMDB
-motherbrain sensory human-comms --project-root . > .claude/human-comms-cmdb.json
+neurogrim sensory human-comms --project-root . > .claude/human-comms-cmdb.json
 
 # Inspect merged preferences
 cat .claude/human-comms-cmdb.json | jq '{score, include_urls, verbosity, lead_with, per_hat}'
 
 # Full health with human-comms row
-motherbrain health
+neurogrim health
 ```
 
 ---

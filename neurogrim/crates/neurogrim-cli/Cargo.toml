@@ -1,0 +1,37 @@
+[package]
+name = "neurogrim-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "NeuroGrim CLI — LSP Brains scoring engine"
+
+[[bin]]
+name = "neurogrim"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+colored = { workspace = true }
+tokio = { workspace = true }
+rmcp = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+neurogrim-core = { workspace = true }
+neurogrim-sensory = { workspace = true }
+neurogrim-mcp = { workspace = true }
+neurogrim-a2a = { workspace = true }
+neurogrim-ecosystem = { workspace = true }
+url = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+# `default-features = false` + `rustls-tls` — keep the dev-dep in lock-step
+# with the runtime TLS choice in neurogrim-a2a (S6-DB-5).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+axum = "0.7"

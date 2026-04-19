@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "schema_version": "2",
+    "description": "NeuroGrim reference deployment — local project (S6-DB-5 fixture)",
+    "updated_by": "neurogrim-local"
+  },
+  "tools": {},
+  "data_sources": {},
+  "config": {
+    "domain_weights": {
+      "test-health": 0.4,
+      "code-quality": 0.3,
+      "deploy-readiness": 0.3
+    },
+    "advisory_domains": [],
+    "principle_map": {
+      "test-health": "Test Health",
+      "code-quality": "Code Quality",
+      "deploy-readiness": "Deploy Readiness"
+    },
+    "domain_definitions": {
+      "test-health": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/test-health-cmdb.json"
+        }
+      },
+      "code-quality": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/code-quality-cmdb.json"
+        }
+      },
+      "deploy-readiness": {
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/deploy-readiness-cmdb.json"
+        }
+      }
+    }
+  }
+}

@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1.6
 #
-# Moth(er):Br+AI+n — External Brain reference deployment (S6-DB-5).
+# NeuroGrim — External Brain reference deployment (S6-DB-5).
 #
-# Purpose: package `motherbrain a2a-serve` as a container so the Brain can run
+# Purpose: package `neurogrim a2a-serve` as a container so the Brain can run
 # as an A2A peer anywhere Docker runs. Same binary the Phase E dual-brain
-# integration test exercises (`motherbrain/crates/motherbrain-cli/tests/
+# integration test exercises (`neurogrim/crates/neurogrim-cli/tests/
 # dual_brain_pair.rs`) — same wire protocol.
 #
 # Non-goals (explicit — spec §13.6 / deployment doc §7):
@@ -13,11 +13,11 @@
 #     the adopter must gate access at the network layer.
 #   * Not production-hardened for multi-tenant. Reference, not hardened kit.
 #
-# Build:   docker build -t motherbrain:dev .
+# Build:   docker build -t neurogrim:dev .
 # Run:     docker run -p 8421:8421 \
-#            -v "$(pwd)/motherbrain-local-project:/brain:ro" \
-#            motherbrain:dev
-# Discover: motherbrain a2a-discover http://127.0.0.1:8421/a2a/v1/
+#            -v "$(pwd)/neurogrim-local-project:/brain:ro" \
+#            neurogrim:dev
+# Discover: neurogrim a2a-discover http://127.0.0.1:8421/a2a/v1/
 #
 # =============================================================================
 # Stage 1 — Builder
@@ -35,7 +35,7 @@ FROM rust:1.89-slim-bookworm AS builder
 
 # Build-time packages only. `pkg-config` is harmless but required by some
 # transitive crates; we do NOT install `libssl-dev` — our reqwest uses
-# `rustls-tls` (see crates/motherbrain-a2a/Cargo.toml) so TLS is pure-Rust.
+# `rustls-tls` (see crates/neurogrim-a2a/Cargo.toml) so TLS is pure-Rust.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
@@ -57,61 +57,61 @@ WORKDIR /work
 # We mirror the workspace's crate layout so `cargo build --workspace`
 # resolves correctly against the manifests.
 # -----------------------------------------------------------------------------
-COPY motherbrain/Cargo.toml motherbrain/Cargo.lock ./motherbrain/
+COPY neurogrim/Cargo.toml neurogrim/Cargo.lock ./neurogrim/
 
-COPY motherbrain/crates/motherbrain-core/Cargo.toml      ./motherbrain/crates/motherbrain-core/
-COPY motherbrain/crates/motherbrain-sensory/Cargo.toml   ./motherbrain/crates/motherbrain-sensory/
-COPY motherbrain/crates/motherbrain-mcp/Cargo.toml       ./motherbrain/crates/motherbrain-mcp/
-COPY motherbrain/crates/motherbrain-a2a/Cargo.toml       ./motherbrain/crates/motherbrain-a2a/
-COPY motherbrain/crates/motherbrain-ecosystem/Cargo.toml ./motherbrain/crates/motherbrain-ecosystem/
-COPY motherbrain/crates/motherbrain-cli/Cargo.toml       ./motherbrain/crates/motherbrain-cli/
+COPY neurogrim/crates/neurogrim-core/Cargo.toml      ./neurogrim/crates/neurogrim-core/
+COPY neurogrim/crates/neurogrim-sensory/Cargo.toml   ./neurogrim/crates/neurogrim-sensory/
+COPY neurogrim/crates/neurogrim-mcp/Cargo.toml       ./neurogrim/crates/neurogrim-mcp/
+COPY neurogrim/crates/neurogrim-a2a/Cargo.toml       ./neurogrim/crates/neurogrim-a2a/
+COPY neurogrim/crates/neurogrim-ecosystem/Cargo.toml ./neurogrim/crates/neurogrim-ecosystem/
+COPY neurogrim/crates/neurogrim-cli/Cargo.toml       ./neurogrim/crates/neurogrim-cli/
 
 # Stub source trees so `cargo build` resolves — they'll be overwritten below.
 # Library crates need `src/lib.rs`; the CLI binary needs `src/main.rs`.
 RUN set -eux; \
-    for c in motherbrain-core motherbrain-sensory motherbrain-mcp motherbrain-a2a motherbrain-ecosystem; do \
-        mkdir -p "./motherbrain/crates/${c}/src"; \
-        echo '// dep-cache stub' > "./motherbrain/crates/${c}/src/lib.rs"; \
+    for c in neurogrim-core neurogrim-sensory neurogrim-mcp neurogrim-a2a neurogrim-ecosystem; do \
+        mkdir -p "./neurogrim/crates/${c}/src"; \
+        echo '// dep-cache stub' > "./neurogrim/crates/${c}/src/lib.rs"; \
     done; \
-    mkdir -p ./motherbrain/crates/motherbrain-cli/src; \
-    echo 'fn main() {}' > ./motherbrain/crates/motherbrain-cli/src/main.rs
+    mkdir -p ./neurogrim/crates/neurogrim-cli/src; \
+    echo 'fn main() {}' > ./neurogrim/crates/neurogrim-cli/src/main.rs
 
 # Warm the dependency layer. Release build so we cache the same artifacts
 # the final build reuses. A stub-source build of the CLI binary alone
 # forces cargo to compile all transitive deps.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/work/motherbrain/target \
-    cd motherbrain \
-    && cargo build --release -p motherbrain-cli
+    --mount=type=cache,target=/work/neurogrim/target \
+    cd neurogrim \
+    && cargo build --release -p neurogrim-cli
 
 # -----------------------------------------------------------------------------
 # Real application source.
 #
 # Overwrite the stubs with the real crates and rebuild. Cache-invalidation
-# hazard: the stub build above produced `motherbrain-cli v0.1.0` and the
+# hazard: the stub build above produced `neurogrim-cli v0.1.0` and the
 # workspace library crates against their stub sources; cargo fingerprints
 # them by source content, and if we just `touch` Cargo.toml it can still
 # skip the rebuild because the library stubs looked like "valid empty
 # crates" to cargo — yielding a tiny "stub" binary in the final image.
-# Seen in practice: image shipped a 436 KB `motherbrain` that printed
+# Seen in practice: image shipped a 436 KB `neurogrim` that printed
 # nothing because it was the stub.
 #
 # Belt-and-braces fix: (1) delete the target artifacts for every workspace
 # crate so cargo must recompile them against the real source; (2) rebuild.
 # We leave the registry cache intact so external deps aren't re-fetched.
 # -----------------------------------------------------------------------------
-COPY motherbrain/crates ./motherbrain/crates
+COPY neurogrim/crates ./neurogrim/crates
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/work/motherbrain/target \
-    cd motherbrain \
-    && for p in motherbrain-core motherbrain-sensory motherbrain-mcp \
-               motherbrain-a2a motherbrain-ecosystem motherbrain-cli; do \
+    --mount=type=cache,target=/work/neurogrim/target \
+    cd neurogrim \
+    && for p in neurogrim-core neurogrim-sensory neurogrim-mcp \
+               neurogrim-a2a neurogrim-ecosystem neurogrim-cli; do \
           cargo clean --release -p "$p" || true; \
        done \
-    && cargo build --release -p motherbrain-cli \
-    && cp target/release/motherbrain /work/motherbrain-bin \
-    && ls -la /work/motherbrain-bin
+    && cargo build --release -p neurogrim-cli \
+    && cp target/release/neurogrim /work/neurogrim-bin \
+    && ls -la /work/neurogrim-bin
 
 # Sanity: confirm the binary runs and *is* the real CLI (not a stub). The
 # bugfix history here is that a stub-source cache hit once shipped a
@@ -120,10 +120,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 #   (2) the `a2a-serve` subcommand is present in `--help` output.
 # A stub binary produced by `fn main() {}` passes neither.
 RUN set -eux \
-    && VERSION_OUT="$(/work/motherbrain-bin --version)" \
+    && VERSION_OUT="$(/work/neurogrim-bin --version)" \
     && [ -n "$VERSION_OUT" ] \
     && echo "built binary version: $VERSION_OUT" \
-    && /work/motherbrain-bin --help | grep -q 'a2a-serve'
+    && /work/neurogrim-bin --help | grep -q 'a2a-serve'
 
 # =============================================================================
 # Stage 2 — Runtime
@@ -148,7 +148,7 @@ RUN groupadd --system --gid 1000 brain \
 # invocations keeps the container from scribbling on the host's project.
 RUN mkdir -p /brain && chown brain:brain /brain
 
-COPY --from=builder /work/motherbrain-bin /usr/local/bin/motherbrain
+COPY --from=builder /work/neurogrim-bin /usr/local/bin/neurogrim
 
 # Health-check tool isn't installed — keeping the image small. Operators
 # can `docker exec` if they need to probe; compose healthchecks can use
@@ -166,7 +166,7 @@ WORKDIR /home/brain
 #   --project-root   — mounted at /brain (see docker-compose.yml).
 #
 # Using ENTRYPOINT + CMD split so operators can override args via
-# `docker run motherbrain:dev <other-subcommand>` without re-typing the
+# `docker run neurogrim:dev <other-subcommand>` without re-typing the
 # binary path.
-ENTRYPOINT ["/usr/local/bin/motherbrain"]
+ENTRYPOINT ["/usr/local/bin/neurogrim"]
 CMD ["a2a-serve", "--bind", "0.0.0.0", "--port", "8421", "--project-root", "/brain"]

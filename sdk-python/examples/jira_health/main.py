@@ -12,7 +12,7 @@ Configuration (via environment variables):
     JIRA_PROJECT    Jira project key to analyze (e.g. "MYPROJ")
 
 Usage:
-    # Run as a standalone MCP server (for use with MotherBrain):
+    # Run as a standalone MCP server (for use with NeuroGrim):
     python -m examples.jira_health
 
     # Or test directly:

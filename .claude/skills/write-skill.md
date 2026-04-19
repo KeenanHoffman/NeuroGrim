@@ -79,12 +79,12 @@ gate state when the skill is read. Skills with `reference`, `meta`, `planning`, 
 `philosophy`, `configuration`, or `ci-cd` roles that don't govern specific files should omit it.
 
 ```markdown
-Governs: motherbrain/crates/motherbrain-sensory/src/git_health.rs
+Governs: neurogrim/crates/neurogrim-sensory/src/git_health.rs
 ```
 
 Or for multiple files:
 ```markdown
-Governs: motherbrain-core/src/scoring.rs, motherbrain-core/src/agent_output.rs
+Governs: neurogrim-core/src/scoring.rs, neurogrim-core/src/agent_output.rs
 ```
 
 ### 4. Trigger Phrases
@@ -184,7 +184,7 @@ Use backtick filename format. Do NOT use markdown links — filenames are enough
 
 **Variables in commands:**
 ```bash
-motherbrain sensory code-quality --project-root <path-to-project>
+neurogrim sensory code-quality --project-root <path-to-project>
 # Use <angle-brackets> for user-supplied values
 # Use $VARIABLE for env vars
 ```

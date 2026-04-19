@@ -1,0 +1,19 @@
+[package]
+name = "neurogrim-mcp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "MCP client + server integration for NeuroGrim"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+rmcp = { workspace = true }
+schemars = { workspace = true }
+tracing = { workspace = true }
+neurogrim-core = { workspace = true }
+neurogrim-sensory = { workspace = true }

@@ -8,7 +8,7 @@
 
 These skills were written for an earlier project context — a LaaS platform
 built on GCP, Terraform, Cloud Run, Pester tests, and PowerShell tooling
-(`Find-*.ps1`, `scripts/utility/*.ps1`, etc.). Moth(er):Br+AI+n is a Rust
+(`Find-*.ps1`, `scripts/utility/*.ps1`, etc.). NeuroGrim is a Rust
 reimplementation and does not share that tooling; following these skills
 would route operators to commands and tools that no longer exist.
 
@@ -25,11 +25,11 @@ The active skill set is in the parent directory (`.claude/skills/`). See
 
 | Archived skill | Closest live skill / command |
 |---|---|
-| `gate-status.md` | `motherbrain health` |
-| `what-next.md` | `motherbrain score` (correlation engine recommendations) |
-| `refocus.md` | `motherbrain health --plain` |
-| `operational-memory.md` | `motherbrain trend` |
-| `brain.md` | The binary at `motherbrain/target/release/motherbrain`; see `CLAUDE.md` |
+| `gate-status.md` | `neurogrim health` |
+| `what-next.md` | `neurogrim score` (correlation engine recommendations) |
+| `refocus.md` | `neurogrim health --plain` |
+| `operational-memory.md` | `neurogrim trend` |
+| `brain.md` | The binary at `neurogrim/target/release/neurogrim`; see `CLAUDE.md` |
 | `lsp.md` and LSP-family | No direct equivalent; the Rust Brain has no LSP layer |
 | `hooks-reference.md` | No direct equivalent; the Rust Brain uses different automation |
 | `skill-index.md` | Use the CLAUDE.md Skills Index |

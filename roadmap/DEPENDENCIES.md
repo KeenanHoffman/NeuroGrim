@@ -43,7 +43,7 @@ S5-TP-1 (starter kit) [COMPLETE]
 **Stage 5 → Stage 6:**
 ```
 S5-TP-7 (dual brain design) ────┐
-                                 ├──> S6-DB-1 (motherbrain-a2a crate)
+                                 ├──> S6-DB-1 (neurogrim-a2a crate)
 S5-TP-8 (spec v2.1 + schemas) ──┘         |
                                            ├──> S6-DB-2 (ecosystem refactor, needs S4-FC-*)
                                            ├──> S6-DB-3 (Brain A2A server)
@@ -112,8 +112,8 @@ TP-5   TP-7      |           |
 | S5-TP-2 (spec) | S5-TP-7 (dual brain) | Dual brain architecture defined in spec |
 | S5-TP-4 (trajectory) | S5-TP-3 (adoption) | Adopters need trajectory to validate over time |
 | S5-TP-6 (zero-config) | S5-TP-3 (adoption) | Zero-config lowers adoption barrier |
-| S5-TP-7 (dual brain design) | S6-DB-1 (motherbrain-a2a crate) | Design precedes implementation |
-| S5-TP-8 (spec v2.1 + schemas) | S6-DB-1 (motherbrain-a2a crate) | Schemas must exist before crate can validate envelopes |
+| S5-TP-7 (dual brain design) | S6-DB-1 (neurogrim-a2a crate) | Design precedes implementation |
+| S5-TP-8 (spec v2.1 + schemas) | S6-DB-1 (neurogrim-a2a crate) | Schemas must exist before crate can validate envelopes |
 | S5-TP-8 (spec v2.1 + schemas) | S6-DB-2 (ecosystem refactor) | Schema additions for `a2a_endpoint` must be normative |
 | S5-TP-8 (spec v2.1 + schemas) | S5-TP-9 (cultural substrate) | Culture schema lands alongside v2.1 publication |
 | S5-TP-9 (cultural substrate) | S5-TP-10 (LSP-Brains Brain) | LSP-Brains Brain needs `culture.yaml` copy |
@@ -124,9 +124,9 @@ TP-5   TP-7      |           |
 
 | From | To | Reason |
 |------|----|--------|
-| S6-DB-1 (motherbrain-a2a crate) | S6-DB-2 (ecosystem refactor) | Ecosystem dispatches to the A2A crate for A2A children |
-| S6-DB-1 (motherbrain-a2a crate) | S6-DB-3 (Brain A2A server) | CLI a2a-serve uses the crate's TaskServer |
-| S6-DB-1 (motherbrain-a2a crate) | S6-DB-6 (Python SDK stretch) | Mirrors the Rust crate's interfaces |
+| S6-DB-1 (neurogrim-a2a crate) | S6-DB-2 (ecosystem refactor) | Ecosystem dispatches to the A2A crate for A2A children |
+| S6-DB-1 (neurogrim-a2a crate) | S6-DB-3 (Brain A2A server) | CLI a2a-serve uses the crate's TaskServer |
+| S6-DB-1 (neurogrim-a2a crate) | S6-DB-6 (Python SDK stretch) | Mirrors the Rust crate's interfaces |
 | S4-FC-* (fractal composition done) | S6-DB-2 (ecosystem refactor) | Subprocess branch ports from S4 implementation |
 | S6-DB-2 (ecosystem refactor) | S6-DB-4 (dual brain pair test) | Pair test exercises ecosystem through A2A transport |
 | S6-DB-3 (Brain A2A server) | S6-DB-4 (dual brain pair test) | Both peers run a2a-serve in the integration test |

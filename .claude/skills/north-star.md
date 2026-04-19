@@ -15,7 +15,7 @@ A lightweight alignment check. Before committing to a plan or after completing s
 work, this skill asks: **does this advance us toward Stage 5?**
 
 Stage 5 is the north star: LSP Brains becomes a transferable specification — a methodology
-any project can adopt. Moth(er):Br+AI+n is the product that proves it. See `.claude/roadmap/VISION.md` for the full vision.
+any project can adopt. NeuroGrim is the product that proves it. See `.claude/roadmap/VISION.md` for the full vision.
 
 ---
 

@@ -188,7 +188,7 @@ Methodology-step: skills
 | `network-topology.md` | Network snapshot inspection and update | "network topology", "show the network", "what's deployed" |
 | `access-topology.md` | IAM snapshot inspection and access path validation | "access topology", "IAM", "who has access", "permissions" |
 | `artifact-cmdb.md` | Container image freshness, build-skip gate, pre-warm schedule | "artifact stale", "skip build", "prewarm", "docker layer cache", "artifact cmdb" |
-| `brain.md` | Moth(er):Br+AI+n: unified health score, cross-domain correlation, tool registry | "brain", "motherbrain", "system health", "unified health", "cross-domain", "tool registry", "domain score" |
+| `brain.md` | NeuroGrim: unified health score, cross-domain correlation, tool registry | "brain", "neurogrim", "system health", "unified health", "cross-domain", "tool registry", "domain score" |
 | `operational-memory.md` | Query historical operational data: Brain scores, gate ledger, incident log, deploy outcomes | "operational memory", "historical scores", "past incidents", "what happened before", "gate history", "deploy outcomes" |
 | `sca.md` | Software composition analysis: pip-audit + pnpm audit vulnerability scanning | "sca", "vulnerability", "dependency audit", "pip-audit", "pnpm audit", "supply chain", "CVE" |
 | `git-tree-cmdb.md` | Git tree cross-references: file impact, xref lookup, secret scan | "cross-reference", "file impact", "which gates watch this", "git tree", "xref", "what does this file affect" |

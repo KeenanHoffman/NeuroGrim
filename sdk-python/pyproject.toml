@@ -31,8 +31,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/keenanHoffmanSparq/Moth-er-Br-AI-n"
-Specification = "https://github.com/keenanHoffmanSparq/LSP-Brains"
+Homepage = "https://github.com/KeenanHoffman/NeuroGrim"
+Specification = "https://github.com/KeenanHoffman/LSP-Brains"
 
 [tool.hatch.build.targets.wheel]
 packages = ["lsp_brains"]

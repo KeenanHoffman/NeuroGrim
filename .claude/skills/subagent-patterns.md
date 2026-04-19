@@ -156,7 +156,7 @@ independent. Both feed the deploy/abort decision.
 
 ```
 Agent A prompt (Preflight):
-"Run `motherbrain validate --registry <path>` and `motherbrain health --plain`
+"Run `neurogrim validate --registry <path>` and `neurogrim health --plain`
 against project <project-root>. Return:
   {\"passed\": bool, \"error\": null | \"<summary of failures>\",
    \"failures\": [{\"item\": \"<check name>\", \"message\": \"<detail>\"}]}"
@@ -541,9 +541,9 @@ failing services. The hook observed and reported; the agent decided and acted.
 
 ## Pattern 5 — Sensor Fan-Out
 
-N independent `motherbrain sensory <name>` queries are bucketed into ≤5 subagents by
+N independent `neurogrim sensory <name>` queries are bucketed into ≤5 subagents by
 expected latency. The parent collects all results, then runs a synthesizer
-(`motherbrain score` or `motherbrain agent`) inline. Orchestrators never go in a bucket.
+(`neurogrim score` or `neurogrim agent`) inline. Orchestrators never go in a bucket.
 
 ```
   Parent
@@ -553,18 +553,18 @@ expected latency. The parent collects all results, then runs a synthesizer
    ├── Bucket 4: medium sensor  (security-standards)                         ──┤
    └── Bucket 5: slow sensor    (test-health — may exec cargo test)          ──┘
          ↓ (converge: all sensor CMDBs written)
-   Parent: motherbrain score --plain          (inline synthesizer)
-   Parent: motherbrain agent                  (inline, if full JSON needed)
+   Parent: neurogrim score --plain          (inline synthesizer)
+   Parent: neurogrim agent                  (inline, if full JSON needed)
 ```
 
 **Bucket 1 subagent prompt (example):**
 ```
 You are a source-reader subagent. Read-only sensor queries only.
-Do NOT edit files. Do NOT run motherbrain score or motherbrain agent.
+Do NOT edit files. Do NOT run neurogrim score or neurogrim agent.
 Pass --plain to every command so output is mergeable.
 Run:
-  motherbrain sensory git-health --project-root <path>
-  motherbrain sensory deploy-readiness --project-root <path>
+  neurogrim sensory git-health --project-root <path>
+  neurogrim sensory deploy-readiness --project-root <path>
 Return: {"passed": bool, "error": null|"<summary>",
   "results": {"git-health":       {"exit_code": 0, "cmdb": {...}},
               "deploy-readiness": {"exit_code": 0, "cmdb": {...}}}}
@@ -578,7 +578,7 @@ of fast sensors finish faster inline (total runtime < subagent spawn overhead).
 **Time saving:** roughly N× for independent sensors, capped at the slowest bucket. The
 critical path is whichever bucket contains the slowest sensor.
 
-**Observability:** each bucket's output is a CMDB envelope. The synthesizer (`motherbrain
+**Observability:** each bucket's output is a CMDB envelope. The synthesizer (`neurogrim
 score`) reads them all and produces the unified score — see spec §4.6 for the aggregation
 formula and §3.8 for the CMDB contract.
 
@@ -623,7 +623,7 @@ Before composing any message to the user, apply this filter:
 ```
 Tests: 295/295 passing
 Commit: owner/repo@abc1234
-Changed: motherbrain-core/src/correlation.rs (+660), motherbrain-cli/src/commands/agent.rs (+126), 5 more files
+Changed: neurogrim-core/src/correlation.rs (+660), neurogrim-cli/src/commands/agent.rs (+126), 5 more files
 Risk: low — no public API or schema interface changes
 ```
 

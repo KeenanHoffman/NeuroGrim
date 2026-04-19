@@ -131,13 +131,13 @@ scanning that detects vulnerabilities before they reach production.
 
 ```bash
 # Score the current project
-motherbrain sensory run security-standards .
+neurogrim sensory run security-standards .
 
 # Write CMDB (required before Brain reads the domain)
-motherbrain sensory run security-standards . > .claude/security-standards-cmdb.json
+neurogrim sensory run security-standards . > .claude/security-standards-cmdb.json
 
 # View score in health output
-motherbrain health
+neurogrim health
 ```
 
 The CMDB file at `.claude/security-standards-cmdb.json` is committed to git — it is
@@ -172,7 +172,7 @@ groups have at least one piece of evidence in the codebase.
 ## Promoting to Weighted Domain
 
 By default `security-standards` is advisory (`weight: 0.0`) — it appears in
-`motherbrain health` but does not affect the unified score. To include it in scoring:
+`neurogrim health` but does not affect the unified score. To include it in scoring:
 
 ```json
 // .claude/brain-registry.json

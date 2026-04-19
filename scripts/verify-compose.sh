@@ -67,7 +67,7 @@ if ! docker compose version >/dev/null 2>&1; then
     fail "docker compose plugin not available (try docker-compose v1 → update to v2)"
     exit 1
 fi
-for fixture in motherbrain-local-project motherbrain-external-project; do
+for fixture in neurogrim-local-project neurogrim-external-project; do
     if [ ! -d "$fixture/.claude" ]; then
         fail "fixture missing: expected $fixture/.claude/"
         exit 1
@@ -101,21 +101,21 @@ wait_for_ready() {
     return 1
 }
 
-log "waiting for motherbrain-local on :${LOCAL_PORT}"
+log "waiting for neurogrim-local on :${LOCAL_PORT}"
 if ! wait_for_ready "http://127.0.0.1:${LOCAL_PORT}/.well-known/agent-card.json" local; then
-    fail "motherbrain-local did not become ready within ${READY_TIMEOUT_SECS}s"
-    docker compose logs motherbrain-local >&2 || true
+    fail "neurogrim-local did not become ready within ${READY_TIMEOUT_SECS}s"
+    docker compose logs neurogrim-local >&2 || true
     exit 2
 fi
-ok "motherbrain-local ready"
+ok "neurogrim-local ready"
 
-log "waiting for motherbrain-external on :${EXTERNAL_PORT}"
+log "waiting for neurogrim-external on :${EXTERNAL_PORT}"
 if ! wait_for_ready "http://127.0.0.1:${EXTERNAL_PORT}/.well-known/agent-card.json" external; then
-    fail "motherbrain-external did not become ready within ${READY_TIMEOUT_SECS}s"
-    docker compose logs motherbrain-external >&2 || true
+    fail "neurogrim-external did not become ready within ${READY_TIMEOUT_SECS}s"
+    docker compose logs neurogrim-external >&2 || true
     exit 2
 fi
-ok "motherbrain-external ready"
+ok "neurogrim-external ready"
 
 # --- 3. Invoke snapshot.requested against both, shape-check responses ---
 # Prefer local binary → falls back to curl POST. Same pattern as
@@ -150,13 +150,13 @@ invoke_peer() {
     return 0
 }
 
-log "invoking snapshot.requested on motherbrain-local"
-if ! invoke_peer "$LOCAL_PORT" motherbrain-local; then exit 3; fi
-ok "motherbrain-local accepted task"
+log "invoking snapshot.requested on neurogrim-local"
+if ! invoke_peer "$LOCAL_PORT" neurogrim-local; then exit 3; fi
+ok "neurogrim-local accepted task"
 
-log "invoking snapshot.requested on motherbrain-external"
-if ! invoke_peer "$EXTERNAL_PORT" motherbrain-external; then exit 3; fi
-ok "motherbrain-external accepted task"
+log "invoking snapshot.requested on neurogrim-external"
+if ! invoke_peer "$EXTERNAL_PORT" neurogrim-external; then exit 3; fi
+ok "neurogrim-external accepted task"
 
 # --- 4. Done ---
 exit 0

@@ -1,10 +1,10 @@
 # LSP Brains: A Nervous System for AI Agents
 
-## Moth(er):Br+AI+n — Reference Implementation Whitepaper
+## NeuroGrim — Reference Implementation Whitepaper
 
 **Version:** 2.0
 **Date:** April 2026
-**Specification:** https://github.com/keenanHoffmanSparq/LSP-Brains
+**Specification:** https://github.com/KeenanHoffman/LSP-Brains
 
 ---
 
@@ -72,7 +72,7 @@ These four components form a feedback loop. Sensory tools write state. The Brain
 
 **LSP Brains** is the methodology — a language-agnostic specification that defines WHAT a Brain must do. The specification covers: sensory tool protocol, scoring contracts, governance model, interface contract, fractal composition protocol, and trajectory intelligence. A Python team can implement it without touching a line of Rust.
 
-**Moth(er):Br+AI+n** is the product — the first reference implementation, written in Rust. It proves the methodology works and provides built-in sensory tools, a scoring engine, CLI, and MCP server integration. The product accelerates adoption; the methodology transfers independently.
+**NeuroGrim** is the product — the first reference implementation, written in Rust. It proves the methodology works and provides built-in sensory tools, a scoring engine, CLI, and MCP server integration. The product accelerates adoption; the methodology transfers independently.
 
 ### The Nervous System Analogy
 
@@ -188,7 +188,7 @@ Example: `test-health-cmdb.json` after a sensory tool run:
 }
 ```
 
-Sensory tools can be built-in (Rust, included with Moth(er):Br+AI+n), custom (any language that writes the correct JSON schema), or Python SDK-based (a wrapper that simplifies custom tool authoring). The only contract is the output format.
+Sensory tools can be built-in (Rust, included with NeuroGrim), custom (any language that writes the correct JSON schema), or Python SDK-based (a wrapper that simplifies custom tool authoring). The only contract is the output format.
 
 ### Step 2: Confidence Decay
 
@@ -255,7 +255,7 @@ This output is consumed by Claude Code sessions, parent Brain instances, hooks, 
 
 ## 5. Built-In Domains
 
-Moth(er):Br+AI+n ships with ten built-in domains organized into two tiers.
+NeuroGrim ships with ten built-in domains organized into two tiers.
 
 ### Weighted Core Domains
 
@@ -475,7 +475,7 @@ This preserves the human's role as the reviewer of decisions, not checklists. Th
 
 Hats are the Brain's attentional bias system. They do not change what the Brain knows — they change which signals the Brain emphasizes when generating recommendations.
 
-Five standard hats ship with Moth(er):Br+AI+n:
+Five standard hats ship with NeuroGrim:
 
 | Hat | Emphasis | When to Wear |
 |-----|----------|-------------|
@@ -627,7 +627,7 @@ Start with the three universal weighted domains: `test-health`, `code-quality`, 
 The built-in sensory tools detect state automatically from your existing files. No instrumentation required. Run them against your project:
 
 ```bash
-motherbrain sense --all
+neurogrim sense --all
 ```
 
 This writes CMDB files. Inspect them. The signals are transparent JSON — you can see exactly what the Brain knows.
@@ -635,7 +635,7 @@ This writes CMDB files. Inspect them. The signals are transparent JSON — you c
 **Step 3: Score health**
 
 ```bash
-motherbrain score
+neurogrim score
 ```
 
 You now have a unified score with domain breakdown and confidence context. If the score looks wrong, check the CMDB files — the Brain's reasoning is fully visible.
@@ -660,7 +660,7 @@ for any stack. It describes the minimum: three domains, a registry, CMDB files, 
 "declare → score → hook" workflow that completes in under an afternoon.
 
 Use the adoption guide as a reference pattern, not a dependency. The reference
-implementation (Moth(er):Br+AI+n, Rust) demonstrates one conformant realization; your
+implementation (NeuroGrim, Rust) demonstrates one conformant realization; your
 own starter kit can target Python, Go, TypeScript, or any language whose output can
 match the CMDB envelope schema.
 
@@ -691,10 +691,10 @@ The SDK handles CMDB file format, timestamping, and schema validation. Custom to
 
 ### The MCP Server
 
-Moth(er):Br+AI+n includes an MCP server that exposes Brain operations as tools for AI agents:
+NeuroGrim includes an MCP server that exposes Brain operations as tools for AI agents:
 
 ```bash
-motherbrain serve --mcp
+neurogrim serve --mcp
 ```
 
 With the MCP server running, agents can invoke Brain scoring, query domain status, check gate conditions, and retrieve recommendations as structured tool outputs. This is how Claude Code sessions integrate with the Brain natively — the agent calls MCP tools rather than parsing CLI output.
@@ -718,7 +718,7 @@ The Brain is useful at Phase 1. It becomes comprehensive over time. New domains 
 
 ### For an Individual Developer
 
-You run `motherbrain score` before a commit. The output tells you the unified score, which gates pass, which fail, and what to fix. You fix the two blocking items. The gate passes. You commit with confidence.
+You run `neurogrim score` before a commit. The output tells you the unified score, which gates pass, which fail, and what to fix. You fix the two blocking items. The gate passes. You commit with confidence.
 
 The Brain is not a checklist you fill out manually. It reads your project state automatically. You do not maintain it — you work, and it watches.
 
@@ -764,7 +764,7 @@ Those three questions — health, priority, focus — are what LSP Brains is bui
 | **Gate** | A declared condition that blocks a lifecycle event (commit, merge, deploy) until health conditions are met |
 | **Hat** | An attentional lens that biases the Brain's recommendation priority toward a specific task context |
 | **LSP Brains** | The language-agnostic specification for building agent nervous systems |
-| **Moth(er):Br+AI+n** | The reference implementation of LSP Brains, written in Rust |
+| **NeuroGrim** | The reference implementation of LSP Brains, written in Rust |
 | **Persona** | An output formatting profile that adapts Brain output for a specific human stakeholder type |
 | **Proposal ledger** | A persistent record of Brain recommendations and their outcomes; the learning substrate |
 | **Sensory tool** | A process that detects state in one domain and writes a CMDB JSON file |
@@ -829,8 +829,8 @@ This schema is stable across Brain versions within a major version number. Consu
 
 ## Appendix C: Further Reading
 
-- **LSP Brains Specification** — https://github.com/keenanHoffmanSparq/LSP-Brains
-- **Moth(er):Br+AI+n Repository** — reference implementation source
+- **LSP Brains Specification** — https://github.com/KeenanHoffman/LSP-Brains
+- **NeuroGrim Repository** — reference implementation source
 - `roadmap/VISION.md` — seventeen guiding principles (1–17) and the north star
 - `roadmap/ROADMAP.md` — stage progression and current implementation status
 - `.claude/skills/brain.md` — operational Brain usage guide

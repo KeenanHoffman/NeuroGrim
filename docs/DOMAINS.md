@@ -428,5 +428,5 @@ Start with a minimal domain: one sensory tool, one score variable, and one named
 a coherence rule can reference. Register it in `brain-registry.json` as advisory (weight 0.0),
 observe it through a few development cycles, then promote it to core if it proves its value.
 
-The LSP Brains specification at https://github.com/keenanHoffmanSparq/LSP-Brains covers the full
+The LSP Brains specification at https://github.com/KeenanHoffman/LSP-Brains covers the full
 domain contract, the sensory tool interface, and the CMDB schema in detail.

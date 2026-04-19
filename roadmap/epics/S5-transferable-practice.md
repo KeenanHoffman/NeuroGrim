@@ -11,7 +11,7 @@
 
 ## Summary
 
-LSP Brains becomes a transferable specification. Moth(er):Br+AI+n becomes a product teams
+LSP Brains becomes a transferable specification. NeuroGrim becomes a product teams
 can adopt. Not "install this tool" but "adopt this methodology." Stage 5 is methodology
 transfer: LSP Brains proven in DevOps becomes a reusable specification any domain can
 absorb. The architecture — sensory tools, central scoring, declared governance, reflexive
@@ -95,7 +95,7 @@ Brain implementation must do. Also finalize the whitepaper and guides.
 **Effort:** XL
 **Depends on:** S5-TP-2, S5-TP-4, S5-TP-5, S5-TP-6
 
-Deliver Moth(er):Br+AI+n as a product to at least one team. Validate that the LSP Brains
+Deliver NeuroGrim as a product to at least one team. Validate that the LSP Brains
 methodology transfers via the specification + starter kit.
 
 This is both active product delivery ("here is a tool for your project") AND passive
@@ -108,7 +108,7 @@ methodology validation ("can you adopt this pattern without direct assistance?")
 - The methodology improves faster with teams using the product
 
 **Acceptance criteria:**
-- [ ] At least one team outside LaaS is using Moth(er):Br+AI+n
+- [ ] At least one team outside LaaS is using NeuroGrim
 - [ ] The adopter's Brain produces health scores using their own domain definitions
 - [ ] Adoption friction documented and fed back into starter kit
 - [ ] Adopter did NOT require direct assistance to get started (spec + tutorial sufficient)
@@ -269,7 +269,7 @@ spec deliverable; the implementation work lives in Stage 6.
 - [x] `brain-registry-v2.schema.json` still validates as draft-07 after additive changes
 - [x] `METHODOLOGY-EVOLUTION.md` entry documents the decision + rationale
 - [x] `DUAL-BRAIN-DESIGN.md` §5 recast complete
-- [ ] README cross-links updated in both repos (LSP-Brains + Moth-er-Br-AI-n)
+- [ ] README cross-links updated in both repos (LSP-Brains + NeuroGrim)
 - [ ] Python SDK README references the A2A boundary
 
 ---
@@ -300,7 +300,7 @@ of surface prompting; declaring culture beats ignoring it.
 
 **Deliverables:**
 - `schemas/culture-manifest-v1.schema.json` (LSP-Brains repo) — validates the manifest
-- `culture.yaml` × 3 — identical copies at the ecosystem root, in MotherBrain, in LSP-Brains
+- `culture.yaml` × 3 — identical copies at the ecosystem root, in NeuroGrim, in LSP-Brains
 - `spec/LSP-BRAINS-SPEC.md` §14 "Cultural Substrate" + TOC + Appendix D row + Appendix E glossary entries
 - `roadmap/VISION.md` principle #17
 - `spec/METHODOLOGY-EVOLUTION.md` §7 "Cultural Substrate" with rationale
@@ -361,7 +361,7 @@ quality; sensory tools are follow-on work (natural Python-SDK examples).
 - [x] All 7 CMDBs validate against `cmdb-envelope-v1.schema.json`
 - [x] All 7 domains declared advisory (weight 0.0)
 - [x] `CLAUDE.md` present with repo purpose, domain table, spec-editing workflow
-- [x] `culture.yaml` byte-identical to the ecosystem + MotherBrain copies
+- [x] `culture.yaml` byte-identical to the ecosystem + NeuroGrim copies
 - [ ] (Future) At least one sensory tool lands — likely `spec-completeness` first as the
       simplest text-pattern check
 
@@ -379,4 +379,4 @@ quality; sensory tools are follow-on work (natural Python-SDK examples).
 
 - Does this make the pattern more general? **This IS the generalization.**
 - Does this make the ecosystem Brain easier? **Proven by external adoption.**
-- Does this separate methodology from product? **LSP Brains spec is the methodology. Moth(er):Br+AI+n is the product.**
+- Does this separate methodology from product? **LSP Brains spec is the methodology. NeuroGrim is the product.**
