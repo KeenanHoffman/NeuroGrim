@@ -56,7 +56,7 @@ enum Commands {
     },
 
     /// Show trajectory analysis (velocity, acceleration, classification)
-    #[command(visible_alias = "plan")]
+    #[command(visible_alias = "drift")]
     Trend {
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
         registry: String,
