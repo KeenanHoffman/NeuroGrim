@@ -270,7 +270,7 @@ pub async fn run(
         bind = %addr,
         "NeuroGrim A2A server starting — peers can discover this Brain"
     );
-    eprintln!("NeuroGrim A2A server");
+    eprintln!("✦ Summoning NeuroGrim A2A peer");
     eprintln!("  brain_id:   {brain_id}");
     eprintln!("  endpoint:   {endpoint}");
     eprintln!("  bind addr:  {addr}");

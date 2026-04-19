@@ -51,6 +51,22 @@ fn version_prints_semver() {
 }
 
 #[test]
+fn aliases_resolve_to_primary_commands() {
+    // Grimoire-themed aliases wired in via `clap`'s `visible_alias`.
+    // Each should accept --help and exit 0. If an alias is ever removed
+    // from main.rs, this fires.
+    for alias in [
+        "scry", "divine", "plan", "seal", "summon", "cast", "conjure", "commune",
+    ] {
+        let (code, _stdout, stderr) = run(&[alias, "--help"], None);
+        assert_eq!(
+            code, 0,
+            "alias {alias:?} should resolve to a command (--help exit 0); stderr={stderr}"
+        );
+    }
+}
+
+#[test]
 fn help_lists_core_subcommands() {
     let (code, stdout, _) = run(&["--help"], None);
     assert_eq!(code, 0, "neurogrim --help should exit 0");

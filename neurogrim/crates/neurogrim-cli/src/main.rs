@@ -7,6 +7,7 @@ mod output;
 #[derive(Parser)]
 #[command(name = "neurogrim")]
 #[command(about = "NeuroGrim — LSP Brains scoring engine")]
+#[command(long_about = "NeuroGrim — LSP Brains scoring engine\n\na book of spells for AI agents")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -16,6 +17,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Compute and display the unified health score
+    #[command(visible_alias = "scry")]
     Score {
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
         registry: String,
@@ -31,6 +33,7 @@ enum Commands {
     },
 
     /// Produce full agent-mode JSON output
+    #[command(visible_alias = "divine")]
     Agent {
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
         registry: String,
@@ -53,6 +56,7 @@ enum Commands {
     },
 
     /// Show trajectory analysis (velocity, acceleration, classification)
+    #[command(visible_alias = "plan")]
     Trend {
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
         registry: String,
@@ -61,18 +65,21 @@ enum Commands {
     },
 
     /// Validate the brain-registry.json configuration
+    #[command(visible_alias = "seal")]
     Validate {
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
         registry: String,
     },
 
     /// Start the Brain as an MCP server
+    #[command(visible_alias = "summon")]
     Serve {
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
         registry: String,
     },
 
     /// Run a built-in sensory tool directly (produces CMDB JSON)
+    #[command(visible_alias = "cast")]
     Sensory {
         /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs
         name: String,
@@ -82,6 +89,7 @@ enum Commands {
     },
 
     /// Initialize a new brain-registry.json by scanning the project
+    #[command(visible_alias = "conjure")]
     Init {
         /// Project root to scan
         #[arg(long, default_value = ".")]
@@ -129,7 +137,7 @@ enum Commands {
     },
 
     /// Invoke a single A2A message against a peer Brain (spec §13.3).
-    #[command(name = "a2a-invoke")]
+    #[command(name = "a2a-invoke", visible_alias = "commune")]
     A2aInvoke {
         /// Peer base URL, e.g. `http://127.0.0.1:8421/a2a/v1/`.
         peer_url: String,
@@ -200,6 +208,7 @@ async fn main() -> Result<()> {
 }
 
 async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
+    eprintln!("✦ Casting {name}…");
     let result = match name {
         "git-health" => neurogrim_sensory::git_health::analyze_git_health(project_root).await?,
         "code-quality" => neurogrim_sensory::code_quality::analyze_code_quality(project_root).await,

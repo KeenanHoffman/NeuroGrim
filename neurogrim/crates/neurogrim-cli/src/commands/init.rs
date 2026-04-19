@@ -528,6 +528,7 @@ pub fn generate_registry(candidates: &[DomainCandidate], project_name: &str) -> 
 // ---------------------------------------------------------------------------
 
 pub async fn run(project_root: &str, output: &str, yes: bool) -> Result<()> {
+    eprintln!("✦ Conjuring registry…");
     let root = PathBuf::from(project_root);
     if !root.is_dir() {
         bail!("Project root '{}' is not a directory.", project_root);

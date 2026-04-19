@@ -49,6 +49,8 @@ pub async fn run(peer_url: String, message_type: String, payload: Option<String>
 
     let url = Url::parse(&peer_url).with_context(|| format!("invalid peer URL {peer_url:?}"))?;
 
+    eprintln!("✦ Communing with {peer_url}…");
+
     let mt = parse_message_type(&message_type)?;
     let payload_value: serde_json::Value = match payload {
         Some(ref s) if !s.is_empty() => serde_json::from_str(s)

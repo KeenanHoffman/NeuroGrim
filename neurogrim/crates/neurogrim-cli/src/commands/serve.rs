@@ -16,7 +16,7 @@ pub async fn run(registry_path: &str) -> Result<()> {
         .to_path_buf();
 
     let server = BrainServer::new(registry, project_root);
-    eprintln!("NeuroGrim MCP server starting on stdio...");
+    eprintln!("✦ Summoning MCP server on stdio…");
 
     let service = server.serve(rmcp::transport::stdio()).await?;
     service.waiting().await?;

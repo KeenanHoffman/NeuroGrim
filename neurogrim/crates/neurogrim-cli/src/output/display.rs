@@ -21,6 +21,9 @@ pub fn display_score(output: &AgentOutput, plain: bool) {
     };
 
     println!("NeuroGrim Score: {}", colored_score);
+    if !plain {
+        println!("  {}", "✦ a book of spells for AI agents".dimmed().italic());
+    }
 
     // Domain breakdown
     let mut domains: Vec<_> = output.domains.iter().collect();
