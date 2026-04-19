@@ -86,15 +86,30 @@ decision to make in the publish-day runbook.
 
 ---
 
-## 3. Cargo dry-run gate 🔴
+## 3. Cargo build + dry-run gate 🟡
 
-**Status on this machine (2026-04-19):** Rust + cargo ARE installed
-(`D:/rust/cargo/bin/cargo`, toolchain 1.95.0), but the machine lacks
-both MSVC build tools and mingw-w64 gcc — so linking fails. Installing
-either linker unblocks the dry-run; both are straightforward installs
-but require user action outside this session. Dry-runs can be run
-from here once a linker is present, or from any other machine with a
-working Rust toolchain.
+**Build + test verified (2026-04-19, post-rebrand):** Using
+`stable-x86_64-pc-windows-gnu` toolchain with mingw-w64 at
+`D:/mingw64/`, the renamed workspace compiles clean and the full test
+suite passes:
+
+- `cargo build --workspace` → zero errors, 10 warnings (pre-existing
+  unused-import / dead-code, not caused by the rebrand)
+- `cargo test --workspace --all-targets` → **201 tests passed, 0
+  failed** across all suites (unit, CLI smoke, dual-brain pair,
+  three-way brain, schema conformance, sensor behavior, ecosystem
+  contract)
+- `./target/debug/neurogrim.exe --version` → `neurogrim 0.1.0`
+- `./target/debug/neurogrim.exe --help` → all commands listed under
+  the new binary name
+
+Build-example ordering note: 3 ecosystem contract tests depend on
+`examples/stub_child_brain.exe` at a non-hashed path that `cargo test
+--all-targets` doesn't populate automatically. Running `cargo build
+--examples -p neurogrim-ecosystem` once before test runs is the
+known workaround — pre-existing behavior, not a rebrand artifact.
+
+Still pending for a real publish:
 
 ### Required commands (bottom-up, dependency order)
 
