@@ -140,6 +140,42 @@ fn validate_accepts_minimal_registry() {
 }
 
 #[test]
+fn validate_accepts_all_advisory_registry() {
+    // Registries where every domain is advisory (weight 0.0) are valid
+    // per spec principle #2 ("unknown is not good"). This is how the
+    // ecosystem, LSP-Brains, and python-starter registries are configured.
+    let tmp = TempDir::new().unwrap();
+    let claude_dir = tmp.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    let registry_path = claude_dir.join("brain-registry.json");
+    std::fs::write(
+        &registry_path,
+        r#"{
+          "meta": {"schema_version": "2",
+                   "description": "advisory-only fixture",
+                   "updated_by": "test"},
+          "config": {
+            "domain_weights": {"spec-quality": 0.0, "coherence": 0.0}
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let (code, stdout, stderr) = run(
+        &["validate", "-r", registry_path.to_str().unwrap()],
+        None,
+    );
+    assert_eq!(
+        code, 0,
+        "all-advisory registry should validate; stdout={stdout}; stderr={stderr}"
+    );
+    assert!(
+        stdout.contains("all-advisory") || stdout.contains("VALID"),
+        "stdout should mark the registry advisory or valid; got:\n{stdout}"
+    );
+}
+
+#[test]
 fn validate_rejects_malformed_json() {
     let tmp = TempDir::new().unwrap();
     let registry_path = tmp.path().join("bad.json");

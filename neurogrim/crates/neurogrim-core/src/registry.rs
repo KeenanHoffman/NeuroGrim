@@ -379,7 +379,8 @@ impl BrainRegistry {
             return Err(RegistryError::NoDomains);
         }
 
-        // Check weight sum (excluding advisory domains with weight 0.0)
+        // Weight sum of non-advisory domains. Advisory domains (weight 0.0)
+        // are intentional and do NOT contribute to the sum.
         let weight_sum: f64 = self
             .config
             .domain_weights
@@ -387,6 +388,16 @@ impl BrainRegistry {
             .filter(|(_, w)| **w > 0.0)
             .map(|(_, w)| w)
             .sum();
+
+        // All-advisory registry (every domain is weight 0.0) is valid.
+        // Spec principle #2 — "unknown is not good" — blesses this state
+        // for registries that exist to observe without yet committing to
+        // weighted scoring (ecosystem-level Brains, spec repos, starter
+        // templates). The `NoDomains` check above still rejects the
+        // degenerate "zero domains defined" case.
+        if weight_sum == 0.0 {
+            return Ok(());
+        }
 
         if (weight_sum - 1.0).abs() > 0.01 {
             return Err(RegistryError::WeightSumInvalid(weight_sum));
@@ -487,6 +498,62 @@ mod tests {
         }"#;
         let registry = BrainRegistry::from_json(json).unwrap();
         assert!(registry.validate().is_err());
+    }
+
+    #[test]
+    fn validate_all_advisory_registry_is_ok() {
+        // All domains advisory (weight 0.0). Valid per spec principle #2;
+        // this is how ecosystem-level and spec-scoring Brains look.
+        let json = r#"{
+            "meta": {"schema_version": "2", "description": "all-advisory",
+                     "updated_by": "test"},
+            "config": {
+                "domain_weights": {"a": 0.0, "b": 0.0, "c": 0.0}
+            }
+        }"#;
+        let registry = BrainRegistry::from_json(json).unwrap();
+        registry
+            .validate()
+            .expect("all-advisory registry should validate");
+    }
+
+    #[test]
+    fn validate_zero_domains_still_errors() {
+        // Degenerate case: zero domains defined. Must NOT be confused
+        // with all-advisory. Separate error variant.
+        let json = r#"{
+            "meta": {"schema_version": "2", "description": "empty",
+                     "updated_by": "test"},
+            "config": {
+                "domain_weights": {}
+            }
+        }"#;
+        let registry = BrainRegistry::from_json(json).unwrap();
+        match registry.validate() {
+            Err(RegistryError::NoDomains) => {}
+            other => panic!("expected NoDomains, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_partial_weight_still_errors() {
+        // Half-specified weights (sum 0.5 from weighted entries) is still
+        // invalid — the advisory carve-out only applies when sum == 0.0
+        // exactly.
+        let json = r#"{
+            "meta": {"schema_version": "2", "description": "partial",
+                     "updated_by": "test"},
+            "config": {
+                "domain_weights": {"a": 0.3, "b": 0.2, "c": 0.0}
+            }
+        }"#;
+        let registry = BrainRegistry::from_json(json).unwrap();
+        match registry.validate() {
+            Err(RegistryError::WeightSumInvalid(s)) => {
+                assert!((s - 0.5).abs() < 0.01, "expected sum ≈ 0.5, got {s}");
+            }
+            other => panic!("expected WeightSumInvalid, got {other:?}"),
+        }
     }
 
     #[test]

@@ -682,3 +682,130 @@ async fn dual_brain_envelope_validates_against_schema_at_every_hop() {
     drop(guard);
     drop(dir);
 }
+
+/// Build a project root with an **all-advisory** registry (every domain at
+/// weight 0.0). Same shape as [`build_minimal_project_root`] but with the
+/// specific posture that broke the operational multi-hop diagnostic before
+/// the validator carve-out landed.
+fn build_all_advisory_project_root() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("create tempdir for advisory project root");
+    let claude = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude).expect("create .claude/");
+
+    let registry_json = json!({
+        "meta": {
+            "schema_version": "2",
+            "description": "All-advisory registry — ecosystem / spec / starter shape",
+            "updated_by": "advisory-peer",
+            "project": "advisory-peer"
+        },
+        "tools": {},
+        "data_sources": {},
+        "config": {
+            "domain_weights": {
+                "code-quality":   0.0,
+                "test-health":    0.0,
+                "human-comms":    0.0
+            },
+            "advisory_domains": ["code-quality", "test-health", "human-comms"],
+            "principle_map": {
+                "code-quality": "Code Quality",
+                "test-health":  "Test Health",
+                "human-comms":  "Human Communication"
+            },
+            "domain_definitions": {
+                "code-quality": {"scoring_source": {"type": "cmdb", "path": ".claude/code-quality-cmdb.json"}},
+                "test-health":  {"scoring_source": {"type": "cmdb", "path": ".claude/test-health-cmdb.json"}},
+                "human-comms":  {"scoring_source": {"type": "cmdb", "path": ".claude/human-comms-cmdb.json"}}
+            }
+        }
+    });
+    std::fs::write(
+        claude.join("brain-registry.json"),
+        serde_json::to_string_pretty(&registry_json).unwrap(),
+    )
+    .expect("write all-advisory brain-registry.json");
+
+    dir
+}
+
+/// **Advisory-peer regression test.** A peer whose domains are all advisory
+/// (weight 0.0) must come up on `a2a-serve` and round-trip `snapshot.requested`
+/// like any other peer. Before the validator carve-out for sum==0.0,
+/// `a2a-serve` bailed at startup with "domain weights do not sum to 1.0".
+///
+/// This is the operational proof that the ecosystem/LSP-Brains/python-starter
+/// registries — all intentionally advisory per spec principle #2 — can
+/// actually participate in the A2A topology.
+#[tokio::test]
+async fn a2a_serve_starts_and_round_trips_on_all_advisory_registry() {
+    let dir = build_all_advisory_project_root();
+    let port = find_free_loopback_port();
+    let mut guard = spawn_peer_server(port, dir.path());
+
+    // 1. Server comes up — Agent Card endpoint reachable within deadline.
+    let authority = authority_root_for_port(port);
+    if let Err(reason) = wait_for_ready(&authority, 10).await {
+        let stderr = drain_stderr_nonblocking(guard.child.as_mut().expect("child alive"));
+        panic!("advisory peer did not become ready: {reason}\nstderr:\n{stderr}");
+    }
+
+    // 2. Agent Card validates and carries the project id.
+    let card_url = authority
+        .join("/.well-known/agent-card.json")
+        .expect("well-known URL");
+    let card: serde_json::Value = reqwest::Client::new()
+        .get(card_url)
+        .send()
+        .await
+        .expect("GET agent-card")
+        .error_for_status()
+        .expect("agent-card 200")
+        .json()
+        .await
+        .expect("agent-card json");
+
+    // Agent Card id is derived from meta.updated_by in the current impl;
+    // the fixture sets both updated_by and project to the same value so
+    // the assertion reads unambiguously regardless of which field drives
+    // the id today.
+    assert_eq!(
+        card["id"], "advisory-peer",
+        "Agent Card id must match the fixture's identity hint; got {card:?}"
+    );
+    assert_eq!(
+        card["interface_version"], "1",
+        "Agent Card interface_version must be 1; got {card:?}"
+    );
+
+    // 3. snapshot.requested round-trip succeeds.
+    use neurogrim_a2a::envelope::MessageType;
+    use neurogrim_a2a::{A2aEnvelope, TaskClient};
+
+    let endpoint = endpoint_for_port(port);
+    let client = TaskClient::new_http();
+    let request =
+        A2aEnvelope::new("advisory-test-caller", MessageType::SnapshotRequested, json!({}));
+    let response = client.invoke(&endpoint, request).await;
+
+    match response {
+        Ok(envelope) => {
+            assert_eq!(
+                envelope.schema_version, "1",
+                "response envelope must be schema_version 1"
+            );
+            assert_eq!(
+                envelope.message_type,
+                MessageType::SnapshotDelivered,
+                "advisory peer must still respond with snapshot.delivered"
+            );
+        }
+        Err(e) => {
+            let stderr = drain_stderr_nonblocking(guard.child.as_mut().expect("child alive"));
+            panic!("snapshot.requested failed against advisory peer: {e:?}\nstderr:\n{stderr}");
+        }
+    }
+
+    drop(guard);
+    drop(dir);
+}

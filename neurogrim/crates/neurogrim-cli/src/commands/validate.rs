@@ -12,7 +12,10 @@ pub async fn run(registry_path: &str) -> Result<()> {
         .values()
         .filter(|w| **w > 0.0)
         .sum();
-    let weight_ok = (weight_sum - 1.0).abs() <= 0.01;
+    // An all-advisory registry (every domain at weight 0.0) is valid
+    // per spec principle #2 and is flagged separately for clarity.
+    let advisory_only = weight_sum == 0.0;
+    let weight_ok = advisory_only || (weight_sum - 1.0).abs() <= 0.01;
 
     // Domain definitions check
     let mut missing_defs = Vec::new();
@@ -28,11 +31,14 @@ pub async fn run(registry_path: &str) -> Result<()> {
     println!("Registry Validation: {}", registry_path);
     println!("  Schema version: {}", registry.meta.schema_version);
     println!("  Domains: {}", registry.config.domain_weights.len());
-    println!(
-        "  Weight sum: {:.3} {}",
-        weight_sum,
-        if weight_ok { "(valid)" } else { "(INVALID)" }
-    );
+    let weight_label = if advisory_only {
+        "(all-advisory)"
+    } else if weight_ok {
+        "(valid)"
+    } else {
+        "(INVALID)"
+    };
+    println!("  Weight sum: {:.3} {}", weight_sum, weight_label);
     println!("  Scoring model: {:?}", model);
     println!("  Hats: {}", registry.config.hats.len());
     println!("  Correlations: {}", registry.config.correlations.len());
