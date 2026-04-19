@@ -87,7 +87,7 @@ pub struct BrainConfig {
     #[serde(default)]
     pub attention_budget: AttentionBudgetConfig,
     #[serde(default)]
-    pub personas: HashMap<String, serde_json::Value>,
+    pub human_personas: HashMap<String, serde_json::Value>,
     #[serde(default)]
     pub hats: HashMap<String, serde_json::Value>,
     #[serde(default)]

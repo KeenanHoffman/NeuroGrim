@@ -404,8 +404,8 @@ pub fn signals_to_domain_candidates(scan: &ScanResult) -> Vec<DomainCandidate> {
 // Registry generator
 // ---------------------------------------------------------------------------
 
-/// Default personas to include in the generated registry.
-fn default_personas() -> Value {
+/// Default human personas to include in the generated registry.
+fn default_human_personas() -> Value {
     json!({
         "executive": {
             "description": "C-suite and stakeholders — score + top risk only",
@@ -514,7 +514,7 @@ pub fn generate_registry(candidates: &[DomainCandidate], project_name: &str) -> 
             },
             "correlations": [],
             "incident_patterns": [],
-            "personas": default_personas(),
+            "human_personas": default_human_personas(),
             "hats": {},
             "sensory_servers": {
                 "_doc": "Add external MCP sensory servers here. Example: { \"command\": \"python\", \"args\": [\"-m\", \"my_tool\"], \"transport\": \"stdio\" }. See https://github.com/KeenanHoffman/LSP-Brains"

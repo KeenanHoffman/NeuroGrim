@@ -27,9 +27,9 @@ enum Commands {
         /// Active hat for domain emphasis
         #[arg(long)]
         hat: Option<String>,
-        /// Output persona (executive, manager, developer, specialist, product-manager)
+        /// Output human-persona (executive, manager, developer, specialist, product-manager)
         #[arg(long)]
-        persona: Option<String>,
+        human_persona: Option<String>,
     },
 
     /// Produce full agent-mode JSON output
@@ -40,7 +40,7 @@ enum Commands {
         #[arg(long)]
         hat: Option<String>,
         #[arg(long)]
-        persona: Option<String>,
+        human_persona: Option<String>,
     },
 
     /// Display human-readable health dashboard
@@ -52,7 +52,7 @@ enum Commands {
         #[arg(long)]
         hat: Option<String>,
         #[arg(long)]
-        persona: Option<String>,
+        human_persona: Option<String>,
     },
 
     /// Show trajectory analysis (velocity, acceleration, classification)
@@ -166,19 +166,19 @@ async fn main() -> Result<()> {
             registry,
             plain,
             hat,
-            persona,
-        } => commands::score::run(&registry, plain, hat, persona).await,
+            human_persona,
+        } => commands::score::run(&registry, plain, hat, human_persona).await,
         Commands::Agent {
             registry,
             hat,
-            persona,
-        } => commands::agent::run(&registry, hat, persona).await,
+            human_persona,
+        } => commands::agent::run(&registry, hat, human_persona).await,
         Commands::Health {
             registry,
             plain,
             hat,
-            persona,
-        } => commands::health::run(&registry, hat, persona, plain).await,
+            human_persona,
+        } => commands::health::run(&registry, hat, human_persona, plain).await,
         Commands::Trend { registry, plain } => commands::trend::run(&registry, plain).await,
         Commands::Validate { registry } => commands::validate::run(&registry).await,
         Commands::Serve { registry } => commands::serve::run(&registry).await,

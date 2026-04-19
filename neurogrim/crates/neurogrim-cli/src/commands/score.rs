@@ -6,12 +6,12 @@ pub async fn run(
     registry_path: &str,
     plain: bool,
     hat: Option<String>,
-    persona: Option<String>,
+    human_persona: Option<String>,
 ) -> Result<()> {
-    let ctx = BrainContext::load(registry_path, hat, persona).await?;
+    let ctx = BrainContext::load(registry_path, hat, human_persona).await?;
 
-    if let Some(ref p) = ctx.agent_output.current_persona {
-        crate::output::persona::display_persona(&ctx.agent_output, p, plain);
+    if let Some(ref p) = ctx.agent_output.current_human_persona {
+        crate::output::human_persona::display_human_persona(&ctx.agent_output, p, plain);
     } else {
         display::display_score(&ctx.agent_output, plain);
     }

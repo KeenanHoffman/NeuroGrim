@@ -71,7 +71,7 @@ Skills corresponding to Rust Brain sensor domains:
 | Task | Skill |
 |------|-------|
 | Authoring guide for new skills | `write-skill.md` |
-| Agent persona system (adversary, architect, etc.) | `personas.md` |
+| Agent hat system (adversary, architect, etc.) | `hats.md` |
 | Pilot↔subagent interface protocol | `pilot-protocol.md` |
 | Coordinate subagents / parallel workflows | `subagent-patterns.md` |
 | Dual-agent T+P review protocol | `dual-review.md` |

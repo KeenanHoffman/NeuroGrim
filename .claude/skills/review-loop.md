@@ -42,10 +42,10 @@ The loop is not a replacement for dual-review — it's the iteration harness tha
 4. Decides whether to iterate based on the Code Reviewer's verdict
 5. Loops back to step 1 if NEEDS-WORK, or exits if APPROVED or ESCALATE
 
-**Persona isolation:** The pilot agent's current persona does not transfer to T, P, or the
-Code Reviewer. Each reviewer runs without inherited persona unless explicitly briefed. The
+**Hat isolation:** The pilot agent's current hat does not transfer to T, P, or the
+Code Reviewer. Each reviewer runs without an inherited hat unless explicitly briefed. The
 loop orchestrator remains in whatever mode it was in before the loop started — the loop
-itself is not persona-bearing.
+itself is not hat-bearing.
 
 ---
 
@@ -167,6 +167,6 @@ produces consistent quality outcomes rather than relying on reviewer memory and 
 ## See Also
 
 - `dual-review.md` — the T+P protocol this loop wraps; T1–T5 and P1–P4 question definitions
-- `personas.md` — persona system; persona isolation during loop orchestration
+- `hats.md` — hat system; hat isolation during loop orchestration
 - `plan-critic.md` — adversarial plan review (complement to the review loop)
 - `subagent-patterns.md` — Pattern 3 (Sequential Hand-Off) for spawning T and P as agents

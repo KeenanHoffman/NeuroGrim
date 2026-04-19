@@ -1,3 +1,3 @@
 pub mod display;
 pub mod json;
-pub mod persona;
+pub mod human_persona;

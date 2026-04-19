@@ -36,7 +36,7 @@ the shape of the `data` field, and what Brain component the output typically fee
 | `analysis` | `engineer` or `reviewer` | Reason over data → findings | recommendations |
 | `investigation` | `engineer` | Root cause research → evidence trail | incident-ledger |
 | `remediation` | `engineer` | Prepare or execute fixes | proposal-ledger |
-| `synthesis` | persona-aligned | Aggregate subagent outputs → unified view | agent output |
+| `synthesis` | hat-aligned | Aggregate subagent outputs → unified view | agent output |
 | `validation` | `reviewer` | Check conformance/correctness → pass/fail | gate state |
 
 The type is declared in the skill manifest's `responsibility` field. The pilot reads
@@ -61,7 +61,7 @@ The pilot constructs this before spawning the subagent:
   },
   "context": {
     "project_root": "<absolute path>",
-    "persona": "<pilot's current persona, or null>",
+    "hat": "<pilot's current hat, or null>",
     "brain_snapshot": null
   }
 }
@@ -245,7 +245,7 @@ Required: `actions_taken`, `blocked_by`, `verification_command`.
 
 ### Type: `synthesis`
 
-Role: receive multiple subagent outputs, produce a unified narrative. Hat is persona-aligned.
+Role: receive multiple subagent outputs, produce a unified narrative under the pilot's hat.
 
 ```json
 "data": {
@@ -256,11 +256,11 @@ Role: receive multiple subagent outputs, produce a unified narrative. Hat is per
     { "rank": 1, "action": "<action>", "impact": "high | medium | low" }
   ],
   "inputs_consumed": ["<capability name>"],
-  "hat_persona": "<hat or persona name>"
+  "hat": "<hat name>"
 }
 ```
 
-Required: `unified_score`, `narrative`, `priorities`, `inputs_consumed`, `hat_persona`.
+Required: `unified_score`, `narrative`, `priorities`, `inputs_consumed`, `hat`.
 
 ---
 
@@ -518,5 +518,4 @@ chain at convergence: `worn_hat != required_hat` triggers a retry.
 
 - `subagent-patterns.md` — coordination patterns (fan-out, convergence, hand-off)
 - `archived/lsp-subagent-queries.md` — investigation-type subagent for LSP symbol queries
-- `archived/hats.md` — hat system and available hats
-- `personas.md` — persona definitions for synthesis-type hat selection
+- `hats.md` — hat system, hat catalog, and synthesis-type hat selection

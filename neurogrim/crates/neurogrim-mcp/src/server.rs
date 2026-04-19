@@ -95,7 +95,7 @@ impl BrainServer {
             .unwrap_or_default()
     }
 
-    async fn run_scoring(&self, hat: Option<String>, persona: Option<String>) -> AgentOutput {
+    async fn run_scoring(&self, hat: Option<String>, human_persona: Option<String>) -> AgentOutput {
         let now = Utc::now();
         let cmdb_data = self.load_cmdb_from_disk().await;
         let history = self.load_score_history().await;
@@ -191,7 +191,7 @@ impl BrainServer {
             dom_trajs,
             None,
             hat,
-            persona,
+            human_persona,
         )
     }
 }
@@ -231,8 +231,8 @@ pub struct SubagentOutcomeParams {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct HealthParams {
-    /// Output persona (executive, manager, developer, specialist, product-manager)
-    pub persona: Option<String>,
+    /// Output human-persona (executive, manager, developer, specialist, product-manager)
+    pub human_persona: Option<String>,
     /// Hat name for domain emphasis
     pub hat: Option<String>,
 }
@@ -251,7 +251,7 @@ impl BrainServer {
         description = "Get the unified health score with domain breakdown, trajectory, and cross-domain analysis. Returns full agent-mode JSON."
     )]
     async fn get_health_score(&self, Parameters(p): Parameters<HealthParams>) -> String {
-        let output = self.run_scoring(p.hat, p.persona).await;
+        let output = self.run_scoring(p.hat, p.human_persona).await;
         serde_json::to_string_pretty(&output)
             .unwrap_or_else(|e| format!("{{\"error\": \"{}\"}}", e))
     }

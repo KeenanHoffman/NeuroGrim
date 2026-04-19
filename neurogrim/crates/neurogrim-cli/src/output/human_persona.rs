@@ -1,24 +1,28 @@
-//! Persona-based output filtering.
+//! Human-persona-based output filtering.
 //!
-//! 5 personas control output verbosity:
+//! 5 human personas control output verbosity for different human readers:
 //! - executive: score + trajectory + top risk (5 lines max)
 //! - manager: domain breakdown + trends + blockers
 //! - developer: full detail (default)
 //! - specialist: single-domain deep dive
 //! - product-manager: delivery risk + blockers
+//!
+//! Distinct from agent **hats**, which shape the agent's attentional bias
+//! (what it emphasizes when scoring). Human personas shape what the
+//! human reader sees; hats shape how the Brain itself scores.
 
 use neurogrim_core::agent_output::AgentOutput;
 
-/// Display output filtered by persona.
-pub fn display_persona(output: &AgentOutput, persona: &str, plain: bool) {
-    match persona {
+/// Display output filtered by human persona.
+pub fn display_human_persona(output: &AgentOutput, human_persona: &str, plain: bool) {
+    match human_persona {
         "executive" => display_executive(output, plain),
         "manager" => display_manager(output, plain),
         "developer" => super::display::display_health(output, plain),
         "specialist" => display_specialist(output, plain),
         "product-manager" => display_pm(output, plain),
         _ => {
-            eprintln!("Unknown persona: {}. Using developer.", persona);
+            eprintln!("Unknown human persona: {}. Using developer.", human_persona);
             super::display::display_health(output, plain);
         }
     }

@@ -595,7 +595,7 @@ mod tests {
             autonomy: serde_json::Value::Null,
             trajectory: Default::default(),
             attention_budget: Default::default(),
-            personas: HashMap::new(),
+            human_personas: HashMap::new(),
             hats: HashMap::new(),
             correlations: vec![],
             incident_patterns: vec![],

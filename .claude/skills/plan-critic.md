@@ -17,15 +17,15 @@ Methodology-step: skills
 
 ---
 
-## Persona
+## Hat
 
-This skill invokes the `adversary` persona. Declare it at the start:
+This skill invokes the `adversary` hat. Declare it at the start:
 
 ```
-> Persona: adversary — reviewing [plan name] before implementation.
+> Wear Hat: adversary — reviewing [plan name] before implementation.
 ```
 
-See `personas.md` for the full persona system, subagent briefing format, and adversary checklist.
+See `hats.md` for the full hat system, subagent briefing format, and adversary checklist.
 
 ---
 
@@ -78,7 +78,7 @@ regardless of file type — invoke the full adversary.
 **The rule:** Use the full protocol when either question points to broad impact or high novelty.
 When both are narrow, a light scan (pilot agent inline, no subagents) is sufficient.
 
-**Grounding example:** The personas + plan-critic work was all `.md` files — no code, no
+**Grounding example:** The hats + plan-critic work was all `.md` files — no code, no
 schemas — yet it clearly warranted full adversary: it established new patterns that every
 future planning session would follow (broad impact) and introduced abstractions that didn't
 exist in the skill system (high novelty). A single-line syntax fix with a known safe pattern
@@ -86,7 +86,7 @@ is narrow on both axes — light scan.
 
 ### Light mode (narrow + low novelty)
 
-Run the DevOps checklist from `personas.md` inline without spawning subagents. Write a
+Run the DevOps checklist from `hats.md` inline without spawning subagents. Write a
 short paragraph noting any concerns. No structured output template required.
 
 ---
@@ -105,17 +105,17 @@ Read the plan file in `.claude/plans/` (or wherever the user points you). Note:
 
 The pilot agent is the orchestrator. It spawns Explore subagents for specific verifiable
 concerns, receives their reports, and synthesizes findings. Subagents do not inherit the
-`adversary` persona — they run without persona context but receive an explicit briefing:
+`adversary` hat — they run without hat context but receive an explicit briefing:
 
 ```
-[Persona: adversary] The pilot agent is acting as an adversarial plan reviewer.
+Hat: adversary — adversarial plan reviewer; skeptical, surface edge cases
 Research: {specific concern}
 Framing: {what the pilot agent is deciding}
 Calibration: lean toward surfacing edge cases — false negatives are worse than false positives.
 ```
 
 Spawn only the subagents relevant to what the plan actually contains. Use the adversary
-checklist from `personas.md` to decide which categories apply.
+checklist from `hats.md` to decide which categories apply.
 
 **Research targets by category:**
 
@@ -143,7 +143,7 @@ Spawn this subagent when the plan **renames or removes** any of the following:
 **Subagent briefing template:**
 
 ```
-[Persona: adversary] Symbol Impact Audit
+Hat: adversary — Symbol Impact Audit
 Research: find ALL callers/references of '{symbol}' in the codebase before it is renamed/removed.
 Symbol type: {rust function | schema field | skill | cli subcommand | sensor domain}
 Tool: `grep -rn <symbol>` across source; `cargo check` after edits to surface hard refs.
@@ -180,7 +180,7 @@ schema, test surface, and conventions, and cross-domain interaction effects are 
 **Domain subagent template:**
 
 ```
-[Persona: adversary] Domain review: {domain name}
+Hat: adversary — Domain review: {domain name}
 Scope: only the {domain-specific changes} in this plan
 Research: what could fail specifically within this domain's conventions, schema, or test surface?
 Calibration: lean toward edge cases — do NOT review cross-domain interactions (pilot agent's job).
@@ -219,7 +219,7 @@ Use this output template:
 
 ```
 ## Plan Critic Review — [plan name]
-**Persona: adversary**
+**Hat: adversary**
 
 ### Strengths
 🟢 [Specific thing done well]
@@ -251,7 +251,7 @@ offer to update the plan file directly.
 After presenting the review:
 
 ```
-> Persona: default — adversary review complete.
+> Remove Hat: adversary — review complete.
 ```
 
 ---
@@ -271,7 +271,7 @@ as `let x = match get()? { Some(x) => x, None => return Err(...) };`.
 
 Plans that look sound on paper routinely break in production due to environmental
 differences, implicit ordering assumptions, and missing rollback paths. Writing a plan is
-cheap; undoing a half-applied infrastructure change is expensive. The adversary persona
+cheap; undoing a half-applied infrastructure change is expensive. The adversary hat
 exists because the author of a plan is the least likely person to spot their own blind spots
 — they already believe the plan is correct. A structured adversarial pass, with targeted
 subagent research on verifiable concerns, surfaces the class of problems that optimistic
@@ -283,7 +283,7 @@ it validates.
 
 ## See Also
 
-- `personas.md` — full persona system, subagent briefing format, adversary checklist
+- `hats.md` — full hat system, subagent briefing format, adversary checklist
 - `review-loop.md` — iterative T+P+Code Reviewer loop for when plans involve skill or code authoring
 - `dual-review.md` — T+P review protocol for skill/infrastructure quality review
 - `weigh-time-risk.md` — risk/time tradeoff before deploy decisions

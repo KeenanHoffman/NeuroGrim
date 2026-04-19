@@ -143,7 +143,7 @@ This framing is not decorative. It guides design decisions. A biological nervous
 │  (0-100)          (attention-budget  (pass/fail)    (velocity + │
 │                    limited)          (per gate)      class)     │
 │                                                                 │
-│  Persona-adapted output: executive / manager / developer / PM  │
+│  Human-persona-adapted output: executive / manager / developer / PM │
 └─────────────────────────────────────────────────────────────────┘
           │                                    │
           ▼                                    ▼
@@ -249,7 +249,7 @@ The Brain produces structured output in a versioned JSON schema. The output incl
 - **Active hat** — which attentional lens shaped the recommendations
 - **Floor applications** — which domains are capping the unified score and why
 
-This output is consumed by Claude Code sessions, parent Brain instances, hooks, or persona-formatted for human stakeholders.
+This output is consumed by Claude Code sessions, parent Brain instances, hooks, or human-persona-formatted for human stakeholders.
 
 ---
 
@@ -359,7 +359,7 @@ A high coherence score means the domains are moving together in a healthy direct
 
 ### The Human Model Domain
 
-The `human-comms` domain implements a persistent model of how a specific human wants to interact with agents. This is distinct from user personas (Section output formatting) — it captures the actual observed preferences of the individual.
+The `human-comms` domain implements a persistent model of how a specific human wants to interact with agents. This is distinct from human personas (Section output formatting) — it captures the actual observed preferences of the individual.
 
 The human model tracks:
 - Preferred output verbosity (terse / standard / detailed)
@@ -485,15 +485,15 @@ Five standard hats ship with NeuroGrim:
 | **security** | Security standards, secret refs, audit CVEs | Security review or incident |
 | **visionary** | Coherence, trajectory, ecosystem health | Architecture or planning sessions |
 
-Hats are declared in `brain-registry.json`. They are not personas — the agent does not pretend to be someone else. A hat is "reading the room" made mechanical: the current task context shapes which signals get attention first.
+Hats are declared in `brain-registry.json`. A hat is the agent's operational lens — it shapes both what signals get attention first (the "reading the room" part) and the mindset the agent brings to the task. "Adversary" and "architect" are hats, not alter egos.
 
 When the Brain produces output under a hat, the active hat is included in the output schema. Every consumer — human, subagent, parent Brain — knows which attentional bias shaped the recommendations.
 
-### Human User Personas
+### Human Personas
 
-Separate from hats (which are agent attentional lenses), personas adapt output format for human stakeholders:
+Separate from hats (which are the *agent's* operational lens), **human personas** adapt output format for different human readers:
 
-| Persona | Receives | Format |
+| Human Persona | Receives | Format |
 |---------|----------|--------|
 | **Executive** | Score + trajectory + top risk | One number, one direction, one action |
 | **Engineering Manager** | Domain breakdown, gate status, team velocity | Dashboard summary with trends |
@@ -730,7 +730,7 @@ The proposal ledger records what the Brain recommended and what the outcomes wer
 
 ### For an Engineering Manager
 
-The Brain produces manager-persona output: domain trends, gate health, team velocity. You can see which projects are improving, which are degrading, which have active floor constraints. You get signal, not noise — the attention budget ensures the most important items surface.
+The Brain produces manager human-persona output: domain trends, gate health, team velocity. You can see which projects are improving, which are degrading, which have active floor constraints. You get signal, not noise — the attention budget ensures the most important items surface.
 
 Trajectory intelligence means you can catch a project in early decline before it becomes a crisis. A score of 72 is fine. A score of 72 degrading at -4 per day for a week is not.
 
@@ -765,7 +765,7 @@ Those three questions — health, priority, focus — are what LSP Brains is bui
 | **Hat** | An attentional lens that biases the Brain's recommendation priority toward a specific task context |
 | **LSP Brains** | The language-agnostic specification for building agent nervous systems |
 | **NeuroGrim** | The reference implementation of LSP Brains, written in Rust |
-| **Persona** | An output formatting profile that adapts Brain output for a specific human stakeholder type |
+| **Human Persona** | An output formatting profile that adapts Brain output for a specific human stakeholder type. Distinct from a **Hat**, which is the agent's operational lens. |
 | **Proposal ledger** | A persistent record of Brain recommendations and their outcomes; the learning substrate |
 | **Sensory tool** | A process that detects state in one domain and writes a CMDB JSON file |
 | **Trajectory** | Velocity, acceleration, and classification computed from score history |
@@ -834,6 +834,6 @@ This schema is stable across Brain versions within a major version number. Consu
 - `roadmap/VISION.md` — seventeen guiding principles (1–17) and the north star
 - `roadmap/ROADMAP.md` — stage progression and current implementation status
 - `.claude/skills/brain.md` — operational Brain usage guide
-- `.claude/skills/hats.md` — hat system documentation and hat-persona pairing
+- `.claude/skills/hats.md` — hat system documentation; pairs with human personas for output shaping
 - `.claude/skills/gate-system-overview.md` — gate state machine architecture
 - `domains/laas/` — archived first-customer domain implementation (read-only reference)

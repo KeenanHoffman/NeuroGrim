@@ -152,7 +152,7 @@ of potential domains you can build.
 - **Secret-Refs** — safe catalog of credential locations; agents generate access code without seeing values
 - **Gates** — checkpoints that block commit, merge, or deploy until conditions are met
 - **Hats** — operational lenses that amplify different domains (engineer, reviewer, operator, security)
-- **Personas** — adapted output for different stakeholders (executive, manager, developer, specialist, PM)
+- **Human personas** — adapted output for different human readers (executive, manager, developer, specialist, PM). Distinct from agent *hats*, which shape what the Brain itself emphasizes.
 - **Attention Budget** — limits displayed recommendations to prevent overload
 
 ## Python SDK

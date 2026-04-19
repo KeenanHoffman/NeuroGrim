@@ -1,39 +1,49 @@
-# Agent Personas
+# Agent Hats
 
-Use this skill when an agent needs to adopt a named operational mode for a specific task —
-or when you want to understand why an agent is communicating in a particular way. Personas
-make the pilot agent's mindset explicit and predictable, especially when subagents need to
-calibrate the depth and framing of their reports.
+Use this skill when an agent needs to adopt a named operational lens for a specific task —
+or when you want to understand why an agent is communicating in a particular way. A hat
+makes the pilot agent's mindset and attentional bias explicit and predictable, especially
+when subagents need to calibrate the depth and framing of their reports.
 
 Role: meta
 
-Trigger phrases: "persona", "adopt a role", "switch modes", "adversary mode", "architect mode",
+Trigger phrases: "hat", "wear hat", "persona", "adopt a role", "switch modes", "adversary mode",
+"architect mode", "incident commander", "rubber duck", "security auditor", "what hat", "what persona",
+"agent role"
 Methodology-step: skills
-"incident commander", "rubber duck", "security auditor", "lsp reader", "what persona", "agent role"
+
+> **About the name.** This concept was historically called "persona" in earlier drafts.
+> The spec-normative name is **hat** (agents *wear* hats, not *adopt* personas), and this
+> skill now uses that vocabulary throughout. Trigger phrases still include "persona" so
+> old muscle memory still invokes the skill.
 
 ---
 
-## What a Persona Is
+## What a Hat Is
 
-A persona is a declared operational mode the pilot agent announces at the start of a task.
+A hat is a declared operational lens the pilot agent announces at the start of a task.
 It sets three things:
 
 - **Mindset** — how to approach the problem (skeptical, generative, calm under pressure, etc.)
 - **Tone** — how to communicate with the user and subagents
-- **Subagent briefing** — what context subagents receive when spawned under this persona
+- **Subagent briefing** — what context subagents receive when spawned under this hat
 
-Personas are **scoped to a single task.** The pilot agent returns to default mode when the
-task completes. They are not permanent character changes — they are deliberate lenses applied
-to specific work.
+Hats are **scoped to a single task.** The pilot agent returns to default mode when the
+task completes. They are not permanent character changes — they are deliberate lenses
+applied to specific work.
 
-Personas are invoked by skills (e.g., `plan-critic.md` invokes `adversary`) or explicitly
-by the user ("act as incident commander").
+Hats are invoked by skills (e.g., `plan-critic.md` invokes `adversary`) or explicitly
+by the user ("wear the incident-commander hat").
+
+Not to be confused with **human personas**, which shape OUTPUT format for different human
+readers (executive, manager, developer, specialist, product-manager). Hats shape the
+*agent's* attentional bias; human personas shape what the *reader* sees.
 
 ---
 
-## Persona Catalog
+## Hat Catalog
 
-| Persona | When to invoke | Mindset | Wired in |
+| Hat | When to invoke | Mindset | Wired in |
 |---------|---------------|---------|---------|
 | `adversary` | Plan review, pre-implementation critique | Skeptical — find what can go wrong; praise genuine strengths | `plan-critic.md`, `fix-apply-failure.md` |
 | `architect` | System design, scoping a new feature or service | Generative — explore tradeoffs, propose structure, think in layers | `add-new-app.md`, `git-strategy.md` |
@@ -43,14 +53,14 @@ by the user ("act as incident commander").
 | `visionary` | Pre-plan ideation, exploring approaches before committing | Divergent and curious — surface options, name tradeoffs, defer specifics | `imagination-mode.md` |
 | `source-reader` | Bulk read-only queries — subagent role only | Read-only executor: runs assigned query commands (e.g., `neurogrim sensory <name>`), returns structured JSON; never edits, commits, or applies | `subagent-patterns.md` Pattern 5 |
 
-> `source-reader` is a subagent-only persona. It is never adopted by the pilot agent directly —
+> `source-reader` is a subagent-only hat. It is never worn by the pilot agent directly —
 > only assigned via a prompt template in the parent's briefing (see `subagent-patterns.md`).
 
 ---
 
-## Per-Persona Operational Checklists
+## Per-Hat Operational Checklists
 
-When in a persona, these are the specific things each one looks for. Use these as a mental
+When wearing a hat, these are the specific things each one looks for. Use these as a mental
 checklist when synthesizing subagent findings or scanning a plan directly.
 
 ### `adversary`
@@ -124,23 +134,22 @@ checklist when synthesizing subagent findings or scanning a plan directly.
 
 ### Fill-in-the-blank template
 
-When spawning a subagent while in a persona, use this template:
+When spawning a subagent while wearing a hat, use this template:
 
 ```
-[Persona: {name}] The pilot agent is acting as {one-line description}.
-Hat: {hat name or "none"} — {hat description if active, or "default domain emphasis"}
+Hat: {name} — {one-line description of the lens; includes mindset + attentional bias}
 Research: {specific concern to investigate}
 Framing: {what the pilot agent is deciding based on this research}
 Calibration: {what kind of finding matters most — errors, options, edge cases, etc.}
 ```
 
-For the structured JSON output pattern with `persona_context`, see `subagent-patterns.md`
-Pattern 4 — it documents the extended result schema and per-persona calibration blocks
+For the structured JSON output pattern with `hat_context`, see `subagent-patterns.md`
+Pattern 4 — it documents the extended result schema and per-hat calibration blocks
 as copy-paste-ready prompts.
 
-### Calibration notes by persona
+### Calibration notes by hat
 
-The calibration line is what distinguishes one persona's subagents from another's:
+The calibration line is what distinguishes one hat's subagents from another's:
 
 - **`adversary`**: "lean toward surfacing edge cases — false negatives are worse than false positives"
 - **`architect`**: "surface options and tradeoffs, not just the first workable approach"
@@ -148,23 +157,21 @@ The calibration line is what distinguishes one persona's subagents from another'
 - **`rubber-duck`**: "flag any step that assumes prior knowledge the reader might not have"
 - **`security-auditor`**: "flag anything that could be narrowed — assume the reviewer wants to minimize access"
 - **`visionary`**: "stay generalized — no specific filenames, commands, or code; name the tradeoff then stop"
-- **`lsp-reader`**: "return raw tool output verbatim — do not interpret, summarize, or editorialize; preserve exact output format for parent synthesis"
+- **`source-reader`**: "return raw tool output verbatim — do not interpret, summarize, or editorialize; preserve exact output format for parent synthesis"
 
 ### Examples
 
-`adversary` subagent (with architect hat):
+`adversary` subagent:
 ```
-[Persona: adversary] The pilot agent is acting as an adversarial plan reviewer.
-Hat: architect — structural health focus (EaC x2.0, defense-in-depth x1.5)
+Hat: adversary — adversarial plan reviewer; skeptical, surfacing edge cases
 Research: whether the new script has PS 5.1 compatibility issues.
 Framing: whether this plan can proceed to implementation or needs revision.
 Calibration: lean toward surfacing edge cases — false negatives are worse than false positives.
 ```
 
-`incident-commander` subagent (with operator hat):
+`incident-commander` subagent:
 ```
-[Persona: incident-commander] The pilot agent is coordinating incident response.
-Hat: operator — deploy readiness focus (gates x2.0, artifacts x1.5)
+Hat: incident-commander — coordinating incident response; calm, decisive, stabilize first
 Research: the last 50 Cloud Run log lines for the affected service.
 Framing: whether to roll back immediately or attempt a hot fix.
 Calibration: prioritize speed — identify the most recent failure signature and stop.
@@ -172,21 +179,21 @@ Calibration: prioritize speed — identify the most recent failure signature and
 
 ---
 
-## Per-Persona Communication Contract
+## Per-Hat Communication Contract
 
-Every persona communicates with the same rule: **distill for the consumer** (see
-`subagent-patterns.md` Pattern 6). The persona shapes *what* to distill, not *how much*
+Every hat communicates with the same rule: **distill for the consumer** (see
+`subagent-patterns.md` Pattern 6). The hat shapes *what* to distill, not *how much*
 to say — the answer is always "as little as possible."
 
-| Persona | Recommended Hat | Human-facing distillation | Link priority |
-|---------|----------------|--------------------------|---------------|
-| `adversary` | `architect` | Risk count + severity. "3 blocking, 1 concern." Link to plan file. | Plan file path |
-| `architect` | `architect` | Decision points only. "2 approaches, tradeoff is X vs Y." | Relevant file paths |
-| `incident-commander` | `operator` | Blast radius + action taken. "2/4 services down, rolled back chat." | Cloud Run logs link, PR if hotfix |
-| `rubber-duck` | (none) | Concept explained + verification question. "Does this match your mental model?" | Doc/skill links for further reading |
-| `security-auditor` | `security` | Binding count + highest risk. "4 unreviewed, 1 existential." | Access topology path |
-| `visionary` | (none) | Options named. "3 approaches explored, recommend A." | Plan or imagination output |
-| `lsp-reader` | (none) | N/A (subagent-only, returns JSON to parent) | N/A |
+| Hat | Human-facing distillation | Link priority |
+|---------|--------------------------|---------------|
+| `adversary` | Risk count + severity. "3 blocking, 1 concern." Link to plan file. | Plan file path |
+| `architect` | Decision points only. "2 approaches, tradeoff is X vs Y." | Relevant file paths |
+| `incident-commander` | Blast radius + action taken. "2/4 services down, rolled back chat." | Cloud Run logs link, PR if hotfix |
+| `rubber-duck` | Concept explained + verification question. "Does this match your mental model?" | Doc/skill links for further reading |
+| `security-auditor` | Binding count + highest risk. "4 unreviewed, 1 existential." | Access topology path |
+| `visionary` | Options named. "3 approaches explored, recommend A." | Plan or imagination output |
+| `source-reader` | N/A (subagent-only, returns JSON to parent) | N/A |
 
 The human should be able to scan the output in under 10 seconds and either approve,
 redirect, or follow a link for depth. If the message requires more than 10 seconds
@@ -194,31 +201,31 @@ to parse, it's too long.
 
 ---
 
-## How to Declare a Persona
+## How to Declare a Hat
 
-**At the start of a persona-based task:**
+**At the start of a hat-based task:**
 ```
-> Persona: [name] — [one-line description of what this task is]
+Wear Hat: [name] — [one-line description of what this task is]
 ```
-Example: `> Persona: adversary — reviewing the gateway routing plan before implementation.`
+Example: `Wear Hat: adversary — reviewing the gateway routing plan before implementation.`
 
 **At the end:**
 ```
-> Persona: default — [name] review complete.
+Remove Hat: [name] — review complete, returning to default.
 ```
-Example: `> Persona: default — adversary review complete.`
+Example: `Remove Hat: adversary — review complete, returning to default.`
 
-This makes the context switch visible to the user and prevents persona bleed into unrelated
+This makes the context switch visible to the user and prevents hat bleed into unrelated
 follow-up tasks.
 
 ---
 
 ## Why This Matters
 
-A persona is a forcing function for consistency. Without one, the pilot agent's approach to
+A hat is a forcing function for consistency. Without one, the pilot agent's approach to
 a task shifts based on phrasing, session history, and recency bias — a plan reviewed in the
 morning gets a different scrutiny level than one reviewed after a long debugging session.
-Declaring a persona makes the mindset explicit and reproducible: the user knows what lens is
+Declaring a hat makes the mindset explicit and reproducible: the user knows what lens is
 being applied, subagents know what to optimize their reports for, and the session transcript
 shows the context switch clearly. This is **Observability Before Action** from
 `archived/devops-philosophy.md` applied to the agent layer itself.
@@ -227,8 +234,8 @@ shows the context switch clearly. This is **Observability Before Action** from
 
 ## See Also
 
-- `plan-critic.md` — first concrete use of `adversary` persona; plan review protocol
+- `plan-critic.md` — first concrete use of the `adversary` hat; plan review protocol
 - `review-loop.md` — iterative 3-agent review workflow using T+P reviewers and a synthesizing Code Reviewer
 - `dual-review.md` — T+P review protocol (complementary technique for skill/infrastructure review)
 - `subagent-patterns.md` — patterns for coordinating subagents in complex workflows
-- `incident-response.md` — full incident playbook (pairs naturally with `incident-commander` persona)
+- `incident-response.md` — full incident playbook (pairs naturally with `incident-commander` hat)

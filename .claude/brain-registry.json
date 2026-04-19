@@ -157,7 +157,7 @@
       }
     ],
     "incident_patterns": [],
-    "personas": {
+    "human_personas": {
       "executive": {
         "description": "C-suite and stakeholders — score + top risk only",
         "output_level": "brief",

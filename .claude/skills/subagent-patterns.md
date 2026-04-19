@@ -214,30 +214,32 @@ cognitive bias toward resolving conflicts mentally before surfacing them.
 
 ---
 
-## Pattern 4 — Persona-Calibrated Briefing
+## Pattern 4 — Hat-Calibrated Briefing
 
-The pilot agent's current persona shapes the subagent's briefing: priority order, output
-depth, and format. This is NOT persona inheritance — subagents don't become the persona.
+The pilot agent's current hat shapes the subagent's briefing: priority order, output
+depth, and format. This is NOT hat inheritance — subagents don't become the hat-wearer.
 It's explicit calibration embedded in the subagent's prompt.
 
 ```
-  Parent (in persona X)
+  Parent (wearing hat X)
    ├── Agent A: concern-1, briefed with X's calibration block ──┐
    ├── Agent B: concern-2, briefed with X's calibration block ──┼── simultaneous
    └── Agent C: concern-3, briefed with X's calibration block ──┘
-         ↓ (converge: results already shaped for persona X's decision model)
-   Parent synthesizes in persona X's voice
+         ↓ (converge: results already shaped for hat X's decision model)
+   Parent synthesizes under hat X's lens
 ```
 
-**When to use:** The parent agent has declared a persona AND is spawning a research or
+**When to use:** The parent agent is wearing a hat AND is spawning a research or
 diagnostic subagent. Without this pattern, all subagent results arrive with generic depth
 and format — the parent must re-interpret before synthesizing. With calibration, subagents
 return pre-shaped output the parent can directly incorporate.
 
-**Key rule:** Never assume the subagent infers persona from context. Always paste the
+**Key rule:** Never assume the subagent infers the hat from context. Always paste the
 calibration block explicitly into the prompt.
 
-**Extended result schema:** Add `persona_context` and `hat_context` to the standard JSON:
+**Extended result schema:** A hat influences both *output format* (how findings are shaped)
+and *domain priority* (which domains are emphasized). Both aspects are captured in the
+standard JSON:
 ```json
 {
   "passed": true | false,
@@ -245,22 +247,23 @@ calibration block explicitly into the prompt.
   "finding": "<one sentence>",
   "detail": "<expansion if needed>",
   "severity": "blocking | concern | suggestion | strength",
-  "persona_context": "<persona name>: <one phrase describing how output was calibrated>",
-  "hat_context": "<hat name or 'none'>: <domain priority applied>"
+  "hat_output_context": "<hat name>: <one phrase describing how output was calibrated>",
+  "hat_domain_context": "<hat name or 'none'>: <domain priority applied>"
 }
 ```
 
-`hat_context` captures which domain emphasis shaped the subagent's output. If the parent
-is wearing a hat, subagents receive hat calibration alongside persona calibration. If no
-hat is active, set to `"none: default domain emphasis"`.
+`hat_domain_context` captures which domain emphasis the hat applied. Not every hat has a
+defined domain priority (some hats are purely about output format and mindset); if the
+parent's hat has no domain priority defined, set `hat_domain_context` to
+`"none: default domain emphasis"`.
 
-### Per-Persona Calibration Blocks
+### Per-Hat Output-Format Calibration Blocks
 
-Copy the relevant block verbatim into subagent prompts when the parent is in that persona.
+Copy the relevant block verbatim into subagent prompts when the parent is wearing that hat.
 
 **`incident-commander` calibration block:**
 ```
-REPORTING TO: incident-commander persona.
+REPORTING TO: incident-commander hat.
 Priority order: blast radius → immediate mitigation → root cause.
 Output calibration: Keep findings to ≤2 sentences per item. Mark severity:blocking for
 anything requiring immediate action. Skip background explanations.
@@ -268,7 +271,7 @@ anything requiring immediate action. Skip background explanations.
 
 **`adversary` calibration block:**
 ```
-REPORTING TO: adversary persona.
+REPORTING TO: adversary hat.
 Priority order: worst-case risks → plausible concerns → minor issues.
 Output calibration: Lean toward false positives over false negatives. Flag every risk
 you can plausibly argue, even weak ones. Return all findings regardless of likelihood.
@@ -276,7 +279,7 @@ you can plausibly argue, even weak ones. Return all findings regardless of likel
 
 **`security-auditor` calibration block:**
 ```
-REPORTING TO: security-auditor persona.
+REPORTING TO: security-auditor hat.
 Priority order: over-broad permissions → missing rotation → drift from snapshot.
 Output calibration: Assume the current permission set is too broad. Flag every binding
 that could be narrowed. Surface any gap between GCP state and the recorded snapshot.
@@ -284,7 +287,7 @@ that could be narrowed. Surface any gap between GCP state and the recorded snaps
 
 **`architect` calibration block:**
 ```
-REPORTING TO: architect persona.
+REPORTING TO: architect hat.
 Priority order: structural violations → ownership gaps → missing extension points.
 Output calibration: Evaluate structural fit, not just correctness. Flag single-responsibility
 violations, unclear component ownership, and missing extension points.
@@ -292,7 +295,7 @@ violations, unclear component ownership, and missing extension points.
 
 **`rubber-duck` calibration block:**
 ```
-REPORTING TO: rubber-duck persona.
+REPORTING TO: rubber-duck hat.
 Priority order: clarity → prerequisite knowledge → jargon density.
 Output calibration: Translate technical findings into plain English. Assume the reader
 has no prior context. Flag any part that would confuse someone new to the system.
@@ -300,23 +303,24 @@ has no prior context. Flag any part that would confuse someone new to the system
 
 ### Hat Passing to Subagents
 
-When the parent agent is wearing a hat and spawns a subagent, announce it visibly:
+When the parent agent is wearing a hat with a domain-priority aspect and spawns a subagent,
+announce it visibly:
 
 ```
 Subagent Wear Hat: operator
 ```
 
-Then include the appropriate hat calibration block (below) in the subagent prompt so the
-subagent applies the same domain priority. The announcement makes hat propagation observable
-to the human operator.
+Then include the appropriate hat domain-priority block (below) in the subagent prompt so
+the subagent applies the same domain priority. The announcement makes hat propagation
+observable to the human operator.
 
-### Per-Hat Calibration Blocks
+### Per-Hat Domain-Priority Calibration Blocks
 
-Hat calibration blocks stack with persona calibration — persona shapes output format,
-hat shapes domain priority. Paste the relevant hat block alongside the persona block when
-the parent is wearing a hat.
+These blocks stack with the output-format blocks above — output-format shapes how findings
+are written, domain-priority shapes which domains get attention first. Paste both blocks
+when the parent's hat has both aspects defined.
 
-**`operator` hat calibration block:**
+**`operator` hat domain-priority block:**
 ```
 HAT CONTEXT: operator — deploy readiness focus.
 Domain priority: gates > artifacts > gitops-integrity > topology.
@@ -324,7 +328,7 @@ When citing Brain data: lead with deploy-blocking gates, then stale artifacts.
 De-prioritize: least-privilege, supply-chain, everything-is-code findings.
 ```
 
-**`security` hat calibration block:**
+**`security` hat domain-priority block:**
 ```
 HAT CONTEXT: security — access control and supply chain focus.
 Domain priority: least-privilege > supply-chain > defense-in-depth > gates.
@@ -332,7 +336,7 @@ When citing Brain data: lead with unreviewed bindings, then vulnerability counts
 De-prioritize: artifact freshness, gitops-integrity findings.
 ```
 
-**`architect` hat calibration block:**
+**`architect` hat domain-priority block:**
 ```
 HAT CONTEXT: architect — structural health focus.
 Domain priority: everything-is-code > defense-in-depth > topology > gitops-integrity.
@@ -340,9 +344,9 @@ When citing Brain data: lead with governance gaps, then coverage metrics.
 De-prioritize: artifact freshness, gate urgency findings.
 ```
 
-**Combined example — `incident-commander` persona + `operator` hat:**
+**Combined example — `incident-commander` hat (output format) + `operator` hat (domain priority):**
 ```
-REPORTING TO: incident-commander persona.
+REPORTING TO: incident-commander hat.
 Priority order: blast radius → immediate mitigation → root cause.
 Output calibration: Keep findings to ≤2 sentences per item. Mark severity:blocking for
 anything requiring immediate action. Skip background explanations.
@@ -360,13 +364,13 @@ When citing Brain data: lead with deploy-blocking gates, then stale artifacts.
 Agent A prompt (Service Status — incident-commander calibrated):
 "Run: gcloud run services list --project=laas-489115 --region=us-central1
  --format='table(metadata.name,status.conditions[0].status,status.latestReadyRevisionName)'
-REPORTING TO: incident-commander persona.
+REPORTING TO: incident-commander hat.
 Priority order: blast radius → immediate mitigation → root cause.
 Output calibration: Keep findings to ≤2 sentences. Mark severity:blocking for services
 that are not Ready. Skip background explanations.
 Return: {\"passed\": bool, \"error\": null | \"<not-ready services>\",
 \"services_not_ready\": [\"<name>\"], \"severity\": \"blocking|concern\",
-\"persona_context\": \"incident-commander: flagged not-ready services first\"}"
+\"hat_output_context\": \"incident-commander: flagged not-ready services first\"}"
 ```
 
 ---

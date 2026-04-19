@@ -37,7 +37,7 @@ pub struct AgentOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_hat: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub current_persona: Option<String>,
+    pub current_human_persona: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,7 +102,7 @@ pub fn build_agent_output(
     domain_trajectories: HashMap<String, TrajectoryResult>,
     effectiveness: Option<HashMap<String, ActionEffectiveness>>,
     hat: Option<String>,
-    persona: Option<String>,
+    human_persona: Option<String>,
 ) -> AgentOutput {
     let mut domains = HashMap::new();
     for (key, ds) in &scorecard.domains {
@@ -160,7 +160,7 @@ pub fn build_agent_output(
         proposal_effectiveness: effectiveness,
         trajectory: unified_trajectory,
         current_hat: hat,
-        current_persona: persona,
+        current_human_persona: human_persona,
     }
 }
 
@@ -340,7 +340,7 @@ mod tests {
         let json = serde_json::to_value(&output).unwrap();
         // Optional fields should not be present
         assert!(json.get("current_hat").is_none());
-        assert!(json.get("current_persona").is_none());
+        assert!(json.get("current_human_persona").is_none());
         assert!(json.get("trajectory").is_none());
         assert!(json.get("proposal_effectiveness").is_none());
     }

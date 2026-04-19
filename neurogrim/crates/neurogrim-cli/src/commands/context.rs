@@ -18,8 +18,8 @@ use std::path::{Path, PathBuf};
 /// Everything a command needs to produce output.
 pub struct BrainContext {
     /// Parsed registry. Retained on the context so downstream consumers
-    /// (future hats, persona filters, A2A Agent Card builders) can inspect
-    /// domain weights + hat declarations without reloading.
+    /// (future hats, human-persona filters, A2A Agent Card builders) can
+    /// inspect domain weights + hat declarations without reloading.
     #[allow(dead_code)]
     pub registry: BrainRegistry,
     /// Resolved project root derived from the registry path. Retained for
@@ -35,7 +35,7 @@ impl BrainContext {
     pub async fn load(
         registry_path: &str,
         hat: Option<String>,
-        persona: Option<String>,
+        human_persona: Option<String>,
     ) -> Result<Self> {
         let json = tokio::fs::read_to_string(registry_path).await?;
         let registry = BrainRegistry::from_json(&json)?;
@@ -151,7 +151,7 @@ impl BrainContext {
             dom_trajs,
             Some(effectiveness),
             hat,
-            persona,
+            human_persona,
         );
 
         Ok(BrainContext {

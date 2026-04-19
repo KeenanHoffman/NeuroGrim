@@ -5,7 +5,7 @@ Imagination mode is surface-level, generalized, and idea-based — no code, no f
 
 Role: planning · meta
 
-Persona: visionary
+Hat: visionary
 
 Trigger phrases: "imagine", "imagination mode", "let's think", "what could we do", "how might we",
 Methodology-step: skills
@@ -31,12 +31,12 @@ plan starts from a considered choice rather than the first workable idea).
 
 ---
 
-## Persona
+## Hat
 
-This skill invokes the `visionary` persona. Declare it at the start:
+This skill invokes the `visionary` hat. Declare it at the start:
 
 ```
-> Persona: visionary — imagining [problem description].
+> Wear Hat: visionary — imagining [problem description].
 ```
 
 The visionary mindset:
@@ -130,7 +130,7 @@ exploring the codebase, then deletes it after incorporating it into the real pla
 Then end with the explicit handoff summary:
 
 ```
-> Persona: default — imagination complete. Scaffold → `.claude/plans/_scaffold.md`.
+> Remove Hat: visionary — imagination complete. Scaffold → `.claude/plans/_scaffold.md`.
 
 **Imagination summary:**
 Explored: [approach A], [approach B], [approach C if applicable]
@@ -158,7 +158,7 @@ so deletion is best-effort cleanup, not critical.
 
 > User: "I want to add rate limiting to the API."
 
-> Persona: visionary — imagining rate limiting approaches for the FastAPI backend.
+> Wear Hat: visionary — imagining rate limiting approaches for the FastAPI backend.
 
 Three meaningfully different approaches come to mind:
 
@@ -221,6 +221,6 @@ wrong approach at the conversation layer, not the plan layer, not the implementa
 ## See Also
 
 - `plan-critic.md` — adversarial review of the plan that follows imagination; includes when-to-run heuristic
-- `personas.md` — full persona system; `visionary` is the pre-planning lens
+- `hats.md` — full hat system; `visionary` is the pre-planning lens
 - `archived/skill-chain.md` — skill sequences; imagination → plan → plan-critic → implement
 - `weigh-time-risk.md` — after imagination, calibrate how much planning depth the change needs

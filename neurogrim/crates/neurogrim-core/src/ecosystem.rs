@@ -556,7 +556,7 @@ mod tests {
             proposal_effectiveness: None,
             trajectory: None,
             current_hat: None,
-            current_persona: None,
+            current_human_persona: None,
         }
     }
 

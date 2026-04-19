@@ -40,7 +40,7 @@ pub async fn run(registry_path: &str) -> Result<()> {
         "  Incident patterns: {}",
         registry.config.incident_patterns.len()
     );
-    println!("  Personas: {}", registry.config.personas.len());
+    println!("  Human personas: {}", registry.config.human_personas.len());
     println!(
         "  Sensory servers: {}",
         registry.config.sensory_servers.len()
