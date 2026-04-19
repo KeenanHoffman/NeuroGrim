@@ -1,0 +1,3 @@
+[submodule "NeuroGrim-python-starter"]
+	path = NeuroGrim-python-starter
+	url = git@github.com:KeenanHoffman/NeuroGrim-python-starter.git

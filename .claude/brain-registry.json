@@ -214,6 +214,18 @@
         "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
         "transport": "stdio"
       }
+    },
+    "children": {
+      "python-starter": {
+        "display_name": "LSP Brains Python Starter (adoption template)",
+        "a2a_endpoint": "http://localhost:8423/a2a/v1/",
+        "agent_card_url": "http://localhost:8423/.well-known/agent-card.json",
+        "brain_path": "NeuroGrim-python-starter",
+        "interface_version": "1",
+        "depends_on": [],
+        "weight": 1.0,
+        "enabled": true
+      }
     }
   }
 }

@@ -21,6 +21,7 @@ has changed.
 | `docs/` | Domain catalog, architecture guides |
 | `whitepaper/` | LSP Brains methodology whitepaper (Markdown; prior HTML build archived 2026-04-17) |
 | `starter-kit/` | **Archived 2026-04-17** — PowerShell reference; moved to `D:\Brains\archive\Moth-er-Br-AI-n\starter-kit\` |
+| `NeuroGrim-python-starter/` | **Child submodule** — Python adoption template. Declared as NeuroGrim's A2A child Brain (port 8423); exercises recursive peer communication (ecosystem → NeuroGrim → starter). |
 | `domains/laas/` | Archived first-customer domain: LaaS (16 domains, 26 gates, 3 hats) — read-only historical reference |
 | `roadmap/` | Vision, roadmap, data architecture, dependency map, stage epics (including new S6 "Dual Brain via A2A") |
 | `.claude/skills/` | Agent skills for methodology work, brain operations, and domain authoring |

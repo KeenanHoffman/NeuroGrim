@@ -13,6 +13,7 @@ tools, cross-domain correlation, trajectory intelligence, and gated governance.
 | Directory | Contents |
 |-----------|----------|
 | `neurogrim/` | Rust Brain engine (workspace with core, sensory, mcp, a2a [Stage 6], cli crates) |
+| `NeuroGrim-python-starter/` | **Child submodule** — adoption template for Python projects. Declared as NeuroGrim's A2A child (port 8423). |
 | `starter-kit/` | **Archived 2026-04-17** — moved to `D:\Brains\archive\Moth-er-Br-AI-n\starter-kit\` |
 | `domains/laas/` | Archived first-customer domain: LaaS (16 domains, 26 gates, 3 hats) |
 | `whitepaper/` | LSP Brains methodology whitepaper (Markdown; HTML build archived) |
@@ -100,6 +101,15 @@ Ten grimoire-themed aliases are available for most CLI commands
 `commune`, `beacon`, `behold`). Primary names remain canonical. See
 `README.md` § Command aliases for the full table, or run
 `neurogrim --help` to verify the live list.
+
+## Child Brain
+
+NeuroGrim is itself a parent Brain in the A2A fractal-composition
+sense: the `NeuroGrim-python-starter/` submodule is declared as its
+child in `.claude/brain-registry.json` (port 8423). This gives
+NeuroGrim a peer relationship with an adoption-template Brain and
+exercises the multi-hop A2A pattern (ecosystem → NeuroGrim →
+python-starter).
 
 ## Agent Philosophy
 
