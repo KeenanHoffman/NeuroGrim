@@ -113,7 +113,7 @@ enum Commands {
 
     /// Serve this Brain as an A2A peer (spec §13). Publishes an Agent Card
     /// and accepts peer invocations (snapshot.requested, score.updated ack).
-    #[command(name = "a2a-serve")]
+    #[command(name = "a2a-serve", visible_alias = "beacon")]
     A2aServe {
         /// TCP port to bind.
         #[arg(long, default_value_t = commands::a2a_serve::DEFAULT_PORT)]
@@ -150,7 +150,7 @@ enum Commands {
     },
 
     /// Fetch a peer Brain's Agent Card (spec §13.2). Prints the card.
-    #[command(name = "a2a-discover")]
+    #[command(name = "a2a-discover", visible_alias = "behold")]
     A2aDiscover {
         /// Peer base URL, e.g. `http://127.0.0.1:8421/a2a/v1/`.
         peer_url: String,

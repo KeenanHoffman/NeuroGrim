@@ -56,7 +56,7 @@ fn aliases_resolve_to_primary_commands() {
     // Each should accept --help and exit 0. If an alias is ever removed
     // from main.rs, this fires.
     for alias in [
-        "scry", "divine", "drift", "seal", "summon", "cast", "conjure", "commune",
+        "scry", "divine", "drift", "seal", "summon", "cast", "conjure", "commune", "beacon", "behold",
     ] {
         let (code, _stdout, stderr) = run(&[alias, "--help"], None);
         assert_eq!(
