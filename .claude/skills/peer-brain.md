@@ -22,6 +22,9 @@ neurogrim a2a-invoke https://peer.example.com/a2a/v1/ \
 All three subcommands land in Stage 6 (S6-DB-3). Until then, these CLI commands are
 aspirational — the plumbing exists in `neurogrim-a2a` (S6-DB-1).
 
+**CLI short forms:** `beacon` = `a2a-serve`, `commune` = `a2a-invoke`,
+`behold` = `a2a-discover`. Primary names remain canonical.
+
 ## Configure this Brain as a peer
 
 Two things need to be true:

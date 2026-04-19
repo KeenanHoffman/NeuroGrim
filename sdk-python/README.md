@@ -1,5 +1,7 @@
 # lsp-brains
 
+> *Python SDK for writing spells — the sensory tools NeuroGrim casts against your project.*
+
 Python SDK for writing [LSP Brains](https://github.com/KeenanHoffman/LSP-Brains) sensory tools.
 
 ## Quick start

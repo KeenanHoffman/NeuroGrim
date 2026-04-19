@@ -1,5 +1,7 @@
 # NeuroGrim — Agent Guide
 
+> *a book of spells for AI agents*
+
 NeuroGrim is the reference implementation of the LSP Brains specification: a Rust-based
 Brain engine that gives AI agents continuous project health awareness through MCP-based sensory
 tools, cross-domain correlation, trajectory intelligence, and gated governance.
@@ -90,6 +92,14 @@ Skills corresponding to Rust Brain sensor domains:
 | `domains/laas/brain-registry.json` | Full LaaS registry (16 domains, real-world reference) |
 | `roadmap/VISION.md` | 16 guiding principles (v2.1+: #16 "right protocol for the role") |
 | `roadmap/ROADMAP.md` | Stage progression (Stages 1–4 done; S5 in progress; S6 "Dual Brain via A2A") |
+
+## Command Reference
+
+Ten grimoire-themed aliases are available for most CLI commands
+(`scry`, `divine`, `drift`, `seal`, `summon`, `cast`, `conjure`,
+`commune`, `beacon`, `behold`). Primary names remain canonical. See
+`README.md` § Command aliases for the full table, or run
+`neurogrim --help` to verify the live list.
 
 ## Agent Philosophy
 

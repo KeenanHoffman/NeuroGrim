@@ -1,11 +1,15 @@
 # NeuroGrim
 
+> *a book of spells for AI agents*
+
 **A language-agnostic nervous system for AI-assisted software projects.**
 
 NeuroGrim implements the [LSP Brains Specification](spec/LSP-BRAINS-SPEC.md) — a
 methodology for giving AI agents continuous, honest awareness of project health through
 MCP-based sensory tools, A2A-based peer coordination, cross-domain correlation,
-trajectory intelligence, and gated governance.
+trajectory intelligence, and gated governance. Sensory tools are small spells cast
+against the project; the Brain keeps a grimoire of their readings and tells you what
+has changed.
 
 ## What's Here
 
@@ -53,6 +57,26 @@ cargo test
 cd sdk-python
 python -m pytest tests/ -v
 ```
+
+## Command aliases
+
+Every NeuroGrim primary command also accepts a themed alias — same behavior, same
+flags, different feel. Aliases are additive; primary names remain canonical.
+
+| Command        | Alias     | Purpose |
+|----------------|-----------|---------|
+| `score`        | `scry`    | Quick unified health read |
+| `agent`        | `divine`  | Full agent-mode JSON output |
+| `trend`        | `drift`   | Trajectory analysis (velocity, acceleration) |
+| `validate`     | `seal`    | Validate `brain-registry.json` |
+| `serve`        | `summon`  | Start as MCP server |
+| `sensory`      | `cast`    | Run a built-in sensory tool |
+| `init`         | `conjure` | Scaffold a new `brain-registry.json` |
+| `a2a-serve`    | `beacon`  | Publish Agent Card + accept peer invocations |
+| `a2a-invoke`   | `commune` | Call a peer Brain over A2A |
+| `a2a-discover` | `behold`  | Fetch a peer's Agent Card |
+
+Run `neurogrim --help` to verify the live list.
 
 ## Architecture
 

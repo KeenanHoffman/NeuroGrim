@@ -13,6 +13,9 @@ communication. This covers fractal composition (parent↔child) and dual brain
 
 See spec §13 (A2A Peer Protocol) and Appendix G (A2A Integration).
 
+**CLI short forms:** `beacon` = `a2a-serve`, `commune` = `a2a-invoke`,
+`behold` = `a2a-discover`. Primary names remain canonical.
+
 ## Decide whether A2A is the right answer
 
 Ask these in order:
