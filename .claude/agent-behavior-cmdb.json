@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-21T00:00:00Z",
+    "updated_by": "stub",
+    "source": "stub — run `neurogrim cast agent-behavior --project-root . > .claude/agent-behavior-cmdb.json` to populate. Scenario library at this level is currently a stub; the authoritative ecosystem library lives at D:/Brains/.claude/agent-behavior-scenarios/."
+  },
+  "score": 0,
+  "updated_at": "2026-04-21T00:00:00Z",
+  "findings": []
+}

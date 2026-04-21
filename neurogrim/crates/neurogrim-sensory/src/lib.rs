@@ -3,6 +3,7 @@
 //! Each tool is an MCP server that produces CMDB-envelope JSON.
 //! All tools implement the same contract: accept project_root, return CMDB.
 
+pub mod agent_behavior;
 pub mod cmdb;
 pub mod code_quality;
 pub mod coherence;

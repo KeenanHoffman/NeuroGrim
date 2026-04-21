@@ -16,7 +16,8 @@
       "security-standards": 0.0,
       "coherence": 0.0,
       "human-comms": 0.0,
-      "secret-refs": 0.0
+      "secret-refs": 0.0,
+      "agent-behavior": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -86,6 +87,13 @@
           "human-comms:code_blocks":    { "field": "code_blocks",    "type": "string" },
           "human-comms:lists_vs_prose": { "field": "lists_vs_prose", "type": "string" },
           "human-comms:emoji":          { "field": "emoji",          "type": "string" }
+        }
+      },
+      "agent-behavior": {
+        "_doc": "Non-deterministic verification of agent behavior per LSP-Brains spec §15. Scenarios live at .claude/agent-behavior-scenarios/ (currently a stub; ecosystem-level library is the authoritative set). Refresh: `neurogrim cast agent-behavior --project-root . > .claude/agent-behavior-cmdb.json`. Advisory-only in v1.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/agent-behavior-cmdb.json"
         }
       }
     },
