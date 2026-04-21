@@ -22,19 +22,45 @@ deploy/
  │
  ├─ :80, :443 ─►  caddy                  (TLS terminator)
  │                  │
- │                  ├─► neurogrim-local       :8421  (Docker DNS name)
- │                  └─► neurogrim-external    :8421
+ │                  ├─► neurogrim-local        :8421  (Docker DNS name)
+ │                  ├─► neurogrim-external     :8421
+ │                  └─► webhook-sync           :4747  (signed-push → git-sync)
  │
  ├─ :8421  ──►  neurogrim-local        (direct; kept for debug)
  └─ :8422  ──►  neurogrim-external     (direct; kept for debug)
 ```
 
-Two reachable layers:
+Three reachable layers through Caddy:
 
-- **Through Caddy (preferred):**
+- **Agent Card / A2A tasks:**
   `https://neurogrim-local.localhost/.well-known/agent-card.json`
+  `https://neurogrim-external.localhost/.well-known/agent-card.json`
+- **Webhooks (Phase 3):**
+  `https://webhooks.localhost/webhooks/<agent-label>`
 - **Direct (debug only):**
   `http://127.0.0.1:8421/.well-known/agent-card.json`
+
+### Webhook secrets
+
+The `webhook-sync` container signature-verifies every delivery against a
+per-agent secret. Each secret is an env var:
+
+```bash
+export NEUROGRIM_LOCAL_WEBHOOK_SECRET=$(openssl rand -hex 32)
+export NEUROGRIM_EXTERNAL_WEBHOOK_SECRET=$(openssl rand -hex 32)
+docker compose up -d --build
+```
+
+Without the env vars, compose falls back to a placeholder string
+(`change-me-insecure`). The service starts but every webhook will fail
+HMAC verification — the honest refusal posture, not a silent insecure
+default. Set the real secrets before exposing the stack to any external
+sender.
+
+See `deploy/webhook-sync/README.md` for the service-level details:
+audit log shape, idempotency + debounce, and the container architecture
+(agents never touch git — webhook-sync is the one network-fetch
+surface).
 
 The `.localhost` TLD is reserved by RFC 6761 and resolves to 127.0.0.1 on
 every modern OS — no `/etc/hosts` edits needed.

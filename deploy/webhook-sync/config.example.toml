@@ -1,0 +1,48 @@
+# neurogrim-webhook-sync — example config.
+# Copy to `config.toml` (path controlled by WEBHOOK_SYNC_CONFIG env var)
+# and edit for your deployment.
+
+[server]
+# Bind inside the container. Public exposure is handled by the Caddy
+# reverse proxy — this service never talks to the internet directly.
+host = "0.0.0.0"
+port = 4747
+
+[data]
+# SQLite file for delivery idempotency + per-agent debounce state.
+# Mount a named volume here in docker-compose so the state survives
+# container restarts.
+state_db = "/data/webhook-sync.sqlite"
+
+[defaults]
+# Default branch to sync when an agent config doesn't override it.
+branch = "main"
+
+# Per-repo debounce: rapid-fire pushes collapse to at most one pull
+# per this many seconds. Tune upward if your CI produces frequent
+# self-dispatched pushes.
+debounce_seconds = 5
+
+# How long a delivery_id counts as "already seen" (GitHub's
+# at-least-once retry policy means we see duplicates). 24h is generous;
+# drop to 3600 if you want to purge state faster.
+idempotency_window_seconds = 86400
+
+# ---------------------------------------------------------------------------
+# One [agents.<label>] block per agent this service fronts. The `<label>`
+# is what shows up in the URL path: POST /webhooks/<label>.
+#
+# The signing secret is held in an env var named here — the actual value
+# never appears in the config file (so stealing the config doesn't steal
+# the secret, and rotations don't require a config edit + redeploy).
+# ---------------------------------------------------------------------------
+
+[agents.neurogrim-local]
+workspace  = "/workspaces/neurogrim-local"
+branch     = "main"
+secret_env = "NEUROGRIM_LOCAL_WEBHOOK_SECRET"
+
+[agents.neurogrim-external]
+workspace  = "/workspaces/neurogrim-external"
+branch     = "main"
+secret_env = "NEUROGRIM_EXTERNAL_WEBHOOK_SECRET"

@@ -34,8 +34,12 @@
 	# aren't resolvable from the internet.
 	local_certs
 
-	# Disable the public /etc/resolv.conf-based resolver attempt — we
-	# only talk to Docker-network service names here.
+	# Disable the admin API. Trade-off: `caddy reload` requires a
+	# container restart instead of a live reload. The admin API would
+	# only be reachable inside the container network anyway, so the
+	# isolation benefit is small; flip to leave it on (delete this
+	# line) if you want `docker compose exec caddy caddy reload` to
+	# work without dropping connections.
 	admin off
 }
 
@@ -72,6 +76,29 @@ neurogrim-external.localhost {
 	tls internal
 
 	reverse_proxy neurogrim-external:8421
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# ---------------------------------------------------------------------------
+# webhooks.localhost — signed-push → git-sync sidecar (Phase 3).
+#
+# GitHub webhooks POST to https://webhooks.localhost/webhooks/<agent>. The
+# webhook-sync service HMAC-verifies each delivery, idempotency-dedupes,
+# debounces rapid-fire pushes, and runs `git fetch && git reset --hard`
+# inside the named workspace volumes the agent containers read from.
+#
+# For real-world deployment replace `webhooks.localhost` with a public
+# hostname GitHub can reach, and swap `tls internal` for `tls <email>`
+# to enable Let's Encrypt.
+# ---------------------------------------------------------------------------
+webhooks.localhost {
+	tls internal
+
+	reverse_proxy webhook-sync:4747
 
 	log {
 		output stdout

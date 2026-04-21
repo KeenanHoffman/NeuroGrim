@@ -84,6 +84,44 @@ services:
       - agents-net
 
   # ---------------------------------------------------------------------------
+  # webhook-sync — signed-push → git-sync sidecar (Phase 3).
+  # See deploy/webhook-sync/README.md for scope, audit log, security posture.
+  # Accepts GitHub-format webhooks, HMAC-verifies them, and runs git fetch +
+  # reset inside each agent's workspace volume. Not exposed to the host —
+  # Caddy fronts it at https://webhooks.localhost/.
+  # ---------------------------------------------------------------------------
+  webhook-sync:
+    build:
+      context: ./deploy/webhook-sync
+      dockerfile: Dockerfile
+    image: neurogrim-webhook-sync:dev
+    container_name: neurogrim-webhook-sync
+    # No host-ports: reachable only on the Docker network (via Caddy).
+    volumes:
+      # Config mount (read-only). The per-agent secrets are held in env
+      # vars named by the config; the TOML itself carries no secret values.
+      - ./deploy/webhook-sync/config.example.toml:/etc/webhook-sync/config.toml:ro
+      # Persistent state: delivery idempotency + debounce sqlite.
+      - webhook_sync_state:/data
+      # Writable workspace mounts for each agent. These are bind mounts
+      # pointing at on-host directories where webhook-sync runs git-reset.
+      # The agent containers share the same paths read-only (the bind
+      # mounts on neurogrim-local/-external above). For a demo you can
+      # point these at cloned repos; for production, use named volumes
+      # populated by an init container.
+      - ./neurogrim-local-project:/workspaces/neurogrim-local
+      - ./neurogrim-external-project:/workspaces/neurogrim-external
+    environment:
+      # MUST be supplied at compose-up time. Each secret is the value
+      # GitHub's "Secret" field on the webhook config. Rotation = change
+      # the env var + docker compose up -d webhook-sync.
+      - NEUROGRIM_LOCAL_WEBHOOK_SECRET=${NEUROGRIM_LOCAL_WEBHOOK_SECRET:-change-me-insecure}
+      - NEUROGRIM_EXTERNAL_WEBHOOK_SECRET=${NEUROGRIM_EXTERNAL_WEBHOOK_SECRET:-change-me-insecure}
+    networks:
+      - agents-net
+    restart: on-failure
+
+  # ---------------------------------------------------------------------------
   # Caddy reverse proxy — TLS terminator + single entry point for A2A peers.
   # See deploy/caddy/Caddyfile for routing; deploy/README.md for the cert-
   # trust workflow (export `/data/caddy/pki/authorities/local/root.crt` once,
@@ -111,6 +149,7 @@ services:
     depends_on:
       - neurogrim-local
       - neurogrim-external
+      - webhook-sync
     networks:
       - agents-net
     restart: on-failure
@@ -130,3 +169,5 @@ volumes:
   # neurogrim_caddy_data` (compose prefixes volume names with the project).
   caddy_data:
   caddy_config:
+  # Delivery idempotency + debounce state for webhook-sync.
+  webhook_sync_state:
