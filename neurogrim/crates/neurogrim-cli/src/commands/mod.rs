@@ -1,6 +1,7 @@
 pub mod a2a_discover;
 pub mod a2a_invoke;
 pub mod a2a_serve;
+pub mod a2a_token;
 pub mod agent;
 pub mod awareness;
 pub mod context;

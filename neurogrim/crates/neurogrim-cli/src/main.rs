@@ -81,7 +81,7 @@ enum Commands {
     /// Run a built-in sensory tool directly (produces CMDB JSON)
     #[command(visible_alias = "cast")]
     Sensory {
-        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs
+        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology
         name: String,
         /// Project root path
         #[arg(long, default_value = ".")]
@@ -134,6 +134,17 @@ enum Commands {
         /// is passthrough — the registry-derived card is still the default).
         #[arg(long)]
         agent_card: Option<String>,
+        /// Require `Authorization: Bearer <token>` on task requests. When
+        /// set, the Agent Card advertises `authentication.scheme: bearer`
+        /// and all `/a2a/v1/tasks*` requests must present a valid token.
+        /// `/.well-known/agent-card.json` stays public regardless.
+        #[arg(long)]
+        require_bearer: bool,
+        /// Path to the token-store sqlite file. Defaults to
+        /// `<project-root>/.claude/a2a-tokens.sqlite`. Only consulted when
+        /// `--require-bearer` is set.
+        #[arg(long)]
+        token_store: Option<String>,
     },
 
     /// Invoke a single A2A message against a peer Brain (spec §13.3).
@@ -147,6 +158,12 @@ enum Commands {
         /// JSON payload. Defaults to `{}`.
         #[arg(long)]
         payload: Option<String>,
+        /// Bearer token for peers that require bearer auth. If omitted and
+        /// the environment variable `NEUROGRIM_A2A_TOKEN` is set, that value
+        /// is used instead. Required for peers whose Agent Card declares
+        /// `authentication.scheme: bearer`; harmless for `scheme: none`.
+        #[arg(long)]
+        bearer: Option<String>,
     },
 
     /// Fetch a peer Brain's Agent Card (spec §13.2). Prints the card.
@@ -154,6 +171,20 @@ enum Commands {
     A2aDiscover {
         /// Peer base URL, e.g. `http://127.0.0.1:8421/a2a/v1/`.
         peer_url: String,
+    },
+
+    /// Manage A2A bearer tokens: issue, list, revoke (spec §13 + bearer).
+    ///
+    /// Tokens are stored in a sqlite database under the project root; only
+    /// the hash of each token is persisted. See `neurogrim a2a-token --help`.
+    #[command(name = "a2a-token")]
+    A2aToken {
+        /// Path to the token store sqlite file. Defaults to
+        /// `.claude/a2a-tokens.sqlite` under the current directory.
+        #[arg(long, default_value = ".claude/a2a-tokens.sqlite")]
+        store: String,
+        #[command(subcommand)]
+        subcommand: commands::a2a_token::A2aTokenCmd,
     },
 }
 
@@ -197,13 +228,32 @@ async fn main() -> Result<()> {
             bind,
             project_root,
             agent_card,
-        } => commands::a2a_serve::run(port, bind, project_root, agent_card).await,
+            require_bearer,
+            token_store,
+        } => {
+            commands::a2a_serve::run(
+                port,
+                bind,
+                project_root,
+                agent_card,
+                require_bearer,
+                token_store,
+            )
+            .await
+        }
         Commands::A2aInvoke {
             peer_url,
             message_type,
             payload,
-        } => commands::a2a_invoke::run(peer_url, message_type, payload).await,
+            bearer,
+        } => {
+            let bearer = bearer.or_else(|| std::env::var("NEUROGRIM_A2A_TOKEN").ok());
+            commands::a2a_invoke::run(peer_url, message_type, payload, bearer).await
+        }
         Commands::A2aDiscover { peer_url } => commands::a2a_discover::run(peer_url).await,
+        Commands::A2aToken { store, subcommand } => {
+            commands::a2a_token::run(store, subcommand).await
+        }
     }
 }
 
@@ -218,7 +268,8 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
         "coherence" => neurogrim_sensory::coherence::analyze_coherence(project_root).await,
         "human-comms" => neurogrim_sensory::human_comms::analyze_human_comms(project_root).await,
         "secret-refs" => neurogrim_sensory::secret_refs::analyze_secret_refs(project_root).await,
-        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs", name),
+        "docker-topology" => neurogrim_sensory::docker_topology::analyze_docker_topology(project_root).await?,
+        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology", name),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())

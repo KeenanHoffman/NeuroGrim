@@ -24,15 +24,17 @@
 //! This is documented here rather than hidden — adopters who need true
 //! long-running tasks should extend this module before relying on it.
 
-use crate::agent_card::AgentCard;
+use crate::agent_card::{AgentCard, AuthScheme};
 use crate::envelope::{A2aEnvelope, MessageType};
 use crate::error::A2aError;
+use crate::token_store::{token_id_prefix, TokenStore};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Request, State},
     http::StatusCode,
+    middleware::{self, Next},
     response::{
         sse::{Event, Sse},
-        IntoResponse,
+        IntoResponse, Response,
     },
     routing::{get, post},
     Json, Router,
@@ -43,7 +45,7 @@ use std::convert::Infallible;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 
 /// Boxed async handler signature. Takes an inbound envelope, returns the
@@ -72,6 +74,12 @@ pub struct TaskServer {
     /// Task store keyed by server-assigned `task_id` → completed envelope.
     /// v1 keeps everything in memory; eviction and persistence are future work.
     tasks: Arc<RwLock<HashMap<String, A2aEnvelope>>>,
+    /// Optional token store. Required when the Agent Card declares
+    /// `authentication.scheme: bearer`. Missing store + bearer scheme is a
+    /// misconfiguration that the middleware surfaces as 500. Wrapped in a
+    /// `Mutex` because `rusqlite::Connection` is `!Sync`; auth checks are
+    /// lightweight so contention is not a concern.
+    token_store: Option<Arc<Mutex<TokenStore>>>,
 }
 
 impl TaskServer {
@@ -83,7 +91,16 @@ impl TaskServer {
             handlers: Arc::new(std::sync::RwLock::new(HashMap::new())),
             idempotency: Arc::new(RwLock::new(HashMap::new())),
             tasks: Arc::new(RwLock::new(HashMap::new())),
+            token_store: None,
         }
+    }
+
+    /// Attach a token store. Required when the Agent Card declares
+    /// `authentication.scheme: bearer`. Safe to attach unconditionally —
+    /// the middleware only consults the store when the scheme requires it.
+    pub fn with_token_store(mut self, store: TokenStore) -> Self {
+        self.token_store = Some(Arc::new(Mutex::new(store)));
+        self
     }
 
     /// Register an async handler for a given message type. Overwrites any
@@ -120,13 +137,30 @@ impl TaskServer {
     /// Build the axum router. Separated from `serve` so tests can mount the
     /// router against an in-process `TcpListener` without binding a public
     /// port.
+    ///
+    /// Route groups:
+    /// - **Public** (no auth, ever): `/.well-known/agent-card.json`. Peers
+    ///   MUST be able to discover a Brain's auth requirements before
+    ///   presenting credentials.
+    /// - **Protected**: `/a2a/v1/tasks*`. If the Agent Card declares
+    ///   `authentication.scheme: bearer`, requests MUST carry a valid
+    ///   `Authorization: Bearer <token>` header; the middleware validates
+    ///   against the attached `TokenStore`.
     pub fn router(self) -> Router {
-        Router::new()
-            .route("/.well-known/agent-card.json", get(get_agent_card))
+        let protected = Router::new()
             .route("/a2a/v1/tasks", post(post_task))
             .route("/a2a/v1/tasks/:task_id", get(get_task))
             .route("/a2a/v1/tasks/:task_id/events", get(get_task_events))
+            .with_state(self.clone())
+            .layer(middleware::from_fn_with_state(
+                self.clone(),
+                auth_middleware,
+            ));
+
+        Router::new()
+            .route("/.well-known/agent-card.json", get(get_agent_card))
             .with_state(self)
+            .merge(protected)
     }
 
     /// Bind to `addr` and serve forever. Returns only if the listener or the
@@ -142,6 +176,119 @@ impl TaskServer {
             .await
             .map_err(|e| A2aError::Transport(format!("axum serve: {e}")))
     }
+}
+
+// ---------------------------------------------------------------------------
+// Auth middleware
+// ---------------------------------------------------------------------------
+
+/// Bearer-token middleware for the protected `/a2a/v1/tasks*` routes.
+///
+/// Flow:
+/// 1. If the Agent Card's scheme is `None`, pass through (no auth required).
+/// 2. Extract `Authorization: Bearer <token>` from the request headers.
+/// 3. Validate against the `TokenStore` (constant-time hash comparison).
+/// 4. Reject with 401 on missing/invalid/revoked/expired tokens.
+///
+/// Response bodies are deliberately minimal — they reveal only that auth
+/// failed, not *why* (no "revoked" vs "expired" leak to an attacker).
+/// The server-side log line captures the reason for operator debugging.
+async fn auth_middleware(
+    State(server): State<TaskServer>,
+    request: Request,
+    next: Next,
+) -> Response {
+    match server.agent_card.authentication.scheme {
+        AuthScheme::None => {
+            // No auth required — pass through.
+            return next.run(request).await;
+        }
+        AuthScheme::Bearer => {
+            // Fall through to token check below.
+        }
+    }
+
+    let store = match server.token_store.as_ref() {
+        Some(s) => s,
+        None => {
+            tracing::error!(
+                "A2A server declares bearer auth but has no token_store attached"
+            );
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "server misconfigured: no token store" })),
+            )
+                .into_response();
+        }
+    };
+
+    let token = match extract_bearer(&request) {
+        Some(t) => t,
+        None => {
+            return unauthorized_response("missing or malformed Authorization header");
+        }
+    };
+
+    let record = {
+        let guard = match store.lock() {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::error!("token store mutex poisoned");
+                return (StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": "token store unavailable" })))
+                    .into_response();
+            }
+        };
+        match guard.validate(&token) {
+            Ok(Some(rec)) => rec,
+            Ok(None) => {
+                // Unknown / revoked / expired — single generic rejection
+                // (see doc comment above).
+                tracing::info!("A2A auth rejected: token invalid/revoked/expired");
+                return unauthorized_response("token invalid, revoked, or expired");
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "token store lookup failed");
+                return (StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": "auth check failed" })))
+                    .into_response();
+            }
+        }
+    };
+
+    tracing::debug!(
+        label = %record.label,
+        token_id = %token_id_prefix(&record.token_id),
+        "A2A auth accepted"
+    );
+    // TODO: plumb the record into request extensions so downstream
+    // handlers can access the label for audit logs. v1 is auth-only;
+    // audit-log wiring lands in Phase 3 of the remote-agent epic.
+    next.run(request).await
+}
+
+fn extract_bearer(request: &Request) -> Option<String> {
+    let hv = request.headers().get("authorization")?;
+    let s = hv.to_str().ok()?;
+    let prefix = "Bearer ";
+    if !s.starts_with(prefix) {
+        // Accept lowercase as a courtesy (some HTTP libraries lowercase).
+        let lower = "bearer ";
+        if !s.starts_with(lower) {
+            return None;
+        }
+        return Some(s[lower.len()..].trim().to_string());
+    }
+    Some(s[prefix.len()..].trim().to_string())
+}
+
+fn unauthorized_response(detail: &str) -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        [("WWW-Authenticate", "Bearer realm=\"A2A\"")],
+        Json(serde_json::json!({ "error": "unauthorized", "detail": detail })),
+    )
+        .into_response()
 }
 
 // ---------------------------------------------------------------------------

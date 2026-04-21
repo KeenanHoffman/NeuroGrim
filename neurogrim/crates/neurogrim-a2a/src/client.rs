@@ -51,6 +51,14 @@ impl TaskClient<HttpSseTransport> {
     pub fn new_http() -> Self {
         Self::new(HttpSseTransport::new())
     }
+
+    /// Convenience constructor for peers that require bearer auth. Equivalent
+    /// to `TaskClient::new(HttpSseTransport::new().with_bearer_token(token))`.
+    /// Adopters reaching an authenticated peer (spec §13 + `scheme: bearer`
+    /// on the Agent Card) call this instead of `new_http`.
+    pub fn new_http_with_bearer(token: impl Into<String>) -> Self {
+        Self::new(HttpSseTransport::new().with_bearer_token(token))
+    }
 }
 
 impl<T: Transport> TaskClient<T> {

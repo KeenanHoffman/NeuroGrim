@@ -39,7 +39,17 @@ pub fn parse_message_type(s: &str) -> Result<MessageType> {
 }
 
 /// Entry point for the `a2a-invoke` subcommand.
-pub async fn run(peer_url: String, message_type: String, payload: Option<String>) -> Result<()> {
+///
+/// When `bearer` is `Some`, it is injected as `Authorization: Bearer <token>`
+/// on every request (including task poll). Peers that advertise
+/// `authentication.scheme: bearer` on their Agent Card require this; peers
+/// that advertise `none` ignore the header.
+pub async fn run(
+    peer_url: String,
+    message_type: String,
+    payload: Option<String>,
+    bearer: Option<String>,
+) -> Result<()> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -58,7 +68,10 @@ pub async fn run(peer_url: String, message_type: String, payload: Option<String>
         _ => serde_json::json!({}),
     };
 
-    let client = TaskClient::new_http();
+    let client = match bearer.as_deref() {
+        Some(tok) if !tok.is_empty() => TaskClient::new_http_with_bearer(tok.to_string()),
+        _ => TaskClient::new_http(),
+    };
 
     // Step 1: discover — print a summary before blowing bytes at the peer.
     let card = client

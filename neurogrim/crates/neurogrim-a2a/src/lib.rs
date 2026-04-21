@@ -36,6 +36,7 @@ pub mod client;
 pub mod envelope;
 pub mod error;
 pub mod server;
+pub mod token_store;
 pub mod transport;
 
 pub use agent_card::AgentCard;
@@ -43,4 +44,5 @@ pub use client::TaskClient;
 pub use envelope::{A2aEnvelope, MessageType};
 pub use error::A2aError;
 pub use server::TaskServer;
+pub use token_store::{TokenRecord, TokenStore, TokenStoreError, TOKEN_PREFIX};
 pub use transport::{HttpSseTransport, JsonRpcTransport, TaskAccepted, Transport};

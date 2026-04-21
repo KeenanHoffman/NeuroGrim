@@ -95,6 +95,11 @@ pub trait Transport: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct HttpSseTransport {
     client: reqwest::Client,
+    /// Optional bearer token. When set, every outbound request carries
+    /// `Authorization: Bearer <token>`. Required for peers that advertise
+    /// `authentication.scheme: bearer` on their Agent Card; harmless for
+    /// `scheme: none` peers (they ignore the header).
+    bearer_token: Option<String>,
 }
 
 impl HttpSseTransport {
@@ -104,13 +109,35 @@ impl HttpSseTransport {
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
+            bearer_token: None,
         }
     }
 
     /// Construct from an existing `reqwest::Client`. Useful for plumbing
     /// timeouts, proxies, or shared connection pools from the caller.
     pub fn with_client(client: reqwest::Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            bearer_token: None,
+        }
+    }
+
+    /// Attach a bearer token. Every outbound request will carry
+    /// `Authorization: Bearer <token>`. Returns `self` so construction
+    /// can chain: `HttpSseTransport::new().with_bearer_token(tok)`.
+    pub fn with_bearer_token(mut self, token: impl Into<String>) -> Self {
+        self.bearer_token = Some(token.into());
+        self
+    }
+
+    /// Returns a `reqwest::RequestBuilder` with the bearer token header
+    /// injected (if configured). Centralizes the auth-header logic so the
+    /// three transport methods don't drift.
+    fn with_auth(&self, rb: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match &self.bearer_token {
+            Some(tok) => rb.bearer_auth(tok),
+            None => rb,
+        }
     }
 
     /// Build the tasks-collection URL: `{authority}/a2a/v1/tasks`. The leading
@@ -150,9 +177,7 @@ impl Transport for HttpSseTransport {
     ) -> Result<TaskAccepted, A2aError> {
         let url = Self::tasks_url(endpoint)?;
         let resp = self
-            .client
-            .post(url)
-            .json(envelope)
+            .with_auth(self.client.post(url).json(envelope))
             .send()
             .await
             .map_err(|e| A2aError::Transport(format!("POST failed: {e}")))?;
@@ -193,8 +218,7 @@ impl Transport for HttpSseTransport {
     ) -> Result<Option<A2aEnvelope>, A2aError> {
         let url = Self::task_url(endpoint, task_id)?;
         let resp = self
-            .client
-            .get(url)
+            .with_auth(self.client.get(url))
             .send()
             .await
             .map_err(|e| A2aError::Transport(format!("GET failed: {e}")))?;
@@ -233,9 +257,11 @@ impl Transport for HttpSseTransport {
 
         let url = Self::events_url(endpoint, task_id)?;
         let resp = self
-            .client
-            .get(url)
-            .header(reqwest::header::ACCEPT, "text/event-stream")
+            .with_auth(
+                self.client
+                    .get(url)
+                    .header(reqwest::header::ACCEPT, "text/event-stream"),
+            )
             .send()
             .await
             .map_err(|e| A2aError::Transport(format!("GET events failed: {e}")))?;

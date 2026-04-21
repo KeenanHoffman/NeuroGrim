@@ -84,12 +84,21 @@ fn default_auth_scheme() -> AuthScheme {
     AuthScheme::None
 }
 
-/// v2.1 supports only `none`. Bearer and mTLS are deferred to a future spec version.
+/// Authentication schemes declared on the Agent Card.
+///
+/// - `None`: no auth. Use only on trusted networks or behind a firewall.
+///   The default for dev and single-host topologies.
+/// - `Bearer`: the client MUST send `Authorization: Bearer <token>` on
+///   every task request. Enables multi-tenant and remote-agent
+///   deployments (METHODOLOGY-EVOLUTION §10, 2026-04-20).
+///
+/// mTLS remains a future addition.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthScheme {
     #[default]
     None,
+    Bearer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

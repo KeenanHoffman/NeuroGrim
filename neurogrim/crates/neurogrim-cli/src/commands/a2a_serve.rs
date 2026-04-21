@@ -28,10 +28,11 @@
 use super::context::BrainContext;
 use anyhow::{Context, Result};
 use neurogrim_a2a::agent_card::{
-    Authentication, Capabilities, Transport as TransportCard, TransportProtocol,
+    AuthScheme, Authentication, Capabilities, Transport as TransportCard, TransportProtocol,
 };
 use neurogrim_a2a::envelope::{A2aEnvelope, MessageType};
 use neurogrim_a2a::error::A2aError;
+use neurogrim_a2a::token_store::TokenStore;
 use neurogrim_a2a::{AgentCard, TaskServer};
 use neurogrim_core::registry::BrainRegistry;
 use std::net::SocketAddr;
@@ -67,6 +68,17 @@ pub fn build_agent_card_from_registry(
     registry: &BrainRegistry,
     endpoint: &str,
     cli_version: &str,
+) -> AgentCard {
+    build_agent_card_with_auth(registry, endpoint, cli_version, AuthScheme::None)
+}
+
+/// Like [`build_agent_card_from_registry`] but with an explicit auth scheme.
+/// Separated so `run` can toggle bearer auth without duplicating the body.
+pub fn build_agent_card_with_auth(
+    registry: &BrainRegistry,
+    endpoint: &str,
+    cli_version: &str,
+    auth: AuthScheme,
 ) -> AgentCard {
     let id = if registry.meta.updated_by.trim().is_empty() {
         // Non-empty fallback — a missing id would fail the schema. A UUID is
@@ -108,7 +120,7 @@ pub fn build_agent_card_from_registry(
             endpoint: endpoint.into(),
             tasks_path: "/a2a/v1/tasks".into(),
         },
-        authentication: Authentication::default(),
+        authentication: Authentication { scheme: auth },
         topology: None,
     }
 }
@@ -150,6 +162,8 @@ pub async fn run(
     bind: String,
     project_root: String,
     _agent_card_path: Option<String>,
+    require_bearer: bool,
+    token_store_path: Option<String>,
 ) -> Result<()> {
     // Initialize tracing with a sane default if the caller didn't. No-op if
     // already set by a higher layer — `try_init` swallows the second init.
@@ -187,10 +201,45 @@ pub async fn run(
     // the same compromise the Phase E test makes — ecosystem.yaml carries
     // the routable URL; the card's `transport.endpoint` is informational.
     let endpoint = format!("http://127.0.0.1:{port}/a2a/v1/");
-    let card = build_agent_card_from_registry(&registry, &endpoint, env!("CARGO_PKG_VERSION"));
+    let auth_scheme = if require_bearer {
+        AuthScheme::Bearer
+    } else {
+        AuthScheme::None
+    };
+    let card = build_agent_card_with_auth(
+        &registry,
+        &endpoint,
+        env!("CARGO_PKG_VERSION"),
+        auth_scheme,
+    );
     let brain_id = card.id.clone();
 
     let mut server = TaskServer::new(card);
+
+    // Attach the token store when bearer auth is demanded. Without a store,
+    // the server would respond 500 to every authenticated request — better
+    // to refuse to start than serve a misconfigured Brain.
+    if require_bearer {
+        let store_path = token_store_path.clone().unwrap_or_else(|| {
+            Path::new(&project_root)
+                .join(".claude/a2a-tokens.sqlite")
+                .to_string_lossy()
+                .into_owned()
+        });
+        let store = TokenStore::open(&store_path).with_context(|| {
+            format!(
+                "failed to open token store at {store_path} \
+                 (hint: issue one with `neurogrim a2a-token issue --label <L>`)"
+            )
+        })?;
+        tracing::info!(store = %store_path, "bearer auth enabled; token store attached");
+        server = server.with_token_store(store);
+    } else if token_store_path.is_some() {
+        tracing::warn!(
+            "--token-store was provided but --require-bearer was not; \
+             ignoring token store (auth scheme: none)"
+        );
+    }
 
     // snapshot.requested handler — runs the full scoring pipeline on every
     // call. BrainContext::load is async (it reads the registry + CMDBs from

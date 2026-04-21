@@ -47,6 +47,7 @@ pub async fn run(peer_url: String) -> Result<()> {
         "  auth scheme:       {}",
         match card.authentication.scheme {
             neurogrim_a2a::agent_card::AuthScheme::None => "none",
+            neurogrim_a2a::agent_card::AuthScheme::Bearer => "bearer",
         }
     );
     println!("  accepts:");
