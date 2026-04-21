@@ -37,6 +37,10 @@ services:
     ports:
       # host:container — container listens on 8421 inside; we publish it
       # on 8421 on the host for parity with the Phase E test's URL shape.
+      # This loopback publication remains after Phase 2 (Caddy) lands,
+      # so `http://127.0.0.1:8421` stays available as a debug path that
+      # bypasses the proxy. Remove both `ports:` blocks if you want the
+      # agents reachable only via Caddy on `https://*.localhost`.
       - "127.0.0.1:8421:8421"
     volumes:
       # Read-only bind-mount: the container must not be able to mutate
@@ -51,6 +55,8 @@ services:
     # Logs stream to stdout/stderr via `tracing`. Tune with RUST_LOG.
     environment:
       - RUST_LOG=info
+    networks:
+      - agents-net
 
   neurogrim-external:
     # No `build:` — we reuse the image neurogrim-local produced.
@@ -65,17 +71,62 @@ services:
       # Agent Card advertises `http://127.0.0.1:8421/…` — that's the
       # container's own view. From the host we connect via 8422; from a
       # peer container on the same Docker network we'd connect via the
-      # service name and internal port (`http://neurogrim-external:8421/…`).
+      # service name and internal port (`http://neurogrim-external:8421/…`);
+      # from outside the host we go through Caddy at
+      # `https://neurogrim-external.localhost/`.
       - "127.0.0.1:8422:8421"
     volumes:
       - ./neurogrim-external-project:/brain:ro
     restart: on-failure
     environment:
       - RUST_LOG=info
+    networks:
+      - agents-net
 
-# Default bridge network. Both services are on it by default; no custom
-# `networks:` block needed for this reference. Operators who want to
-# isolate the brains from each other (e.g. only the parent should reach
-# the child, not vice versa) can add a named network with selective
-# attachment. Out of scope here — the reference is two peers visible to
-# each other and to the host.
+  # ---------------------------------------------------------------------------
+  # Caddy reverse proxy — TLS terminator + single entry point for A2A peers.
+  # See deploy/caddy/Caddyfile for routing; deploy/README.md for the cert-
+  # trust workflow (export `/data/caddy/pki/authorities/local/root.crt` once,
+  # import into OS store, then every `*.localhost` site works in browsers +
+  # `curl` without `--insecure`).
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: neurogrim-caddy
+    ports:
+      # Loopback only — the gateway is a dev convenience, not a public
+      # entry point. Public deployment changes these to `0.0.0.0:443` and
+      # switches the Caddyfile's `tls internal` to a real ACME directive
+      # (see deploy/README.md §Production).
+      - "127.0.0.1:443:443"
+      - "127.0.0.1:80:80"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Named volumes persist Caddy's auto-generated root CA + issued
+      # certs across `docker compose down` / `up`. Without this, each
+      # restart would issue a fresh root and invalidate every trusted
+      # cert the operator imported into the OS store.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - neurogrim-local
+      - neurogrim-external
+    networks:
+      - agents-net
+    restart: on-failure
+
+# Named bridge network. All three services attach here so Caddy can resolve
+# `neurogrim-local` / `neurogrim-external` as DNS names inside the bridge.
+# The default compose network would also work, but an explicit name keeps
+# container DNS tidy and makes the topology obvious in `docker network ls`.
+networks:
+  agents-net:
+    driver: bridge
+    name: neurogrim-agents-net
+
+volumes:
+  # Persisting Caddy's PKI is the whole reason this volume exists. Named
+  # so operators can inspect it: `docker volume inspect
+  # neurogrim_caddy_data` (compose prefixes volume names with the project).
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,80 @@
+# NeuroGrim — Caddy reverse proxy for A2A peers (Remote-Agent Topology, Phase 2).
+#
+# Fronts the agent containers behind a single TLS-terminating gateway. Callers
+# reach agents via `https://<agent>.localhost/` instead of directly on port
+# 8421/8422, which gets us:
+#
+#   * HTTPS by default (Caddy's internal CA for dev; swap `tls internal` for
+#     `tls <email>` to enable Let's Encrypt in production).
+#   * One place to rotate certs, add auth middleware, rate-limit, etc.
+#   * An uniform URL shape — `https://<agent>.localhost/` — that survives
+#     moving agents between hosts. The `.localhost` TLD is reserved by
+#     RFC 6761 and always resolves to 127.0.0.1; no /etc/hosts edits needed.
+#
+# Honest about what this IS and ISN'T:
+#   * IS: local-dev posture. `tls internal` issues certs signed by Caddy's
+#     own root CA, which lives in the `caddy_data` volume. Trust the root
+#     once (see deploy/README.md) and every *.localhost site just works.
+#   * ISN'T: production. For real deployment, set `email` in the global
+#     block and replace each `tls internal` with an omitted `tls` directive
+#     — Caddy will auto-provision Let's Encrypt certs when the hostnames
+#     are publicly reachable.
+#
+# Agent Card note (spec §13.2): the `transport.endpoint` field each agent
+# advertises is *informational*. Callers obtain routable URLs from the
+# registry (or from operator knowledge), not from the card. This matters
+# because agents running in containers don't know the outside hostname
+# Caddy assigns them — they still advertise `http://127.0.0.1:8421/a2a/v1/`,
+# and that's fine as long as no client treats it as authoritative for
+# routing.
+
+{
+	# Use Caddy's internal CA for every site below. The alternative
+	# (public ACME) would fail for *.localhost since those hostnames
+	# aren't resolvable from the internet.
+	local_certs
+
+	# Disable the public /etc/resolv.conf-based resolver attempt — we
+	# only talk to Docker-network service names here.
+	admin off
+}
+
+# ---------------------------------------------------------------------------
+# neurogrim-local — the parent Brain.
+# ---------------------------------------------------------------------------
+neurogrim-local.localhost {
+	tls internal
+
+	# `neurogrim-local:8421` is the Docker-network DNS name the compose
+	# file gives the agent container. Internal plaintext is fine here —
+	# the hop is inside the same Docker bridge, not over the wire.
+	#
+	# We use Caddy's default Host rewriting (Host = upstream hostport).
+	# axum's router doesn't vhost on Host, so the agent doesn't care
+	# which subdomain carried the request. If we ever want per-subdomain
+	# auth gating at the agent, add `header_up Host {host}` to preserve
+	# the client's Host header.
+	reverse_proxy neurogrim-local:8421
+
+	# One access-log line per request, JSON so it's easy to grep/parse.
+	# Field allow-list matches the audit discipline we use elsewhere:
+	# no request/response body, just metadata.
+	log {
+		output stdout
+		format json
+	}
+}
+
+# ---------------------------------------------------------------------------
+# neurogrim-external — the external Brain peer.
+# ---------------------------------------------------------------------------
+neurogrim-external.localhost {
+	tls internal
+
+	reverse_proxy neurogrim-external:8421
+
+	log {
+		output stdout
+		format json
+	}
+}
