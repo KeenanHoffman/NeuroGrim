@@ -105,7 +105,21 @@ sudo update-ca-certificates
 ```
 
 After that, browsers + `curl` trust `https://*.localhost` without
-`--insecure` / `--cacert`.
+`--insecure` / `--cacert`. The Rust `neurogrim` CLI also picks up the
+OS store automatically (reqwest uses `rustls-tls-native-roots`), so
+`neurogrim a2a-discover`, `neurogrim commune`, and `neurogrim score`
+all work against `https://*.localhost` end-to-end.
+
+**Windows: also add hosts entries.** The Windows resolver doesn't
+auto-resolve `*.localhost`, which breaks Rust's reqwest (curl
+special-cases it but stdlib resolvers don't). Run the helper once
+elevated:
+
+```cmd
+D:\Brains\NeuroGrim\deploy\caddy\add-hosts.cmd
+```
+
+Linux / macOS don't need this — their resolvers honor RFC 6761.
 
 ### Option B — per-call `--cacert`
 

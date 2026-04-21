@@ -21,6 +21,6 @@ neurogrim-a2a = { workspace = true }
 [dev-dependencies]
 tempfile = "3"
 axum = "0.7"
-# `default-features = false` + `rustls-tls` — keep the dev-dep in lock-step
-# with the runtime TLS choice in neurogrim-a2a (S6-DB-5).
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# `default-features = false` + `rustls-tls-native-roots` — keep the
+# dev-dep in lock-step with the runtime TLS choice in neurogrim-a2a.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }

@@ -1,0 +1,66 @@
+# Compose override that flips both agents to `--require-bearer`.
+#
+# Use this when you want the local stack to mirror the production
+# "CEO scenario" posture: every A2A task request must carry a valid
+# Authorization: Bearer <token> header. Without a token store +
+# issued tokens on the host, every request returns 401.
+#
+# Usage:
+#   docker compose \
+#       -f docker-compose.yml \
+#       -f docker-compose.bearer.yml \
+#       up -d --build
+#
+# Preparation (once, on the host):
+#   cd neurogrim
+#   cargo build --release -p neurogrim-cli
+#   ./target/release/neurogrim a2a-token issue \
+#       --store ../neurogrim-local-project/.claude/a2a-tokens.sqlite \
+#       --label ceo-alice
+#   # repeat for ../neurogrim-external-project/...
+#
+# The token stores live inside the bind-mounted workspace dirs so the
+# agent containers can read them through the same mount the host CLI
+# writes to. No new volumes required.
+#
+# Trade-offs:
+# - Adds one knob operators have to learn to use the local stack.
+# - The token store files are sqlite — binary; they don't pollute the
+#   bind-mount project dirs much, but operators should .gitignore them
+#   if those dirs are ever committed elsewhere.
+# - Agents serving a 401 on /a2a/v1/tasks* still keep /.well-known/
+#   agent-card.json PUBLIC (that's the intended discovery posture).
+
+services:
+  neurogrim-local:
+    command:
+      - "a2a-serve"
+      - "--bind"
+      - "0.0.0.0"
+      - "--port"
+      - "8421"
+      - "--project-root"
+      - "/brain"
+      - "--require-bearer"
+      - "--token-store"
+      - "/brain/.claude/a2a-tokens.sqlite"
+    volumes:
+      # Override the default ro mount — bearer mode needs the token
+      # store writable (last_used_at stamps are issued on every
+      # successful auth check; read-only would cause noisy warnings).
+      - ./neurogrim-local-project:/brain
+
+  neurogrim-external:
+    command:
+      - "a2a-serve"
+      - "--bind"
+      - "0.0.0.0"
+      - "--port"
+      - "8421"
+      - "--project-root"
+      - "/brain"
+      - "--require-bearer"
+      - "--token-store"
+      - "/brain/.claude/a2a-tokens.sqlite"
+    volumes:
+      - ./neurogrim-external-project:/brain
