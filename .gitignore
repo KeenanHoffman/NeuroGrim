@@ -59,3 +59,9 @@ TestResults/
 
 # Cargo publish dry-run logs (ephemeral, machine-local)
 neurogrim/.dry-run-logs/
+
+# A2A bearer-token stores — machine-local, issued per deployment.
+# Never commit.
+**/a2a-tokens.sqlite
+**/a2a-tokens.sqlite-shm
+**/a2a-tokens.sqlite-wal
