@@ -1,9 +1,7 @@
 # Epic: Agent Behavior Verification Extensions
 
 **Stage:** 8
-**Status:** Planning complete (2026-04-21) — planned to ship three
-stories (calibration audit → multi-judge consensus → execution-based
-rubrics). Each story unlocks the next.
+**Status:** **Complete** (2026-04-21) — all 3 stories shipped + committed. Harness now has calibration gate (§15.3), multi-judge consensus, and execution-based rubrics via the shared tool library. Agent-behavior domain is unlocked for promotion past advisory weight once an operator runs the calibration audit on real credentials.
 **Priority:** Medium
 **Goal:** Close the path from "advisory-only" to "production-gateable"
 for the `agent-behavior` domain. S7-ABV shipped the measurement; S8-ABV-EXT
@@ -21,21 +19,21 @@ evidence (EXT-3).
 
 ## Stage 8 Is Done When
 
-- [ ] `abv-run calibrate` command ships; drift report schema stable;
+- [x] `abv-run calibrate` command ships; drift report schema stable;
       harness refuses to write a trustworthy CMDB when calibration
       fails, but can be forced past the gate with a `--skip-calibration`
       flag for iteration.
-- [ ] Scenario schema supports `judge_models: [...]` for multi-judge
+- [x] Scenario schema supports `judge_models: [...]` for multi-judge
       consensus; runner invokes N judges per trial and takes the median;
       per-criterion variance is recorded in the result.
-- [ ] Scenario schema supports `tools: [...]` for execution-based
+- [x] Scenario schema supports `tools: [...]` for execution-based
       rubrics; the harness passes the tool schema to Anthropic's
       `/v1/messages`, captures `tool_use` content blocks, and surfaces
       them to the judge so rubrics can grade actual calls.
-- [ ] `agent-behavior-runner/tests/` retains 100% no-API coverage;
+- [x] `agent-behavior-runner/tests/` retains 100% no-API coverage;
       test count grows by ~15 to ~50 total.
-- [ ] e2e-sim scenario 11 remains green (harness plumbing unchanged).
-- [ ] At least one ecosystem scenario authored that uses the
+- [x] e2e-sim scenario 11 remains green (harness plumbing unchanged).
+- [x] At least one ecosystem scenario authored that uses the
       multi-judge + execution-based path end-to-end.
 
 **Anti-criteria (explicit non-goals for this stage):**
@@ -51,7 +49,7 @@ evidence (EXT-3).
 
 ### S8-ABV-EXT-1: Calibration Audit
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** M
 **Depends on:** —
 
@@ -83,19 +81,19 @@ refuses to emit a trustworthy CMDB when the live judge has drifted.
   sub-section.
 
 **Acceptance criteria:**
-- [ ] `abv-run calibrate --help` covers the subcommand.
-- [ ] Unit test: drift-report math (per-sample delta, overall
+- [x] `abv-run calibrate --help` covers the subcommand.
+- [x] Unit test: drift-report math (per-sample delta, overall
       max_drift, status classification with threshold boundaries).
-- [ ] Unit test: `abv-run scenarios` with a scripted judge that
+- [x] Unit test: `abv-run scenarios` with a scripted judge that
       hits the drift threshold refuses to write a trustworthy CMDB.
-- [ ] Gold-sample calibration schema validates as draft-07.
-- [ ] e2e-sim scenario 11 still passes (no regression).
+- [x] Gold-sample calibration schema validates as draft-07.
+- [x] e2e-sim scenario 11 still passes (no regression).
 
 ---
 
 ### S8-ABV-EXT-2: Multi-Judge Consensus
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** M
 **Depends on:** S8-ABV-EXT-1 (calibration understands multi-judge output)
 
@@ -124,20 +122,20 @@ and gives operators signal on which criteria are inherently noisy.
   from "agent is inconsistent." Document the new triage fork.
 
 **Acceptance criteria:**
-- [ ] Unit test: median-of-three aggregation handles one outlier
+- [x] Unit test: median-of-three aggregation handles one outlier
       correctly.
-- [ ] Unit test: two-judge tie breaks by higher score (documented
+- [x] Unit test: two-judge tie breaks by higher score (documented
       contract).
-- [ ] Integration test: three scripted clients returning distinct
+- [x] Integration test: three scripted clients returning distinct
       rubric scores; harness emits median + variance correctly.
-- [ ] Scenario schema examples include a multi-judge scenario that
+- [x] Scenario schema examples include a multi-judge scenario that
       passes validation.
 
 ---
 
 ### S8-ABV-EXT-3: Execution-Based Rubrics
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** L
 **Depends on:** S8-ABV-EXT-2 (consensus + calibration are the
 trust layer that makes execution-grade evidence usable)
@@ -175,16 +173,16 @@ response, and surfacing them to the judge as structured evidence.
   side they show what the extension buys.
 
 **Acceptance criteria:**
-- [ ] Tool schema library validates as draft-07 (needs a meta-schema
+- [x] Tool schema library validates as draft-07 (needs a meta-schema
       for tool definitions).
-- [ ] Unit test: agent-response parser handles mixed text + tool_use
+- [x] Unit test: agent-response parser handles mixed text + tool_use
       content correctly.
-- [ ] Unit test: scenarios without `tools` behave exactly as before
+- [x] Unit test: scenarios without `tools` behave exactly as before
       (no regression to existing 5 v1 scenarios).
-- [ ] `lsp-code-execution.yaml` passes gold-sample calibration with
+- [x] `lsp-code-execution.yaml` passes gold-sample calibration with
       a tool_use-rich gold-good response and a text-only gold-bad
       response.
-- [ ] Worked example updated with execution-based example.
+- [x] Worked example updated with execution-based example.
 
 **Biggest risk:** tool schema maintenance. Every new capability
 scenarios want to grade execution of requires a new tool schema.

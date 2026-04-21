@@ -18,7 +18,7 @@
 | 5 | Transferable Practice | In progress | 1 epic (10 stories) |
 | 6 | Dual Brain via A2A (prior name: Dual Brain Implementation) | **Complete** — DB-1..5 + DB-7 all shipped; DB-6 (Python SDK helper) remains as stretch only; Remote-Agent Topology (bearer + Caddy + webhook-sync + CEO template + e2e-sim) shipped 2026-04-21 | 1 epic (7 stories) + Remote-Agent Topology sub-epic (5 phases, all shipped) |
 | 7 | Agent Behavior Verification | **Complete** (2026-04-21) — all 7 stories shipped + committed; worked-example score-delta stub awaits first operator run | 1 epic (7 stories) — `S7-agent-behavior-verification.md` |
-| 8 | Agent Behavior Verification Extensions | Planning complete (2026-04-21) — three stories (calibration audit / multi-judge consensus / execution-based rubrics); EXT-1 unlocks the gate promotion path | 1 epic (3 stories) — `S8-agent-behavior-extensions.md` |
+| 8 | Agent Behavior Verification Extensions | **Complete** (2026-04-21) — all 3 stories (calibration audit + multi-judge consensus + execution-based rubrics) shipped. Agent-behavior domain is calibration-gated and ready for the promotion-past-advisory decision (requires operator-led calibration audit) | 1 epic (3 stories) — `S8-agent-behavior-extensions.md` |
 
 Stages are sequential but overlapping. Each stage must produce a working system, not just
 scaffolding.
