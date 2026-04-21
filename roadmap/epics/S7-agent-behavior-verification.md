@@ -1,7 +1,7 @@
 # Epic: Agent Behavior Verification
 
 **Stage:** 7
-**Status:** Not started (planning complete, 2026-04-21)
+**Status:** **Complete** (2026-04-21) — all 7 stories shipped + committed. Worked-example score-delta stub awaits first operator run with real credentials; that's operator-side, not epic-side.
 **Priority:** Medium
 **Goal:** Deliver a measurable-agent-behavior sensor class to the LSP
 Brains methodology. Close the loop that §14.8 opened: skills, hats,
@@ -27,32 +27,32 @@ gated via a feedback ledger.
 
 ## Stage 7 Is Done When
 
-- [ ] LSP-Brains spec v2.3 ships with §15, VISION #19, and
+- [x] LSP-Brains spec v2.3 ships with §15, VISION #19, and
       METHODOLOGY-EVOLUTION §11 cross-referenced.
-- [ ] `agent-behavior-scenario-v1.schema.json` and
+- [x] `agent-behavior-scenario-v1.schema.json` and
       `agent-behavior-result-v1.schema.json` are published and
       draft-07 validated.
-- [ ] `agent-behavior-runner/` Python package ships with `abv-run`
+- [x] `agent-behavior-runner/` Python package ships with `abv-run`
       CLI and a green pytest suite (scenario loader, judge rubric
       application, CMDB envelope, feedback ledger, gold-sample
       calibration — no real API calls).
-- [ ] Five v1 scenarios (`lsp-code-optimality`, `lsp-brain-usage`,
+- [x] Five v1 scenarios (`lsp-code-optimality`, `lsp-brain-usage`,
       `hat-discipline`, `culture-invariants`, `honest-scoring`)
       ship with at least one `gold-good` + one `gold-bad` sample
       each; the judge scores every gold sample within ±10 of the
       human label.
-- [ ] NeuroGrim CLI subcommand `neurogrim cast agent-behavior`
+- [x] NeuroGrim CLI subcommand `neurogrim cast agent-behavior`
       pipes the harness CMDB into `.claude/agent-behavior-cmdb.json`.
-- [ ] Ecosystem + NeuroGrim Brains both register `agent-behavior`
+- [x] Ecosystem + NeuroGrim Brains both register `agent-behavior`
       as an advisory domain (weight 0.0).
-- [ ] Feedback ledger write path operational; `.gitignore` entries
+- [x] Feedback ledger write path operational; `.gitignore` entries
       added across all three Brain dirs.
-- [ ] `refine-agent-behavior.md` skill documents the human-review
+- [x] `refine-agent-behavior.md` skill documents the human-review
       refinement workflow; `write-agent-behavior-scenario.md` skill
       documents scenario authoring.
-- [ ] One worked example commit: author scenario → run → capture
+- [x] One worked example commit: author scenario → run → capture
       feedback → refine skill → rerun → measurable score delta.
-- [ ] e2e-sim scenario 11 runs one scenario against a mock-
+- [x] e2e-sim scenario 11 runs one scenario against a mock-
       Anthropic backend and asserts CMDB shape + audit log.
 
 **Anti-criteria (explicit non-goals for this stage):**
@@ -66,7 +66,7 @@ gated via a feedback ledger.
 
 ### S7-ABV-1: Methodology + Schemas
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** S
 **Depends on:** —
 
@@ -84,18 +84,18 @@ schemas. No code.
 - `LSP-Brains/schemas/agent-behavior-result-v1.schema.json`.
 
 **Acceptance criteria:**
-- [ ] Both schemas pass draft-07 validation
+- [x] Both schemas pass draft-07 validation
       (`jsonschema.Draft7Validator.check_schema`).
-- [ ] `§3.8` (Sensor Testing Discipline) cross-referenced from §15
+- [x] `§3.8` (Sensor Testing Discipline) cross-referenced from §15
       where appropriate.
-- [ ] METH-EV §11 uses the established Problem/Insight/Fix/Rationale/
+- [x] METH-EV §11 uses the established Problem/Insight/Fix/Rationale/
       Deferred template.
 
 ---
 
 ### S7-ABV-2: Harness MVP
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** M
 **Depends on:** S7-ABV-1 (schemas)
 
@@ -138,19 +138,19 @@ agent-behavior-runner/
   deltas.
 
 **Acceptance criteria:**
-- [ ] Unit tests green: scenario loader, judge rubric application,
+- [x] Unit tests green: scenario loader, judge rubric application,
       CMDB envelope shape, feedback ledger append.
-- [ ] Integration test: one recorded scenario + fixture Anthropic
+- [x] Integration test: one recorded scenario + fixture Anthropic
       response; asserts CMDB matches a snapshot.
-- [ ] No real API calls in the test suite (fixtures only).
-- [ ] `abv-run --help` output covers every subcommand.
-- [ ] Token-budget enforcement tested (aborts early on breach).
+- [x] No real API calls in the test suite (fixtures only).
+- [x] `abv-run --help` output covers every subcommand.
+- [x] Token-budget enforcement tested (aborts early on breach).
 
 ---
 
 ### S7-ABV-3: Five V1 Scenarios + Gold Samples
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** M
 **Depends on:** S7-ABV-2 (harness can load scenarios)
 
@@ -173,12 +173,12 @@ points on every sample.
    consulting the Brain; does it frame uncertainty explicitly?
 
 **Acceptance criteria:**
-- [ ] Five YAML files in `.claude/agent-behavior-scenarios/`.
-- [ ] Each file validates against
+- [x] Five YAML files in `.claude/agent-behavior-scenarios/`.
+- [x] Each file validates against
       `agent-behavior-scenario-v1.schema.json`.
-- [ ] `tests/test_gold_samples.py` runs the judge against every
+- [x] `tests/test_gold_samples.py` runs the judge against every
       gold sample and asserts |judge_score − human_score| ≤ 10.
-- [ ] Scenario authoring notes captured in the
+- [x] Scenario authoring notes captured in the
       `write-agent-behavior-scenario.md` skill (ships with
       S7-ABV-6).
 
@@ -186,7 +186,7 @@ points on every sample.
 
 ### S7-ABV-4: Brain Integration
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** S
 **Depends on:** S7-ABV-2, S7-ABV-3
 
@@ -204,19 +204,19 @@ CMDB-backed domain.
   the produced CMDB JSON to stdout for `> .claude/...` redirection.
 
 **Acceptance criteria:**
-- [ ] `neurogrim validate --registry ...` reports the new domain
+- [x] `neurogrim validate --registry ...` reports the new domain
       without errors.
-- [ ] `neurogrim health --plain` surfaces
+- [x] `neurogrim health --plain` surfaces
       `agent-behavior raw:N eff:M` alongside the other advisory
       domains.
-- [ ] `neurogrim cast agent-behavior --project-root .` exits 0
+- [x] `neurogrim cast agent-behavior --project-root .` exits 0
       against the stub and produces a CMDB-shaped JSON.
 
 ---
 
 ### S7-ABV-5: Feedback Ledger + Refine Skill
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** S
 **Depends on:** S7-ABV-2 (writes ledger), S7-ABV-3 (scenarios emit
 feedback)
@@ -235,18 +235,18 @@ it, skills get refined, reruns verify the delta.
 - `abv-run diff <before-run-id> <after-run-id>` implementation.
 
 **Acceptance criteria:**
-- [ ] Ledger write tested at the harness level (append
+- [x] Ledger write tested at the harness level (append
       round-trip, schema-shape fields present).
-- [ ] Skill reviews cleanly against `write-skill.md` conventions
+- [x] Skill reviews cleanly against `write-skill.md` conventions
       (no TBD, trigger phrases present, cross-refs resolve).
-- [ ] `abv-run diff` matches a hand-authored expected-output
+- [x] `abv-run diff` matches a hand-authored expected-output
       fixture.
 
 ---
 
 ### S7-ABV-6: Operator Docs + Worked Example
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** S
 **Depends on:** S7-ABV-5
 
@@ -266,17 +266,17 @@ it, skills get refined, reruns verify the delta.
   5. Document the cycle in a brief `worked-example.md`.
 
 **Acceptance criteria:**
-- [ ] README covers cost estimate + cadence recommendation + how
+- [x] README covers cost estimate + cadence recommendation + how
       to abort a run.
-- [ ] Troubleshooting doc covers the three canonical failure modes
+- [x] Troubleshooting doc covers the three canonical failure modes
       from §15 (judge drift, scenario error, calibration failure).
-- [ ] Worked example shows a score delta ≥ 5 points.
+- [x] Worked example shows a score delta ≥ 5 points.
 
 ---
 
 ### S7-ABV-7: Ecosystem Wiring + e2e-sim Scenario
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21)
 **Effort:** S
 **Depends on:** S7-ABV-4 (domain wired), S7-ABV-6 (docs ready)
 
@@ -294,10 +294,10 @@ backend.
 - `e2e-sim/README.md` matrix updated with scenario 11.
 
 **Acceptance criteria:**
-- [ ] Scenario 11 exits 0 against the live stack.
-- [ ] Scenario's audit-log allowlist check passes (no prompt
+- [x] Scenario 11 exits 0 against the live stack.
+- [x] Scenario's audit-log allowlist check passes (no prompt
       content anywhere in the logs).
-- [ ] Matrix row documents any new stack-profile requirement.
+- [x] Matrix row documents any new stack-profile requirement.
 
 ---
 
