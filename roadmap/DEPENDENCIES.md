@@ -132,6 +132,18 @@ TP-5   TP-7      |           |
 | S6-DB-3 (Brain A2A server) | S6-DB-4 (dual brain pair test) | Both peers run a2a-serve in the integration test |
 | S6-DB-4 (pair test) | S6-DB-5 (external deployment) | Deployment depends on verified pair behavior |
 
+### Planned (Stage 7 — Agent Behavior Verification)
+
+| From | To | Reason |
+|------|----|--------|
+| S5-TP-9 (Cultural Substrate) | S7-ABV-3 (scenarios) | `culture-invariants` scenario grades the five canonical culture values directly. |
+| S6-DB-5 (claude-proxy operational) | S7-ABV-2 (harness) | The harness reuses claude-proxy for Anthropic API mediation + token hygiene + audit allowlist. |
+| S7-ABV-1 (schemas) | S7-ABV-2 (harness) | Scenario + result schemas must exist before the loader + CMDB emitter can be implemented. |
+| S7-ABV-2 (harness) | S7-ABV-3 (scenarios) | Gold-sample calibration tests need the harness to invoke the judge. |
+| S7-ABV-3 (scenarios) | S7-ABV-4 (Brain integration) | `cast agent-behavior` dispatch is pointless without real scenarios to run. |
+| S7-ABV-2 (harness) | S7-ABV-5 (feedback ledger) | The ledger write path is implemented inside the harness. |
+| S7-ABV-4 (integration) + S7-ABV-6 (docs) | S7-ABV-7 (e2e-sim scenario) | End-to-end scenario requires the full integration surface + documented operator workflow. |
+
 ---
 
 ## S5 Parallelization

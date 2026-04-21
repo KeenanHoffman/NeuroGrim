@@ -317,6 +317,23 @@ These guide every decision. When in doubt, choose the option that advances these
     drift. Feedback loops are cheap; silent drift is expensive. See spec §3.8 and
     METHODOLOGY-EVOLUTION §8.
 
+19. **Agents are sensed.** Principle #18 says the observer needs an observer. This
+    goes one level deeper: the agents *running* the observers must themselves be
+    scorable. Skills describe how an agent SHOULD behave; hats describe how it SHOULD
+    attend; culture describes the invariants it SHOULD never violate. Without a
+    measurement layer, these are declarations without verification — the same failure
+    mode §14.8 acknowledged for culture drift, generalized to every facet of agent
+    behavior. LSP Brains answers this with scenario-driven verification: a rubric-
+    scored probe run against the agent-under-test, with results aggregated into a
+    regular CMDB domain (`agent-behavior`) and a feedback ledger that closes the loop
+    back to skill authors. The agent is graded; the human refines; the next run
+    measures the refinement. Critically, the agent-under-test does NOT write back to
+    the skills it is graded against — the bright line that keeps the mechanism from
+    degenerating into self-training. Non-deterministic verification of non-deterministic
+    behavior is messier than deterministic tests; the mess is load-bearing, and the
+    distributional interpretation of scores is what makes it honest. See spec §15,
+    `agent-behavior-scenario-v1.schema.json`, and METHODOLOGY-EVOLUTION §11.
+
 ---
 
 ## What Success Looks Like
