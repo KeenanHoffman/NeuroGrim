@@ -169,6 +169,49 @@ respond per §15.3.
 
 Until human-resolved, keep `agent-behavior`'s weight at 0.0 (advisory).
 
+### The calibration gate (S8-ABV-EXT-1)
+
+As of S8-ABV-EXT-1, the harness runs a live-judge calibration pass
+BEFORE each trials run (`abv-run scenarios`) and refuses to emit a
+trustworthy CMDB when the max per-sample drift exceeds the threshold
+(default 10 points). To invoke calibration without running trials:
+
+```bash
+abv-run calibrate D:/Brains/.claude/agent-behavior-scenarios/ --threshold 10
+```
+
+Exit code: `0` on pass / drift-warning, `4` on drift-blocker. The
+stdout is a JSON drift report conforming to
+`calibration-report-v1.schema.json`; stderr has a human-readable
+summary.
+
+Common verdicts:
+
+- **`drift-blocker` with `systematic_bias` ≈ 0, high `max_drift`**
+  — the judge is noisy on specific samples but not uniformly
+  biased. First suspect: the model rotated AND a specific
+  scenario's rubric happens to sit in a region of that rotation's
+  weakness. Rerun calibration 2-3 times; if drift persists only on
+  one scenario, version-bump that scenario's rubric.
+- **`drift-blocker` with large `systematic_bias`** (e.g., +18
+  across all samples) — uniform generosity / harshness. Nearly
+  always the judge prompt changed OR the model rotated to a
+  different personality family. Pin the judge model explicitly
+  in each scenario YAML before anything else.
+- **`drift-warning`** — every sample within 2×threshold. Scenarios
+  run but the CMDB carries `judge_calibration.status:
+  drift-warning` so downstream consumers know trust is reduced.
+  Refine rubrics OR tighten the threshold OR switch models.
+
+If drift-blocker is recurring and you need to iterate on scenarios
+while it's unblocked, the `--skip-calibration` flag on `abv-run
+scenarios` is the iteration-mode escape hatch. The CMDB emitted
+under `--skip-calibration` is flagged `judge_calibration.status:
+skipped` so no consumer accidentally trusts it.
+
+**Never promote `agent-behavior` past advisory weight while
+calibration is blocking.** That's the main thing this gate is for.
+
 ---
 
 ## Failure mode 3: Calibration failure
