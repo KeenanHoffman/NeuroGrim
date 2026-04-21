@@ -15,6 +15,11 @@
 .claude/brain/subagent-outcomes.jsonl
 .claude/brain/subagent-health-cmdb.json
 .claude/coherence-cmdb.json
+# Agent-behavior verification state (spec §15 / S7-ABV). Feedback
+# ledger is per-deployment; per-run result records are ephemeral.
+.claude/brain/agent-behavior-feedback.jsonl
+.claude/brain/agent-behavior-latest.json
+.claude/brain/agent-behavior-runs/
 
 # Local machine awareness — machine-specific facts, never commit
 .claude/brain/local-awareness.json
