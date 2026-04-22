@@ -244,6 +244,88 @@ Verify the overall_status is back to `pass`. If it isn't:
 
 ---
 
+## Mock-mode triage (S9-ABV-RED-4)
+
+`abv-run red-mode` is the live-generation sibling of the
+pre-recorded red-sample path. Its output is a report, not ledger
+entries — but the triage thinking is similar, with one additional
+decision branch.
+
+When a mock-mode report shows `red-miss` at a mode summary, apply
+the same three-way diagnostic from above, plus a fourth to watch:
+
+4. **`adversary-miscalibrated`** — the mock adversary produced output
+   that's either (a) too cartoonish (every trial scores near zero;
+   the "miss" is an artifact of the judge picking up the caricature)
+   or (b) too subtle (every trial scores mid-range; what you're
+   measuring is adversary-subtlety-drift, not judge integrity).
+   Signal: low variance across trials paired with scores that cluster
+   tightly around some value. Action: revise the adversary's
+   `system_prompt` in `.claude/agent-behavior-adversary-prompts.yaml`
+   so the generated responses are realistic-middling, not extreme.
+   Do NOT edit the judge prompt.
+
+### When to promote a mock response to a pre-recorded sample
+
+A high-signal mock response is one that:
+
+- Displays the failure mode clearly (not cartoonish, not subtle).
+- Scores over ceiling (red-miss observed).
+- Was not byte-identical to an existing pre-recorded sample.
+
+Promotion path (manual — mock-mode does NOT auto-write the
+ledger):
+
+1. Copy the mock response from `trial_results[].response` in the
+   report.
+2. Author it into the scenario's `red_samples[]` array following
+   `write-agent-behavior-scenario.md` § "Adding red samples".
+3. Use a `notes` field citing the mock-mode report's `run_id` for
+   provenance.
+4. Re-run `abv-run calibrate` — the new sample enters the stable
+   pre-recorded library and the judge-integrity ledger thereafter.
+
+This is the only path for mock-sourced evidence to enter the
+judge-integrity ledger. The intermediate human step preserves the
+ledger's stable-ID discipline and keeps triage grounded in
+reviewed authoring judgment.
+
+### Reading a mock-mode report
+
+```bash
+abv-run red-mode .claude/agent-behavior-scenarios/ \
+    --output /tmp/red-mode-report.json
+
+# Overall verdict
+jq .overall_status /tmp/red-mode-report.json
+
+# Per-mode summaries (compact)
+jq '.mode_summaries[] | {mode, status, missed: .trials_missed,
+  max_over_ceiling}' /tmp/red-mode-report.json
+
+# Full per-trial records for deep review
+jq '.trial_results[] | select(.status == "red-miss")' \
+   /tmp/red-mode-report.json
+```
+
+Key fields:
+
+- `canary_gate` — if `fail`, the sweep aborted; address the
+  harness before interpreting anything else.
+- `mode_summaries[].max_over_ceiling` — highest miss margin per
+  mode. High margin = qualitative judge failure; small margin =
+  could be honest variance.
+- `mode_summaries[].mean_score` — the adversary's average score
+  under this judge. Signal for `adversary-miscalibrated`: if mean
+  is 10 for a ceiling-45 mode, adversary is producing
+  cartoonish output; if mean is 44, adversary is producing subtle
+  output that's barely-bad. Both call for adversary prompt
+  revision, not judge changes.
+- `trial_results[].response` — the mock response itself. Review
+  when deciding whether to promote.
+
+---
+
 ## When to escalate instead of triage
 
 - **Multiple `confirmed-judge-miss` entries on the same criterion

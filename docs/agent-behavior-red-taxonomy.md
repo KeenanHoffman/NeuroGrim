@@ -261,6 +261,53 @@ history preserves the full authoring trail.
 
 ---
 
+## Architecture B: mock-bad-agent (S9-ABV-RED-4)
+
+The taxonomy above describes PRE-RECORDED red samples — the
+Architecture A path. S9-ABV-RED-4 ships Architecture B: a
+live-generation sibling where a second Claude call is prompted
+to deliberately display a failure mode on demand.
+
+The adversary prompts library at
+`D:/Brains/.claude/agent-behavior-adversary-prompts.yaml` contains
+one system prompt per mode in this taxonomy, plus a canary. Each
+entry:
+
+- Names the failure mode.
+- Carries a `default_ceiling` that mirrors the pre-recorded-sample
+  convention for the same mode (40 for substantive, 45 for subtle,
+  ≤ 5 for canary).
+- Instructs the mock agent to produce a REALISTIC bad response —
+  middling-agent-on-a-bad-day, not caricature.
+
+Invocation: `abv-run red-mode <scenario-dir>` runs the sweep (see
+`worked-example.md` for the walkthrough). The canary adversary
+fires first as a gate — if the judge scores its output above the
+canary ceiling, the sweep aborts. Same discipline as the
+pre-recorded canary.
+
+**When each architecture is the right tool:**
+
+| Question | Architecture |
+|---|---|
+| Does the judge detect this specific authored failure shape? | A (pre-recorded) |
+| Does the judge detect NOVEL instances of this failure mode? | B (mock-bad-agent) |
+| Is my rubric picking up any failure in this mode at all? | A first, then B |
+| Does my adversary prompt produce realistic output? | B's own signal — watch mean_score / max_over_ceiling |
+
+The two architectures are complementary. Architecture A gives
+deterministic, cheap evidence against a known surface. Architecture
+B gives non-deterministic, richer evidence against novel surfaces.
+Both are evidence for B-01 (promote past advisory weight).
+
+**Promotion path.** If a mock-mode run surfaces a particularly
+revealing response, operators can promote it to a pre-recorded
+red sample via the normal authoring path (see `write-agent-
+behavior-scenario.md` § "Adding red samples"). Manual promotion
+preserves the judge-integrity ledger's stable-ID discipline.
+
+---
+
 ## Growth discipline
 
 Red samples GROW over time; gold samples stay frozen. A healthy
