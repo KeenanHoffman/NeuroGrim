@@ -1,7 +1,7 @@
 {
   "brains": {
     "ecosystem": {
-      "claude_md_tokens": 2300,
+      "claude_md_tokens": 2466,
       "mcp_tool_list_tokens": 0,
       "skills": [
         {
@@ -78,13 +78,13 @@
         },
         {
           "path": "write-skill.md",
-          "tokens": 1581
+          "tokens": 1729
         }
       ],
       "totals": {
-        "cold_start": 40988,
-        "delta": 36788,
-        "toc_projected": 4200
+        "cold_start": 41302,
+        "delta": 36936,
+        "toc_projected": 4366
       }
     },
     "lsp-brains": {
@@ -107,7 +107,7 @@
       }
     },
     "neurogrim": {
-      "claude_md_tokens": 1679,
+      "claude_md_tokens": 1913,
       "mcp_tool_list_tokens": 983,
       "skills": [
         {
@@ -188,13 +188,13 @@
         },
         {
           "path": "write-skill.md",
-          "tokens": 1581
+          "tokens": 1729
         }
       ],
       "totals": {
-        "cold_start": 41067,
-        "delta": 36688,
-        "toc_projected": 4379
+        "cold_start": 41449,
+        "delta": 36836,
+        "toc_projected": 4613
       }
     },
     "python-starter": {
@@ -361,18 +361,18 @@
         "ecosystem",
         "neurogrim"
       ],
-      "tokens_each": 1581,
-      "waste_on_full_stack": 1581
+      "tokens_each": 1729,
+      "waste_on_full_stack": 1729
     }
   ],
-  "generated_at": "2026-04-22T10:59:40.569498500+00:00",
+  "generated_at": "2026-04-22T11:32:04.306870600+00:00",
   "summary": {
     "decision_zone_verdict_preliminary": "proceed to Phase 2",
-    "dup_waste_total": 39143,
+    "dup_waste_total": 39291,
     "median_skill_tokens": 1928,
     "p90_skill_tokens": 3005,
     "worst_cold_start_brain": "neurogrim",
-    "worst_tokens": 41067
+    "worst_tokens": 41449
   },
   "tokenizer": "tiktoken-rs cl100k_base",
   "tokenizer_caveat": "cl100k_base is not Claude's tokenizer; ±10-20%. Re-run via Anthropic token-counting API in the ambiguous zone."

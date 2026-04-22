@@ -65,6 +65,23 @@ Methodology-step: skills
 | 40-200 tokens | Sweet spot. Plenty of routing signal, fits within the 1,536-char budget. |
 | > 300 tokens | Over-described. Move narrative into the body; keep lead terse. |
 
+**Optional frontmatter:** `usage-rarity`
+
+Skills that are deliberately niche — invoked once a quarter, once a year,
+only during incidents — can declare:
+
+```markdown
+usage-rarity: rare
+```
+
+in the lead paragraph (before the first `## ` header). This extends the
+`capability-hygiene` dead-skill window from 90 days to 365 days, so
+`rollback-deployment.md`, `incident-response.md`, and similar
+safety-critical skills don't get flagged as dead during quiet periods.
+Default is `common` (90-day window). Use `rare` only when the skill is
+genuinely invoked rarely by design — overclassifying hides real dead
+capabilities.
+
 **Anti-patterns:**
 - Using `## When to Use This Skill` as a section header instead of the lead
   paragraph — the description-block extractor stops at the first `## ` header, so

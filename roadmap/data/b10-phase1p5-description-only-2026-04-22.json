@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-22T11:00:25.509138100+00:00",
+  "generated_at": "2026-04-22T11:32:39.398667800+00:00",
   "hygiene_distribution": {
     "excellent (10-25%)": 19,
     "good (5-10% or 25-40%)": 21,
@@ -198,20 +198,20 @@
         {
           "combined_tokens": 145,
           "description_tokens": 98,
-          "full_tokens": 1581,
+          "full_tokens": 1729,
           "hygiene_bucket": "good (5-10% or 25-40%)",
-          "hygiene_pct_desc_of_body": 6.1986084756483235,
+          "hygiene_pct_desc_of_body": 5.668016194331984,
           "outline_tokens": 47,
           "path": "write-skill.md",
-          "reduction_pct": 90.82858950031626
+          "reduction_pct": 91.61364950838635
         }
       ],
       "totals": {
         "description_only": 3587,
         "description_plus_outline": 5229,
-        "full_body": 38688,
+        "full_body": 38836,
         "outline_only": 1642,
-        "reduction_pct_desc_plus_outline": 86.48418114143921
+        "reduction_pct_desc_plus_outline": 86.53568853640952
       }
     },
     "lsp-brains": {
@@ -442,29 +442,29 @@
         {
           "combined_tokens": 145,
           "description_tokens": 98,
-          "full_tokens": 1581,
+          "full_tokens": 1729,
           "hygiene_bucket": "good (5-10% or 25-40%)",
-          "hygiene_pct_desc_of_body": 6.1986084756483235,
+          "hygiene_pct_desc_of_body": 5.668016194331984,
           "outline_tokens": 47,
           "path": "write-skill.md",
-          "reduction_pct": 90.82858950031626
+          "reduction_pct": 91.61364950838635
         }
       ],
       "totals": {
         "description_only": 3431,
         "description_plus_outline": 5056,
-        "full_body": 38405,
+        "full_body": 38553,
         "outline_only": 1625,
-        "reduction_pct_desc_plus_outline": 86.83504751985419
+        "reduction_pct_desc_plus_outline": 86.88558607631053
       }
     }
   },
   "stack_totals": {
     "description_only": 7396,
     "description_plus_outline": 10829,
-    "full_body": 81957,
+    "full_body": 82253,
     "outline_contribution": 3433,
-    "stack_reduction_pct_with_desc_plus_outline": 86.78697365691765
+    "stack_reduction_pct_with_desc_plus_outline": 86.83452275296949
   },
   "tokenizer": "tiktoken-rs cl100k_base"
 }

@@ -69,6 +69,50 @@ Governs: neurogrim-core/src/scoring.rs, neurogrim-core/src/agent_output.rs
 
 ---
 
+## Optional Frontmatter: `usage-rarity`
+
+Skills that are deliberately niche — invoked once a quarter, once a
+year, only during incidents — can declare their rarity to opt into a
+longer dead-skill detection window.
+
+```markdown
+usage-rarity: rare
+```
+
+Place this line in the lead paragraph, before the first `## ` section.
+Case-insensitive.
+
+**Effect on `capability-hygiene`:**
+
+| Rarity | Dead-skill window | Meaning |
+|---|---|---|
+| `common` (default) | 90 days | Most skills. 0 invocations in 90 days → flagged dead. |
+| `rare` | 365 days | Niche skills. 0 invocations in 365 days → flagged dead. |
+
+**When to declare `rare`:**
+
+- Safety-critical skills: `rollback-deployment.md`, `incident-response.md`.
+- Quarterly/annual procedures: compliance audits, DR drills.
+- Setup / bootstrap skills that run once per project.
+
+**When NOT to declare `rare`:**
+
+- Skill is new and hasn't had time to accrue invocations — the
+  30-day grace period handles that automatically.
+- Skill has a bad description and nobody invokes it because of
+  routing failure — fixing the description, not changing rarity, is
+  the right response.
+- You're trying to suppress a dead-skill finding that's surfacing a
+  real problem. `rare` is for genuine niche use, not a quieting flag.
+
+**Plan-critic note on self-reinforcing blind spots:** `rare` + no
+invocations for 365 days is still a valid dead signal; eventually
+even niche skills need to either be demonstrated useful or archived.
+The 365-day threshold isn't a hiding place; it's a more patient
+observation window.
+
+---
+
 ## Trigger Phrases — Deeper Notes
 
 A comma-separated list of natural-language phrases an agent or

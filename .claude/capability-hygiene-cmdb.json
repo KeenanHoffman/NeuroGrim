@@ -94,166 +94,291 @@
           "description_chars": 310,
           "description_tokens_approx": 77,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "a2a.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 2,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 579,
           "description_tokens_approx": 144,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "cli-mode.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 748,
           "description_tokens_approx": 187,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "coherence.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 807,
           "description_tokens_approx": 201,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "dual-review.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 924,
           "description_tokens_approx": 231,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "hats.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 2,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 827,
           "description_tokens_approx": 206,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "human-comms.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 844,
           "description_tokens_approx": 211,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "imagination-mode.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 753,
           "description_tokens_approx": 188,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "north-star.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 298,
           "description_tokens_approx": 74,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "peer-brain.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 2,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 907,
           "description_tokens_approx": 226,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "pilot-protocol.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 799,
           "description_tokens_approx": 199,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "plan-critic.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 992,
           "description_tokens_approx": 248,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "refine-judge-integrity.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 856,
           "description_tokens_approx": 214,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "review-loop.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 2,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 528,
           "description_tokens_approx": 132,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "rubber-duck.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 4,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 802,
           "description_tokens_approx": 200,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "secret-refs.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 974,
           "description_tokens_approx": 243,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "security-standards.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 791,
           "description_tokens_approx": 197,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "skill-deprecation.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 1063,
           "description_tokens_approx": 265,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "subagent-patterns.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 575,
           "description_tokens_approx": 143,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "sync-ecosystem.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 2,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         },
         {
           "description_chars": 424,
           "description_tokens_approx": 106,
           "has_when_to_use_signal": true,
+          "invocations_in_window": 0,
+          "last_invoked": null,
           "path": "write-skill.md",
           "points": 10,
-          "status": "compliant"
+          "skill_age_days": 0,
+          "status": "compliant",
+          "usage_rarity": "common",
+          "usage_status": "new",
+          "window_days": 90
         }
       ],
       "earned": 200,
+      "ledger:low_confidence": 1,
+      "ledger:total_invocations": 0,
       "possible": 200,
-      "total": 20
+      "total": 20,
+      "usage:alive": 0,
+      "usage:dead": 0,
+      "usage:new": 20
     },
     "subagents": {
       "compliant": 0,
@@ -450,7 +575,7 @@
   ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-22T10:57:10.954902700+00:00",
+    "updated_at": "2026-04-22T11:33:00.223562300+00:00",
     "updated_by": "capability-hygiene"
   },
   "missing_when_to_use_count": 0,
@@ -462,165 +587,285 @@
       "description_chars": 310,
       "description_tokens_approx": 77,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "a2a.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 2,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 579,
       "description_tokens_approx": 144,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "cli-mode.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 748,
       "description_tokens_approx": 187,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "coherence.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 807,
       "description_tokens_approx": 201,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "dual-review.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 924,
       "description_tokens_approx": 231,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "hats.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 2,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 827,
       "description_tokens_approx": 206,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "human-comms.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 844,
       "description_tokens_approx": 211,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "imagination-mode.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 753,
       "description_tokens_approx": 188,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "north-star.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 298,
       "description_tokens_approx": 74,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "peer-brain.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 2,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 907,
       "description_tokens_approx": 226,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "pilot-protocol.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 799,
       "description_tokens_approx": 199,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "plan-critic.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 992,
       "description_tokens_approx": 248,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "refine-judge-integrity.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 856,
       "description_tokens_approx": 214,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "review-loop.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 2,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 528,
       "description_tokens_approx": 132,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "rubber-duck.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 4,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 802,
       "description_tokens_approx": 200,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "secret-refs.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 974,
       "description_tokens_approx": 243,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "security-standards.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 791,
       "description_tokens_approx": 197,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "skill-deprecation.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 1063,
       "description_tokens_approx": 265,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "subagent-patterns.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 575,
       "description_tokens_approx": 143,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "sync-ecosystem.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 2,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     },
     {
       "description_chars": 424,
       "description_tokens_approx": 106,
       "has_when_to_use_signal": true,
+      "invocations_in_window": 0,
+      "last_invoked": null,
       "path": "write-skill.md",
       "points": 10,
-      "status": "compliant"
+      "skill_age_days": 0,
+      "status": "compliant",
+      "usage_rarity": "common",
+      "usage_status": "new",
+      "window_days": 90
     }
   ],
   "total_capabilities": 54,
   "total_skills": 20,
   "under_described_count": 0,
-  "updated_at": "2026-04-22T10:57:10.954902700+00:00"
+  "updated_at": "2026-04-22T11:33:00.223562300+00:00"
 }

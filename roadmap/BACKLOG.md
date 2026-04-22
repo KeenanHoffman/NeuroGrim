@@ -11,19 +11,23 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (**Tier 2 broader-adoption shipped**:
-`capability-hygiene` generalized to score 6 capability types —
-skills, subagents, MCP tools, hats, correlations, personas —
-with per-type breakdown + backward-compat fields. All 4 Brains
-now score 100/100 on the aggregated domain: NeuroGrim has 54
-capabilities across 5 types; ecosystem has 43 (19 skills + 24
-tools via recursive Rust scanning of NeuroGrim); LSP-Brains 2;
-python-starter 0. 271 workspace tests pass (+7 from Tier 2).
-Tier 3 (Axis 4 — usage telemetry) remains tabled per 2026-04-22
-decision. Earlier same-day: Tier 1 (B-13 full rollout + Axis 2
-ecosystem-wide registration); B-11/B-12 shipped; record
-correction parked B-10, contracted B-11/B-12, closed S11; B-09
-shipped.).
+**Last updated:** 2026-04-22 (**Axis 4 v1 shipped** — empirical
+self-observability. PostToolUse hook captures every `Skill`
+tool invocation to `.claude/brain/invocation-ledger.jsonl` (name
++ timestamp only, privacy-by-design). `capability-hygiene`
+extended with ledger reader + usage-rarity frontmatter + dead-
+skill classifier (alive/dead/new with 30-day grace period,
+default 90-day window, 365-day for `usage-rarity: rare`). Dead
+findings are advisory — no hygiene points deducted, marked
+`low-confidence-*` when ledger is sparse. All 4 Brains at
+100/100. 281 workspace tests pass (+10 new). Hook contract
+validated against Claude Code 2.1.111 (matcher `"Skill"` fires;
+stdin JSON on Git Bash via plain `cat`). v2 (miss rate —
+scenario-driven) still gated on v1 dogfoods cleanly for 2 weeks.
+Earlier same-day: Tier 2 generalized capability-hygiene to 6
+capability types; Tier 1 (B-13 full rollout + Axis 2
+registration); B-11/B-12 shipped; B-10 parked; S11 closed;
+B-09 shipped.).
 
 ---
 

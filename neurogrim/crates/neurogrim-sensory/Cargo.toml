@@ -28,3 +28,7 @@ jsonschema = "0.17"
 # programmatically populated TempDir; tempfile handles cleanup.
 tempfile = "3"
 tokio = { workspace = true }
+# Axis 4 v1 (2026-04-22) — dead-skill tests need to backdate file
+# mtimes to simulate old skills. std::fs doesn't offer write access
+# to mtime on stable Rust.
+filetime = "0.2"

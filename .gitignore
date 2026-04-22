@@ -14,6 +14,10 @@
 .claude/brain/proposal-ledger.json
 .claude/brain/subagent-outcomes.jsonl
 .claude/brain/subagent-health-cmdb.json
+# Axis 4 v1 (2026-04-22) — Skill invocation ledger fed by the
+# PostToolUse hook at scripts/record-skill-invocation.sh. Per-deployment
+# runtime state; append-only JSONL.
+.claude/brain/invocation-ledger.jsonl
 .claude/coherence-cmdb.json
 # Agent-behavior verification state (spec §15 / S7-ABV). Feedback
 # ledger is per-deployment; per-run result records are ephemeral.

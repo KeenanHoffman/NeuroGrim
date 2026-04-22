@@ -103,6 +103,27 @@ Ten grimoire-themed aliases are available for most CLI commands
 `README.md` § Command aliases for the full table, or run
 `neurogrim --help` to verify the live list.
 
+## Invocation Ledger (Axis 4 v1 — 2026-04-22)
+
+Every `Skill` tool invocation can be recorded to a per-Brain ledger
+at `.claude/brain/invocation-ledger.jsonl` via a PostToolUse hook.
+The `capability-hygiene` domain reads this ledger to classify each
+skill as **alive**, **dead**, or **new** — closing the empirical
+side of the three-axis self-observability loop (hygiene · invocation
+· future miss-rate).
+
+**Setup:** add the PostToolUse hook to `.claude/settings.local.json`
+pointing at `scripts/record-skill-invocation.sh`. Operator setup
+guide + privacy stance + troubleshooting in
+[`docs/invocation-ledger.md`](docs/invocation-ledger.md).
+
+**Privacy-by-design:** the ledger captures name + timestamp only.
+No arguments, no tool responses, no transcript content.
+
+**Opt-in posture:** ledger is gitignored; the `capability-hygiene`
+domain works with or without it (no ledger = every skill scored as
+"new", grace-period applies to everyone).
+
 ## Tool Invocation Mode (MCP vs CLI)
 
 NeuroGrim exposes its seven BrainServer scoring tools two ways —

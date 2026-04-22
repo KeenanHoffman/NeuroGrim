@@ -86,6 +86,28 @@ const CORRELATION_MIN_DESC_CHARS: usize = 60;
 /// Correlation: minimum insight length (chars).
 const CORRELATION_MIN_INSIGHT_CHARS: usize = 20;
 
+// ── Axis 4 v1 (2026-04-22): invocation ledger + dead-skill detection ─────────
+
+/// Days without invocation before a skill is flagged dead (default).
+/// Skills can opt out of this default by declaring
+/// `usage-rarity: rare` in their frontmatter, which bumps to
+/// `DEAD_WINDOW_DAYS_RARE`.
+const DEAD_WINDOW_DAYS_DEFAULT: i64 = 90;
+
+/// Extended window for skills marked `usage-rarity: rare`. Examples:
+/// incident-response, rollback-deployment — invoked once a quarter/year.
+const DEAD_WINDOW_DAYS_RARE: i64 = 365;
+
+/// Grace period after a skill file is created. Freshly-authored skills
+/// get this window to accrue invocations before being flagged dead.
+/// File mtime is the proxy for skill age (imperfect after a fresh clone
+/// but acceptable for v1 — see plan-critic notes).
+const GRACE_PERIOD_DAYS: i64 = 30;
+
+/// Below this total invocation count across the ledger, dead findings
+/// are marked `low_confidence`. Small sample sizes produce noisy signals.
+const LOW_CONFIDENCE_TOTAL_INVOCATIONS: usize = 20;
+
 // ── MCP Server glue ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -297,6 +319,20 @@ fn score_skills(root: &Path) -> TypeResult {
         return result;
     }
 
+    // Axis 4 v1: read the invocation ledger once and classify each
+    // skill as alive/dead/new. Dead findings are ADVISORY — they don't
+    // subtract hygiene points (hygiene = description quality; usage =
+    // separate axis). Findings surface the observation; operator reads
+    // + decides.
+    let now = chrono::Utc::now();
+    let ledger = read_invocation_ledger(root, now);
+    let low_confidence = ledger.total_invocations < LOW_CONFIDENCE_TOTAL_INVOCATIONS;
+
+    // Per-type usage-status tally for the CMDB breakdown extras.
+    let mut alive_count = 0usize;
+    let mut dead_count = 0usize;
+    let mut new_count = 0usize;
+
     for (name, body) in files {
         let description = extract_description_block(&body);
         let chars = description.chars().count();
@@ -339,6 +375,41 @@ fn score_skills(root: &Path) -> TypeResult {
             )
         };
 
+        // Axis 4 v1: usage classification.
+        let rarity = parse_usage_rarity(description);
+        let window_days = if rarity == "rare" {
+            DEAD_WINDOW_DAYS_RARE
+        } else {
+            DEAD_WINDOW_DAYS_DEFAULT
+        };
+        // Trim `.md` when looking up in the ledger. The hook records
+        // Claude Code's skill name (no extension); the on-disk file has
+        // `<name>.md`. Both representations are tolerated — we check
+        // both to avoid false negatives during the v1 transition.
+        let stripped_name = name.strip_suffix(".md").unwrap_or(&name);
+        let usage = ledger
+            .per_skill
+            .get(stripped_name)
+            .or_else(|| ledger.per_skill.get(&name))
+            .cloned()
+            .unwrap_or_default();
+        let invocations_in_window = if rarity == "rare" {
+            usage.count_rare_window
+        } else {
+            usage.count_default_window
+        };
+        let age_days = skill_age_days(root, &name, now);
+        let usage_status: &'static str = if age_days < GRACE_PERIOD_DAYS {
+            new_count += 1;
+            "new"
+        } else if invocations_in_window == 0 {
+            dead_count += 1;
+            "dead"
+        } else {
+            alive_count += 1;
+            "alive"
+        };
+
         let detail = json!({
             "path": name,
             "description_chars": chars,
@@ -346,8 +417,15 @@ fn score_skills(root: &Path) -> TypeResult {
             "has_when_to_use_signal": has_signal,
             "status": status,
             "points": points,
+            "usage_rarity": rarity,
+            "usage_status": usage_status,
+            "window_days": window_days,
+            "invocations_in_window": invocations_in_window,
+            "last_invoked": usage.last_invoked.map(|t| t.to_rfc3339()),
+            "skill_age_days": if age_days == i64::MAX { Value::Null } else { json!(age_days) },
         });
 
+        // Hygiene finding — subtracts points as before.
         let finding = if points < 10 {
             Some(Finding {
                 name: format!("{status}:skill:{name}"),
@@ -360,7 +438,47 @@ fn score_skills(root: &Path) -> TypeResult {
         };
 
         result.add(detail, finding, points, status);
+
+        // Dead finding — ADVISORY, zero points deducted. Always surfaced
+        // unless low-confidence (total ledger below threshold), in which
+        // case the finding name is prefixed `low-confidence:`.
+        if usage_status == "dead" {
+            let confidence_prefix = if low_confidence { "low-confidence-" } else { "" };
+            let window_hint = if rarity == "rare" { "365-day rare" } else { "90-day" };
+            result.findings.push(Finding {
+                name: format!("{confidence_prefix}dead-skill:{name}"),
+                status: "dead".to_string(),
+                points: 0,
+                detail: Some(format!(
+                    "`{name}` has 0 invocations in the {window_hint} window. \
+                     skill_age_days={age_days}, total_ledger_invocations={}. \
+                     {}",
+                    ledger.total_invocations,
+                    if low_confidence {
+                        "Ledger sample size is below the confidence threshold \
+                         — treat this as a weak signal."
+                    } else {
+                        "Combine with hygiene score before acting: dead + \
+                         low hygiene = probably misdescribed; dead + high \
+                         hygiene = possibly genuine niche (consider \
+                         `usage-rarity: rare` or archive)."
+                    }
+                )),
+            });
+        }
     }
+
+    // Stash usage aggregation into the TypeResult as a special extras
+    // channel. The main orchestration reads this and injects it into
+    // the capability_breakdown.skills block.
+    result.status_counts.insert("usage:alive", alive_count);
+    result.status_counts.insert("usage:dead", dead_count);
+    result.status_counts.insert("usage:new", new_count);
+    result.status_counts.insert("ledger:total_invocations", ledger.total_invocations);
+    result.status_counts.insert(
+        "ledger:low_confidence",
+        if low_confidence { 1 } else { 0 },
+    );
 
     result
 }
@@ -760,6 +878,131 @@ fn collect_md_files(dir: &Path) -> Vec<(String, String)> {
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out
+}
+
+// ── Axis 4 v1: invocation ledger + skill age + usage-rarity ──────────────────
+
+/// Summary of a skill's invocations from the ledger. Used by
+/// `score_skills` to classify alive/dead/new.
+#[derive(Debug, Default, Clone)]
+struct SkillUsage {
+    /// Invocations in the last DEAD_WINDOW_DAYS_DEFAULT.
+    count_default_window: usize,
+    /// Invocations in the last DEAD_WINDOW_DAYS_RARE.
+    count_rare_window: usize,
+    /// Most recent invocation timestamp (any age, not windowed).
+    last_invoked: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Index of per-skill invocation counts + timestamps, plus the total
+/// ledger size (used to gate low-confidence findings).
+#[derive(Debug, Default)]
+struct InvocationIndex {
+    per_skill: std::collections::HashMap<String, SkillUsage>,
+    total_invocations: usize,
+}
+
+/// Read `{root}/.claude/brain/invocation-ledger.jsonl` into an index of
+/// per-skill usage. Tolerates missing file, missing fields, and malformed
+/// lines (each is silently skipped, never panics).
+fn read_invocation_ledger(
+    root: &Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> InvocationIndex {
+    use chrono::Duration;
+
+    let mut index = InvocationIndex::default();
+    let path = root.join(".claude").join("brain").join("invocation-ledger.jsonl");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(_) => return index,
+    };
+
+    let default_cutoff = now - Duration::days(DEAD_WINDOW_DAYS_DEFAULT);
+    let rare_cutoff = now - Duration::days(DEAD_WINDOW_DAYS_RARE);
+
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parsed: Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let name = match parsed.get("name").and_then(|v| v.as_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        let ts_str = match parsed.get("ts").and_then(|v| v.as_str()) {
+            Some(t) => t,
+            None => continue,
+        };
+        let ts = match chrono::DateTime::parse_from_rfc3339(ts_str) {
+            Ok(t) => t.with_timezone(&chrono::Utc),
+            Err(_) => continue,
+        };
+
+        index.total_invocations += 1;
+
+        // Don't window-track invocations older than the longest window.
+        if ts < rare_cutoff {
+            continue;
+        }
+
+        let entry = index.per_skill.entry(name).or_default();
+        if ts >= default_cutoff {
+            entry.count_default_window += 1;
+        }
+        entry.count_rare_window += 1;
+        entry.last_invoked = Some(match entry.last_invoked {
+            Some(prev) if prev > ts => prev,
+            _ => ts,
+        });
+    }
+
+    index
+}
+
+/// Parse the optional `usage-rarity:` frontmatter field from a skill's
+/// description block. Returns `"rare"` or `"common"` (default).
+/// Case-insensitive. Only considers lines within the description block.
+fn parse_usage_rarity(description: &str) -> &'static str {
+    for line in description.lines() {
+        let trimmed = line.trim().to_lowercase();
+        if let Some(rest) = trimmed.strip_prefix("usage-rarity:") {
+            let val = rest.trim();
+            if val == "rare" {
+                return "rare";
+            }
+            return "common";
+        }
+    }
+    "common"
+}
+
+/// Age of a skill file in whole days (based on filesystem mtime). Used
+/// for the grace-period check. Returns `i64::MAX` if mtime can't be
+/// resolved — conservatively old = no grace period granted.
+fn skill_age_days(
+    root: &Path,
+    skill_basename: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> i64 {
+    let path = root
+        .join(".claude")
+        .join("skills")
+        .join(skill_basename);
+    let meta = match std::fs::metadata(&path) {
+        Ok(m) => m,
+        Err(_) => return i64::MAX,
+    };
+    let modified = match meta.modified() {
+        Ok(t) => t,
+        Err(_) => return i64::MAX,
+    };
+    let modified_dt: chrono::DateTime<chrono::Utc> = modified.into();
+    (now - modified_dt).num_days()
 }
 
 /// Load `{root}/.claude/brain-registry.json` as a serde_json::Value. Returns
@@ -1314,5 +1557,205 @@ async fn inline_form(params: Params<()>) -> String { "ok".into() }
         assert_eq!(result["under_described_count"], 1);
         assert_eq!(result["score"], 50);
         assert_eq!(result["total_capabilities"], 2);
+    }
+
+    // ── Axis 4 v1: ledger + rarity + dead-skill tests ──
+
+    fn write_ledger(brain_root: &Path, lines: &[&str]) {
+        let dir = brain_root.join(".claude").join("brain");
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = lines.join("\n") + "\n";
+        std::fs::write(dir.join("invocation-ledger.jsonl"), body).unwrap();
+    }
+
+    #[test]
+    fn parse_usage_rarity_defaults_common() {
+        assert_eq!(parse_usage_rarity("# Foo\n\ndescription only"), "common");
+    }
+
+    #[test]
+    fn parse_usage_rarity_detects_rare() {
+        let desc = "# Title\n\n**When to use:** x.\n\nusage-rarity: rare\n";
+        assert_eq!(parse_usage_rarity(desc), "rare");
+    }
+
+    #[test]
+    fn parse_usage_rarity_case_insensitive() {
+        let desc = "# Title\n\nUsage-Rarity: RARE\n";
+        assert_eq!(parse_usage_rarity(desc), "rare");
+    }
+
+    #[test]
+    fn read_invocation_ledger_missing_file_returns_empty() {
+        let tmp = TempDir::new().unwrap();
+        let ix = read_invocation_ledger(tmp.path(), chrono::Utc::now());
+        assert_eq!(ix.total_invocations, 0);
+        assert!(ix.per_skill.is_empty());
+    }
+
+    #[test]
+    fn read_invocation_ledger_basic_counts() {
+        let tmp = TempDir::new().unwrap();
+        let now = chrono::Utc::now();
+        let recent = (now - chrono::Duration::days(1)).to_rfc3339();
+        let old_in_rare = (now - chrono::Duration::days(200)).to_rfc3339();
+        let too_old = (now - chrono::Duration::days(500)).to_rfc3339();
+        write_ledger(
+            tmp.path(),
+            &[
+                &format!(r#"{{"schema_version":"1","ts":"{recent}","type":"skill","name":"rubber-duck","session_id":"s","invocation_id":"i"}}"#),
+                &format!(r#"{{"schema_version":"1","ts":"{old_in_rare}","type":"skill","name":"rubber-duck","session_id":"s","invocation_id":"i2"}}"#),
+                &format!(r#"{{"schema_version":"1","ts":"{too_old}","type":"skill","name":"rubber-duck","session_id":"s","invocation_id":"i3"}}"#),
+            ],
+        );
+        let ix = read_invocation_ledger(tmp.path(), now);
+        assert_eq!(ix.total_invocations, 3);
+        let usage = &ix.per_skill["rubber-duck"];
+        assert_eq!(usage.count_default_window, 1); // only the recent one
+        assert_eq!(usage.count_rare_window, 2);    // recent + 200d ago
+        assert!(usage.last_invoked.is_some());
+    }
+
+    #[test]
+    fn read_invocation_ledger_tolerates_malformed() {
+        let tmp = TempDir::new().unwrap();
+        let now = chrono::Utc::now();
+        let recent = (now - chrono::Duration::days(1)).to_rfc3339();
+        write_ledger(
+            tmp.path(),
+            &[
+                "not-json-at-all",
+                &format!(r#"{{"ts":"{recent}","name":"ok"}}"#),
+                r#"{"ts":"not-a-date","name":"bad-ts"}"#,
+                r#"{"name":"missing-ts"}"#,
+                "",
+            ],
+        );
+        let ix = read_invocation_ledger(tmp.path(), now);
+        // Only the one well-formed line should be counted.
+        assert_eq!(ix.total_invocations, 1);
+        assert_eq!(ix.per_skill.len(), 1);
+        assert_eq!(ix.per_skill["ok"].count_default_window, 1);
+    }
+
+    #[tokio::test]
+    async fn dead_skill_flagged_after_grace_period_with_no_invocations() {
+        let tmp = TempDir::new().unwrap();
+        let body = "# Skill\n\n\
+                    **When to use this skill:** This skill has a compliant lead \
+                    paragraph with plenty of description text to clear the 40-token \
+                    floor and the required when-to-use signal. It just happens to \
+                    never get invoked by any agent anywhere.\n\n\
+                    ## Body\n\ncontent.\n";
+        write_skill(tmp.path(), "ghost.md", body);
+        // Force file mtime to be old (past the grace period).
+        let path = tmp.path().join(".claude").join("skills").join("ghost.md");
+        let old_time = std::time::SystemTime::now()
+            - std::time::Duration::from_secs(60 * 60 * 24 * 100);
+        filetime::set_file_mtime(&path, filetime::FileTime::from_system_time(old_time))
+            .ok();
+
+        // Populate the ledger with enough unrelated invocations so we
+        // cross the low-confidence threshold.
+        let now = chrono::Utc::now();
+        let recent = (now - chrono::Duration::days(1)).to_rfc3339();
+        let mut lines: Vec<String> = Vec::new();
+        for i in 0..25 {
+            lines.push(format!(
+                r#"{{"schema_version":"1","ts":"{recent}","type":"skill","name":"other","session_id":"s","invocation_id":"{i}"}}"#
+            ));
+        }
+        let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+        write_ledger(tmp.path(), &line_refs);
+
+        let result = analyze_capability_hygiene(tmp.path().to_str().unwrap()).await;
+        let findings = result["findings"].as_array().unwrap();
+        assert!(findings.iter().any(|f| {
+            f["name"].as_str() == Some("dead-skill:ghost.md")
+        }), "expected a dead-skill finding, got: {:?}", findings);
+    }
+
+    #[tokio::test]
+    async fn new_skill_inside_grace_period_not_flagged_dead() {
+        let tmp = TempDir::new().unwrap();
+        let body = "# New Skill\n\n\
+                    **When to use this skill:** Recently authored skill that hasn't \
+                    had time to accrue invocations yet. The description is long \
+                    enough to pass hygiene checks and carries the when-to-use signal.\n\n\
+                    ## Body\n\ncontent.\n";
+        write_skill(tmp.path(), "fresh.md", body);
+        // Do NOT backdate mtime — leave it as now, well inside grace period.
+        let result = analyze_capability_hygiene(tmp.path().to_str().unwrap()).await;
+        let findings = result["findings"].as_array().unwrap();
+        assert!(!findings.iter().any(|f| {
+            f["name"].as_str() == Some("dead-skill:fresh.md")
+                || f["name"].as_str() == Some("low-confidence-dead-skill:fresh.md")
+        }), "new skill should not be flagged dead, findings: {:?}", findings);
+    }
+
+    #[tokio::test]
+    async fn low_confidence_prefix_when_ledger_is_sparse() {
+        let tmp = TempDir::new().unwrap();
+        let body = "# Skill\n\n\
+                    **When to use this skill:** A skill whose description passes \
+                    hygiene but the ledger is too sparse to draw firm conclusions \
+                    about liveness. We still flag it, but with the low-confidence \
+                    prefix so the operator knows to weight the signal accordingly.\n\n\
+                    ## Body\n\ncontent.\n";
+        write_skill(tmp.path(), "sparse.md", body);
+        let path = tmp.path().join(".claude").join("skills").join("sparse.md");
+        let old_time = std::time::SystemTime::now()
+            - std::time::Duration::from_secs(60 * 60 * 24 * 100);
+        filetime::set_file_mtime(&path, filetime::FileTime::from_system_time(old_time))
+            .ok();
+        // No ledger written — total_invocations = 0 < LOW_CONFIDENCE_TOTAL_INVOCATIONS.
+        let result = analyze_capability_hygiene(tmp.path().to_str().unwrap()).await;
+        let findings = result["findings"].as_array().unwrap();
+        assert!(findings.iter().any(|f| {
+            f["name"].as_str() == Some("low-confidence-dead-skill:sparse.md")
+        }), "expected low-confidence-prefixed dead finding, got: {:?}", findings);
+    }
+
+    #[tokio::test]
+    async fn rare_skill_uses_extended_window() {
+        let tmp = TempDir::new().unwrap();
+        // Skill marked rare, last invoked 200 days ago — would be dead
+        // under the 90d window but alive under the 365d rare window.
+        let body = "# Rare Skill\n\n\
+                    **When to use this skill:** Skill that's deliberately niche. \
+                    Invoked rarely, but when invoked it's critical. The extended \
+                    365-day window accommodates this usage pattern without \
+                    triggering false dead findings.\n\n\
+                    usage-rarity: rare\n\n\
+                    ## Body\n\ncontent.\n";
+        write_skill(tmp.path(), "rare-one.md", body);
+        let path = tmp.path().join(".claude").join("skills").join("rare-one.md");
+        let old_time = std::time::SystemTime::now()
+            - std::time::Duration::from_secs(60 * 60 * 24 * 100);
+        filetime::set_file_mtime(&path, filetime::FileTime::from_system_time(old_time))
+            .ok();
+
+        let now = chrono::Utc::now();
+        let two_hundred_days_ago = (now - chrono::Duration::days(200)).to_rfc3339();
+        let mut lines: Vec<String> = vec![
+            format!(
+                r#"{{"schema_version":"1","ts":"{two_hundred_days_ago}","type":"skill","name":"rare-one","session_id":"s","invocation_id":"r1"}}"#
+            ),
+        ];
+        for i in 0..25 {
+            let recent = (now - chrono::Duration::days(1)).to_rfc3339();
+            lines.push(format!(
+                r#"{{"schema_version":"1","ts":"{recent}","type":"skill","name":"other","session_id":"s","invocation_id":"{i}"}}"#
+            ));
+        }
+        let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+        write_ledger(tmp.path(), &line_refs);
+
+        let result = analyze_capability_hygiene(tmp.path().to_str().unwrap()).await;
+        let findings = result["findings"].as_array().unwrap();
+        assert!(!findings.iter().any(|f| {
+            let n = f["name"].as_str().unwrap_or("");
+            n == "dead-skill:rare-one.md" || n == "low-confidence-dead-skill:rare-one.md"
+        }), "rare skill with invocation 200d ago should stay alive under 365d window, findings: {:?}", findings);
     }
 }
