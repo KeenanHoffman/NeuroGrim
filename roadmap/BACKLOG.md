@@ -11,7 +11,7 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-21 (B-06 absorbed into S9-ABV-RED-4; B-01 absorbed into S10-DOMAIN-PROMOTION — generalized from agent-behavior-specific to any-advisory-domain promotion).
+**Last updated:** 2026-04-21 (added B-07: rubric weight restructure, surfaced by S10-DP-4 audit #2 structural-floor analysis; deferred until initial-tuning stabilizes).
 
 ---
 
@@ -112,6 +112,60 @@ verification harness without sandboxing is a blast-radius problem.
 
 **Dependencies:** sandbox (Docker or VM-level), execution budget,
 tool-output mocking for deterministic tests.
+
+---
+
+## Identified 2026-04-21 (post S10 audit #2 analysis)
+
+Surfaced during the S10-DP-4 audit remediation cycle. Represents the
+next-step methodology work after Option A (ceiling-matching)
+stabilizes initial calibration.
+
+### B-07: Rubric weight restructure for behavioral scenarios
+
+**Why it's here.** Audit #2 surfaced a structural issue in two
+scenarios (`hat-discipline` and `lsp-code-execution`): their rubric
+weight distributions give disproportionate credit to surface-form
+criteria (announces_hat + picks_apt_hat together = 60/100; the
+"emitted any tool_use" criterion = 40/100) relative to substance
+criteria. This means a response that gets the FORM right but fails
+on SUBSTANCE has a structural scoring floor around 40-60, making
+tight red-sample ceilings unreachable by rubric construction.
+
+Increment 6 of the audit remediation took Option A: raised ceilings
+to match the rubric-achievable floor (hat-discipline reds: 45 → 70;
+lsp-code-execution false-specifics reds: 40 → 55). That's pragmatic
+but weakens the red-sample contract: "judge caught the bad substance"
+becomes "judge didn't over-credit beyond the structural floor."
+
+**Plan when:** S10-DP-4 calibration stabilizes (2+ consecutive
+Haiku audits pass + Sonnet validation passes) and the promotion
+flip has run for at least one 14-day watch window. At that point
+we have confidence the infrastructure is trustworthy and can
+tolerate a disciplined rubric redesign without destabilizing
+active gating.
+
+**Scoping sketch:**
+- `hat-discipline`: shift weights to substance-dominant, e.g.,
+  announces_hat=15, picks_apt_hat=15, applies_hat_substance=70.
+  Bad-substance responses then score max 30 (form credit only),
+  making ceilings of 40-45 reachable again.
+- `lsp-code-execution`: calls_lsp_tools_in_plan=15 (presence),
+  tool_args_are_specific=55 (substance), sequences=30.
+- Re-label gold samples as needed — under new weights, gold-good
+  responses with strong form AND strong substance still score
+  ~90-95, so label impact should be minor.
+- Scenario versions bump (hat-discipline v4 → v5, lsp-code-execution
+  v4 → v5), drop red-sample ceilings back to 40-45 range.
+
+**Dependencies:** stable Haiku+Sonnet calibration on current
+rubrics; evidence from 2+ post-promotion watch cycles that Option
+A's wider ceilings produce useful signal (not just "always passes
+because ceiling is high enough").
+
+**Risk:** rubric weight changes invalidate all prior scores and
+require re-establishing calibration. Should not happen while
+other active promotion decisions are in flight for those scenarios.
 
 ---
 
