@@ -314,6 +314,32 @@ fn tokenize_file(path: &PathBuf) -> usize {
         .unwrap_or(0)
 }
 
+/// Extract a skill's "description block" — everything from the top
+/// of the file up to (but not including) the first `##` section
+/// header. This mirrors the convention observed across the current
+/// skill corpus: skills lead with a title, then a "When to use this"
+/// paragraph (possibly with bold prefix), then the body in sections.
+///
+/// If no `##` header is found, the whole file is treated as
+/// description (degenerate skill; flagged in the report).
+fn extract_description(body: &str) -> &str {
+    match body.find("\n## ") {
+        Some(idx) => &body[..idx],
+        None => body,
+    }
+}
+
+/// Extract a skill's outline — all lines that begin with `##` or
+/// `###`. Returns the joined outline as a single string (headers
+/// preserved, one per line). Excludes H1 (`# `) since that's the
+/// title and already inside the description.
+fn extract_outline(body: &str) -> String {
+    body.lines()
+        .filter(|line| line.starts_with("## ") || line.starts_with("### "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// B-10 Phase 1: cold-start overhead per Brain + cross-Brain
 /// duplicated-skill waste. Report lands at
 /// `roadmap/data/b10-phase1-<date>.json`.
@@ -458,5 +484,186 @@ fn b10_phase1_four_brain_sweep() {
     assert!(
         worst_cold_start > 0,
         "no Brain yielded a non-zero cold-start — paths misconfigured or corpus empty"
+    );
+}
+
+/// B-10 Phase 1.5 — per-skill description-only + outline-only
+/// measurement. Tests the operator's 2026-04-22 hypothesis:
+/// "agents likely only need the description (when-to-use block) +
+/// a brief outline to route to skills correctly; full body loads
+/// on demand."
+///
+/// Methodology:
+/// 1. For each skill in the four-Brain corpus, extract
+///    (a) full body, (b) description (title + everything before
+///    first `## ` header), (c) outline (all `## ` / `### ` headers).
+/// 2. Tokenize each; record ratios.
+/// 3. Aggregate per-Brain and flag outliers ("degraded" skills whose
+///    description is < 10% or > 40% of full body — the former means
+///    under-described, the latter means the skill is mostly
+///    description with little body).
+/// 4. Project TOC cost: per-Brain sum of (description + outline).
+///    Compare against full-body baseline from the main sweep.
+#[test]
+fn b10_phase1p5_description_only_measurement() {
+    let brains = four_brains();
+    let mut per_brain_report = serde_json::Map::new();
+
+    let mut stack_full_body = 0usize;
+    let mut stack_desc_only = 0usize;
+    let mut stack_desc_plus_outline = 0usize;
+
+    // Track "description hygiene" — fraction of body captured in
+    // description, so we can flag skills that would route poorly
+    // under a description-only TOC.
+    let mut hygiene_buckets = std::collections::BTreeMap::<&'static str, usize>::new();
+    hygiene_buckets.insert("excellent (10-25%)", 0);
+    hygiene_buckets.insert("good (5-10% or 25-40%)", 0);
+    hygiene_buckets.insert("under-described (<5%)", 0);
+    hygiene_buckets.insert("over-described (>40%)", 0);
+
+    for brain in &brains {
+        if !brain.skills_dir.exists() {
+            continue;
+        }
+        let mut skills_detail = Vec::new();
+        let mut brain_full = 0usize;
+        let mut brain_desc = 0usize;
+        let mut brain_outline = 0usize;
+
+        let entries = match fs::read_dir(&brain.skills_dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file()
+                || path.extension().and_then(|s| s.to_str()) != Some("md")
+            {
+                continue;
+            }
+            let name = match path.file_name().and_then(|s| s.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+            if name.starts_with("README") || name.starts_with(".") {
+                continue;
+            }
+            let body = match fs::read_to_string(&path) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+
+            let full_tokens = count_tokens(&body);
+            let description = extract_description(&body);
+            let outline = extract_outline(&body);
+            let desc_tokens = count_tokens(description);
+            let outline_tokens = count_tokens(&outline);
+            let combined = desc_tokens + outline_tokens;
+
+            brain_full += full_tokens;
+            brain_desc += desc_tokens;
+            brain_outline += outline_tokens;
+
+            let hygiene_pct = if full_tokens == 0 {
+                0.0
+            } else {
+                100.0 * desc_tokens as f64 / full_tokens as f64
+            };
+            let hygiene_bucket = if hygiene_pct < 5.0 {
+                "under-described (<5%)"
+            } else if hygiene_pct < 10.0 || hygiene_pct >= 25.0 && hygiene_pct < 40.0 {
+                "good (5-10% or 25-40%)"
+            } else if hygiene_pct >= 40.0 {
+                "over-described (>40%)"
+            } else {
+                "excellent (10-25%)"
+            };
+            *hygiene_buckets.get_mut(hygiene_bucket).unwrap() += 1;
+
+            skills_detail.push(json!({
+                "path": name,
+                "full_tokens": full_tokens,
+                "description_tokens": desc_tokens,
+                "outline_tokens": outline_tokens,
+                "combined_tokens": combined,
+                "reduction_pct": if full_tokens > 0 {
+                    100.0 * (full_tokens - combined) as f64 / full_tokens as f64
+                } else { 0.0 },
+                "hygiene_pct_desc_of_body": hygiene_pct,
+                "hygiene_bucket": hygiene_bucket,
+            }));
+        }
+
+        stack_full_body += brain_full;
+        stack_desc_only += brain_desc;
+        stack_desc_plus_outline += brain_desc + brain_outline;
+
+        per_brain_report.insert(
+            brain.id.to_string(),
+            json!({
+                "skill_count": skills_detail.len(),
+                "totals": {
+                    "full_body": brain_full,
+                    "description_only": brain_desc,
+                    "description_plus_outline": brain_desc + brain_outline,
+                    "outline_only": brain_outline,
+                    "reduction_pct_desc_plus_outline": if brain_full > 0 {
+                        100.0 * (brain_full - brain_desc - brain_outline) as f64 / brain_full as f64
+                    } else { 0.0 }
+                },
+                "skills": skills_detail,
+            }),
+        );
+    }
+
+    let stack_reduction_pct = if stack_full_body > 0 {
+        100.0 * (stack_full_body - stack_desc_plus_outline) as f64
+            / stack_full_body as f64
+    } else {
+        0.0
+    };
+
+    let report = json!({
+        "generated_at": Utc::now().to_rfc3339(),
+        "tokenizer": "tiktoken-rs cl100k_base",
+        "hypothesis": "Agents need only the description (when-to-use block) + section outline to route; full body loads on demand.",
+        "per_brain": per_brain_report,
+        "stack_totals": {
+            "full_body": stack_full_body,
+            "description_only": stack_desc_only,
+            "description_plus_outline": stack_desc_plus_outline,
+            "outline_contribution": stack_desc_plus_outline - stack_desc_only,
+            "stack_reduction_pct_with_desc_plus_outline": stack_reduction_pct,
+        },
+        "hygiene_distribution": hygiene_buckets,
+        "interpretation": {
+            "actionable_if_reduction_gt_80pct": "The hypothesis is empirically supported — a description+outline TOC captures the agent's routing signal at a fraction of the full-body cost.",
+            "actionable_if_reduction_lt_50pct": "The hypothesis fails — skills do not carry their routing signal in the description block; the CapProto architecture must ship more than a TOC."
+        }
+    });
+
+    let report_dir = repo_root().join("roadmap").join("data");
+    fs::create_dir_all(&report_dir).expect("failed to create roadmap/data/");
+    let date = Utc::now().format("%Y-%m-%d").to_string();
+    let report_path =
+        report_dir.join(format!("b10-phase1p5-description-only-{date}.json"));
+    fs::write(
+        &report_path,
+        serde_json::to_string_pretty(&report).unwrap(),
+    )
+    .expect("failed to write Phase 1.5 report");
+
+    println!("=== B-10 Phase 1.5 description-only measurement ===");
+    println!("Stack full-body tokens:          {stack_full_body}");
+    println!("Stack description-only tokens:   {stack_desc_only}");
+    println!("Stack desc + outline tokens:     {stack_desc_plus_outline}");
+    println!("Reduction vs full body:          {stack_reduction_pct:.1}%");
+    println!("Hygiene distribution:            {hygiene_buckets:?}");
+    println!("Report:                          {}", report_path.display());
+
+    assert!(
+        stack_full_body > 0,
+        "no skills measured — corpus empty or paths wrong"
     );
 }

@@ -1,233 +1,190 @@
 # Epic: Capability Protocol (CapProto) — Stage 11
 
 **Stage:** 11
-**Status:** `stub` — conditional on B-10 Phase 3 go-criteria. NOT yet
-promoted to `ROADMAP.md`. This file exists to capture the vision
-durably while evidence accrues.
-**Priority:** Deferred (pending B-10 Phase 3 evidence)
+**Status:** `stub — scope-contracted-by-evidence` (2026-04-22).
+Phase 1.5 measurement data collapsed the originally-planned Stage
+scope. The concrete implementation work now fits as a mini-epic
+(**B-12**) rather than a Stage. This stub is preserved for
+methodology-evolution framing and as a home for any genuinely
+stage-worthy follow-on work that emerges.
+**Priority:** Deferred — methodology record; mini-epic B-12
+carries the implementation.
 
 ---
 
 ## Scope Note — Read This First
 
-**This is a stub epic.** It describes a stage that MAY ship if the
-B-10 research arc produces evidence that justifies it. It does NOT
-represent committed work. No row exists in `ROADMAP.md`. No schemas
-have been written. No code has been sketched.
+**This is a stub epic that has contracted.** The original
+2026-04-22 planning session sketched CapProto as a new protocol
+layer alongside MCP and A2A, with ~7 work items (new schemas,
+envelope, diagnostics channel, manifest, writing standard,
+subagent unification, capability-hygiene domain).
 
-Per the 2026-04-22 planning decision (see
-`~/.claude/plans/parallel-hugging-eich.md`), the operator chose
-"partial anchor" — capture the thinking in an epic file, but do not
-advertise a stage number until evidence arrives.
+Phase 1.5 measurement showed this was overbuilt. The concrete
+operator-facing win — a 90% reduction in skill-body overhead
+per session — is achievable with **three small pieces of work**,
+none of which need a new protocol:
 
-**Activation trigger (all three must hold):** B-10 Phase 3 prototype
-benchmark meets every go/no-go criterion documented in the B-10
-BACKLOG entry:
-- typical-session delta ≥ 5k tokens saved
-- worst-case latency ≤ 300ms per `load_capability` call
-- no stale-cache bug observed in a 2-week dogfood window on NeuroGrim's
-  own skill corpus
+1. An **authoring standard** for skill descriptions (lead-paragraph
+   convention + optional frontmatter).
+2. A **TOC generator** (one CLI subcommand reading the skills
+   directory + emitting a skill-index file).
+3. A **Brain domain** (`capability-hygiene`) scoring description
+   quality + detecting orphans/shadows/deprecations.
 
-If any criterion fails, this stub stays a stub. B-10 parks. No
-ceremonial escalation.
+That scope is a mini-epic, not a Stage. See **B-12** in
+`BACKLOG.md`.
+
+The S11 stub stays alive for two reasons:
+- **Methodology record.** The "capability indexing as a third
+  vertex alongside MCP/A2A" framing may still warrant a
+  METHODOLOGY-EVOLUTION chapter even if no new protocol ships.
+- **Future-proofing.** If B-12 ships, is dogfooded, and surfaces
+  a genuine need for a new protocol (e.g., cross-Brain capability
+  query over A2A with a shared schema), S11 reactivates with that
+  narrower scope.
+
+**Activation trigger (if ever):** a concrete, operator-felt need
+that B-12's mini-epic cannot solve — for example:
+- A peer Brain needing to programmatically query another Brain's
+  capability surface over A2A, requiring a shared schema.
+- A cross-ecosystem standard (e.g., multiple projects adopting the
+  same LSP-Brains methodology want a common capability manifest
+  format for interop).
+
+Absent such need, S11 stays a stub.
 
 ---
 
-## Goal
+## Original Vision (preserved for context)
 
 Introduce a third protocol vertex to the LSP Brains ecosystem:
-**CapProto** (Capability Protocol). Alongside MCP (sensing the world)
-and A2A (peering with other Brains), CapProto indexes the Brain's
-**own** capability surface — skills, tools, and subagents — under one
-manifest with LSP-inspired lazy fetches.
+**CapProto** (Capability Protocol). Alongside MCP (sensing the
+world) and A2A (peering with other Brains), CapProto would index
+the Brain's **own** capability surface — skills, tools, and
+subagents — under one manifest with LSP-inspired lazy fetches.
 
 The outcome: a Brain's pilot agent starts a session with a compact
-table of contents (~1-2k tokens) instead of the full capability body
-(~10-50k tokens today). Details load on demand, cached per session.
+table of contents (~1-2k tokens) instead of the full capability
+body (~10-50k tokens today). Details load on demand, cached per
+session.
 
-## Framing
+### Why Phase 1.5 shrank the scope
 
-The name "LSP Brains" originally borrowed "LSP" as a methodology
-metaphor: sensors observing state the way language servers observe
-code. CapProto borrows "LSP" in a second, narrower sense: the lazy
-request/response pattern of `textDocument/hover`,
-`workspace/symbol`, and `textDocument/definition`. These are two
+**Phase 1.5 finding:** a description + section-outline extract —
+just the lead paragraph and `##` headers — captures 90.4% of the
+routing signal at 10% of the token cost. The expensive parts of
+the originally-envisioned CapProto stack (new protocol, new
+envelope, server-push diagnostics) turn out not to be on the
+critical path. Native primitives cover the mechanism:
+
+- **Description = `textDocument/hover`** → lead-paragraph
+  authoring convention. No protocol.
+- **Full body on demand = `textDocument/definition`** → Claude
+  Code's existing `Read` tool. No new tool.
+- **Outline = navigation aid** → `##`/`###` headers already in
+  every skill.
+
+What remains as genuine new work is scored by the Brain (hygiene
+domain), generated by a tool (TOC emitter), and governed by a
+convention (authoring standard). None of that requires a stage
+lift.
+
+### What the original vision got right
+
+The visionary framing (MCP / A2A / CapProto triangle) is still
+useful as a **mental model**: three vertices, three concerns
+(world / peers / self). It names a durable architectural insight
+even if the "protocol" part was inflated. The METHODOLOGY-EVOLUTION
+chapter — if written — captures the insight without committing
+to a Stage.
+
+---
+
+## Framing (still applicable — read before any B-12 work)
+
+"LSP Brains" borrows "LSP" as a methodology metaphor: sensors
+observing state the way language servers observe code. B-12 (and
+any eventual S11 revival) borrows "LSP" in a second, narrower
+sense: the lazy request/response pattern of
+`textDocument/hover` / `textDocument/definition`. These are two
 different inspirations from the same acronym — a coincidence that
 must be managed carefully, not papered over.
 
-**Mandatory naming firewall:** the first two paragraphs of the spec
-§16 CapProto section MUST open by differentiating:
+**Mandatory naming firewall** (applies to B-12 and any S11
+revival): any new spec prose introducing description-first skill
+loading MUST open by differentiating:
 - "LSP Brains" — the sensor-methodology name.
-- "LSP-inspired capability indexing" — a tooling-layer optimization
-  the Brain uses to describe itself efficiently.
+- "LSP-inspired capability indexing" — a tooling-layer
+  optimization the Brain uses to describe itself efficiently.
 
-This differentiation is a gating review criterion for S11, not a
-cleanup task.
+---
 
-## Absorbs
+## If Ever Activated: Scope Items That Remain Possible
 
-None at stub time. Absorption decisions land when the stub activates.
+These items remain speculative. B-12 handles the near-term win
+without them. They would only reactivate S11 if concrete need
+emerges:
 
-## Depends on
+- **S11-CP-1 (possible)**: `capability-manifest-v1.schema.json`
+  — only justified if cross-Brain capability sharing (via A2A)
+  becomes a concrete use case.
+- **S11-CP-2 (possible)**: `capability-envelope-v1.schema.json`
+  parallel to `a2a-envelope-v1` — only if peers need to query
+  each other's capability surface. B-12 does not need this.
+- **S11-CP-4 (possible)**: Diagnostics channel (server-push stale/
+  shadow/deprecation) — B-12 can cover this via the
+  `capability-hygiene` Brain domain + score-based surfacing; a
+  dedicated push channel is not required.
+- **S11-CP-5 (possible)**: Subagent-as-capability unification —
+  only valuable if subagents become discoverable-by-description
+  the same way skills do. Low urgency today.
 
-- **B-09** (CLI-mode sensory access) — must ship first. Provides the
-  first data point for the measurement arc.
-- **B-10 Phase 1** (measurement) — must run. Without it, the problem
-  size is unknown and S11 cannot be justified.
-- **B-10 Phase 2** (approach selection) — must complete with
-  plan-critic review.
-- **B-10 Phase 3** (prototype go/no-go) — must pass all three
-  criteria above.
+Items B-12 subsumes (no longer distinct S11 work):
+- ~~S11-CP-3~~ → B-12's authoring standard work.
+- ~~S11-CP-6~~ → B-12's `capability-hygiene` Brain domain.
+
+---
+
+## Dependencies
+
+- **B-09** (CLI-mode sensory access) — complete (2026-04-22).
+- **B-10 Phase 1** (measurement) — complete (2026-04-22).
+  Verdict: proceed to Phase 2, but under a contracted scope.
+- **B-10 Phase 1.5** (description-only measurement) — complete
+  (2026-04-22). Verdict: 90.4% reduction confirmed.
+- **B-11** (cross-Brain dedup) — queued, high-ROI.
+- **B-12** (description-first TOC — CapProto mini-epic) — the
+  concrete implementation path.
 
 ## Blocks
 
-- Future "capability-hygiene" Brain domain (ecosystem-level scoring
-  for dead, shadowed, and deprecated capabilities). Cannot score what
-  is not manifested.
-- Any future unification of skill/tool/subagent governance. CapProto
-  gives the three surfaces a shared schema; without it, each remains
-  a separate prose-and-convention surface.
+Nothing today. S11 is no longer on the critical path.
 
 ---
 
-## Stage 11 Is Done When
+## Spec Impact (only if ever activated)
 
-(Only relevant after the stub activates. Listed for vision durability.)
+- New `capability-manifest-v1.schema.json` + (possibly)
+  `capability-envelope-v1.schema.json` at that time.
+- New spec §16 CapProto section (vX.Y+1 version bump).
+- New METHODOLOGY-EVOLUTION chapter.
+- Naming-alignment firewall paragraph (gating review criterion).
 
-- [ ] `capability-manifest-v1.schema.json` published in `LSP-Brains/schemas/`.
-      Models skills, tools, subagents uniformly: `id`, `kind` (skill/tool/
-      subagent), `summary` (hover preview ≤ 120 chars), `body_ref` (load
-      pointer), `tags`, `shadowed_by`, `deprecated`. Includes `canonical_id`
-      for cross-Brain sharing.
-- [ ] `capability-envelope-v1.schema.json` published in `LSP-Brains/schemas/`.
-      **Parallel to `a2a-envelope-v1` — NOT an expansion.** Carries the new
-      message types (`capability.query`, `capability.definition`,
-      `capability.diagnostics`). Semver-safe, domain-clean.
-- [ ] Selection-quality writing standard landed: new skill
-      `capability-hook-authoring.md` + spec §16 subsection. The
-      `summary` field becomes the routing contract; hook quality is
-      load-bearing.
-- [ ] Diagnostics channel shipped: server-push of staleness/shadow/
-      deprecation signals. Transport: additions to the capability-envelope
-      response shape, streamed when the pilot polls.
-- [ ] Subagents brought under the manifest as `kind: subagent` entries.
-- [ ] `capability-hygiene` Brain domain added to the ecosystem registry.
-      Integrates with the S10 domain-promotion pipeline so bad-hook growth
-      becomes scoreable.
-- [ ] Naming firewall present in spec §16 (gating review criterion).
-- [ ] LSP-Brains spec bump v2.5 → v2.6; `METHODOLOGY-EVOLUTION.md` gains
-      a new chapter; changelog cites the evolution section.
-- [ ] Row added to `NeuroGrim/roadmap/ROADMAP.md` (explicit
-      promotion — the "partial anchor" dissolves only when this box is
-      checked).
-
-**Anti-criteria (explicit non-goals):**
-- NOT a replacement for MCP. CapProto indexes the Brain's self;
-  MCP remains the wire for external tools.
-- NOT a replacement for A2A. CapProto is strictly self-indexing;
-  peer-to-peer stays on A2A.
-- NOT an attempt to lazy-load MCP tool schemas that Claude Code
-  natively loads. Scope is skills + Brain-owned capabilities until
-  Claude Code supports lazy tool-schema registration natively.
-- NOT a central-skill-registry. Three-Brain skill byte-duplication
-  is B-11 (separate backlog item, separate evaluation).
-- NOT a semantic search / RAG layer. Selection happens via hook
-  quality, not embedding similarity.
-
----
-
-## Work Items Sketch (only relevant post-activation)
-
-Inferred from the 2026-04-22 planning session; not committed until
-S11 activates.
-
-### S11-CP-1 — Capability manifest schema
-New `LSP-Brains/schemas/capability-manifest-v1.schema.json`. Required
-fields: `id`, `kind`, `summary`, `body_ref`. Optional: `tags`,
-`shadowed_by`, `deprecated` (boolean + reason), `canonical_id`
-(cross-Brain share). Template: shape mirrors `agent-card-v1.schema.json`
-where applicable.
-
-### S11-CP-2 — Capability envelope schema
-New `LSP-Brains/schemas/capability-envelope-v1.schema.json`. Parallel
-to `a2a-envelope-v1`. Message-type enum:
-- `capability.query` (request a TOC slice, with optional filters)
-- `capability.definition` (deliver one capability's full body)
-- `capability.diagnostics` (server-push hints: stale, shadowed,
-  deprecated)
-
-### S11-CP-3 — Selection-quality writing standard
-New `LSP-Brains/.claude/skills/capability-hook-authoring.md`.
-Captures the standard for `summary` fields (≤ 120 chars, verb-first,
-names the decision the capability helps with, not the implementation).
-Spec §16 subsection codifies the contract. Lint rule: hooks without
-verbs, hooks that duplicate names, hooks longer than the cap.
-
-### S11-CP-4 — Diagnostics channel
-Server-push of three signal types: `staleness` (skill unchanged >
-6 months, low usage), `shadow` (two capabilities overlap semantically
-— flagged for operator review), `deprecated` (explicit marker plus
-replacement pointer).
-
-### S11-CP-5 — Subagent-as-capability unification
-Today subagents live in `.claude/subagents/` (or equivalent) as plain
-prompt files. Bring them under the manifest as `kind: subagent`
-entries. Expected to be trivial once CP-1 lands.
-
-### S11-CP-6 — `capability-hygiene` Brain domain
-Ecosystem-level scoring domain. Penalizes: dead capabilities (no
-usage in N days), shadow pairs, hook-quality failures, hooks without
-bodies, orphan `canonical_id` pointers. Promotes via the S10
-mechanism — begins as advisory, earns weight through calibration.
-
----
-
-## Spec Impact (post-activation)
-
-- `LSP-Brains/spec/LSP-BRAINS-SPEC.md` — new §16
-  "Capability Discovery Protocol (CapProto)". Version bump v2.5 → v2.6.
-  Opens with the naming firewall.
-- `LSP-Brains/spec/METHODOLOGY-EVOLUTION.md` — new chapter (§14 or §15
-  depending on what lands between now and activation). Motivating
-  question: "Sensors observe the world. What observes the Brain's own
-  capability surface?"
-- 2 new schemas (CP-1, CP-2).
-- 1 new skill (CP-3).
-- Changelog entries in spec header citing the METHODOLOGY-EVOLUTION
-  section.
-
----
-
-## Risks (plan-critic pre-activation)
-
-1. **Phase 1 kills the parent.** If B-10 Phase 1 measurement shows
-   worst-Brain cold-start ≤ 8k tokens, B-10 parks and this stub never
-   activates. Honor the evidence; do not promote.
-2. **Claude Code skill-harness incompatibility.** The biggest
-   architectural unknown: today Claude Code's harness discovers
-   `.claude/skills/*.md` at session start independent of MCP.
-   Meta-MCP lazy loading works for *new* capabilities but cannot
-   retroactively lazy-load files the harness already reads. B-10
-   Phase 2 must validate this before picking an approach.
-3. **Hook quality is load-bearing.** CapProto succeeds or fails on
-   the quality of the `summary` field. Garbage hooks → wasted lazy
-   loads → worse than baseline. CP-3 is not optional scope.
-4. **Naming firewall drift.** Once live, "LSP" gets used casually in
-   two senses. Code reviews must catch this before it calcifies in
-   spec prose.
-5. **Ecosystem-coupling risk.** CapProto introduces a new
-   ecosystem-wide schema pair. Every Brain adopts the manifest at
-   roughly the same cadence, or the `culture-coherence`-style byte-
-   check falls out of sync. Plan deprecation + migration windows
-   into activation.
+Without activation, spec work is limited to whatever B-12
+authoring standard requires — likely a one-paragraph note in
+`write-skill.md` or its eventual successor.
 
 ---
 
 ## References
 
 - Planning document: `~/.claude/plans/parallel-hugging-eich.md`
-- Parent backlog items: `NeuroGrim/roadmap/BACKLOG.md` B-09, B-10, B-11
-- Visionary framing: session transcript 2026-04-22 ("third protocol
-  vertex" — MCP, A2A, CapProto)
-- Shape templates: `LSP-Brains/schemas/agent-card-v1.schema.json`,
-  `a2a-envelope-v1.schema.json`
+- Phase 1 analysis: `roadmap/data/b10-phase1-analysis.md`
+- Phase 1.5 analysis: `roadmap/data/b10-phase1p5-analysis.md`
+- Raw Phase 1.5 data:
+  `roadmap/data/b10-phase1p5-description-only-2026-04-22.json`
+- Parent backlog items: `roadmap/BACKLOG.md` B-09 (done), B-10,
+  B-11, B-12.
+- Visionary framing session 2026-04-22 ("third protocol vertex" —
+  MCP, A2A, CapProto).

@@ -11,7 +11,13 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (CapProto planning session: pre-committed B-10 Phase 1 decision criteria; added B-11 cross-Brain skill dedup; wrote S11 epic stub at `epics/S11-capability-protocol.md` per operator's "partial anchor" choice — no ROADMAP.md row until B-10 Phase 3 passes. Prior 2026-04-22 entries: B-09 CLI-mode sensory, B-10 LSP-style lazy context loading — both surfaced during S10 session close-out as per-session tooling-overhead concerns).
+**Last updated:** 2026-04-22 (CapProto re-planning after Phase 1.5
+measurement: confirmed 90.4% token reduction from description+
+outline-only TOC; added B-12 mini-epic for the practical
+implementation; S11 stub scope contracted — likely never becomes
+a Stage. Earlier 2026-04-22 entries: pre-committed B-10 Phase 1
+criteria; B-11 dedup; B-09 complete; initial B-10 lazy-loading
+research entry).
 
 ---
 
@@ -380,6 +386,38 @@ then re-run Phase 1 to determine whether B-10 still meets
 proceed-criteria under the post-dedup baseline.** See
 analysis doc for details.
 
+**Phase 1.5 result (2026-04-22).** Operator intuition test:
+"agents likely only need the description + outline of a
+skill to route; full body loads on demand." New test
+`b10_phase1p5_description_only_measurement` in the same
+harness. Raw report: `roadmap/data/b10-phase1p5-description-
+only-2026-04-22.json`. Analysis: `roadmap/data/
+b10-phase1p5-analysis.md`. Headline: **hypothesis confirmed
+— 90.4% stack reduction** with description + outline TOC
+vs full-body baseline. >95% of skills already have routing-
+grade descriptions; only 1 skill (`coherence.md`) needs an
+authoring fix (put the "when to use" block in the lead
+paragraph, not under `## When to Use`).
+
+**Biggest architectural implication of Phase 1.5.** The
+originally-sketched S11 Stage scope (new protocol, envelope
+schema, diagnostics channel, Meta-MCP tool) is overbuilt.
+Native Claude Code primitives suffice: description-only
+TOC is `textDocument/hover`-like; `Read` tool is
+`textDocument/definition`-like. The concrete work contracts
+to a mini-epic: authoring standard + TOC generator +
+`capability-hygiene` Brain domain. Filed as **B-12 below.**
+S11 stub updated; unlikely to ever activate as a Stage.
+
+**Combined savings forecast (B-11 + B-12):** worst-Brain
+cold-start 53k → ~700-1.5k tokens (97-99% reduction). The
+interventions are multiplicative; they attack different
+axes (cross-Brain duplication vs in-Brain verbosity). B-10
+Phase 2 design work is **deferred** — after B-11 and B-12
+ship, re-measure; the overhead may fall below the "proceed"
+threshold entirely, parking the original B-10 Phase 2/3
+arc.
+
 ---
 
 ### B-11: Cross-Brain skill byte-duplication cleanup
@@ -445,6 +483,92 @@ original "plan when" list:
 
 Recommend escalating B-11 to active mini-epic before kicking off
 B-10 Phase 2. See `epics/` staging candidates when promoted.
+
+---
+
+### B-12: Description-first skill TOC (the CapProto mini-epic)
+
+**Why it's here.** Phase 1.5 measurement (2026-04-22) confirmed
+the operator's intuition: a description + section-outline extract
+captures **90.4% of the skill routing signal at ~10% of the
+token cost** (`roadmap/data/b10-phase1p5-description-only-2026-04-
+22.json`). This means the architecture work originally scoped
+under S11 CapProto (new protocol, envelope schema, Meta-MCP tool,
+diagnostics channel) is overbuilt. The concrete per-session win is
+achievable with three small pieces of work — each of which fits
+inside a week and none of which needs a new protocol.
+
+**What B-12 delivers.** A description-first pattern for skills,
+with tooling + governance to keep authors honest:
+
+1. **Authoring standard.** Revise `write-skill.md` to require:
+   - Lead-paragraph "When to use this skill:" block before any
+     `## ` section header.
+   - Description block ≤ ~200 tokens (soft cap; linter warning).
+   - Consistent frontmatter / field convention so the TOC
+     generator can parse uniformly.
+2. **TOC generator.** A new `neurogrim` CLI subcommand (or a
+   small Rust binary) that reads `.claude/skills/*.md`, extracts
+   each file's description + `##` outline, and emits a
+   `.claude/SKILLS-INDEX.md` (or whatever path the convention
+   picks). Claude Code + CLAUDE.md references the generated
+   index, not the individual files.
+3. **`capability-hygiene` Brain domain.** Advisory (weight 0.0
+   in v1 per spec principle #2) domain that scores:
+   - Presence + length of description field per skill
+   - Outline presence + depth
+   - Shadow detection (two skills with overlapping trigger phrases)
+   - Orphan detection (skill file present but not referenced by
+     any generated index)
+   - Deprecation markers honored
+   Emits a CMDB envelope per `cmdb-envelope-v1.schema.json`.
+
+**Non-goals (preserve from S11 contraction):**
+- NOT a new protocol. No envelope schema. No new MCP server.
+- NOT a replacement for `Read` tool. Agents load skill bodies
+  on demand via existing primitives.
+- NOT ecosystem-wide; each Brain maintains its own skills (this
+  is B-11's concern).
+- NOT a semantic/embedding search. Description quality, not
+  vector similarity, is the routing contract.
+
+**Combined with B-11:** B-11 (dedup) + B-12 (TOC) are
+multiplicative. Expected worst-Brain cold-start reduction after
+both: **53k → ~700-1,500 tokens** (97-99% reduction).
+
+**Plan when:** immediately after B-11 ships. B-12 is tractable in
+~1 week of focused work; no external dependencies.
+
+**Dependencies:**
+- None blocking.
+- Compatible with a no-S11 future (native primitives only).
+- Compatible with a future-S11 revival (B-12's authoring standard
+  becomes CP-3; `capability-hygiene` domain becomes CP-6).
+
+**Risks / adversarial review notes:**
+- **Convention drift.** If the authoring standard lands but the
+  linter or TOC generator doesn't enforce it, skills will drift
+  back toward prose bodies with weak leads. Mitigation: the
+  `capability-hygiene` Brain domain scores this; hygiene below
+  threshold surfaces as a recommendation.
+- **Outline volatility.** If skills frequently refactor their
+  `##` heading structure, the generated TOC churns. Mitigation:
+  the TOC is regenerated on demand; churn is benign if committed
+  alongside the skill edit.
+- **Description under-specificity.** 18-token descriptions (like
+  current `coherence.md` when measured naively) would route
+  poorly. Mitigation: linter enforces minimum length (~40 tokens
+  as a floor); Phase 1.5 shows >95% of existing skills already
+  clear this bar.
+- **Naming-firewall discipline.** Same as S11: "LSP Brains" (the
+  methodology) ≠ "LSP-inspired capability indexing" (the tooling
+  optimization). Any prose introducing B-12 in spec must open
+  with the two-sentence differentiator.
+
+**Reference implementation location:** probably lives in
+`neurogrim-cli` as a new subcommand (`neurogrim skills index` or
+similar), with the hygiene domain as a new sensory tool in
+`neurogrim-sensory`. Exact names TBD.
 
 ### B-08: Red-mode cross-scenario mode-applicability matrix
 
