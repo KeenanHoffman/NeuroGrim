@@ -301,8 +301,27 @@ fn brain_id_from_path(brain_root: &Path, invocation_root: &Path) -> String {
         .unwrap_or_else(|| brain_root.to_string_lossy().to_string())
 }
 
-/// Load all non-archived `.md` skill files under `{brain_root}/.claude/skills/`.
-/// Returns a map of basename → raw file bytes. Skips README and dotfiles.
+/// Load all skill entries under `{brain_root}/.claude/skills/`.
+///
+/// Finds TWO patterns (2026-04-22, Tier A partial — supports migration from
+/// legacy format to SKILL.md without a big-bang switch):
+///
+/// 1. **Legacy:** `.claude/skills/<name>.md` direct descendants.
+///    Key in the returned map: `<name>.md` (unchanged from original
+///    behavior, so existing ledgers + comparisons keep working).
+///
+/// 2. **Plugin:** `.claude/skills/<name>/SKILL.md`.
+///    Key in the returned map: `<name>/SKILL.md` (directory-prefixed so
+///    drift detection compares SKILL.md to SKILL.md across Brains, not
+///    against legacy single-file entries).
+///
+/// Cross-format drift (one Brain with `rubber-duck.md`, another with
+/// `rubber-duck/SKILL.md`) is NOT detected by byte comparison — that's
+/// expected migration churn, not a coherence problem. When migration
+/// completes across all Brains to the same format, comparisons work
+/// cleanly again.
+///
+/// Skips README, dotfiles, and `archived/` subdirectory entirely.
 fn load_skills(brain_root: &Path) -> BTreeMap<String, Vec<u8>> {
     let dir = brain_root.join(".claude").join("skills");
     let mut out = BTreeMap::new();
@@ -312,21 +331,34 @@ fn load_skills(brain_root: &Path) -> BTreeMap<String, Vec<u8>> {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        if path.extension().and_then(|s| s.to_str()) != Some("md") {
-            continue;
-        }
         let name = match path.file_name().and_then(|s| s.to_str()) {
-            Some(n) => n,
+            Some(n) => n.to_string(),
             None => continue,
         };
-        if name.starts_with("README") || name.starts_with('.') {
+
+        // Skip README, dotfiles, and the archived/ subdirectory.
+        if name.starts_with("README") || name.starts_with('.') || name == "archived" {
             continue;
         }
-        if let Ok(bytes) = std::fs::read(&path) {
-            out.insert(name.to_string(), bytes);
+
+        if path.is_file() {
+            // Legacy pattern: direct-descendant `.md` file.
+            if path.extension().and_then(|s| s.to_str()) != Some("md") {
+                continue;
+            }
+            if let Ok(bytes) = std::fs::read(&path) {
+                out.insert(name, bytes);
+            }
+        } else if path.is_dir() {
+            // Plugin pattern: `<name>/SKILL.md` (the Claude Code modern
+            // discovery pattern — see docs/invocation-ledger.md).
+            let skill_md = path.join("SKILL.md");
+            if skill_md.is_file() {
+                if let Ok(bytes) = std::fs::read(&skill_md) {
+                    let key = format!("{name}/SKILL.md");
+                    out.insert(key, bytes);
+                }
+            }
         }
     }
     out
@@ -446,5 +478,80 @@ mod tests {
         assert_eq!(result["brains_discovered"], 2);
         assert_eq!(result["drift_count"], 0);
         assert_eq!(result["score"], 100);
+    }
+
+    /// Helper: create a SKILL.md inside `<brain_root>/.claude/skills/<name>/`.
+    fn write_skill_md(brain_root: &Path, skill_name: &str, body: &str) {
+        let dir = brain_root
+            .join(".claude")
+            .join("skills")
+            .join(skill_name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("SKILL.md"), body).unwrap();
+    }
+
+    #[tokio::test]
+    async fn skill_md_plugin_format_is_discovered() {
+        // Tier A partial (2026-04-22): the scanner must find
+        // `.claude/skills/<name>/SKILL.md` in addition to legacy
+        // `.claude/skills/<name>.md`.
+        let parent = TempDir::new().unwrap();
+        let a = parent.path().join("A");
+        let b = parent.path().join("B");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let body = "---\nname: rubber-duck\ndescription: shared\n---\nbody";
+        write_skill_md(&a, "rubber-duck", body);
+        write_skill_md(&b, "rubber-duck", body);
+
+        let result = analyze_skill_coherence(a.to_str().unwrap()).await;
+        assert_eq!(result["score"], 100);
+        assert_eq!(result["total_duplicated_basenames"], 1);
+        assert_eq!(result["in_sync_count"], 1);
+        assert_eq!(result["drift_count"], 0);
+    }
+
+    #[tokio::test]
+    async fn skill_md_drift_between_brains_is_detected() {
+        let parent = TempDir::new().unwrap();
+        let a = parent.path().join("A");
+        let b = parent.path().join("B");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        write_skill_md(&a, "rubber-duck", "---\nname: rubber-duck\n---\nA-body");
+        write_skill_md(&b, "rubber-duck", "---\nname: rubber-duck\n---\nB-body-DRIFT");
+
+        let result = analyze_skill_coherence(a.to_str().unwrap()).await;
+        assert_eq!(result["drift_count"], 1);
+        assert_eq!(result["score"], 90);
+        let findings = result["findings"].as_array().unwrap();
+        assert!(findings.iter().any(|f| {
+            f["name"].as_str() == Some("drift:rubber-duck/SKILL.md")
+        }), "expected SKILL.md drift finding, got: {:?}", findings);
+    }
+
+    #[tokio::test]
+    async fn mixed_legacy_and_plugin_formats_coexist() {
+        // One Brain has skills in both formats simultaneously; both
+        // should be discovered and counted. No drift (each file is
+        // unique across Brains).
+        let (_parent, root) = isolated_brain("mixed");
+        write_skill(&root, "legacy-one.md", "# Legacy\n\nbody");
+        write_skill_md(&root, "plugin-one", "---\nname: plugin-one\n---\nbody");
+
+        let result = analyze_skill_coherence(root.to_str().unwrap()).await;
+        // Single-brain scan with no siblings → no duplications, but both
+        // skills are counted as "discovered" via the self entry.
+        assert_eq!(result["brains_discovered"], 1);
+        assert_eq!(result["total_duplicated_basenames"], 0);
+        assert_eq!(result["score"], 100);
+
+        // Inspect the self Brain's skill count via the brain_paths field.
+        let paths = result["brain_paths"].as_array().unwrap();
+        let self_brain = paths
+            .iter()
+            .find(|b| b["id"] == "self")
+            .expect("self brain entry");
+        assert_eq!(self_brain["skill_count"], 2);
     }
 }

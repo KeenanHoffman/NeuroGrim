@@ -10,6 +10,19 @@ the empirical half of the three-axis self-observability picture
 Axis 4 v1 (2026-04-22). Skills only. Subagents + tools are a future
 extension once the v1 signal is validated in dogfood.
 
+> **Correction 2026-04-22 (post-audit):** the `Skill` PostToolUse
+> hook only fires for skills that are actually `Skill`-tool-invocable
+> — i.e. skills structured as `.claude/skills/<name>/SKILL.md` with
+> YAML frontmatter. Legacy Markdown skills at
+> `.claude/skills/<name>.md` are **Read** by agents, not invoked via
+> the `Skill` tool, and so are invisible to this ledger until
+> migrated. Until the migration lands, the `capability-hygiene`
+> domain will classify every legacy skill as `dead` once its 30-day
+> grace period expires — this is an expected false positive, not a
+> real signal. Tracked in BACKLOG under the Tier A migration; the
+> sensor tooling already supports both formats, so migrated skills
+> start producing real usage signal immediately.
+
 ## What gets captured (privacy-by-design)
 
 Each invocation records:
@@ -132,6 +145,16 @@ low-confidence-dead-skill:<name>       — ledger too sparse to trust
 4. Claude Code was restarted after the settings edit.
 5. You're in a fresh session — existing sessions may have cached
    settings.
+
+**Hook exits 1 with "CLAUDE_PROJECT_DIR is unset"** — This is the
+guardrail (concern C1 in the 2026-04-22 deep audit). Claude Code
+normally populates `CLAUDE_PROJECT_DIR` automatically; if it's
+missing, the hook is refusing to silently scatter ledger data into
+whatever `$PWD` the bash process launched with. Check:
+1. The hook was invoked via Claude Code (not run manually).
+2. You're on a Claude Code build that sets `CLAUDE_PROJECT_DIR`.
+3. If running the hook from a harness/test, set the env var
+   explicitly.
 
 **Ledger lines are malformed** — The capability-hygiene reader
 tolerates malformed lines (silently skips them). If this is

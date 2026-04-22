@@ -314,8 +314,10 @@ fn score_skills(root: &Path) -> TypeResult {
     let mut result = TypeResult::new("skills");
     let dir = root.join(".claude").join("skills");
 
-    let files = collect_md_files(&dir);
-    if files.is_empty() {
+    // Tier A partial (2026-04-22): scan BOTH legacy `.claude/skills/
+    // <name>.md` AND plugin `.claude/skills/<name>/SKILL.md` formats.
+    let entries = collect_skill_entries(&dir);
+    if entries.is_empty() {
         return result;
     }
 
@@ -332,12 +334,41 @@ fn score_skills(root: &Path) -> TypeResult {
     let mut alive_count = 0usize;
     let mut dead_count = 0usize;
     let mut new_count = 0usize;
+    let mut legacy_count = 0usize;
+    let mut plugin_count = 0usize;
 
-    for (name, body) in files {
-        let description = extract_description_block(&body);
+    for entry in entries {
+        let SkillFileEntry {
+            skill_id,
+            display_path,
+            body,
+            format,
+        } = entry;
+        match format {
+            SkillFormat::Legacy => legacy_count += 1,
+            SkillFormat::Plugin => plugin_count += 1,
+        }
+
+        // Select routing text based on format:
+        //  - Plugin: description + when_to_use from YAML frontmatter (if
+        //    parseable and non-empty).
+        //  - Legacy (or malformed plugin): lead paragraph fallback.
+        //
+        // `plugin_has_when_field` is true iff the plugin frontmatter
+        // explicitly declared a non-empty `when_to_use:` key. That's an
+        // unambiguous routing signal, so it satisfies the when-to-use
+        // requirement even when the free-text doesn't match the regex.
+        let (description_source, plugin_has_when_field): (String, bool) = match format {
+            SkillFormat::Plugin => match extract_skill_md_routing_text(&body) {
+                Some((text, has_field)) => (text, has_field),
+                None => (extract_description_block(&body).to_string(), false),
+            },
+            SkillFormat::Legacy => (extract_description_block(&body).to_string(), false),
+        };
+        let description: &str = &description_source;
         let chars = description.chars().count();
         let tokens = chars / CHARS_PER_TOKEN;
-        let has_signal = detect_when_to_use(description);
+        let has_signal = plugin_has_when_field || detect_when_to_use(description);
 
         let (points, status, reason) = if tokens < SKILL_MIN_DESCRIPTION_TOKENS {
             (
@@ -376,21 +407,29 @@ fn score_skills(root: &Path) -> TypeResult {
         };
 
         // Axis 4 v1: usage classification.
-        let rarity = parse_usage_rarity(description);
+        //
+        // Rarity lookup is format-specific: legacy uses `usage-rarity:`
+        // frontmatter line in the lead paragraph; plugin skills declare
+        // it as a proper YAML frontmatter key. `parse_usage_rarity`
+        // handles both (it operates on the raw body string — the plugin
+        // YAML frontmatter is a superset that still includes
+        // `usage-rarity` if present as a field).
+        let rarity = parse_usage_rarity(&body);
         let window_days = if rarity == "rare" {
             DEAD_WINDOW_DAYS_RARE
         } else {
             DEAD_WINDOW_DAYS_DEFAULT
         };
-        // Trim `.md` when looking up in the ledger. The hook records
-        // Claude Code's skill name (no extension); the on-disk file has
-        // `<name>.md`. Both representations are tolerated — we check
-        // both to avoid false negatives during the v1 transition.
-        let stripped_name = name.strip_suffix(".md").unwrap_or(&name);
+
+        // Ledger lookup uses `skill_id` (no extension, no path prefix)
+        // which matches both (a) `tool_input.skill` for plugin skills,
+        // and (b) the hook-extracted name for legacy once the migration
+        // corrects the capture path. Fall back to display_path for
+        // historical legacy ledger entries.
         let usage = ledger
             .per_skill
-            .get(stripped_name)
-            .or_else(|| ledger.per_skill.get(&name))
+            .get(&skill_id)
+            .or_else(|| ledger.per_skill.get(&display_path))
             .cloned()
             .unwrap_or_default();
         let invocations_in_window = if rarity == "rare" {
@@ -398,7 +437,7 @@ fn score_skills(root: &Path) -> TypeResult {
         } else {
             usage.count_default_window
         };
-        let age_days = skill_age_days(root, &name, now);
+        let age_days = skill_age_days_for(root, &skill_id, format, now);
         let usage_status: &'static str = if age_days < GRACE_PERIOD_DAYS {
             new_count += 1;
             "new"
@@ -410,8 +449,15 @@ fn score_skills(root: &Path) -> TypeResult {
             "alive"
         };
 
+        let format_str = match format {
+            SkillFormat::Legacy => "legacy",
+            SkillFormat::Plugin => "plugin",
+        };
+
         let detail = json!({
-            "path": name,
+            "path": display_path,
+            "skill_id": skill_id,
+            "format": format_str,
             "description_chars": chars,
             "description_tokens_approx": tokens,
             "has_when_to_use_signal": has_signal,
@@ -428,7 +474,7 @@ fn score_skills(root: &Path) -> TypeResult {
         // Hygiene finding — subtracts points as before.
         let finding = if points < 10 {
             Some(Finding {
-                name: format!("{status}:skill:{name}"),
+                name: format!("{status}:skill:{display_path}"),
                 status: status.to_string(),
                 points: -((10 - points) as i32),
                 detail: Some(reason),
@@ -446,11 +492,11 @@ fn score_skills(root: &Path) -> TypeResult {
             let confidence_prefix = if low_confidence { "low-confidence-" } else { "" };
             let window_hint = if rarity == "rare" { "365-day rare" } else { "90-day" };
             result.findings.push(Finding {
-                name: format!("{confidence_prefix}dead-skill:{name}"),
+                name: format!("{confidence_prefix}dead-skill:{display_path}"),
                 status: "dead".to_string(),
                 points: 0,
                 detail: Some(format!(
-                    "`{name}` has 0 invocations in the {window_hint} window. \
+                    "`{display_path}` has 0 invocations in the {window_hint} window. \
                      skill_age_days={age_days}, total_ledger_invocations={}. \
                      {}",
                     ledger.total_invocations,
@@ -479,8 +525,44 @@ fn score_skills(root: &Path) -> TypeResult {
         "ledger:low_confidence",
         if low_confidence { 1 } else { 0 },
     );
+    // Tier A partial: surface per-format counts so operators can watch
+    // the migration progress over time.
+    result.status_counts.insert("format:legacy", legacy_count);
+    result.status_counts.insert("format:plugin", plugin_count);
 
     result
+}
+
+/// Format-aware file-age resolver. Legacy skills live at
+/// `.claude/skills/<skill_id>.md`; plugin skills live at
+/// `.claude/skills/<skill_id>/SKILL.md`.
+fn skill_age_days_for(
+    root: &Path,
+    skill_id: &str,
+    format: SkillFormat,
+    now: chrono::DateTime<chrono::Utc>,
+) -> i64 {
+    let path = match format {
+        SkillFormat::Legacy => root
+            .join(".claude")
+            .join("skills")
+            .join(format!("{skill_id}.md")),
+        SkillFormat::Plugin => root
+            .join(".claude")
+            .join("skills")
+            .join(skill_id)
+            .join("SKILL.md"),
+    };
+    let meta = match std::fs::metadata(&path) {
+        Ok(m) => m,
+        Err(_) => return i64::MAX,
+    };
+    let modified = match meta.modified() {
+        Ok(t) => t,
+        Err(_) => return i64::MAX,
+    };
+    let modified_dt: chrono::DateTime<chrono::Utc> = modified.into();
+    (now - modified_dt).num_days()
 }
 
 // ── Scorer: subagents ─────────────────────────────────────────────────────────
@@ -880,6 +962,138 @@ fn collect_md_files(dir: &Path) -> Vec<(String, String)> {
     out
 }
 
+// ── Tier A partial (2026-04-22): SKILL.md plugin-format support ──────────────
+
+/// A skill entry discovered under `.claude/skills/`. The scanner returns
+/// one of two shapes depending on how the skill is laid out on disk.
+#[derive(Debug, Clone)]
+struct SkillFileEntry {
+    /// Skill identifier — the name without any extension or path prefix.
+    /// Used both for ledger lookup (matches `tool_input.skill` for
+    /// plugin skills) and as the cross-Brain comparison key.
+    skill_id: String,
+    /// Human-visible path shown in CMDB findings. `<name>.md` for
+    /// legacy; `<name>/SKILL.md` for plugin.
+    display_path: String,
+    /// Raw file body.
+    body: String,
+    /// Format of this skill entry.
+    format: SkillFormat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SkillFormat {
+    /// `.claude/skills/<name>.md` direct-descendant markdown. The lead
+    /// paragraph (everything before first `##`) is the routing signal.
+    Legacy,
+    /// `.claude/skills/<name>/SKILL.md` plugin format. The YAML
+    /// frontmatter's `description` (+ optional `when_to_use`) is the
+    /// routing signal.
+    Plugin,
+}
+
+/// Scan `<root>/.claude/skills/` for both legacy `.md` files and
+/// modern `<name>/SKILL.md` plugin skills. Skips `archived/`,
+/// `README*`, dotfiles.
+fn collect_skill_entries(skills_dir: &Path) -> Vec<SkillFileEntry> {
+    let mut out: Vec<SkillFileEntry> = Vec::new();
+    let entries = match std::fs::read_dir(skills_dir) {
+        Ok(e) => e,
+        Err(_) => return out,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|s| s.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        if name.starts_with("README") || name.starts_with('.') || name == "archived" {
+            continue;
+        }
+
+        if path.is_file() {
+            // Legacy: `.claude/skills/<name>.md`.
+            if path.extension().and_then(|s| s.to_str()) != Some("md") {
+                continue;
+            }
+            let skill_id = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(&name)
+                .to_string();
+            if let Ok(body) = std::fs::read_to_string(&path) {
+                out.push(SkillFileEntry {
+                    skill_id,
+                    display_path: name,
+                    body,
+                    format: SkillFormat::Legacy,
+                });
+            }
+        } else if path.is_dir() {
+            // Plugin: `.claude/skills/<name>/SKILL.md`.
+            let skill_md = path.join("SKILL.md");
+            if !skill_md.is_file() {
+                continue;
+            }
+            if let Ok(body) = std::fs::read_to_string(&skill_md) {
+                out.push(SkillFileEntry {
+                    skill_id: name.clone(),
+                    display_path: format!("{name}/SKILL.md"),
+                    body,
+                    format: SkillFormat::Plugin,
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.skill_id.cmp(&b.skill_id));
+    out
+}
+
+/// Extract the SKILL.md routing description.
+///
+/// Returns `Some((combined_text, has_when_to_use_field))` if valid
+/// frontmatter is found with at least one of `description` or
+/// `when_to_use` populated. `combined_text` concatenates both fields
+/// (when present) for length/budget scoring. `has_when_to_use_field`
+/// is the definitive signal — if the YAML has a `when_to_use` field,
+/// the skill has declared its activation context explicitly and
+/// passes the when-to-use signal check regardless of phrase matching.
+///
+/// Claude Code truncates the combined text at 1,536 chars in its
+/// skill listing (see docs/invocation-ledger.md). We score the raw
+/// combined value; over-budget gets flagged, not truncated.
+///
+/// Returns `None` when frontmatter is absent or both fields are
+/// empty — callers fall back to scoring the body as legacy.
+fn extract_skill_md_routing_text(body: &str) -> Option<(String, bool)> {
+    // Frontmatter is bounded by leading `---` and terminating `---`
+    // at the start of a line. Be forgiving with trailing whitespace.
+    let trimmed = body.trim_start();
+    let rest = trimmed.strip_prefix("---")?;
+    // Find the closing `---` on its own line.
+    let close_idx = rest.find("\n---")?;
+    let frontmatter = &rest[..close_idx];
+
+    let parsed: serde_yaml::Value = serde_yaml::from_str(frontmatter).ok()?;
+    let description = parsed
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let when_to_use = parsed
+        .get("when_to_use")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
+    let has_when_field = when_to_use.is_some();
+    let combined = match (description, when_to_use) {
+        (Some(d), Some(w)) => format!("{d}\n\n{w}"),
+        (Some(d), None) => d,
+        (None, Some(w)) => w,
+        (None, None) => return None,
+    };
+    Some((combined, has_when_field))
+}
+
 // ── Axis 4 v1: invocation ledger + skill age + usage-rarity ──────────────────
 
 /// Summary of a skill's invocations from the ledger. Used by
@@ -979,30 +1193,6 @@ fn parse_usage_rarity(description: &str) -> &'static str {
         }
     }
     "common"
-}
-
-/// Age of a skill file in whole days (based on filesystem mtime). Used
-/// for the grace-period check. Returns `i64::MAX` if mtime can't be
-/// resolved — conservatively old = no grace period granted.
-fn skill_age_days(
-    root: &Path,
-    skill_basename: &str,
-    now: chrono::DateTime<chrono::Utc>,
-) -> i64 {
-    let path = root
-        .join(".claude")
-        .join("skills")
-        .join(skill_basename);
-    let meta = match std::fs::metadata(&path) {
-        Ok(m) => m,
-        Err(_) => return i64::MAX,
-    };
-    let modified = match meta.modified() {
-        Ok(t) => t,
-        Err(_) => return i64::MAX,
-    };
-    let modified_dt: chrono::DateTime<chrono::Utc> = modified.into();
-    (now - modified_dt).num_days()
 }
 
 /// Load `{root}/.claude/brain-registry.json` as a serde_json::Value. Returns
@@ -1757,5 +1947,176 @@ async fn inline_form(params: Params<()>) -> String { "ok".into() }
             let n = f["name"].as_str().unwrap_or("");
             n == "dead-skill:rare-one.md" || n == "low-confidence-dead-skill:rare-one.md"
         }), "rare skill with invocation 200d ago should stay alive under 365d window, findings: {:?}", findings);
+    }
+
+    // ── Tier A partial (2026-04-22): SKILL.md plugin-format tests ──
+
+    /// Helper: write a `.claude/skills/<name>/SKILL.md`.
+    fn write_skill_md(brain_root: &Path, dir_name: &str, body: &str) {
+        let dir = brain_root
+            .join(".claude")
+            .join("skills")
+            .join(dir_name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("SKILL.md"), body).unwrap();
+    }
+
+    #[test]
+    fn extract_skill_md_routing_text_parses_description_only() {
+        let body = "---\nname: foo\ndescription: what this skill does\n---\nbody here";
+        let (text, has_when_field) = extract_skill_md_routing_text(body).unwrap();
+        assert_eq!(text, "what this skill does");
+        assert!(!has_when_field);
+    }
+
+    #[test]
+    fn extract_skill_md_routing_text_combines_description_and_when_to_use() {
+        let body = "---\nname: foo\ndescription: A\nwhen_to_use: B\n---\nbody";
+        let (text, has_when_field) = extract_skill_md_routing_text(body).unwrap();
+        assert!(text.contains("A"));
+        assert!(text.contains("B"));
+        assert!(has_when_field);
+    }
+
+    #[test]
+    fn extract_skill_md_routing_text_returns_none_for_no_frontmatter() {
+        let body = "# Plain Markdown\n\nNo frontmatter here.";
+        assert!(extract_skill_md_routing_text(body).is_none());
+    }
+
+    #[test]
+    fn extract_skill_md_routing_text_returns_none_for_empty_fields() {
+        let body = "---\nname: foo\n---\nbody";
+        assert!(extract_skill_md_routing_text(body).is_none());
+    }
+
+    #[tokio::test]
+    async fn compliant_skill_md_plugin_scores_100() {
+        let tmp = TempDir::new().unwrap();
+        let body = "---\n\
+                    name: plan-critic\n\
+                    description: Adversarial review of a plan file before \
+                    implementation. Surfaces pitfalls, missing rollback paths, \
+                    gate gaps, and compatibility risks before code is written.\n\
+                    when_to_use: When you see a plan file in .claude/plans/ \
+                    and the user has said 'review my plan' or 'sanity check this'.\n\
+                    ---\n\
+                    # Plan Critic\n\n\
+                    (body content)\n";
+        write_skill_md(tmp.path(), "plan-critic", body);
+        let result = analyze_capability_hygiene(tmp.path().to_str().unwrap()).await;
+        assert_eq!(result["score"], 100);
+        assert_eq!(result["compliant_count"], 1);
+        assert_eq!(result["total_skills"], 1);
+    }
+
+    #[tokio::test]
+    async fn skill_md_without_description_falls_back_to_lead_paragraph() {
+        let tmp = TempDir::new().unwrap();
+        // Malformed-ish: YAML frontmatter is present but description field
+        // is absent. Falls back to scoring the body's lead paragraph — so
+        // the skill should still score well if the body has a decent lead.
+        let body = "---\n\
+                    name: foo\n\
+                    ---\n\
+                    # Foo\n\n\
+                    **When to use this skill:** This skill exists as a \
+                    fallback example. When the YAML frontmatter doesn't \
+                    carry a description, we score the lead paragraph the \
+                    legacy way. The skill still authors cleanly if the \
+                    body follows the authoring standard.\n\n\
+                    ## Section\n\nbody.";
+        write_skill_md(tmp.path(), "foo", body);
+        let result = analyze_capability_hygiene(tmp.path().to_str().unwrap()).await;
+        assert_eq!(result["compliant_count"], 1);
+        assert_eq!(result["score"], 100);
+    }
+
+    #[tokio::test]
+    async fn skill_md_plugin_is_scannable_alongside_legacy() {
+        // Mixed-format Brain: one legacy skill + one plugin skill.
+        // Both should be discovered; aggregate score considers both.
+        let tmp = TempDir::new().unwrap();
+
+        // Legacy skill, compliant.
+        let legacy = "# Legacy\n\n\
+                      **When to use this skill:** Demonstrates the legacy \
+                      single-file authoring format. Includes a long enough \
+                      lead paragraph to meet the length floor and the \
+                      when-to-use signal requirement.\n\n\
+                      ## Body\n\ncontent.\n";
+        write_skill(tmp.path(), "legacy-one.md", legacy);
+
+        // Plugin skill, compliant.
+        let plugin = "---\n\
+                      name: plugin-one\n\
+                      description: Demonstrates the plugin SKILL.md format \
+                      with a frontmatter-based routing description.\n\
+                      when_to_use: When scenario testing requires both a \
+                      legacy and a plugin skill present simultaneously.\n\
+                      ---\n\
+                      # Plugin One\n\nbody.\n";
+        write_skill_md(tmp.path(), "plugin-one", plugin);
+
+        let result = analyze_capability_hygiene(tmp.path().to_str().unwrap()).await;
+        assert_eq!(result["total_skills"], 2);
+        assert_eq!(result["compliant_count"], 2);
+        assert_eq!(result["score"], 100);
+
+        // Per-format counts land in the breakdown via status_counts.
+        let breakdown = &result["capability_breakdown"]["skills"];
+        assert_eq!(breakdown["format:legacy"], 1);
+        assert_eq!(breakdown["format:plugin"], 1);
+    }
+
+    #[tokio::test]
+    async fn skill_md_plugin_ledger_lookup_uses_directory_name() {
+        // Plugin skill's ledger key is the DIRECTORY name (matches
+        // Claude Code's `tool_input.skill`), not `<name>/SKILL.md`.
+        let tmp = TempDir::new().unwrap();
+        let body = "---\n\
+                    name: rubber-duck\n\
+                    description: Socratic rubber-duck skill for stuck agents.\n\
+                    when_to_use: When the user says 'duck it' or the agent \
+                    is circling without testing an approach in conversation.\n\
+                    ---\n\
+                    # Rubber Duck\n\nbody.\n";
+        write_skill_md(tmp.path(), "rubber-duck", body);
+
+        // Backdate mtime so the skill is past the grace period.
+        let path = tmp
+            .path()
+            .join(".claude")
+            .join("skills")
+            .join("rubber-duck")
+            .join("SKILL.md");
+        let old_time = std::time::SystemTime::now()
+            - std::time::Duration::from_secs(60 * 60 * 24 * 100);
+        filetime::set_file_mtime(&path, filetime::FileTime::from_system_time(old_time))
+            .ok();
+
+        // Ledger records an invocation under the directory name.
+        let now = chrono::Utc::now();
+        let recent = (now - chrono::Duration::days(1)).to_rfc3339();
+        let mut lines: Vec<String> = vec![format!(
+            r#"{{"schema_version":"1","ts":"{recent}","type":"skill","name":"rubber-duck","session_id":"s","invocation_id":"r1"}}"#
+        )];
+        for i in 0..25 {
+            lines.push(format!(
+                r#"{{"schema_version":"1","ts":"{recent}","type":"skill","name":"other","session_id":"s","invocation_id":"{i}"}}"#
+            ));
+        }
+        let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+        write_ledger(tmp.path(), &line_refs);
+
+        let result = analyze_capability_hygiene(tmp.path().to_str().unwrap()).await;
+        let findings = result["findings"].as_array().unwrap();
+
+        // The skill should be ALIVE (not dead), since the ledger has
+        // an invocation under the directory name.
+        assert!(!findings.iter().any(|f| {
+            let n = f["name"].as_str().unwrap_or("");
+            n.contains("dead-skill:rubber-duck")
+        }), "plugin skill with recent invocation should be alive, findings: {:?}", findings);
     }
 }

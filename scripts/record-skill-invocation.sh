@@ -19,7 +19,18 @@
 # The ledger is gitignored (runtime state per existing Brain convention).
 
 set -u
-cd "${CLAUDE_PROJECT_DIR:-$PWD}"
+
+# Guardrail (concern C1): require CLAUDE_PROJECT_DIR. Without it the
+# ledger would silently append to $PWD — whichever directory Claude
+# Code happened to launch the hook from. That scatters ledger data
+# across unrelated directories and makes `capability-hygiene`'s usage
+# classification silently unreliable. Fail loud instead.
+if [ -z "${CLAUDE_PROJECT_DIR:-}" ]; then
+  echo "record-skill-invocation.sh: CLAUDE_PROJECT_DIR is unset; refusing to write ledger to an unknown directory." >&2
+  exit 1
+fi
+
+cd "$CLAUDE_PROJECT_DIR"
 mkdir -p .claude/brain
 ledger=".claude/brain/invocation-ledger.jsonl"
 
