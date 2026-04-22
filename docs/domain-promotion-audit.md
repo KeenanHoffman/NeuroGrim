@@ -41,13 +41,39 @@ runbook is the reference implementation of that normative contract.
 |---|---|---|---|---|
 | Haiku | `claude-haiku-*` | 2 consecutive passes required | ~$0.20 | Routine audit + post-promotion weekly cadence |
 | Sonnet | `claude-sonnet-*` | 1 pass required | ~$2-3 | Validation gate; required at audit + quarterly |
+| Opus | `claude-opus-*` (rare) | occasional | ~$5-10 | Highest-fidelity tier; quarterly/annually for cross-tier baseline |
 
 **Why two profiles.** Haiku is cheap enough to run on every
 meaningful change (judge prompt edit, rubric tightening, library
 expansion). Sonnet is the "production-grade" validation —
 expensive but closer to the models real agents are graded by. Two
 Haiku passes + one Sonnet pass gives statistical confidence
-without $10/audit.
+without $10/audit. Opus is available as an occasional tier for
+cross-profile baseline data collection.
+
+**Model calibration profiles matter.** Each model has its own
+calibration profile — systematic patterns in how it reads rubrics
+and scores middle-ground samples. Haiku tends to cluster scores at
+extremes (low dynamic range on middle); Sonnet is ~5 points more
+generous on partially-bad responses but ~5 points harsher on
+clearly-bad extremes. Treating models as interchangeable loses
+signal. **Every audit cycle SHOULD record the exact (model,
+thinking-level) combination used** and cross-reference to
+`NeuroGrim/docs/judge-calibration-profiles.md` where empirical
+observations accumulate across audits. When you audit with a new
+model or thinking configuration, add a profile entry BEFORE
+interpreting the results.
+
+**Extended thinking.** Anthropic's thinking feature gives the
+judge additional internal token budget before producing the
+scoring JSON. Enable via the `ABV_JUDGE_THINKING` env var (set to
+the desired budget_tokens integer; unset = disabled). Thinking
+is JUDGE-only — adversary/agent generation paths ignore the env
+deliberately to keep adversary behavior consistent across judge
+experimentation. Thinking-enabled audits cost more per call
+(thinking tokens billed at input rates). Treat each (model,
+thinking_budget) as a distinct profile; document findings
+separately.
 
 **Routine cadence after promotion** (required):
 - Weekly: one Haiku calibrate + red-mode.
@@ -128,6 +154,24 @@ sonnet-red-mode.json
 
 These are the audit artifacts. They will be referenced by path in
 the `abv-run promote` invocation.
+
+### Step 4a — Record model + thinking-level observations
+
+For each (model, thinking-level) combination used in this audit,
+append an entry to (or extend an existing entry in)
+`NeuroGrim/docs/judge-calibration-profiles.md`. Capture:
+- Systematic bias observed vs human labels.
+- Dynamic range on gold-good and gold-bad.
+- Handling of middle-ground red samples.
+- Any mode-specific behavior worth noting (especially the subtle
+  modes: false-humility, culture-veneer, rubric-mimicry).
+- Cross-reference to the audit artifact paths as empirical evidence.
+
+Observations accumulate across audit cycles. Do NOT edit prior
+profile content when a new audit produces different numbers —
+add a dated observation. Profiles are empirical reality; if
+today's run diverges from a week ago, that's signal, not noise
+to overwrite.
 
 ---
 
