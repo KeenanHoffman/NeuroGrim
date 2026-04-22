@@ -19,8 +19,10 @@ runbook is the reference implementation of that normative contract.
 
 1. **Calibration harness operational.** You can run `abv-run calibrate`
    and `abv-run red-mode` against live API credentials via
-   `claude-proxy`. A non-zero `ANTHROPIC_API_KEY` is loaded into the
-   proxy; a scope token is issued to the runner.
+   `claude-proxy`. A non-zero `CLAUDE_PROXY_UPSTREAM_KEY` is loaded
+   into the proxy (NOT `ANTHROPIC_API_KEY` — the proxy deliberately
+   reserves that env var for Claude Code CLI to keep Max-subscription
+   billing intact); a scope token is issued to the runner.
 2. **`ABV_OPERATOR` env var set** to your operator handle (e.g.,
    `keenan`). The CLI refuses ledger writes without this.
 3. **Budget.** A full audit (2× Haiku + 1× Sonnet, see below) costs
