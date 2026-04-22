@@ -167,7 +167,7 @@ Longer is only better if the extra content is actionable. Cut anything that is
 "good to know" but doesn't change what someone does. If the body exceeds ~2000
 tokens of narrative, apply the **B-13 compression pattern**: extract depth to
 `docs/<skill-name>-guide.md`, keep the skill body as decision surface. See
-`subagent-patterns.md` + `docs/subagent-patterns-guide.md` as the canonical
+`subagent-patterns/SKILL.md` + `docs/subagent-patterns-guide.md` as the canonical
 example.
 
 ---
@@ -213,6 +213,6 @@ authoring a new skill.
   trigger phrases philosophy, optional sections, Why-This-Matters requirement
   + exempt list, style conventions, full template, companion hook rubric,
   wiring steps, deep troubleshooting.
-- `subagent-patterns.md` + `docs/subagent-patterns-guide.md` — canonical example
+- `subagent-patterns/SKILL.md` + `docs/subagent-patterns-guide.md` — canonical example
   of the B-13 skill/guide split pattern.
-- `skill-deprecation.md` — when to retire a skill instead of rewriting it.
+- `skill-deprecation/SKILL.md` — when to retire a skill instead of rewriting it.

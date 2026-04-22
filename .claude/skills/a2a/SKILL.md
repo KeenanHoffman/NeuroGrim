@@ -1,3 +1,18 @@
+---
+name: a2a
+description: >-
+  You are about to invoke, implement, or debug peer-Brain communication.
+  This covers fractal composition (parent↔child) and dual brain
+  (local↔external). For sensory tools or LLM-facing Brain tools, use the
+  MCP skills (`archived/brain.md`), not this one.
+when_to_use: >-
+  You are about to invoke, implement, or debug peer-Brain (A2A)
+  communication — fractal composition (parent↔child) or dual-brain
+  (local↔external). Trigger phrases — "a2a", "peer brain", "invoke a peer",
+  "fractal composition", "dual brain", "agent card", "beacon", "commune",
+  "behold".
+---
+
 # Skill: A2A Peer Protocol
 
 **When to read this:** You are about to invoke, implement, or debug peer-Brain
@@ -123,7 +138,7 @@ If A2A invocation fails, check in this order:
 
 - `peer-archived/brain.md` — running NeuroGrim as an A2A peer (serve, discover, troubleshoot).
 - `archived/brain.md` — Brain scoring and MCP-facing workflows.
-- `coherence.md` — how cross-domain signals and incident patterns use A2A messages in
+- `coherence/SKILL.md` — how cross-domain signals and incident patterns use A2A messages in
   dual-brain coordination.
 
 ## Related reading
@@ -131,4 +146,4 @@ If A2A invocation fails, check in this order:
 - `D:\Brains\LSP-Brains\spec\LSP-BRAINS-SPEC.md` §13 + Appendix G
 - `D:\Brains\LSP-Brains\spec\DUAL-BRAIN-DESIGN.md` §5 (A2A Message Vocabulary)
 - `D:\Brains\LSP-Brains\spec\METHODOLOGY-EVOLUTION.md` §6 (rationale)
-- `D:\Brains\NeuroGrim\roadmap\epics\S6-dual-brain-a2a.md`
+- `D:\Brains\NeuroGrim\roadmap\epics\S6-dual-brain-a2a/SKILL.md`

@@ -1,3 +1,20 @@
+---
+name: sync-ecosystem
+description: >-
+  Someone needs to know whether the ecosystem Brain's view of its children
+  is still accurate. NeuroGrim or LSP-Brains may have added new domains,
+  new schemas, new spec sections, or new skills that the ecosystem registry
+  doesn't yet know about. Also useful before any ecosystem-level reporting
+  or trajectory computation — no point scoring against an outdated child
+  inventory.
+when_to_use: >-
+  You want to check whether the ecosystem Brain's view of its children is
+  still accurate — before ecosystem-level reporting, before trajectory
+  computation, or after NeuroGrim/LSP-Brains adds new domains, schemas,
+  spec sections, or skills. Trigger phrases — "sync ecosystem", "check
+  children drift", "ecosystem registry stale", "refresh ecosystem view".
+---
+
 # Skill: Sync Ecosystem
 
 **When to use this skill:** Someone needs to know whether the ecosystem Brain's view of

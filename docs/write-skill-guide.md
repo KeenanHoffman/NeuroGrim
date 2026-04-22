@@ -234,7 +234,7 @@ philosophy layer):
   `archived/devops-for-developers.md`
 - Meta-skills: `archived/skill-index.md`, `write-skill.md`,
   `archived/skill-chain.md`, `archived/skill-gap-tracker.md`,
-  `skill-deprecation.md`, `archived/demo.md`,
+  `skill-deprecation/SKILL.md`, `archived/demo.md`,
   `session-handoff.md`, `session-recap.md`
 
 ---
@@ -449,7 +449,7 @@ SHOULD-level expectation on sensory tools specifically.
 - Fix: Apply the B-13 pattern — extract depth to
   `docs/<skill-name>-guide.md` with a cross-reference; keep the
   skill body as decision surface (when to use + pattern summary +
-  minimal reference). `subagent-patterns.md` and this guide are
+  minimal reference). `subagent-patterns/SKILL.md` and this guide are
   the canonical examples of the pattern.
 
 ---

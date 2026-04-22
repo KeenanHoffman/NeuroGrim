@@ -62,11 +62,11 @@ readers (executive, manager, developer, specialist, product-manager). Hats shape
 | `incident-commander` | Live incidents, broken deploys, data loss scenarios | Calm and decisive — stabilize first, understand second, explain third | `incident-response.md`, `debug-cloud-run.md`, `explain-error.md` |
 | `rubber-duck` | Explaining complex systems to someone new to the project | Patient teacher — no jargon, first principles, check for understanding | `archived/devops-for-developers.md`, `setup.md` |
 | `security-auditor` | IAM changes, secret rotation, access topology review | Paranoid — assume breach, verify every permission, minimize surface area | `access-topology.md`, `diagnose-iap.md` |
-| `visionary` | Pre-plan ideation, exploring approaches before committing | Divergent and curious — surface options, name tradeoffs, defer specifics | `imagination-mode.md` |
-| `source-reader` | Bulk read-only queries — subagent role only | Read-only executor: runs assigned query commands (e.g., `neurogrim sensory <name>`), returns structured JSON; never edits, commits, or applies | `subagent-patterns.md` Pattern 5 |
+| `visionary` | Pre-plan ideation, exploring approaches before committing | Divergent and curious — surface options, name tradeoffs, defer specifics | `imagination-mode/SKILL.md` |
+| `source-reader` | Bulk read-only queries — subagent role only | Read-only executor: runs assigned query commands (e.g., `neurogrim sensory <name>`), returns structured JSON; never edits, commits, or applies | `subagent-patterns/SKILL.md` Pattern 5 |
 
 > `source-reader` is a subagent-only hat. It is never worn by the pilot agent directly —
-> only assigned via a prompt template in the parent's briefing (see `subagent-patterns.md`).
+> only assigned via a prompt template in the parent's briefing (see `subagent-patterns/SKILL.md`).
 
 ---
 
@@ -155,7 +155,7 @@ Framing: {what the pilot agent is deciding based on this research}
 Calibration: {what kind of finding matters most — errors, options, edge cases, etc.}
 ```
 
-For the structured JSON output pattern with `hat_context`, see `subagent-patterns.md`
+For the structured JSON output pattern with `hat_context`, see `subagent-patterns/SKILL.md`
 Pattern 4 — it documents the extended result schema and per-hat calibration blocks
 as copy-paste-ready prompts.
 
@@ -194,7 +194,7 @@ Calibration: prioritize speed — identify the most recent failure signature and
 ## Per-Hat Communication Contract
 
 Every hat communicates with the same rule: **distill for the consumer** (see
-`subagent-patterns.md` Pattern 6). The hat shapes *what* to distill, not *how much*
+`subagent-patterns/SKILL.md` Pattern 6). The hat shapes *what* to distill, not *how much*
 to say — the answer is always "as little as possible."
 
 | Hat | Human-facing distillation | Link priority |
@@ -247,7 +247,7 @@ shows the context switch clearly. This is **Observability Before Action** from
 ## See Also
 
 - `plan-critic/SKILL.md` — first concrete use of the `adversary` hat; plan review protocol
-- `review-loop.md` — iterative 3-agent review workflow using T+P reviewers and a synthesizing Code Reviewer
-- `dual-review.md` — T+P review protocol (complementary technique for skill/infrastructure review)
-- `subagent-patterns.md` — patterns for coordinating subagents in complex workflows
+- `review-loop/SKILL.md` — iterative 3-agent review workflow using T+P reviewers and a synthesizing Code Reviewer
+- `dual-review/SKILL.md` — T+P review protocol (complementary technique for skill/infrastructure review)
+- `subagent-patterns/SKILL.md` — patterns for coordinating subagents in complex workflows
 - `incident-response.md` — full incident playbook (pairs naturally with `incident-commander` hat)

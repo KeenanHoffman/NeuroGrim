@@ -282,6 +282,32 @@ fn tokenize_skills(skills_dir: &PathBuf) -> (Vec<serde_json::Value>, usize) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
+        // Plugin format: .claude/skills/<name>/SKILL.md
+        if path.is_dir() {
+            if let Some(dname) = path.file_name().and_then(|s| s.to_str()) {
+                if dname == "archived" || dname.starts_with(".") {
+                    continue;
+                }
+            }
+            let skill_md = path.join("SKILL.md");
+            if skill_md.is_file() {
+                if let Ok(body) = fs::read_to_string(&skill_md) {
+                    let tokens = count_tokens(&body);
+                    total += tokens;
+                    let display = path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .map(|n| format!("{n}/SKILL.md"))
+                        .unwrap_or_else(|| "?".to_string());
+                    out.push(json!({
+                        "path": display,
+                        "tokens": tokens,
+                    }));
+                }
+            }
+            continue;
+        }
+        // Legacy format: .claude/skills/<name>.md
         if !path.is_file() {
             continue;
         }
@@ -562,8 +588,26 @@ fn b10_phase1p5_description_only_measurement() {
             Ok(e) => e,
             Err(_) => continue,
         };
+        // Scan both formats:
+        //   Legacy: .claude/skills/<name>.md (direct .md file)
+        //   Plugin: .claude/skills/<name>/SKILL.md (directory entrypoint)
+        let mut skill_files: Vec<(String, std::path::PathBuf)> = Vec::new();
         for entry in entries.flatten() {
             let path = entry.path();
+            if path.is_dir() {
+                if let Some(dname) = path.file_name().and_then(|s| s.to_str()) {
+                    if dname == "archived" || dname.starts_with(".") {
+                        continue;
+                    }
+                }
+                let skill_md = path.join("SKILL.md");
+                if skill_md.is_file() {
+                    if let Some(dname) = path.file_name().and_then(|s| s.to_str()) {
+                        skill_files.push((format!("{dname}/SKILL.md"), skill_md));
+                    }
+                }
+                continue;
+            }
             if !path.is_file()
                 || path.extension().and_then(|s| s.to_str()) != Some("md")
             {
@@ -576,6 +620,10 @@ fn b10_phase1p5_description_only_measurement() {
             if name.starts_with("README") || name.starts_with(".") {
                 continue;
             }
+            skill_files.push((name.to_string(), path));
+        }
+        for (name, path) in skill_files {
+            let name = name.as_str();
             let body = match fs::read_to_string(&path) {
                 Ok(b) => b,
                 Err(_) => continue,

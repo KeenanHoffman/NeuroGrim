@@ -44,8 +44,8 @@ archived skills; their commands and tools no longer exist.
 
 | Task | Skill |
 |------|-------|
-| When to use A2A, invoking a peer Brain, reading Agent Cards | `a2a.md` |
-| Running NeuroGrim as an A2A peer (serve, discover, troubleshoot) | `peer-brain.md` |
+| When to use A2A, invoking a peer Brain, reading Agent Cards | `a2a/SKILL.md` |
+| Running NeuroGrim as an A2A peer (serve, discover, troubleshoot) | `peer-brain/SKILL.md` |
 
 ### Brain Domains
 
@@ -53,18 +53,18 @@ Skills corresponding to Rust Brain sensor domains:
 
 | Task | Skill |
 |------|-------|
-| Cross-domain correlation health and coherence scoring | `coherence.md` |
-| Human communication model: preferences, per-hat overrides | `human-comms.md` |
-| Safe secret reference catalog: providers, manifest, CMDB | `secret-refs.md` |
-| Security posture: SOC2 / ISO27001 / NIST CSF evidence scanning | `security-standards.md` |
+| Cross-domain correlation health and coherence scoring | `coherence/SKILL.md` |
+| Human communication model: preferences, per-hat overrides | `human-comms/SKILL.md` |
+| Safe secret reference catalog: providers, manifest, CMDB | `secret-refs/SKILL.md` |
+| Security posture: SOC2 / ISO27001 / NIST CSF evidence scanning | `security-standards/SKILL.md` |
 
 ### Planning & Workflow
 
 | Task | Skill |
 |------|-------|
 | Adversarial plan review before implementation | `plan-critic/SKILL.md` |
-| Pre-plan ideation: explore approaches conversationally | `imagination-mode.md` |
-| North star alignment check | `north-star.md` |
+| Pre-plan ideation: explore approaches conversationally | `imagination-mode/SKILL.md` |
+| North star alignment check | `north-star/SKILL.md` |
 | Rubber-duck a stuck problem with a Socratic listener | `rubber-duck/SKILL.md` |
 
 ### Meta (Skills System)
@@ -73,12 +73,12 @@ Skills corresponding to Rust Brain sensor domains:
 |------|-------|
 | Authoring guide for new skills | `write-skill/SKILL.md` |
 | Agent hat system (adversary, architect, etc.) | `hats/SKILL.md` |
-| Pilot↔subagent interface protocol | `pilot-protocol.md` |
-| Coordinate subagents / parallel workflows | `subagent-patterns.md` |
-| Dual-agent T+P review protocol | `dual-review.md` |
-| Iterative T+P+Code Reviewer quality loop | `review-loop.md` |
-| Process for retiring outdated skills | `skill-deprecation.md` |
-| Bypass MCP: invoke the Brain via Bash subcommands | `cli-mode.md` |
+| Pilot↔subagent interface protocol | `pilot-protocol/SKILL.md` |
+| Coordinate subagents / parallel workflows | `subagent-patterns/SKILL.md` |
+| Dual-agent T+P review protocol | `dual-review/SKILL.md` |
+| Iterative T+P+Code Reviewer quality loop | `review-loop/SKILL.md` |
+| Process for retiring outdated skills | `skill-deprecation/SKILL.md` |
+| Bypass MCP: invoke the Brain via Bash subcommands | `cli-mode/SKILL.md` |
 
 ## Key Files
 

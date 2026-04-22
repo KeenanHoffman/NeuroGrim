@@ -1,3 +1,21 @@
+---
+name: subagent-patterns
+description: >-
+  You have a workflow with multiple independent concerns and you are
+  deciding whether to spawn subagents to run them in parallel vs. serialize
+  inline — OR you've already decided to spawn and need the specific pattern
+  (fan-out, pipeline, staged verification) and convergence approach. Use
+  this skill whenever a task has ≥ 2 concerns that are genuinely
+  independent, wall-clock saving > 60s, and each concern fits a precise 3-5
+  sentence prompt. This skill carries the decision surface + pattern index;
+  `docs/subagent-patterns-guide.md` carries the walk-throughs.
+when_to_use: >-
+  "spawn a subagent", "run in parallel", "parallelize this workflow",
+  "subagent coordination", "fan-out pattern", "multiple agents", "staged
+  agents", "parallel verification", "how do I use the Agent tool",
+  "coordinate agents", "independent concerns", "run these simultaneously"
+---
+
 # Coordinate Subagents
 
 **When to use this skill:** You have a workflow with multiple independent
@@ -10,7 +28,7 @@ sentence prompt. This skill carries the decision surface + pattern index;
 `docs/subagent-patterns-guide.md` carries the walk-throughs.
 
 Role: operational · reference
-Protocol: lsp-brains/agent/1.0 (see pilot-protocol.md for full envelope reference)
+Protocol: lsp-brains/agent/1.0 (see pilot-protocol/SKILL.md for full envelope reference)
 
 Trigger phrases: "spawn a subagent", "run in parallel", "parallelize this workflow",
 Domain: deploy
@@ -61,7 +79,7 @@ calibration blocks.
 ## Envelope Protocol (Required)
 
 Every subagent prompt uses the LSP Brains agent envelope. Full schema:
-`pilot-protocol.md`. Summary:
+`pilot-protocol/SKILL.md`. Summary:
 
 1. Read the skill manifest → get `responsibility`, `required_hat`, schemas.
 2. Build the request envelope (copy `required_hat` into `wear_hat`).
@@ -106,8 +124,8 @@ Further troubleshooting: `docs/subagent-patterns-guide.md` § Troubleshooting.
 
 ## See Also
 
-- `pilot-protocol.md` — envelope schema (required before spawning).
-- `dual-review.md` — Pattern 3 worked example.
+- `pilot-protocol/SKILL.md` — envelope schema (required before spawning).
+- `dual-review/SKILL.md` — Pattern 3 worked example.
 - `docs/subagent-patterns-guide.md` — full reference for all 6 patterns with
   worked examples, hat calibration blocks, envelope integration, failure
   handling, and the hook-system boundary.

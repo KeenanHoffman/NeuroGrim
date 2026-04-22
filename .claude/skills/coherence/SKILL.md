@@ -1,3 +1,18 @@
+---
+name: coherence
+description: >-
+  Your unified health score seems inconsistent with observed risk; two
+  domains are trending in divergent directions; you want to define a named
+  compound risk for your project; or you are preparing to promote a domain
+  from advisory (0.0) to weighted. Coherence surfaces cross-domain
+  relationships — compound risks, dependencies, reinforcing patterns — that
+  individual domains cannot see alone.
+when_to_use: >-
+  "coherence", "cross-domain", "correlation", "compound risk", "correlation
+  fired", "authoring correlations", "domain drift together", "unified score
+  doesn't match reality", "promote domain"
+---
+
 # Coherence — Cross-Domain Correlation Health
 
 **When to use this skill:** Your unified health score seems inconsistent with observed

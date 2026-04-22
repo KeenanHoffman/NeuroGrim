@@ -291,17 +291,17 @@ remediation path:
 
 - **Calibration drift-warning or drift-blocker**: the judge's gold-
   sample scoring diverged from human labels by > 10 points on ≥ 1
-  gold sample. Triage via `refine-agent-behavior.md` (skill).
+  gold sample. Triage via `refine-agent-behavior/SKILL.md` (skill).
   Possible causes: judge model rotation, rubric ambiguity, gold-
   sample mislabel.
 - **Red-sample miss** (`red-miss` on any red sample): judge failed
   to catch a failure mode the pre-recorded library asserts it
-  should. Triage via `refine-judge-integrity.md` (skill). Decide
+  should. Triage via `refine-judge-integrity/SKILL.md` (skill). Decide
   one of: `confirmed-judge-miss` → library expansion;
   `scenario-rubric-gap` → rubric edit + version bump;
   `mislabeled-red-sample` → sample retirement or ceiling change.
 - **Mock-mode miss** (`red-miss` at a (scenario, mode) pair): judge
-  failed on novel generation. Triage via `refine-judge-integrity.md`
+  failed on novel generation. Triage via `refine-judge-integrity/SKILL.md`
   § "Mock-mode triage". Additional fourth branch:
   `adversary-miscalibrated` → adversary prompt needs tightening,
   not the judge.

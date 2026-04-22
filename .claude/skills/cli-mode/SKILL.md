@@ -1,3 +1,19 @@
+---
+name: cli-mode
+description: >-
+  You are running in a Claude Code session where NeuroGrim is **NOT**
+  registered as an MCP server in `.mcp.json` (opt-in CLI mode). In this
+  mode, the seven BrainServer tool schemas (`get_health_score`,
+  `get_trajectory`, etc.) are not in your context — you must invoke the
+  Brain via Bash subcommands instead of MCP tool calls.
+when_to_use: >-
+  You are in a Claude Code session that omits the NeuroGrim MCP server
+  (CLI-only mode) and need to invoke the Brain via `neurogrim score`,
+  `neurogrim sensory <name>`, or similar Bash subcommands instead of MCP
+  tools. Trigger phrases — "cli mode", "neurogrim command", "score via
+  bash", "mcp is off", "no brain tools", "bypass mcp".
+---
+
 # Skill: CLI Mode — Use Bash Instead of MCP for NeuroGrim Tools
 
 **When to read this:** You are running in a Claude Code session where

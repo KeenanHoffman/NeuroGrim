@@ -1,3 +1,20 @@
+---
+name: human-comms
+description: >-
+  You are configuring persistent human-communication preferences
+  (verbosity, format, lead-with, emoji use, per-hat overrides),
+  troubleshooting why an agent is not respecting your comm style, or
+  setting up a new project's `.claude/human-comms.yaml` override. The
+  `human-comms` domain closes the gap between the Brain (world model) and
+  the agent's knowledge of the human it works with — preferences are
+  explicit, versioned, and visible in `neurogrim health`, not guessed fresh
+  each session.
+when_to_use: >-
+  "human comms", "communication preferences", "verbosity",
+  "human-comms.yaml", "configure agent output style", "how should the agent
+  talk", "persona override", "per-hat comms"
+---
+
 # Human Comms — Persistent Human Model
 
 **When to use this skill:** You are configuring persistent human-communication

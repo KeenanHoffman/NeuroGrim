@@ -1,8 +1,21 @@
+---
+name: peer-brain
+description: >-
+  You are configuring or running a NeuroGrim instance to participate in a
+  peer topology — either as a child in fractal composition, or as one half
+  of a dual-brain pair. For the protocol itself, read `a2a/SKILL.md` first.
+when_to_use: >-
+  You are configuring or running a NeuroGrim instance to serve as an A2A
+  peer — agent card, port allocation, peer discovery, or dual-brain
+  troubleshooting. Trigger phrases — "run as a peer", "a2a serve", "agent
+  card", "peer discovery", "port 842", "child brain", "external brain".
+---
+
 # Skill: Peer Brain — Running NeuroGrim as an A2A Peer
 
 **When to read this:** You are configuring or running a NeuroGrim instance to
 participate in a peer topology — either as a child in fractal composition, or as one
-half of a dual-brain pair. For the protocol itself, read `a2a.md` first.
+half of a dual-brain pair. For the protocol itself, read `a2a/SKILL.md` first.
 
 ## TL;DR
 
@@ -120,7 +133,7 @@ In this codebase, these two invariants are CI-enforced:
 2. The `neurogrim-mcp` crate MUST NOT import from `neurogrim-a2a` or `axum`.
 
 If you find yourself wanting to cross these boundaries, you're probably misusing one of
-the protocols. Re-read `a2a.md` and the spec's protocol boundary in §1.1.
+the protocols. Re-read `a2a/SKILL.md` and the spec's protocol boundary in §1.1.
 
 ## Observability
 
@@ -134,13 +147,13 @@ or a client generating non-unique `message_id`s. Investigate.
 
 ## Related skills
 
-- `a2a.md` — protocol reference and message shapes.
+- `a2a/SKILL.md` — protocol reference and message shapes.
 - `archived/brain.md` — health scoring and the MCP side of the interface.
 - `archived/operational-memory.md` — where peer-exchange events land (score-history, incident-ledger).
-- `coherence.md` — cross-domain reasoning that consumes peer signals.
+- `coherence/SKILL.md` — cross-domain reasoning that consumes peer signals.
 
 ## Related reading
 
 - `D:\Brains\LSP-Brains\spec\LSP-BRAINS-SPEC.md` §10, §13, Appendix G
 - `D:\Brains\LSP-Brains\spec\DUAL-BRAIN-DESIGN.md`
-- `D:\Brains\NeuroGrim\roadmap\epics\S6-dual-brain-a2a.md`
+- `D:\Brains\NeuroGrim\roadmap\epics\S6-dual-brain-a2a/SKILL.md`

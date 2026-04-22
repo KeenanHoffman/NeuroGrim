@@ -1,7 +1,7 @@
 # CLI Sensory Surface — MCP Tool ↔ CLI Subcommand Mapping
 
 This document lets an agent reproduce any NeuroGrim MCP tool call via
-a Bash subprocess when running in [CLI mode](cli-mode.md) — no MCP
+a Bash subprocess when running in [CLI mode](cli-mode/SKILL.md) — no MCP
 tool schemas injected into session context.
 
 **Scope:** the seven `BrainServer` MCP tools exposed by
@@ -283,7 +283,7 @@ failure). Treat non-zero exit as the authoritative failure signal.
 
 ## Related
 
-- [cli-mode.md](cli-mode.md) — when to choose CLI over MCP,
+- [cli-mode/SKILL.md](cli-mode/SKILL.md) — when to choose CLI over MCP,
   `.mcp.json` config patterns, benchmark pointer.
 - [.claude/skills/cli-mode.md](../.claude/skills/cli-mode.md) —
   agent-facing skill routing Bash instead of MCP tool calls.

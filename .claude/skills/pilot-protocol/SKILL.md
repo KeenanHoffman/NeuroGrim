@@ -1,3 +1,21 @@
+---
+name: pilot-protocol
+description: >-
+  You are about to spawn a subagent, implement a new subagent-facing skill,
+  or debug a subagent response that isn't conforming. This skill defines
+  the bidirectional interface language between the pilot agent and any
+  subagent it spawns — the `lsp-brains/agent/1.0` envelope, the request
+  shape, the response shape, and the retry-then-abort semantics. Schemas
+  are defined once in skill manifests, are the authority, and are enforced
+  hard; non-conformant responses are retried once, then aborted — no silent
+  degradation.
+when_to_use: >-
+  "spawn a subagent", "subagent protocol", "agent interface", "what
+  schema", "agent schema", "subagent response format", "agent envelope",
+  "lsp-brains protocol", "what hat should the subagent wear", "enforce
+  subagent output", "validate subagent response"
+---
+
 # Pilot Protocol
 
 **When to use this skill:** You are about to spawn a subagent, implement a new
@@ -185,6 +203,6 @@ time.
   error), symbol shape, full subagent system prompt template, capability
   discovery (static + dynamic), skill manifest Interface Contract YAML
   example, hat chain traceability, integration points.
-- `subagent-patterns.md` — coordination patterns (fan-out, convergence,
+- `subagent-patterns/SKILL.md` — coordination patterns (fan-out, convergence,
   hand-off) that wrap this envelope protocol.
 - `hats/SKILL.md` — hat system, hat catalog, and synthesis-type hat selection.

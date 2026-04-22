@@ -1,6 +1,6 @@
 # Subagent Patterns — Full Guide
 
-This is the deep reference for the `subagent-patterns.md` skill. The skill
+This is the deep reference for the `subagent-patterns/SKILL.md` skill. The skill
 itself carries the decision surface (when to spawn vs inline, the 6-pattern
 summary table, the envelope contract). This guide carries the walk-throughs:
 every pattern with a worked example, all hat-calibration blocks, full envelope
@@ -198,8 +198,8 @@ limited scope and the hand-off is structured rather than implicit.
 
 **LaaS example: Dual-Review as Staged Agents**
 
-The T and P passes in `dual-review.md` can be literal subagents rather than successive
-prompts in one conversation. See `dual-review.md` Staged Agent Path section for the
+The T and P passes in `dual-review/SKILL.md` can be literal subagents rather than successive
+prompts in one conversation. See `dual-review/SKILL.md` Staged Agent Path section for the
 complete prompt templates.
 
 **Why hand-off over a single sequential prompt:** When T and P are separate agents, any
@@ -514,7 +514,7 @@ not to re-run discovery.
 
 ## Envelope Protocol Integration
 
-All subagents in this project use the LSP Brains agent protocol. See `pilot-protocol.md`
+All subagents in this project use the LSP Brains agent protocol. See `pilot-protocol/SKILL.md`
 for the full reference. The patterns above are orthogonal to the envelope — they describe
 coordination topology, not wire format. Every subagent prompt, regardless of pattern, must
 use the standard envelope.
@@ -524,7 +524,7 @@ use the standard envelope.
 1. Read the skill manifest for the capability → get `responsibility`, `required_hat`,
    `input_schema`, `output_schema`
 2. Build the JSON request envelope (copy `required_hat` into `wear_hat`)
-3. Construct the system prompt using the template from `pilot-protocol.md`
+3. Construct the system prompt using the template from `pilot-protocol/SKILL.md`
 4. Spawn the subagent
 
 **Step added to every convergence check after collecting results:**
@@ -619,7 +619,7 @@ not PASS). Fall back to running that concern inline sequentially. Log that the p
 path was not used.
 
 **Mode 3 — Subagent returns malformed output (not valid JSON, missing required fields):**
-Apply the enforcement model from `pilot-protocol.md`: retry once with a specific
+Apply the enforcement model from `pilot-protocol/SKILL.md`: retry once with a specific
 correction, then abort. Never assume success from ambiguous output. Record
 SCHEMA_MISMATCH in proposal-ledger so conformance rate is tracked over time.
 

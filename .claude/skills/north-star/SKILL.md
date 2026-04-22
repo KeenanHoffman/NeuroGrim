@@ -1,3 +1,17 @@
+---
+name: north-star
+description: >-
+  You are about to commit to a plan, just finished significant work, or are
+  trying to decide which backlog item to prioritize next — and want a
+  lightweight alignment check against the project's vision. This skill
+  asks: *does this advance us toward the north-star stage?* Reach for it
+  before scoping any sizable piece of work, after closing an epic, or
+  whenever a stakeholder asks "are we on track".
+when_to_use: >-
+  "north star", "vision check", "does this advance", "are we on track",
+  "roadmap", "backlog", "which stage", "what stage are we in"
+---
+
 # North Star — Vision + Stage Alignment Check
 
 **When to use this skill:** You are about to commit to a plan, just finished
@@ -97,7 +111,7 @@ When in doubt, choose the option that advances these.
 
 ## See Also
 
-- `imagination-mode.md` — pre-plan exploration (visionary hat)
+- `imagination-mode/SKILL.md` — pre-plan exploration (visionary hat)
 - `plan-critic/SKILL.md` — adversarial review before implementation
 - `archived/brain.md` — current Brain reference
 - `archived/devops-philosophy.md` — the 8 DevOps principles underlying domain weights

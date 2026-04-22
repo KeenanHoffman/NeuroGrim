@@ -1,3 +1,20 @@
+---
+name: imagination-mode
+description: >-
+  You are about to plan something non-trivial and the right approach is not
+  yet obvious — OR the user signals they want to think out loud before
+  committing ("imagine", "let's think", "what could we do", "brainstorm",
+  "before we plan"). Imagination mode is a conversational pre-planning
+  space: surface-level, idea-based, generalized. No code, no files, no
+  commands — just approaches, tradeoffs, and constraints explored aloud
+  until the right shape emerges.
+when_to_use: >-
+  "imagine", "imagination mode", "let's think", "what could we do", "how
+  might we", "brainstorm", "explore approaches", "think through this",
+  "ideate", "before we plan", "what are the options", "what would it look
+  like if", "talk through", "think out loud"
+---
+
 # Imagination Mode
 
 **When to use this skill:** You are about to plan something non-trivial and the
@@ -197,7 +214,7 @@ That shapes which approach is worth going deeper on.
 ## The Full Pre-Implementation Sequence
 
 ```
-imagination-mode.md      (explore approaches — no code, no files)
+imagination-mode/SKILL.md      (explore approaches — no code, no files)
   → plan mode            (write the plan file)
   → plan-critic/SKILL.md       (adversarial review before implementing)
   → implementation

@@ -1,3 +1,18 @@
+---
+name: review-loop
+description: >-
+  Use this skill when a plan involves authoring or substantially revising a
+  skill, hook, or architectural decision — and the output needs iterative
+  quality gates rather than a single-pass review. The review loop runs T
+  (Technical) and P (Philosophy) reviewers in sequence, hands their
+  findings to a Code Reviewer for synthesis and revision requests, then
+  loops back until all concerns are resolved or iteration is exhausted.
+when_to_use: >-
+  "review loop", "iterative review", "keep reviewing until clean", "run the
+  loop", "T+P loop", "code reviewer", "review and revise", "loop until
+  approved", "run until no concerns"
+---
+
 # Review Loop
 
 Use this skill when a plan involves authoring or substantially revising a skill, hook, or
@@ -6,7 +21,7 @@ single-pass review. The review loop runs T (Technical) and P (Philosophy) review
 sequence, hands their findings to a Code Reviewer for synthesis and revision requests, then
 loops back until all concerns are resolved or iteration is exhausted.
 
-Use it after `dual-review.md` issues a `revise:` verdict, or whenever the work being
+Use it after `dual-review/SKILL.md` issues a `revise:` verdict, or whenever the work being
 reviewed will be edited in response to findings (as opposed to just being read and approved).
 
 Role: meta
@@ -20,7 +35,7 @@ Methodology-step: skills
 
 ## Why a Loop, Not a Single Pass
 
-`dual-review.md`'s Standard Path is a single-cycle evaluation — T reviews, P reviews,
+`dual-review/SKILL.md`'s Standard Path is a single-cycle evaluation — T reviews, P reviews,
 synthesis recommends approve or revise. It deliberately stops there: it says what needs to
 change but doesn't define who re-runs T+P after changes are made, or when to stop.
 
@@ -53,7 +68,7 @@ itself is not hat-bearing.
 
 ### T — Technical Reviewer
 
-Evaluates technical correctness using T1–T5 from `dual-review.md`:
+Evaluates technical correctness using T1–T5 from `dual-review/SKILL.md`:
 - T1: Code blocks syntactically valid and runnable?
 - T2: Trigger phrases cover realistic invocation patterns?
 - T3: Troubleshooting covers top 3 real failure modes?
@@ -64,7 +79,7 @@ Returns a structured finding: pass/warn/fail per question, plus any items flagge
 
 ### P — Philosophy Reviewer
 
-Reads T's output, then evaluates principle alignment using P1–P4 from `dual-review.md`:
+Reads T's output, then evaluates principle alignment using P1–P4 from `dual-review/SKILL.md`:
 - P1: `## Why This Matters` gives a genuine reason, not a restatement?
 - P2: Platform Migration Test passes?
 - P3: Exactly one principle cited?
@@ -147,7 +162,7 @@ than spawned subagents. Use spawned agents when:
 - The change affects gate behavior or deploy order
 - Conflict between T and P needs to be structurally visible
 
-See `dual-review.md` — Staged Agent Path for the full spawn templates and JSON result format.
+See `dual-review/SKILL.md` — Staged Agent Path for the full spawn templates and JSON result format.
 
 ---
 
@@ -166,7 +181,7 @@ produces consistent quality outcomes rather than relying on reviewer memory and 
 
 ## See Also
 
-- `dual-review.md` — the T+P protocol this loop wraps; T1–T5 and P1–P4 question definitions
+- `dual-review/SKILL.md` — the T+P protocol this loop wraps; T1–T5 and P1–P4 question definitions
 - `hats/SKILL.md` — hat system; hat isolation during loop orchestration
 - `plan-critic/SKILL.md` — adversarial plan review (complement to the review loop)
-- `subagent-patterns.md` — Pattern 3 (Sequential Hand-Off) for spawning T and P as agents
+- `subagent-patterns/SKILL.md` — Pattern 3 (Sequential Hand-Off) for spawning T and P as agents

@@ -269,7 +269,7 @@ Some observations look like failures but are expected non-determinism:
 | A scenario passes on Monday, fails on Tuesday, passes on Wednesday | Same as above. The pass/fail threshold is a single cut through a distribution; low-signal scenarios will straddle it. Solution: more trials OR widen the pass threshold, never both. |
 | Feedback ledger has entries for scenarios that "passed" | Feedback is elicited on every trial regardless of pass/fail. The agent may have passed on the rubric while still having useful signal to share. |
 | CMDB `score` differs slightly from the per-scenario means' arithmetic average | By design — the CMDB rolls up per-scenario `mean_score` values with equal weighting, and the per-scenario mean excludes error trials. Small drift vs a naïve average is expected. |
-| `score_stddev > 15` for a single scenario | Probably under-specified rubric. Either the criteria descriptions are too vague, or the prompt admits too wide a range of valid responses. Refine via `refine-agent-behavior.md`. |
+| `score_stddev > 15` for a single scenario | Probably under-specified rubric. Either the criteria descriptions are too vague, or the prompt admits too wide a range of valid responses. Refine via `refine-agent-behavior/SKILL.md`. |
 
 ---
 

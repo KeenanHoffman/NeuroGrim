@@ -206,9 +206,9 @@ artifact it validates.
   briefing expansions.
 - `hats/SKILL.md` — full hat system, subagent briefing format, adversary
   checklist.
-- `review-loop.md` — iterative T+P+Code Reviewer loop for plans involving
+- `review-loop/SKILL.md` — iterative T+P+Code Reviewer loop for plans involving
   skill or code authoring.
-- `dual-review.md` — T+P review protocol for skill/infrastructure quality
+- `dual-review/SKILL.md` — T+P review protocol for skill/infrastructure quality
   review.
 - `weigh-time-risk.md` — risk/time tradeoff before deploy decisions.
 - `preflight.md` — 8-item readiness checklist before any `apply`.

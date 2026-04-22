@@ -1,3 +1,20 @@
+---
+name: dual-review
+description: >-
+  You need a two-pass review for a new skill, a new hook, or an
+  architectural decision — when both technical correctness AND principle
+  alignment matter. A Technical Reviewer and a Philosophy Reviewer evaluate
+  independently, then the results are synthesized with philosophy taking
+  precedence. Reach for this skill before merging a skill, hook, or
+  architectural change; single-pass review has selection bias that this
+  protocol is designed to correct.
+when_to_use: >-
+  "dual review", "review this skill", "technical and philosophy review",
+  "T+P review", "philosophy review", "check this against principles", "is
+  this principled", "both technical and philosophical check", "review this
+  hook", "evaluate this decision"
+---
+
 # Dual Review Protocol
 
 **When to use this skill:** You need a two-pass review for a new skill, a new
@@ -105,7 +122,7 @@ is important — separate agents cannot resolve conflicts silently.
 **Agent A — T Reviewer prompt template:**
 ```
 "You are a Technical Reviewer for the LaaS skill system. Read `.claude/skills/<skill-name>.md`.
-Evaluate ONLY the Technical Lens (T1–T5 from `dual-review.md`).
+Evaluate ONLY the Technical Lens (T1–T5 from `dual-review/SKILL.md`).
 Return ONLY a JSON result:
 {
   \"passed\": bool,
@@ -123,7 +140,7 @@ Return ONLY a JSON result:
 ```
 "You are a Philosophy Reviewer for the LaaS skill system. Read `.claude/skills/<skill-name>.md`.
 The Technical Reviewer returned: <paste Agent A JSON output>.
-Evaluate ONLY the Philosophy Lens (P1–P4 from `dual-review.md`). Address any items in
+Evaluate ONLY the Philosophy Lens (P1–P4 from `dual-review/SKILL.md`). Address any items in
 `conflicts_for_p`. Remember: philosophy takes precedence in synthesis.
 Return ONLY a JSON result:
 {
@@ -149,7 +166,7 @@ unresolved tensions.
 - Either `passed: false` → surface all findings; do not register the skill
 - Parent writes the final synthesis; neither subagent writes to disk
 
-See `subagent-patterns.md` Pattern 3 (Sequential Hand-Off) for the full spawn pattern
+See `subagent-patterns/SKILL.md` Pattern 3 (Sequential Hand-Off) for the full spawn pattern
 and JSON result format conventions.
 
 ---
@@ -268,4 +285,4 @@ specific questions change.
 - `archived/devops-philosophy.md` — the 8 principles P1–P4 test against
 - `archived/skill-hook-pairs.md` — catalog of skill↔hook pairs; new pairs should pass dual review
 - `assess-skill-on-edit.sh` — automated T/P pass that fires on every skill edit
-- `review-loop.md` — iterative T+P+Code Reviewer loop for when the work will be revised in response to findings; wraps this protocol with a structured iteration harness and exit conditions
+- `review-loop/SKILL.md` — iterative T+P+Code Reviewer loop for when the work will be revised in response to findings; wraps this protocol with a structured iteration harness and exit conditions

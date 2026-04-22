@@ -1,6 +1,6 @@
 # Pilot Protocol — Full Guide
 
-Deep reference for the `pilot-protocol.md` skill. The skill carries
+Deep reference for the `pilot-protocol/SKILL.md` skill. The skill carries
 the decision surface (protocol identifier, responsibility type
 table, request envelope shape, response format with the delimited-
 block contract, enforcement/retry model, See Also). This guide
@@ -347,7 +347,7 @@ required_hat` triggers a retry.
 
 | Component | Role |
 |---|---|
-| `subagent-patterns.md` | Envelope construction + validation wraps Patterns 1–5 |
+| `subagent-patterns/SKILL.md` | Envelope construction + validation wraps Patterns 1–5 |
 | `proposal-ledger.json` | Records SCHEMA_MISMATCH events per capability |
 | `brain-registry.json` `subagent_capabilities` | Capability registry, lists required_hat |
 | Brain MCP `list_capabilities` | Dynamic capability discovery |

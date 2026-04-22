@@ -1,3 +1,17 @@
+---
+name: refine-judge-integrity
+description: >-
+  An `abv-run calibrate` run produced one or more red-misses (judge scored
+  a red sample above its ceiling), the harness wrote `pending` entries to
+  `.claude/brain/judge-integrity-ledger.jsonl`, and you're about to decide
+  what each miss means. The output of `abv-run judge-integrity list` shows
+  unresolved entries and you're sitting down to triage.
+when_to_use: >-
+  "triage the red-miss," "the judge missed a red sample," "the
+  judge-integrity ledger has entries," "run abv-run judge-integrity
+  triage," "why did the red sample pass."
+---
+
 # Skill: Refine Judge Integrity
 
 **When to use this skill:** An `abv-run calibrate` run produced one or
@@ -16,7 +30,7 @@ judge-integrity triage," "why did the red sample pass."
 writes without `ABV_OPERATOR` set.
 
 This skill implements the human half of spec §15.3 "Red samples"
-(LSP-Brains v2.4). Its sibling is `refine-agent-behavior.md`, which
+(LSP-Brains v2.4). Its sibling is `refine-agent-behavior/SKILL.md`, which
 closes the loop on feedback-ledger entries from agent-under-test
 self-report. They use similar workflows; the signals and the editing
 surfaces differ.
@@ -217,7 +231,7 @@ Verify the overall_status is back to `pass`. If it isn't:
 
 - New red-miss? The fix didn't fully land; re-triage.
 - Gold drift? Unrelated to the red-sample fix; address via
-  `refine-agent-behavior.md`.
+  `refine-agent-behavior/SKILL.md`.
 
 ---
 
@@ -279,7 +293,7 @@ ledger):
 1. Copy the mock response from `trial_results[].response` in the
    report.
 2. Author it into the scenario's `red_samples[]` array following
-   `write-agent-behavior-scenario.md` § "Adding red samples".
+   `write-agent-behavior-scenario/SKILL.md` § "Adding red samples".
 3. Use a `notes` field citing the mock-mode report's `run_id` for
    provenance.
 4. Re-run `abv-run calibrate` — the new sample enters the stable
@@ -345,12 +359,12 @@ Key fields:
 
 ## Relationship to other skills
 
-- **`refine-agent-behavior.md`** — sibling skill, different signal.
+- **`refine-agent-behavior/SKILL.md`** — sibling skill, different signal.
   Feedback-ledger entries come from the AGENT-UNDER-TEST's
   self-report; judge-integrity entries come from the LIVE JUDGE's
   red-miss behavior. Different files, different triage decisions,
   similar rigor.
-- **`write-agent-behavior-scenario.md`** — when a
+- **`write-agent-behavior-scenario/SKILL.md`** — when a
   `scenario-rubric-gap` triage results in editing or adding a
   rubric criterion, this skill covers the authoring contract.
 - **`plan-critic/SKILL.md`** — when the triage implies a systemic change
