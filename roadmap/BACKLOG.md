@@ -11,7 +11,7 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (added B-09: CLI-mode sensory access alternative to MCP, and B-10: LSP-style lazy context loading for skills+tools — both surfaced during S10 session close-out as per-session tooling-overhead concerns).
+**Last updated:** 2026-04-22 (CapProto planning session: pre-committed B-10 Phase 1 decision criteria; added B-11 cross-Brain skill dedup; wrote S11 epic stub at `epics/S11-capability-protocol.md` per operator's "partial anchor" choice — no ROADMAP.md row until B-10 Phase 3 passes. Prior 2026-04-22 entries: B-09 CLI-mode sensory, B-10 LSP-style lazy context loading — both surfaced during S10 session close-out as per-session tooling-overhead concerns).
 
 ---
 
@@ -122,7 +122,31 @@ per-session tooling-overhead concerns raised by the operator when
 thinking about how context windows are consumed by tool schemas +
 skill descriptions at session start, before any real work happens.
 
-### B-09: CLI-mode sensory access (power-user alternative to MCP)
+### B-09: CLI-mode sensory access (power-user alternative to MCP) — COMPLETE (2026-04-22)
+
+**Status:** **Complete (2026-04-22).** Promoted to mini-epic and
+shipped in one session alongside B-10 Phase 1 measurement.
+Epic record: `epics/B09-cli-mode-sensory.md`. Measured savings:
+983 tokens per session (100% reduction on the BrainServer tool
+schema injection axis). Default stays MCP; CLI is opt-in via
+`.mcp.json` omission + the `cli-mode` skill.
+
+**Delivered artifacts:**
+- `docs/cli-mode.md` — `.mcp.json` opt-out pattern
+- `docs/cli-sensory-surface.md` — 7-tool MCP↔CLI mapping
+- `.claude/skills/cli-mode.md` — agent-facing skill
+- `neurogrim-cli/tests/context_overhead.rs` — benchmark harness
+- `roadmap/data/b09-bench-2026-04-22.json` — baseline report
+- `CLAUDE.md` + `README.md` — mode-selection guidance
+
+**DP-1 scope revision.** Original framing assumed a Rust feature flag
+on `neurogrim agent`. Plan-critic verification during execution
+showed `commands::agent::run()` is 13 lines with zero MCP coupling —
+there was no Rust-level flag to add. Real lever is which servers the
+operator enables in `.claude/.mcp.json`. DP-1 became a docs + config-
+pattern story. Net effort: 0 Rust LOC, ~3.5 days docs + one test.
+
+**Original framing preserved for history:**
 
 **Why it's here.** MCP is the default tooling protocol because it
 offers uniform tool-discovery, schema validation, and LLM-friendly
@@ -280,6 +304,23 @@ investigation before scoping:
   approach for just those; benchmark token savings vs latency
   cost. Go/no-go on broader rollout.
 
+**Decision criteria (pre-committed 2026-04-22, before data
+collection, so the go/no-go is not retrofit):**
+
+- **Park B-10 if:** worst-Brain cold-start ≤ 8k tokens AND no
+  Brain's skill corpus grows > 10%/quarter. Modern context
+  windows absorb this; complexity unjustified.
+- **Proceed to Phase 2 if:** worst-Brain cold-start ≥ 20k tokens
+  OR four-Brain duplicated-skill waste ≥ 5k tokens (the
+  `rubber-duck.md` triplicate is the canary signal).
+- **Ambiguous zone (8k–20k):** run Phase 1.5 secondary
+  measurement — what fraction of skills/tools does a typical
+  session actually use? <20% utilization → proceed;
+  >50% → park.
+- **Phase 3 go/no-go (only relevant if Phases 1+2 proceed):**
+  typical-session delta ≥ 5k tokens saved, worst-case latency
+  ≤ 300ms per lazy-load, no stale-cache bug in 2-week dogfood.
+
 **Dependencies:**
 - B-09 (CLI-mode tools) overlaps — both reduce tool overhead.
   B-09 ships a specific power-user escape hatch; B-10 is a
@@ -316,9 +357,94 @@ remaining a backlog item — the architectural shift would be
 big enough to warrant stage treatment. Premature to commit to
 stage-hood without Phase 1 data.
 
+**Partial stage anchor (2026-04-22).** Operator chose to
+write a stub epic at `epics/S11-capability-protocol.md`
+capturing the CapProto vision without committing a ROADMAP.md
+row. The stub activates only if Phase 3 hits all three
+go-criteria above.
+
+**Phase 1 result (2026-04-22).** Full four-Brain sweep ran
+via `neurogrim-cli/tests/context_overhead.rs`. Raw report:
+`roadmap/data/b10-phase1-2026-04-22.json`. Companion
+analysis: `roadmap/data/b10-phase1-analysis.md`. Headline:
+**verdict = proceed to Phase 2** — worst-Brain cold-start
+53,170 tokens (ecosystem), four-Brain duplicated-skill waste
+49,730 tokens. Both proceed-criteria fired independently.
+
+**Key plan-critic finding from Phase 1:** ~93% of the
+measured overhead is cross-Brain skill duplication, not
+fundamental skill-catalog size. B-11 (dedup) alone would
+cut worst-Brain cold-start from 53k → ~3.4k without any
+lazy-loading protocol. **Recommendation: act on B-11 first,
+then re-run Phase 1 to determine whether B-10 still meets
+proceed-criteria under the post-dedup baseline.** See
+analysis doc for details.
+
 ---
 
-## Identified 2026-04-22 (post S10 audit #3 red-mode analysis)
+### B-11: Cross-Brain skill byte-duplication cleanup
+
+**Why it's here.** Today several skills (e.g., `rubber-duck.md`,
+`write-skill.md`, `hats.md`) are byte-identical across three or
+more of the four `.claude/skills/` directories (ecosystem,
+NeuroGrim, LSP-Brains, NeuroGrim-python-starter). Drift is only
+caught by manual `cmp` or ad-hoc grep. The existing
+`culture-coherence` domain checks `culture.yaml` byte-equality
+but does NOT cover skills; there is no machine-readable skill
+registry anywhere in the stack.
+
+Surfaced during the 2026-04-22 CapProto planning session as an
+adjacent concern that is architecturally independent of B-10
+and S11 — addressable either way.
+
+**What B-11 delivers.** One of two candidate architectures
+(or a hybrid):
+
+1. **Central defn + per-Brain override.** One canonical copy
+   of each shared skill lives in a central location (candidate:
+   `LSP-Brains/skills/` or a new ecosystem-level `skills/`
+   directory). Each Brain's `.claude/skills/` contains either a
+   pointer file or an explicit override diff. Read-time
+   resolution via a harness lookup.
+
+2. **Byte-equality Brain domain.** Add a `skill-coherence`
+   domain mirroring `culture-coherence`: scores = number of
+   byte-identical-required files that are in sync. No
+   behavioral change to skill resolution; drift becomes
+   scoreable and observable. Simpler; does not solve the
+   "source of truth" question.
+
+**Plan when:** independent of CapProto progress. Trigger by any
+of: (a) observed drift between duplicated copies, (b) a fourth
+Brain joins the ecosystem (scaling pressure), (c) any edit to a
+shared skill that must be propagated across copies manually —
+the first time an operator feels that friction, B-11 escalates.
+
+**Dependencies:** none. Compatible with a CapProto future
+(S11-CP-1's `canonical_id` field is a natural carrier) AND with
+a no-CapProto future (`skill-coherence` domain stands alone).
+
+**Risks:** none adversarial yet; design decision is "which
+architecture" and that's answerable empirically with one
+drift incident.
+
+**Priority elevation (2026-04-22).** B-10 Phase 1 measurement
+(see `roadmap/data/b10-phase1-2026-04-22.json`) showed ~93% of
+the per-session token overhead B-10 is trying to solve is cross-
+Brain duplication — not fundamental catalog size. Dedup alone
+would cut worst-Brain cold-start from 53k → ~3.4k tokens. This
+makes B-11 the highest-ROI intervention in the CapProto arc and
+probably the cheapest. Concrete drift signals additional to the
+original "plan when" list:
+- 15 skills are byte-identical in 2 Brains (ecosystem + NeuroGrim).
+- 2 skills are byte-identical in 3 Brains (`refine-judge-integrity.md`,
+  `rubber-duck.md`).
+- CLAUDE.md skill tables are already stale vs filesystem
+  (ecosystem advertises 2 skills, has 19). Hand-maintained tables
+  drift.
+
+Recommend escalating B-11 to active mini-epic before kicking off
+B-10 Phase 2. See `epics/` staging candidates when promoted.
 
 ### B-08: Red-mode cross-scenario mode-applicability matrix
 

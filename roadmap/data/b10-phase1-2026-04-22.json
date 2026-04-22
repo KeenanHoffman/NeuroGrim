@@ -1,0 +1,379 @@
+{
+  "brains": {
+    "ecosystem": {
+      "claude_md_tokens": 2300,
+      "mcp_tool_list_tokens": 0,
+      "skills": [
+        {
+          "path": "coherence.md",
+          "tokens": 2043
+        },
+        {
+          "path": "dual-review.md",
+          "tokens": 2833
+        },
+        {
+          "path": "hats.md",
+          "tokens": 3005
+        },
+        {
+          "path": "human-comms.md",
+          "tokens": 1737
+        },
+        {
+          "path": "imagination-mode.md",
+          "tokens": 1908
+        },
+        {
+          "path": "north-star.md",
+          "tokens": 819
+        },
+        {
+          "path": "pilot-protocol.md",
+          "tokens": 3975
+        },
+        {
+          "path": "plan-critic.md",
+          "tokens": 3209
+        },
+        {
+          "path": "refine-agent-behavior.md",
+          "tokens": 2050
+        },
+        {
+          "path": "refine-judge-integrity.md",
+          "tokens": 3814
+        },
+        {
+          "path": "review-loop.md",
+          "tokens": 1666
+        },
+        {
+          "path": "rubber-duck.md",
+          "tokens": 1050
+        },
+        {
+          "path": "secret-refs.md",
+          "tokens": 2443
+        },
+        {
+          "path": "security-standards.md",
+          "tokens": 2172
+        },
+        {
+          "path": "skill-deprecation.md",
+          "tokens": 1836
+        },
+        {
+          "path": "subagent-patterns.md",
+          "tokens": 7208
+        },
+        {
+          "path": "sync-ecosystem.md",
+          "tokens": 1689
+        },
+        {
+          "path": "write-agent-behavior-scenario.md",
+          "tokens": 3954
+        },
+        {
+          "path": "write-skill.md",
+          "tokens": 3459
+        }
+      ],
+      "totals": {
+        "cold_start": 53170,
+        "delta": 48970,
+        "toc_projected": 4200
+      }
+    },
+    "lsp-brains": {
+      "claude_md_tokens": 1246,
+      "mcp_tool_list_tokens": 0,
+      "skills": [
+        {
+          "path": "refine-judge-integrity.md",
+          "tokens": 3814
+        },
+        {
+          "path": "rubber-duck.md",
+          "tokens": 1029
+        }
+      ],
+      "totals": {
+        "cold_start": 6089,
+        "delta": 4643,
+        "toc_projected": 1446
+      }
+    },
+    "neurogrim": {
+      "claude_md_tokens": 1679,
+      "mcp_tool_list_tokens": 983,
+      "skills": [
+        {
+          "path": "a2a.md",
+          "tokens": 1702
+        },
+        {
+          "path": "cli-mode.md",
+          "tokens": 933
+        },
+        {
+          "path": "coherence.md",
+          "tokens": 2043
+        },
+        {
+          "path": "dual-review.md",
+          "tokens": 2833
+        },
+        {
+          "path": "hats.md",
+          "tokens": 3005
+        },
+        {
+          "path": "human-comms.md",
+          "tokens": 1737
+        },
+        {
+          "path": "imagination-mode.md",
+          "tokens": 1908
+        },
+        {
+          "path": "north-star.md",
+          "tokens": 819
+        },
+        {
+          "path": "peer-brain.md",
+          "tokens": 1491
+        },
+        {
+          "path": "pilot-protocol.md",
+          "tokens": 3975
+        },
+        {
+          "path": "plan-critic.md",
+          "tokens": 3209
+        },
+        {
+          "path": "refine-judge-integrity.md",
+          "tokens": 3814
+        },
+        {
+          "path": "review-loop.md",
+          "tokens": 1666
+        },
+        {
+          "path": "rubber-duck.md",
+          "tokens": 1050
+        },
+        {
+          "path": "secret-refs.md",
+          "tokens": 2443
+        },
+        {
+          "path": "security-standards.md",
+          "tokens": 2172
+        },
+        {
+          "path": "skill-deprecation.md",
+          "tokens": 1836
+        },
+        {
+          "path": "subagent-patterns.md",
+          "tokens": 7208
+        },
+        {
+          "path": "sync-ecosystem.md",
+          "tokens": 1689
+        },
+        {
+          "path": "write-skill.md",
+          "tokens": 3459
+        }
+      ],
+      "totals": {
+        "cold_start": 51654,
+        "delta": 47275,
+        "toc_projected": 4379
+      }
+    },
+    "python-starter": {
+      "claude_md_tokens": 860,
+      "mcp_tool_list_tokens": 0,
+      "skills": [],
+      "totals": {
+        "cold_start": 860,
+        "delta": 0,
+        "toc_projected": 860
+      }
+    }
+  },
+  "duplications": [
+    {
+      "file_basename": "coherence.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 2043,
+      "waste_on_full_stack": 2043
+    },
+    {
+      "file_basename": "dual-review.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 2833,
+      "waste_on_full_stack": 2833
+    },
+    {
+      "file_basename": "hats.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 3005,
+      "waste_on_full_stack": 3005
+    },
+    {
+      "file_basename": "human-comms.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 1737,
+      "waste_on_full_stack": 1737
+    },
+    {
+      "file_basename": "imagination-mode.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 1908,
+      "waste_on_full_stack": 1908
+    },
+    {
+      "file_basename": "north-star.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 819,
+      "waste_on_full_stack": 819
+    },
+    {
+      "file_basename": "pilot-protocol.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 3975,
+      "waste_on_full_stack": 3975
+    },
+    {
+      "file_basename": "plan-critic.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 3209,
+      "waste_on_full_stack": 3209
+    },
+    {
+      "file_basename": "refine-judge-integrity.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim",
+        "lsp-brains"
+      ],
+      "tokens_each": 3814,
+      "waste_on_full_stack": 7628
+    },
+    {
+      "file_basename": "review-loop.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 1666,
+      "waste_on_full_stack": 1666
+    },
+    {
+      "file_basename": "rubber-duck.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim",
+        "lsp-brains"
+      ],
+      "tokens_each": 1050,
+      "waste_on_full_stack": 2100
+    },
+    {
+      "file_basename": "secret-refs.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 2443,
+      "waste_on_full_stack": 2443
+    },
+    {
+      "file_basename": "security-standards.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 2172,
+      "waste_on_full_stack": 2172
+    },
+    {
+      "file_basename": "skill-deprecation.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 1836,
+      "waste_on_full_stack": 1836
+    },
+    {
+      "file_basename": "subagent-patterns.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 7208,
+      "waste_on_full_stack": 7208
+    },
+    {
+      "file_basename": "sync-ecosystem.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 1689,
+      "waste_on_full_stack": 1689
+    },
+    {
+      "file_basename": "write-skill.md",
+      "present_in": [
+        "ecosystem",
+        "neurogrim"
+      ],
+      "tokens_each": 3459,
+      "waste_on_full_stack": 3459
+    }
+  ],
+  "generated_at": "2026-04-22T08:35:02.594936100+00:00",
+  "summary": {
+    "decision_zone_verdict_preliminary": "proceed to Phase 2",
+    "dup_waste_total": 49730,
+    "median_skill_tokens": 2050,
+    "p90_skill_tokens": 3954,
+    "worst_cold_start_brain": "ecosystem",
+    "worst_tokens": 53170
+  },
+  "tokenizer": "tiktoken-rs cl100k_base",
+  "tokenizer_caveat": "cl100k_base is not Claude's tokenizer; ±10-20%. Re-run via Anthropic token-counting API in the ambiguous zone."
+}

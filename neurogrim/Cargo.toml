@@ -47,6 +47,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Testing
 proptest = "1"
+tiktoken-rs = "0.6"
 
 # URL parsing / validation (shared across a2a + ecosystem)
 url = { version = "2", features = ["serde"] }

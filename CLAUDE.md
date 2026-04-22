@@ -78,6 +78,7 @@ Skills corresponding to Rust Brain sensor domains:
 | Dual-agent T+P review protocol | `dual-review.md` |
 | Iterative T+P+Code Reviewer quality loop | `review-loop.md` |
 | Process for retiring outdated skills | `skill-deprecation.md` |
+| Bypass MCP: invoke the Brain via Bash subcommands | `cli-mode.md` |
 
 ## Key Files
 
@@ -101,6 +102,24 @@ Ten grimoire-themed aliases are available for most CLI commands
 `commune`, `beacon`, `behold`). Primary names remain canonical. See
 `README.md` § Command aliases for the full table, or run
 `neurogrim --help` to verify the live list.
+
+## Tool Invocation Mode (MCP vs CLI)
+
+NeuroGrim exposes its seven BrainServer scoring tools two ways —
+as an MCP server (`neurogrim serve`, the default) or as direct
+CLI subcommands (`neurogrim score`, `neurogrim trend`, etc.).
+
+| Mode | Context cost at session start | When to use |
+|------|-------------------------------|-------------|
+| **MCP (default)** | ~983 tokens (7 tool schemas injected) | Newcomers; sessions where discovery/typed errors matter. |
+| **CLI (opt-in)** | 0 tokens | Power users who know the CLI surface; long sessions under context pressure. |
+
+Opt into CLI mode by **omitting** the NeuroGrim MCP server from
+your `.claude/.mcp.json`. Then load the `cli-mode` skill so the
+agent reaches for Bash instead of MCP tools. Full doc + config
+examples: `docs/cli-mode.md`. MCP↔CLI surface mapping:
+`docs/cli-sensory-surface.md`. Benchmark + methodology:
+`roadmap/data/b09-bench-<date>.json`.
 
 ## Child Brain
 

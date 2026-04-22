@@ -79,6 +79,23 @@ flags, different feel. Aliases are additive; primary names remain canonical.
 
 Run `neurogrim --help` to verify the live list.
 
+## Tool Invocation Mode (MCP vs CLI)
+
+NeuroGrim can be reached two ways from a Claude Code session:
+
+| Mode | Context cost at session start | When to choose |
+|------|-------------------------------|----------------|
+| **MCP** (default) | ~983 tokens (7 BrainServer tool schemas) | Discovery + typed error shapes matter; newcomers. |
+| **CLI** (opt-in) | 0 tokens | Power users comfortable with `neurogrim` subcommands; long sessions under context pressure. |
+
+**CLI mode:** omit NeuroGrim from `.claude/.mcp.json`; invoke via
+Bash using the existing `score` / `trend` / `health` / `validate` /
+`awareness` / `agent` subcommands. Full docs:
+[`docs/cli-mode.md`](docs/cli-mode.md) +
+[`docs/cli-sensory-surface.md`](docs/cli-sensory-surface.md). Benchmark
+methodology: `roadmap/data/b09-bench-<date>.json` (regenerate via
+`cargo test -p neurogrim-cli --test context_overhead -- --nocapture`).
+
 ## Architecture
 
 ```

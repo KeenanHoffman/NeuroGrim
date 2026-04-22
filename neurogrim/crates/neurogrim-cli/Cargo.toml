@@ -35,3 +35,7 @@ tempfile = "3"
 # dev-dep in lock-step with the runtime TLS choice in neurogrim-a2a.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 axum = "0.7"
+# Tokenizer for B-09 DP-4 / B-10 Phase 1 context-overhead benchmarks.
+# Uses cl100k_base (GPT-4 / Claude family baseline — directionally
+# accurate, ±10-20% vs. Claude's actual tokenizer for deltas).
+tiktoken-rs = { workspace = true }
