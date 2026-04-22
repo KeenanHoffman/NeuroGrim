@@ -20,6 +20,9 @@
 .claude/brain/agent-behavior-feedback.jsonl
 .claude/brain/agent-behavior-latest.json
 .claude/brain/agent-behavior-runs/
+# Judge-integrity ledger (S9-ABV-RED-3) — red-miss entries +
+# triage decisions; per-deployment, never commit.
+.claude/brain/judge-integrity-ledger.jsonl
 
 # Local machine awareness — machine-specific facts, never commit
 .claude/brain/local-awareness.json
