@@ -1,9 +1,11 @@
 # Epic: Domain Promotion Past Advisory Weight
 
 **Stage:** 10
-**Status:** In progress (2026-04-21) — plan-critic reviewed; S10-DP-1..3
-infrastructure ships this pass; S10-DP-4 (the actual weight flip) stays
-guarded-pending on operator-led calibration audit.
+**Status:** Infrastructure Complete (2026-04-21) — S10-DP-1/2/3
+shipped + pushed across all three repos. 259/259 pytest green.
+S10-DP-4 (the actual NeuroGrim weight flip) stays guarded-pending on
+operator-led calibration audit per the runbook; epic closes fully
+when operator executes the flip.
 **Priority:** Medium
 
 **Goal.** Ship the **mechanism** by which any advisory-weighted domain
@@ -78,7 +80,7 @@ generalizes the mechanism so other advisory domains (`git-health`,
 
 ### S10-DP-1: Operator Audit Runbook + Spec Subsection
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21) — shipped in NeuroGrim `483e80a` (445-line runbook at `docs/domain-promotion-audit.md` covering audit protocol, two-profile Haiku/Sonnet ladder, eight pass criteria, five-branch failure classification, rollback procedure, post-promotion cadence, tabletop decision flowchart, and governance note on generalization to other advisory domains) and LSP-Brains `56bf97c` (spec §15.5 "Promotion path" subsection with SHALL-level requirements + METH-EV §13 governance-via-evidence entry + v2.5 additive changelog bump).
 **Effort:** S
 **Depends on:** —
 
@@ -141,7 +143,7 @@ grounded definition.
 
 ### S10-DP-2: Promotion + Rollback CLI + Ledger
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21) — shipped in LSP-Brains `8d4ceff` (domain-promotion-ledger-v1 schema with three entry types: promotion / rollback / failed-attempt) and ecosystem `4c8195d` (`promotion_ledger.py` with ABV_OPERATOR guard + three-way folding; `registry.py` with three rebalance strategies preserving sum=1.0; `abv-run promote` + `abv-run rollback` CLI with audit-evidence enforcement, registry backup, --dry-run preview, --record-failed-attempt path; 59 new tests across promotion_ledger / registry / promote_cli).
 **Effort:** M
 **Depends on:** S10-DP-1 (the runbook defines what the CLI enforces)
 
@@ -214,7 +216,7 @@ governed way + an append-only ledger that records the decision.
 
 ### S10-DP-3: Score-Swing Detection + Proposal Surfacing
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21) — shipped in ecosystem `049a381` (`swing_detector.py` with `classify_swing` + zero-stddev fallback, ISO 8601 timestamp parser tolerating Z/offset/nanosecond variants, `detect_post_promotion_swing` with baseline/recent windowing; `abv-run promotion-watch` CLI reading score-history + promotion-ledger; 27 new tests). Deliberately does NOT auto-write to NeuroGrim's Rust-managed proposal-ledger (external writes would race the scoring pipeline); operators review the report + decide. Exit 4 on blocker for CI visibility.
 **Effort:** S
 **Depends on:** S10-DP-2 (ledger provides the "promotion happened at
 ts X" signal that the detector keys off of)
