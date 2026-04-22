@@ -11,19 +11,19 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (**Tier 1 broader-adoption
-shipped**: B-13 rolled out across 4 remaining fat skills
-(write-skill, pilot-protocol, plan-critic, write-agent-behavior-
-scenario); both `skill-coherence` + `capability-hygiene` domains
-registered + scored at advisory weight 0.0 in all four Brains
-(NeuroGrim, LSP-Brains, python-starter, ecosystem). All four
-Brains score 100/100 on both. Self-observability now ecosystem-
-wide. Tier 2 (Axis 3 — generalize to tools/subagents/hats/
-correlations/personas) ready to start after a 2-week compliance
-settle window. Earlier same-day: B-11/B-12 shipped + flagged-
-skill rewrites + B-13 pilot on subagent-patterns.md; record
-correction parked B-10, contracted B-11/B-12, closed S11;
-B-09 shipped.).
+**Last updated:** 2026-04-22 (**Tier 2 broader-adoption shipped**:
+`capability-hygiene` generalized to score 6 capability types —
+skills, subagents, MCP tools, hats, correlations, personas —
+with per-type breakdown + backward-compat fields. All 4 Brains
+now score 100/100 on the aggregated domain: NeuroGrim has 54
+capabilities across 5 types; ecosystem has 43 (19 skills + 24
+tools via recursive Rust scanning of NeuroGrim); LSP-Brains 2;
+python-starter 0. 271 workspace tests pass (+7 from Tier 2).
+Tier 3 (Axis 4 — usage telemetry) remains tabled per 2026-04-22
+decision. Earlier same-day: Tier 1 (B-13 full rollout + Axis 2
+ecosystem-wide registration); B-11/B-12 shipped; record
+correction parked B-10, contracted B-11/B-12, closed S11; B-09
+shipped.).
 
 ---
 

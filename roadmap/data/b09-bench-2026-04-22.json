@@ -9,7 +9,7 @@
     "percent_reduction_from_mcp": 100.0,
     "tokens_saved_by_cli_mode": 983
   },
-  "generated_at": "2026-04-22T10:28:13.853271300+00:00",
+  "generated_at": "2026-04-22T10:59:12.824590800+00:00",
   "mcp_mode": {
     "tokens_injected_at_session_start": 983,
     "tool_count": 7,
