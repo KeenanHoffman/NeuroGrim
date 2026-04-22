@@ -343,6 +343,19 @@ fn extract_outline(body: &str) -> String {
 /// B-10 Phase 1: cold-start overhead per Brain + cross-Brain
 /// duplicated-skill waste. Report lands at
 /// `roadmap/data/b10-phase1-<date>.json`.
+///
+/// ⚠ **CORRECTION (2026-04-22): this test measures DISK cost,
+/// not CONTEXT cost.** Same-day `claude-code-guide` verification
+/// confirmed Claude Code lazy-loads skill bodies on demand; only
+/// names + descriptions (1,536-char budget each) sit in the
+/// session-start index. The "cold_start" value this test reports
+/// is the byte-size of `.claude/skills/*.md` on disk, not the
+/// token cost Claude Code actually injects into the system
+/// prompt. The "proceed to Phase 2" verdict in the generated
+/// JSON report is **invalidated**; B-10 is PARKED in
+/// `roadmap/BACKLOG.md`. Preserved for historical record —
+/// DO NOT act on the numbers as if they measured per-session
+/// context cost.
 #[test]
 fn b10_phase1_four_brain_sweep() {
     let brains = four_brains();
@@ -504,6 +517,20 @@ fn b10_phase1_four_brain_sweep() {
 ///    description with little body).
 /// 4. Project TOC cost: per-Brain sum of (description + outline).
 ///    Compare against full-body baseline from the main sweep.
+///
+/// ⚠ **CORRECTION (2026-04-22): the hypothesis is right but the
+/// "reduction vs full body" calculation is phantom.** Claude Code
+/// already implements description-first lazy loading natively —
+/// the "full body" was never the baseline. Descriptions + outlines
+/// DO carry routing signal (that part is real + validated), but
+/// the 90.4% "saving" measured against the disk-cost baseline
+/// describes a cost that was never incurred. The remaining value:
+/// per-skill hygiene observations (which skills have terse
+/// descriptions worth rewriting) feed B-12's contracted authoring
+/// standard. See `roadmap/BACKLOG.md` B-12 and the correction
+/// banner on `roadmap/data/b10-phase1p5-analysis.md`. Preserved
+/// for historical record — DO NOT act on the "reduction_pct"
+/// numbers.
 #[test]
 fn b10_phase1p5_description_only_measurement() {
     let brains = four_brains();

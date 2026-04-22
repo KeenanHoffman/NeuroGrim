@@ -1,12 +1,50 @@
 # B-10 Phase 1.5 Analysis — 2026-04-22
 
-**Raw report:** `b10-phase1p5-description-only-2026-04-22.json`
-**Harness:** `neurogrim-cli/tests/context_overhead.rs` (new test
-`b10_phase1p5_description_only_measurement`)
-**Hypothesis (operator, 2026-04-22):** *"all an agent needs for a
-skill is the description of when to use it, everything else can be
-retrieved on demand saving thousands of tokens. Perhaps a small
-outline of the content in the skill as well."*
+> ## ⚠ CORRECTION BANNER (added 2026-04-22, same day) — READ FIRST
+>
+> **The hypothesis tested below is RIGHT. The "90.4% reduction"
+> headline is PHANTOM.**
+>
+> The operator's intuition ("agents need only description + outline
+> to route; full body loads on demand") is exactly how Claude Code
+> already works natively — authoritative Claude Code docs state:
+> *"a skill's body loads only when it's used, so long reference
+> material costs almost nothing until you need it."* Only names +
+> descriptions (1,536-char budget each) are in the session-start
+> index; full bodies load via the Skill tool on invocation.
+>
+> This analysis compared "description + outline" to a "full body"
+> baseline. **But that full-body baseline was never the actual
+> session cost.** The reduction ratio is correct math on the
+> wrong reference point. We measured what Claude Code already
+> implements natively; we did not measure an achievable savings
+> over today's baseline.
+>
+> **What remains valid:**
+> - The hypothesis itself — descriptions carry the routing
+>   signal. Claude Code validated this by shipping the exact
+>   pattern natively.
+> - The per-skill description-quality observations (most skills
+>   have 80-250 tokens of usable description; `coherence.md` is
+>   under-described only because its "When to Use" block sits
+>   under a `## ` section rather than in the lead paragraph).
+> - The implication for B-12's contracted scope: description
+>   quality IS the routing contract; an authoring standard +
+>   hygiene domain are worth building even without token
+>   savings.
+>
+> **What collapses:**
+> - "90.4% stack reduction" — phantom (measured against a
+>   baseline Claude Code doesn't use).
+> - "Combined with B-11 → 97-99% reduction" — phantom.
+> - "Authoring standard + TOC generator" as B-12's twin
+>   deliverables → TOC generator dropped; Claude Code has the
+>   index natively.
+>
+> **Pointer to the live scope:** `roadmap/BACKLOG.md` B-12
+> (contracted 2026-04-22). This document is preserved for
+> historical record; do NOT act on the "forecast" section's
+> combined-savings numbers.
 
 ## Verdict: **hypothesis empirically confirmed**
 

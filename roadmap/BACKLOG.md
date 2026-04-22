@@ -11,13 +11,17 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (CapProto re-planning after Phase 1.5
-measurement: confirmed 90.4% token reduction from description+
-outline-only TOC; added B-12 mini-epic for the practical
-implementation; S11 stub scope contracted — likely never becomes
-a Stage. Earlier 2026-04-22 entries: pre-committed B-10 Phase 1
-criteria; B-11 dedup; B-09 complete; initial B-10 lazy-loading
-research entry).
+**Last updated:** 2026-04-22 (**Record correction** after
+`claude-code-guide` verification that Claude Code lazy-loads
+skill bodies natively — Phase 1's 53k figure was disk cost, not
+context cost. **B-10 PARKED** (measurement invalidated). **B-11
+contracted** to Approach 2 (drift-detection Brain domain only).
+**B-12 contracted** to authoring-standard + `capability-hygiene`
+domain only (no TOC generator — Claude Code has the index
+natively). **S11 closed** — will not activate as a Stage.
+Earlier same-day entries documented the original arc (now
+superseded by this correction): B-09 COMPLETE, B-10 Phase 1 +
+1.5, B-11 dedup-as-token-saver, B-12 TOC-generator, S11 stub.).
 
 ---
 
@@ -215,7 +219,48 @@ time post-S10.
 
 ---
 
-### B-10: LSP-style lazy context loading for skills + tools
+### B-10: LSP-style lazy context loading — PARKED 2026-04-22 (measurement invalidated)
+
+**Status: PARKED 2026-04-22.** Post-ship plan-critic verification
+(`claude-code-guide` subagent, pointing to official Claude Code
+docs) confirmed that **skill bodies are lazy-loaded on demand,
+not pre-loaded at session start**. Only names + descriptions
+(1,536-char budget per skill) are in the index; actual baseline
+context cost for 41 skills across four Brains is ~500 tokens,
+not 104k. Phase 1's sweep (`context_overhead.rs`) tokenized
+every `.md` file on disk — it was measuring **disk cost**, not
+**context cost**. The "53k cold-start overhead" never existed in
+the actual session baseline.
+
+**Consequences of the correction:**
+- The Phase 1 "proceed to Phase 2" verdict is **invalidated**.
+- Phase 2 (approach selection) + Phase 3 (prototype) are
+  **cancelled**.
+- The pattern Phase 1.5 identified — "description + outline
+  captures routing signal" — is valid but describes what
+  **Claude Code already implements natively**. Confirming a
+  pattern is not the same as delivering it.
+- Combined "B-11 + B-12 → 97-99% reduction" claim collapses to
+  phantom. Real per-session savings post this correction:
+  only B-09's 983 tokens (MCP tool-schema injection is still
+  pre-loaded — that measurement was correct).
+
+**What's preserved elsewhere:**
+- B-09 remains COMPLETE; its savings are real.
+- B-11 contracts to drift-detection only (see below).
+- B-12 contracts to authoring-standard + hygiene domain (see
+  below).
+- S11 stub closes out; see `epics/S11-capability-protocol.md`.
+
+**Do not act on numbers in:**
+- `roadmap/data/b10-phase1-2026-04-22.json` (disk-cost
+  measurement; useful as a corpus-size snapshot only).
+- `roadmap/data/b10-phase1p5-description-only-2026-04-22.json`
+  (ratio calculations assume the full body was ever injected
+  into context — it wasn't).
+Both analysis docs have correction banners at the top.
+
+**Original framing preserved for historical record below:**
 
 **Why it's here.** Both skills (surfaced as summaries in the
 context window at session start) and MCP tools (injected as
@@ -420,7 +465,30 @@ arc.
 
 ---
 
-### B-11: Cross-Brain skill byte-duplication cleanup
+### B-11: Cross-Brain skill byte-duplication cleanup — CONTRACTED 2026-04-22 (drift-detection only)
+
+**Contracted scope 2026-04-22.** The loading-model correction
+(see B-10 PARK banner above) removed the token-savings motivation
+that elevated B-11 earlier in the same day. B-11 stays in the
+backlog as a **governance concern only**: duplicated skills can
+still drift out of sync, and drift degrades quality even when it
+doesn't cost tokens.
+
+**Architecture choice locked in:** Approach 2 (byte-equality
+Brain domain mirroring `culture-coherence`). Approach 1 (central
+defn + per-Brain override) is **rejected** — it required harness
+changes justified only by phantom token savings. Approach 2 is a
+pure detector: no behavioral change to skill resolution, no new
+storage format, no drift in Claude Code's native skill discovery.
+Probably a single sensory tool + one registry entry + a
+`skill-coherence` domain at weight 0.0 (advisory) in v1.
+
+**Priority elevation (pre-correction, 2026-04-22) is rescinded.**
+B-11 no longer captures "93% of the overhead." It captures a real
+governance concern, not a token win. Effort: 1-2 days when
+planned into an active cycle.
+
+**Original framing preserved for historical record below:**
 
 **Why it's here.** Today several skills (e.g., `rubber-duck.md`,
 `write-skill.md`, `hats.md`) are byte-identical across three or
@@ -486,7 +554,83 @@ B-10 Phase 2. See `epics/` staging candidates when promoted.
 
 ---
 
-### B-12: Description-first skill TOC (the CapProto mini-epic)
+### B-12: Skill description authoring standard + capability-hygiene Brain domain — CONTRACTED 2026-04-22
+
+**Contracted scope 2026-04-22.** The loading-model correction
+(see B-10 PARK banner above) invalidated B-12's original
+token-savings motivation. Phase 1.5's "90% reduction from
+description+outline TOC" was phantom — Claude Code already
+implements description-first lazy loading natively. The pattern
+is right; the savings calculation assumed a baseline that
+doesn't exist.
+
+**What B-12 still delivers (two parts, both real):**
+
+1. **Authoring standard for skill descriptions.** The
+   1,536-character description IS the routing contract in Claude
+   Code's native skill index. Description quality directly
+   determines whether the correct skill gets invoked. Standard
+   codifies:
+   - Required lead-paragraph "When to use this skill:" block.
+   - Minimum description length (~40 tokens) to carry routing
+     signal; maximum ~200 tokens to respect the 1,536-char
+     index budget.
+   - Discouraged patterns (descriptions that read as "what the
+     skill is" rather than "when to reach for it").
+   - Revise `write-skill.md` + one-time pass over existing
+     skills to bring under-described ones (e.g., `coherence.md`
+     which puts its "When to Use This Skill" in a `## ` section
+     instead of the lead paragraph) into compliance.
+
+2. **`capability-hygiene` Brain domain.** Advisory (weight 0.0
+   in v1 per spec principle #2) domain that scores:
+   - Presence + length of description field per skill
+   - Orphan detection (skill file present but not in any index)
+   - Shadow detection (two skills with overlapping trigger
+     phrases or descriptions)
+   - Deprecation markers honored
+   Emits a CMDB envelope per `cmdb-envelope-v1.schema.json`.
+   Integrates with the S10 domain-promotion pipeline so a
+   quality floor can be argued and advanced over time.
+
+**What's removed from B-12 scope post-correction:**
+- ~~TOC generator~~ — Claude Code has the skill index natively;
+  generating a parallel `.claude/SKILLS-INDEX.md` is redundant.
+  A future CLAUDE.md-table auto-maintenance tool may be worth
+  ~1 day of work if the tables drift badly, but it's not B-12.
+- ~~Combined 97-99% reduction forecast~~ — phantom.
+- ~~Meta-MCP tool / new protocol~~ — Claude Code's Skill tool
+  already IS the `textDocument/definition` mechanism.
+
+**Optional follow-on: body-size optimization.** Operator
+insight (2026-04-22, post-loading-model correction): once a
+skill is invoked via the Skill tool, its body stays in context
+for the rest of the session. Fat skill bodies compound cost
+across subsequent turns. Named candidates for compression
+(push depth to `docs/`, keep skill body terse with pointers):
+- `subagent-patterns.md` (7,208 tokens)
+- `write-skill.md` (3,459)
+- `pilot-protocol.md` (3,975)
+- `plan-critic.md` (3,209)
+- `write-agent-behavior-scenario.md` (3,954)
+
+This is **not** committed B-12 scope. Revisit when any of these
+is refactored for other reasons, or when a skill-invocation-
+heavy session hits real context pressure. If promoted, it
+becomes its own work item (candidate ID: B-13).
+
+**Effort estimate (contracted):** 3-5 days when planned into an
+active cycle. Split:
+- 1-2 days: authoring standard doc + `write-skill.md` revision
+  + one-time compliance pass over the current 19-skill corpus.
+- 2-3 days: `capability-hygiene` sensory tool + registry entry
+  + basic tests.
+
+**Plan when:** opportunistically. No blocker; no deadline. A
+good candidate for a "catch-up hygiene" slot between larger
+stages.
+
+**Original framing preserved for historical record below:**
 
 **Why it's here.** Phase 1.5 measurement (2026-04-22) confirmed
 the operator's intuition: a description + section-outline extract

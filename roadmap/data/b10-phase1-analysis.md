@@ -1,8 +1,38 @@
 # B-10 Phase 1 Analysis — 2026-04-22
 
-**Raw report:** `b10-phase1-2026-04-22.json`
-**Tokenizer:** `tiktoken-rs cl100k_base` (±10-20% vs Claude's tokenizer)
-**Harness:** `neurogrim-cli/tests/context_overhead.rs`
+> ## ⚠ CORRECTION BANNER (added 2026-04-22, same day) — READ FIRST
+>
+> **The verdict below ("proceed to Phase 2") is INVALIDATED.**
+> Same-day `claude-code-guide` verification (after this analysis
+> was published) confirmed that Claude Code **lazy-loads skill
+> bodies on demand**, not pre-loaded at session start. Only
+> names + descriptions (1,536-char budget each) are in the index.
+>
+> This analysis tokenized every `.md` file under `.claude/skills/`
+> — it was measuring **disk cost**, not **context cost**. The
+> "53,170-token worst-Brain cold-start" does not exist in the
+> actual session baseline; it describes how many tokens are ON
+> DISK in the skill files, not how many are INJECTED into the
+> system prompt at session start.
+>
+> **Consequences:**
+> - B-10 is PARKED. See `roadmap/BACKLOG.md` B-10 entry.
+> - Phase 2 (approach selection) + Phase 3 (prototype) are
+>   cancelled.
+> - B-11 contracted to drift-detection-only; the "93% of the
+>   overhead is duplication" finding is also a measurement of
+>   disk, not context.
+> - B-12 contracted to authoring-standard + `capability-hygiene`
+>   domain (description quality still matters as the routing
+>   contract).
+> - S11 stub will not activate as a Stage.
+>
+> **This document is preserved for historical record.** Its
+> methodology was sound; the interpretation was wrong. Do NOT
+> act on the numbers in the verdict, thresholds, or "headline
+> findings" sections below as if they measured per-session
+> context cost. The correct framing: this is a corpus-size
+> snapshot of the skill directory as it stood on 2026-04-22.
 
 ## Verdict: **proceed to Phase 2**
 

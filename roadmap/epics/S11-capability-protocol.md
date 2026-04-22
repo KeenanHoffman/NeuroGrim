@@ -1,58 +1,75 @@
 # Epic: Capability Protocol (CapProto) — Stage 11
 
 **Stage:** 11
-**Status:** `stub — scope-contracted-by-evidence` (2026-04-22).
-Phase 1.5 measurement data collapsed the originally-planned Stage
-scope. The concrete implementation work now fits as a mini-epic
-(**B-12**) rather than a Stage. This stub is preserved for
-methodology-evolution framing and as a home for any genuinely
-stage-worthy follow-on work that emerges.
-**Priority:** Deferred — methodology record; mini-epic B-12
-carries the implementation.
+**Status:** `stub — will not activate (measurement foundation
+invalidated 2026-04-22)`. Same-day `claude-code-guide`
+verification showed that Claude Code **lazy-loads skill bodies
+on demand** via a native 1,536-char description index. The
+entire measurement chain that motivated a Stage-level CapProto
+— Phase 1's 53k cold-start + Phase 1.5's 90.4% reduction — was
+measuring **disk cost**, not **context cost**. Claude Code
+already implements the mechanism this Stage was proposing to
+build. The pattern is valid; the engineering effort to ship it
+is not needed at the Stage level.
+**Priority:** Archive-in-place. Preserved as methodology record
+for the "third vertex" mental model (MCP / A2A / CapProto) and
+as a historical trail. Concrete governance work lives in
+mini-epic B-12 (authoring standard + `capability-hygiene`
+Brain domain).
 
 ---
 
 ## Scope Note — Read This First
 
-**This is a stub epic that has contracted.** The original
-2026-04-22 planning session sketched CapProto as a new protocol
-layer alongside MCP and A2A, with ~7 work items (new schemas,
-envelope, diagnostics channel, manifest, writing standard,
-subagent unification, capability-hygiene domain).
+**This stub will not activate as a Stage.** Its foundation
+(per-session token savings from a new "capability indexing"
+protocol) was invalidated on 2026-04-22 when `claude-code-guide`
+verification confirmed that Claude Code **lazy-loads skill
+bodies natively**. Only names + descriptions (1,536-char budget
+each) sit in the session-start index; full bodies load on
+demand via the Skill tool. The CapProto-as-Stage mechanism this
+epic would have built is the mechanism Claude Code already
+ships.
 
-Phase 1.5 measurement showed this was overbuilt. The concrete
-operator-facing win — a 90% reduction in skill-body overhead
-per session — is achievable with **three small pieces of work**,
-none of which need a new protocol:
+**First-pass contraction (same day, before the correction):**
+Phase 1.5 showed the "90% reduction" hypothesis empirically —
+so the stub was initially contracted to "stage → mini-epic"
+(B-12 with three work items: authoring standard, TOC generator,
+hygiene domain).
 
-1. An **authoring standard** for skill descriptions (lead-paragraph
-   convention + optional frontmatter).
-2. A **TOC generator** (one CLI subcommand reading the skills
-   directory + emitting a skill-index file).
-3. A **Brain domain** (`capability-hygiene`) scoring description
-   quality + detecting orphans/shadows/deprecations.
+**Second-pass contraction (same day, after the loading-model
+correction):** both Phase 1's 53k measurement and Phase 1.5's
+90.4% reduction are disk measurements, not context measurements.
+The savings they projected never existed. B-12 contracts
+further:
+- ~~TOC generator~~ dropped (Claude Code has the index).
+- Authoring standard retained (description IS the routing
+  contract).
+- `capability-hygiene` Brain domain retained (governance +
+  self-observability).
 
-That scope is a mini-epic, not a Stage. See **B-12** in
-`BACKLOG.md`.
+See `roadmap/BACKLOG.md` B-12 (contracted 2026-04-22) for the
+live scope of that mini-epic. No Stage S11 work is planned.
 
-The S11 stub stays alive for two reasons:
-- **Methodology record.** The "capability indexing as a third
-  vertex alongside MCP/A2A" framing may still warrant a
-  METHODOLOGY-EVOLUTION chapter even if no new protocol ships.
-- **Future-proofing.** If B-12 ships, is dogfooded, and surfaces
-  a genuine need for a new protocol (e.g., cross-Brain capability
-  query over A2A with a shared schema), S11 reactivates with that
-  narrower scope.
+**What survives at the methodology-record level:**
+The "CapProto as third vertex" mental model (MCP = sense the
+world; A2A = peer with other Brains; CapProto = index the
+Brain's own capability surface) remains a useful way to reason
+about how a Brain relates to its own skills. A
+METHODOLOGY-EVOLUTION chapter summarizing this insight may be
+worth writing when B-12 ships, but it would describe "a pattern
+Claude Code implements natively" rather than "a protocol we
+built."
 
-**Activation trigger (if ever):** a concrete, operator-felt need
-that B-12's mini-epic cannot solve — for example:
+**Reactivation trigger (unchanged from first-pass contraction,
+still applies):** a concrete, operator-felt need B-12's mini-
+epic cannot solve, such as:
 - A peer Brain needing to programmatically query another Brain's
   capability surface over A2A, requiring a shared schema.
-- A cross-ecosystem standard (e.g., multiple projects adopting the
-  same LSP-Brains methodology want a common capability manifest
-  format for interop).
+- A cross-ecosystem adoption pattern that mandates a common
+  capability manifest format for interop.
 
-Absent such need, S11 stays a stub.
+Absent such need, S11 remains closed.
 
 ---
 
