@@ -11,7 +11,7 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-21 (B-06 absorbed back into S9-ABV-RED-4 per operator request; v1 ships both Architectures A and B).
+**Last updated:** 2026-04-21 (B-06 absorbed into S9-ABV-RED-4; B-01 absorbed into S10-DOMAIN-PROMOTION — generalized from agent-behavior-specific to any-advisory-domain promotion).
 
 ---
 
@@ -21,23 +21,30 @@ These were the "NOT in scope" items from the S8-ABV-EXT epic (see
 `epics/S8-agent-behavior-extensions.md`). They're recognized as
 real future work; none is blocking current operations.
 
-### B-01: Promote `agent-behavior` past advisory weight
+### B-01: Promote `agent-behavior` past advisory weight — ABSORBED into S10-DOMAIN-PROMOTION
 
-**Why it's here.** S8-ABV-EXT shipped the trust infrastructure
+**Absorption** (2026-04-21). Generalized from agent-behavior-specific
+to a domain-promotion mechanism applicable to any advisory domain
+(`git-health`, `rust-health`, `coherence`, `human-comms`, etc.).
+
+**Original framing.** S8-ABV-EXT shipped the trust infrastructure
 (calibration gate, multi-judge consensus, execution-based rubrics).
-The weight flip from 0.0 to > 0.0 — so the domain actually moves
-the Brain's aggregate score and gates — is a **policy decision, not
-a code change**. An epic scopes (a) what threshold triggers
-automatic promotion, (b) which Brains enable first, (c) the
-rollback trigger when scores swing post-flip, and (d) the operator
-runbook for doing a calibration audit and declaring it passed.
+S9-ABV-RED shipped the detection infrastructure (red samples, judge-
+integrity ledger, mock-bad-agent). The weight flip from 0.0 to > 0.0
+— so the domain actually moves the Brain's aggregate score and gates
+— is a policy decision, not a code change.
 
-**Plan when:** a real project needs agent-behavior to affect
-deploy-readiness. Early-adopter candidate: the NeuroGrim Brain
-dog-fooding against its own skills.
-
-**Dependencies:** S8-ABV-EXT complete (done); operator-led
-calibration audit passed on live credentials.
+**Current scoping.** See
+`epics/S10-domain-promotion.md`. Four stories:
+- S10-DP-1: operator audit runbook + spec §15.5 subsection +
+  METH-EV §13 + v2.5 spec bump.
+- S10-DP-2: `abv-run promote` + `abv-run rollback` CLI + ledger +
+  registry rebalance helper.
+- S10-DP-3: `abv-run promotion-watch` — post-promotion score-swing
+  detection + proposal surfacing.
+- S10-DP-4 (pending operator audit): the actual NeuroGrim dog-food
+  flip (0.40/0.35/0.25/0.0 → 0.38/0.33/0.24/0.05 via proportional
+  rebalance).
 
 ### B-02: Cross-provider judges (Claude + GPT as mixed consensus)
 

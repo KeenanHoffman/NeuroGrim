@@ -3,7 +3,7 @@
 **North star:** `VISION.md`
 **Dependencies:** `DEPENDENCIES.md`
 **Data architecture:** `DATA-ARCHITECTURE.md`
-**Last updated:** 2026-04-21 (Stage 9 Red Scenarios & Judge Integrity — **Complete**: all 4 stories shipped; v1 delivers both architectures (pre-recorded red samples + mock-bad-agent live generation). 173/173 pytest green; 53 new tests across the epic)
+**Last updated:** 2026-04-21 (Stage 10 Domain Promotion — **Planned** — generalizes B-01 from agent-behavior-specific to any-advisory-domain; ships audit runbook + promote/rollback CLI + swing detection; S10-DP-4 actual NeuroGrim flip stays guarded-pending on operator audit)
 
 ---
 
@@ -20,6 +20,7 @@
 | 7 | Agent Behavior Verification | **Complete** (2026-04-21) — all 7 stories shipped + committed; worked-example score-delta stub awaits first operator run | 1 epic (7 stories) — `S7-agent-behavior-verification.md` |
 | 8 | Agent Behavior Verification Extensions | **Complete** (2026-04-21) — all 3 stories (calibration audit + multi-judge consensus + execution-based rubrics) shipped. Agent-behavior domain is calibration-gated and ready for the promotion-past-advisory decision (requires operator-led calibration audit) | 1 epic (3 stories) — `S8-agent-behavior-extensions.md` |
 | 9 | Agent Behavior Verification — Red Scenarios & Judge Integrity | **Complete** (2026-04-21) — all 4 stories shipped: red-sample schema + harness (RED-1), 13-sample library across 6 scenarios + failure-mode taxonomy (RED-2), judge-integrity ledger + triage CLI + `refine-judge-integrity.md` skill (RED-3), mock-bad-agent red-mode + adversary library + `abv-run red-mode` CLI (RED-4). Agent-behavior domain now has both Architecture A (deterministic pre-recorded) and Architecture B (live-generation) coverage. | 1 epic (4 stories) — `S9-agent-behavior-red-scenarios.md` |
+| 10 | Domain Promotion — advisory → weighted mechanism | Planned (2026-04-21) — absorbs BACKLOG B-01 and generalizes. Ships operator audit runbook + `abv-run promote`/`abv-run rollback` CLI + promotion ledger + score-swing detection. S10-DP-4 (actual NeuroGrim `agent-behavior` 0.0→0.05 flip via proportional rebalance) stays guarded-pending on operator-led calibration audit. | 1 epic (3 active + 1 pending-operator stories) — `S10-domain-promotion.md` |
 
 Stages are sequential but overlapping. Each stage must produce a working system, not just
 scaffolding.
