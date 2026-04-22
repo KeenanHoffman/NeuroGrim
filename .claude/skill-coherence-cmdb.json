@@ -17,61 +17,23 @@
     }
   ],
   "brains_discovered": 3,
-  "drift_count": 3,
-  "drift_details": [
-    {
-      "basename": "coherence.md",
-      "bytes_match": false,
-      "present_in": [
-        "Brains",
-        "self"
-      ]
-    },
-    {
-      "basename": "rubber-duck.md",
-      "bytes_match": false,
-      "present_in": [
-        "Brains",
-        "LSP-Brains",
-        "self"
-      ]
-    },
-    {
-      "basename": "write-skill.md",
-      "bytes_match": false,
-      "present_in": [
-        "Brains",
-        "self"
-      ]
-    }
-  ],
+  "drift_count": 0,
+  "drift_details": [],
   "findings": [
     {
-      "detail": "`coherence.md` differs across 2 brain(s): Brains, self",
-      "name": "drift:coherence.md",
-      "points": -10,
-      "status": "drift"
-    },
-    {
-      "detail": "`rubber-duck.md` differs across 3 brain(s): Brains, LSP-Brains, self",
-      "name": "drift:rubber-duck.md",
-      "points": -10,
-      "status": "drift"
-    },
-    {
-      "detail": "`write-skill.md` differs across 2 brain(s): Brains, self",
-      "name": "drift:write-skill.md",
-      "points": -10,
-      "status": "drift"
+      "detail": "17 duplicated basename(s) across 3 brain(s); all byte-identical.",
+      "name": "all-duplicates-in-sync",
+      "points": 0,
+      "status": "ok"
     }
   ],
-  "in_sync_count": 14,
+  "in_sync_count": 17,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-22T09:34:47.709645100+00:00",
+    "updated_at": "2026-04-22T09:55:35.824282600+00:00",
     "updated_by": "skill-coherence"
   },
-  "score": 70,
+  "score": 100,
   "total_duplicated_basenames": 17,
-  "updated_at": "2026-04-22T09:34:47.709645100+00:00"
+  "updated_at": "2026-04-22T09:55:35.824282600+00:00"
 }

@@ -1,7 +1,13 @@
 # Deprecate or Retire a Skill
 
-Process for identifying stale skills, marking them deprecated, and removing them safely
-without breaking cross-references or misleading future agents.
+**When to use this skill:** A skill is stale, superseded, or describes a
+workflow that no longer exists — and you need to retire or update it safely
+without breaking cross-references or misleading future agents. This skill
+covers the decision tree (update vs deprecate vs delete), the redirect-block
+convention for deprecated-in-place skills, the cross-reference sweep, and the
+archival move. Reach for this when you encounter an out-of-date skill, when a
+review identifies outdated guidance, or when a platform change invalidates
+existing procedure docs.
 
 Role: meta
 

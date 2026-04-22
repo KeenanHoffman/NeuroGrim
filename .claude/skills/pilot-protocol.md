@@ -1,8 +1,12 @@
 # Pilot Protocol
 
-Defines the bidirectional interface language between the pilot agent and any subagent
-it spawns. Schemas are defined once in skill manifests, are the authority, and are enforced
-hard. Non-conformant responses are retried once, then aborted — no silent degradation.
+**When to use this skill:** You are about to spawn a subagent, implement a new
+subagent-facing skill, or debug a subagent response that isn't conforming.
+This skill defines the bidirectional interface language between the pilot agent
+and any subagent it spawns — the `lsp-brains/agent/1.0` envelope, the request
+shape, the response shape, and the retry-then-abort semantics. Schemas are
+defined once in skill manifests, are the authority, and are enforced hard;
+non-conformant responses are retried once, then aborted — no silent degradation.
 
 Role: operational · reference
 

@@ -1,7 +1,12 @@
 # Imagination Mode
 
-A conversational pre-planning space for exploring approaches before committing to a plan.
-Imagination mode is surface-level, generalized, and idea-based — no code, no files, no commands.
+**When to use this skill:** You are about to plan something non-trivial and the
+right approach is not yet obvious — OR the user signals they want to think
+out loud before committing ("imagine", "let's think", "what could we do",
+"brainstorm", "before we plan"). Imagination mode is a conversational
+pre-planning space: surface-level, idea-based, generalized. No code, no files,
+no commands — just approaches, tradeoffs, and constraints explored aloud until
+the right shape emerges.
 
 Role: planning · meta
 

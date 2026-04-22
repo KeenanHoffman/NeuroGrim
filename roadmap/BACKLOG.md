@@ -11,18 +11,16 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (**B-11 + B-12 SHIPPED** to their
-contracted scopes. `skill-coherence` domain detects byte-level
-drift between duplicated skills across Brains; `capability-
-hygiene` domain scores each skill's lead-paragraph description
-against the authoring standard. write-skill.md carries the new
-"Lead Paragraph — Routing-Critical" section. coherence.md fixed
-as the canonical example. Both domains registered at advisory
-weight 0.0. First scoring run: skill-coherence=70 (3 drifts from
-this session's edits), capability-hygiene=78 (9 skills need
-when-to-use signal in their leads). Earlier same-day: record
-correction parking B-10, contracting B-11/B-12, closing S11 —
-see B-10 banner below. B-09 shipped earlier the same day.).
+**Last updated:** 2026-04-22 (**Cleanup pass + B-13 pilot**:
+all 9 skills flagged by capability-hygiene received explicit
+"when to use" rewrites; all drifted duplicates propagated across
+Brains; `subagent-patterns.md` piloted the B-13 body-size
+compression pattern (7,208 → ~1,433 tokens, ~80% reduction)
+with deep content extracted to `docs/subagent-patterns-guide.md`.
+Both `skill-coherence` and `capability-hygiene` now report
+100/100 across the four-Brain stack. Earlier same-day:
+B-11+B-12 shipped; record correction parked B-10, contracted
+B-11/B-12, closed S11; B-09 shipped earlier the same day.).
 
 ---
 
@@ -630,12 +628,15 @@ deprecation, subagent-patterns) could be brought to compliant
 with lead-paragraph rewrites. The `capability-hygiene` CMDB
 will tick up toward 100 as authors adopt the convention.
 
-**Body-size optimization follow-on (operator insight
-2026-04-22)** remains uncommitted. Candidates for compression:
-`subagent-patterns.md` (7.2k), `write-skill.md` (3.5k),
-`pilot-protocol.md` (4.0k), `plan-critic.md` (3.2k),
-`write-agent-behavior-scenario.md` (3.9k). Track as B-13 if
-operator-felt context pressure justifies the refactor.
+**Body-size optimization (B-13 pilot shipped 2026-04-22).** See
+B-13 below — the `subagent-patterns.md` pilot validated the
+compression pattern (7,208 → ~1,433 tokens, ~80% reduction per
+invocation) with the deep reference preserved in
+`docs/subagent-patterns-guide.md`. Remaining candidates for the
+same treatment: `write-skill.md` (3.5k), `pilot-protocol.md`
+(4.0k), `plan-critic.md` (3.2k),
+`write-agent-behavior-scenario.md` (3.9k). Each refactor is
+tractable in <1 hour now that the pattern is proven.
 
 **Original contracted-scope framing preserved for historical
 record below:**
@@ -797,6 +798,70 @@ both: **53k → ~700-1,500 tokens** (97-99% reduction).
 `neurogrim-cli` as a new subcommand (`neurogrim skills index` or
 similar), with the hygiene domain as a new sensory tool in
 `neurogrim-sensory`. Exact names TBD.
+
+---
+
+### B-13: Skill body-size compression (push depth to docs/) — PILOT SHIPPED 2026-04-22
+
+**Status: PILOT SHIPPED 2026-04-22.** The operator-surfaced
+insight (2026-04-22, post-loading-model correction) that
+once a skill is invoked, its body stays in context for the
+rest of the session — so **fat skill bodies compound cost
+across subsequent turns** — validated as a real
+per-invocation saving axis.
+
+**Pilot target:** `subagent-patterns.md` (7,208 tokens originally).
+
+**Approach:** split skill body into two files:
+- `.claude/skills/subagent-patterns.md` — the **decision surface**:
+  lead paragraph, decision table (spawn vs inline), 6-pattern
+  summary with one-line each + link, envelope-protocol summary,
+  top-3 troubleshooting, "Why This Matters". Size: ~1,433 tokens
+  (~80% reduction from original).
+- `docs/subagent-patterns-guide.md` — the **deep reference**:
+  every pattern's full walk-through, worked LaaS examples,
+  all hat-calibration blocks (output-format + domain-priority),
+  envelope integration details, convergence failure handling,
+  hook-system boundary. Size: ~7,400 tokens.
+
+**Per-invocation impact:** when an agent invokes the skill, only
+the skill body loads into context (~1,433 tokens, down from
+7,208). If the agent needs deep detail (e.g., the incident-commander
+calibration block), they `Read` the guide on demand — a separate
+~7,400 token load, but only if actually needed. Typical
+invocation — which reaches for the decision table + pattern
+summary without needing every calibration block — saves ~5,775
+tokens per invocation per session.
+
+**Remaining candidates for the same treatment** (each ~1 hour of
+work now that the pattern is validated):
+- `write-skill.md` (~3,459 tokens) — extract the template, the
+  companion-hook rubric, and the wiring checklist to a guide;
+  keep the authoring standard + "Lead Paragraph" section inline.
+- `pilot-protocol.md` (~3,975 tokens) — extract envelope schema
+  deep details + legacy-format notes; keep the request/response
+  summary inline.
+- `plan-critic.md` (~3,209 tokens) — extract the full adversary-
+  check catalog; keep the invocation pattern inline.
+- `write-agent-behavior-scenario.md` (~3,954 tokens) — extract
+  the rubric-authoring how-to; keep the step-by-step inline.
+
+**Plan when:** opportunistically. No blocker. Each one-skill
+refactor is a <1-hour task.
+
+**Dependencies:** none. The pattern is validated; adoption is
+pure authoring work.
+
+**Risks:**
+- **Agents may not Read the guide when they need depth.**
+  Mitigation: the skill carries explicit pointers to the right
+  guide section for each pattern; the table's "Full walk-through"
+  column links directly.
+- **Drift between skill and guide.** If a pattern's semantics
+  change, both files need updating. Mitigation: `capability-
+  hygiene` domain does not (yet) check cross-file consistency,
+  but a future extension could; meanwhile, the convention is
+  "update the skill first, then mirror to the guide".
 
 ### B-08: Red-mode cross-scenario mode-applicability matrix
 

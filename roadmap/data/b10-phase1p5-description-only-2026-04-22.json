@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-04-22T09:37:46.838778400+00:00",
+  "generated_at": "2026-04-22T09:55:15.348171200+00:00",
   "hygiene_distribution": {
-    "excellent (10-25%)": 9,
-    "good (5-10% or 25-40%)": 16,
+    "excellent (10-25%)": 15,
+    "good (5-10% or 25-40%)": 23,
     "over-described (>40%)": 0,
-    "under-described (<5%)": 16
+    "under-described (<5%)": 3
   },
   "hypothesis": "Agents need only the description (when-to-use block) + section outline to route; full body loads on demand.",
   "interpretation": {
@@ -16,24 +16,24 @@
       "skill_count": 19,
       "skills": [
         {
-          "combined_tokens": 126,
-          "description_tokens": 18,
-          "full_tokens": 2043,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 0.8810572687224669,
-          "outline_tokens": 108,
+          "combined_tokens": 255,
+          "description_tokens": 154,
+          "full_tokens": 2122,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 7.257304429783224,
+          "outline_tokens": 101,
           "path": "coherence.md",
-          "reduction_pct": 93.83259911894272
+          "reduction_pct": 87.98303487276155
         },
         {
-          "combined_tokens": 236,
-          "description_tokens": 120,
-          "full_tokens": 2833,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 4.235792446170137,
+          "combined_tokens": 286,
+          "description_tokens": 170,
+          "full_tokens": 2883,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 5.896635449184877,
           "outline_tokens": 116,
           "path": "dual-review.md",
-          "reduction_pct": 91.66960818919873
+          "reduction_pct": 90.07977800901838
         },
         {
           "combined_tokens": 318,
@@ -46,44 +46,44 @@
           "reduction_pct": 89.41763727121464
         },
         {
-          "combined_tokens": 142,
-          "description_tokens": 85,
-          "full_tokens": 1737,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 4.89349453080023,
+          "combined_tokens": 244,
+          "description_tokens": 187,
+          "full_tokens": 1839,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 10.168569874932029,
           "outline_tokens": 57,
           "path": "human-comms.md",
-          "reduction_pct": 91.82498560736903
+          "reduction_pct": 86.73191952147907
         },
         {
-          "combined_tokens": 233,
-          "description_tokens": 134,
-          "full_tokens": 1908,
-          "hygiene_bucket": "good (5-10% or 25-40%)",
-          "hygiene_pct_desc_of_body": 7.023060796645702,
+          "combined_tokens": 305,
+          "description_tokens": 206,
+          "full_tokens": 1980,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 10.404040404040405,
           "outline_tokens": 99,
           "path": "imagination-mode.md",
-          "reduction_pct": 87.78825995807128
+          "reduction_pct": 84.5959595959596
         },
         {
-          "combined_tokens": 118,
-          "description_tokens": 84,
-          "full_tokens": 819,
+          "combined_tokens": 221,
+          "description_tokens": 187,
+          "full_tokens": 922,
           "hygiene_bucket": "excellent (10-25%)",
-          "hygiene_pct_desc_of_body": 10.256410256410257,
+          "hygiene_pct_desc_of_body": 20.281995661605205,
           "outline_tokens": 34,
           "path": "north-star.md",
-          "reduction_pct": 85.59218559218559
+          "reduction_pct": 76.03036876355749
         },
         {
-          "combined_tokens": 263,
-          "description_tokens": 140,
-          "full_tokens": 3975,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 3.5220125786163523,
+          "combined_tokens": 335,
+          "description_tokens": 212,
+          "full_tokens": 4047,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 5.238448233259204,
           "outline_tokens": 123,
           "path": "pilot-protocol.md",
-          "reduction_pct": 93.38364779874213
+          "reduction_pct": 91.72226340499135
         },
         {
           "combined_tokens": 346,
@@ -136,44 +136,44 @@
           "reduction_pct": 84.28571428571429
         },
         {
-          "combined_tokens": 226,
-          "description_tokens": 93,
-          "full_tokens": 2443,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 3.8067949242734342,
+          "combined_tokens": 310,
+          "description_tokens": 177,
+          "full_tokens": 2527,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 7.0043529877324895,
           "outline_tokens": 133,
           "path": "secret-refs.md",
-          "reduction_pct": 90.749079001228
+          "reduction_pct": 87.73248911753066
         },
         {
-          "combined_tokens": 270,
-          "description_tokens": 140,
-          "full_tokens": 2172,
+          "combined_tokens": 349,
+          "description_tokens": 219,
+          "full_tokens": 2251,
           "hygiene_bucket": "good (5-10% or 25-40%)",
-          "hygiene_pct_desc_of_body": 6.445672191528545,
+          "hygiene_pct_desc_of_body": 9.729009329187027,
           "outline_tokens": 130,
           "path": "security-standards.md",
-          "reduction_pct": 87.56906077348066
+          "reduction_pct": 84.49577965348733
         },
         {
-          "combined_tokens": 185,
-          "description_tokens": 89,
-          "full_tokens": 1836,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 4.847494553376906,
+          "combined_tokens": 277,
+          "description_tokens": 181,
+          "full_tokens": 1928,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 9.387966804979254,
           "outline_tokens": 96,
           "path": "skill-deprecation.md",
-          "reduction_pct": 89.92374727668846
+          "reduction_pct": 85.63278008298755
         },
         {
-          "combined_tokens": 323,
-          "description_tokens": 159,
-          "full_tokens": 7208,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 2.2058823529411766,
-          "outline_tokens": 164,
+          "combined_tokens": 276,
+          "description_tokens": 240,
+          "full_tokens": 1345,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 17.843866171003718,
+          "outline_tokens": 36,
           "path": "subagent-patterns.md",
-          "reduction_pct": 95.51886792452831
+          "reduction_pct": 79.47955390334573
         },
         {
           "combined_tokens": 215,
@@ -196,22 +196,22 @@
           "reduction_pct": 90.49064238745574
         },
         {
-          "combined_tokens": 321,
+          "combined_tokens": 337,
           "description_tokens": 99,
-          "full_tokens": 3459,
+          "full_tokens": 4026,
           "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 2.862098872506505,
-          "outline_tokens": 222,
+          "hygiene_pct_desc_of_body": 2.459016393442623,
+          "outline_tokens": 238,
           "path": "write-skill.md",
-          "reduction_pct": 90.71986123156982
+          "reduction_pct": 91.6294088425236
         }
       ],
       "totals": {
-        "description_only": 2717,
-        "description_plus_outline": 4849,
-        "full_body": 50870,
-        "outline_only": 2132,
-        "reduction_pct_desc_plus_outline": 90.46785924906625
+        "description_only": 3588,
+        "description_plus_outline": 5601,
+        "full_body": 46307,
+        "outline_only": 2013,
+        "reduction_pct_desc_plus_outline": 87.90463644805321
       }
     },
     "lsp-brains": {
@@ -230,20 +230,20 @@
         {
           "combined_tokens": 165,
           "description_tokens": 126,
-          "full_tokens": 1029,
+          "full_tokens": 1050,
           "hygiene_bucket": "excellent (10-25%)",
-          "hygiene_pct_desc_of_body": 12.244897959183673,
+          "hygiene_pct_desc_of_body": 12.0,
           "outline_tokens": 39,
           "path": "rubber-duck.md",
-          "reduction_pct": 83.96501457725948
+          "reduction_pct": 84.28571428571429
         }
       ],
       "totals": {
         "description_only": 378,
         "description_plus_outline": 544,
-        "full_body": 4843,
+        "full_body": 4864,
         "outline_only": 166,
-        "reduction_pct_desc_plus_outline": 88.76729300020648
+        "reduction_pct_desc_plus_outline": 88.8157894736842
       }
     },
     "neurogrim": {
@@ -280,14 +280,14 @@
           "reduction_pct": 87.98303487276155
         },
         {
-          "combined_tokens": 236,
-          "description_tokens": 120,
-          "full_tokens": 2833,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 4.235792446170137,
+          "combined_tokens": 286,
+          "description_tokens": 170,
+          "full_tokens": 2883,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 5.896635449184877,
           "outline_tokens": 116,
           "path": "dual-review.md",
-          "reduction_pct": 91.66960818919873
+          "reduction_pct": 90.07977800901838
         },
         {
           "combined_tokens": 318,
@@ -300,34 +300,34 @@
           "reduction_pct": 89.41763727121464
         },
         {
-          "combined_tokens": 142,
-          "description_tokens": 85,
-          "full_tokens": 1737,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 4.89349453080023,
+          "combined_tokens": 244,
+          "description_tokens": 187,
+          "full_tokens": 1839,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 10.168569874932029,
           "outline_tokens": 57,
           "path": "human-comms.md",
-          "reduction_pct": 91.82498560736903
+          "reduction_pct": 86.73191952147907
         },
         {
-          "combined_tokens": 233,
-          "description_tokens": 134,
-          "full_tokens": 1908,
-          "hygiene_bucket": "good (5-10% or 25-40%)",
-          "hygiene_pct_desc_of_body": 7.023060796645702,
+          "combined_tokens": 305,
+          "description_tokens": 206,
+          "full_tokens": 1980,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 10.404040404040405,
           "outline_tokens": 99,
           "path": "imagination-mode.md",
-          "reduction_pct": 87.78825995807128
+          "reduction_pct": 84.5959595959596
         },
         {
-          "combined_tokens": 118,
-          "description_tokens": 84,
-          "full_tokens": 819,
+          "combined_tokens": 221,
+          "description_tokens": 187,
+          "full_tokens": 922,
           "hygiene_bucket": "excellent (10-25%)",
-          "hygiene_pct_desc_of_body": 10.256410256410257,
+          "hygiene_pct_desc_of_body": 20.281995661605205,
           "outline_tokens": 34,
           "path": "north-star.md",
-          "reduction_pct": 85.59218559218559
+          "reduction_pct": 76.03036876355749
         },
         {
           "combined_tokens": 165,
@@ -340,14 +340,14 @@
           "reduction_pct": 88.93360160965794
         },
         {
-          "combined_tokens": 263,
-          "description_tokens": 140,
-          "full_tokens": 3975,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 3.5220125786163523,
+          "combined_tokens": 335,
+          "description_tokens": 212,
+          "full_tokens": 4047,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 5.238448233259204,
           "outline_tokens": 123,
           "path": "pilot-protocol.md",
-          "reduction_pct": 93.38364779874213
+          "reduction_pct": 91.72226340499135
         },
         {
           "combined_tokens": 346,
@@ -390,44 +390,44 @@
           "reduction_pct": 84.28571428571429
         },
         {
-          "combined_tokens": 226,
-          "description_tokens": 93,
-          "full_tokens": 2443,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 3.8067949242734342,
+          "combined_tokens": 310,
+          "description_tokens": 177,
+          "full_tokens": 2527,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 7.0043529877324895,
           "outline_tokens": 133,
           "path": "secret-refs.md",
-          "reduction_pct": 90.749079001228
+          "reduction_pct": 87.73248911753066
         },
         {
-          "combined_tokens": 270,
-          "description_tokens": 140,
-          "full_tokens": 2172,
+          "combined_tokens": 349,
+          "description_tokens": 219,
+          "full_tokens": 2251,
           "hygiene_bucket": "good (5-10% or 25-40%)",
-          "hygiene_pct_desc_of_body": 6.445672191528545,
+          "hygiene_pct_desc_of_body": 9.729009329187027,
           "outline_tokens": 130,
           "path": "security-standards.md",
-          "reduction_pct": 87.56906077348066
+          "reduction_pct": 84.49577965348733
         },
         {
-          "combined_tokens": 185,
-          "description_tokens": 89,
-          "full_tokens": 1836,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 4.847494553376906,
+          "combined_tokens": 277,
+          "description_tokens": 181,
+          "full_tokens": 1928,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 9.387966804979254,
           "outline_tokens": 96,
           "path": "skill-deprecation.md",
-          "reduction_pct": 89.92374727668846
+          "reduction_pct": 85.63278008298755
         },
         {
-          "combined_tokens": 323,
-          "description_tokens": 159,
-          "full_tokens": 7208,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 2.2058823529411766,
-          "outline_tokens": 164,
+          "combined_tokens": 276,
+          "description_tokens": 240,
+          "full_tokens": 1345,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 17.843866171003718,
+          "outline_tokens": 36,
           "path": "subagent-patterns.md",
-          "reduction_pct": 95.51886792452831
+          "reduction_pct": 79.47955390334573
         },
         {
           "combined_tokens": 215,
@@ -451,20 +451,20 @@
         }
       ],
       "totals": {
-        "description_only": 2697,
-        "description_plus_outline": 4768,
-        "full_body": 49638,
-        "outline_only": 2071,
-        "reduction_pct_desc_plus_outline": 90.39445586042952
+        "description_only": 3432,
+        "description_plus_outline": 5375,
+        "full_body": 44429,
+        "outline_only": 1943,
+        "reduction_pct_desc_plus_outline": 87.90204596097144
       }
     }
   },
   "stack_totals": {
-    "description_only": 5792,
-    "description_plus_outline": 10161,
-    "full_body": 105351,
-    "outline_contribution": 4369,
-    "stack_reduction_pct_with_desc_plus_outline": 90.35509867015975
+    "description_only": 7398,
+    "description_plus_outline": 11520,
+    "full_body": 95600,
+    "outline_contribution": 4122,
+    "stack_reduction_pct_with_desc_plus_outline": 87.94979079497908
   },
   "tokenizer": "tiktoken-rs cl100k_base"
 }

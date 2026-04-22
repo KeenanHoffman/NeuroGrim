@@ -1,8 +1,13 @@
 # Security Standards Domain
 
-Scans a project's file tree for compliance evidence across 5 SOC2 Common Criteria (CC)
-control groups. Each finding is tagged with its SOC2 CC, ISO27001 Annex A, and NIST CSF
-control IDs so teams can use output directly in audit evidence packages.
+**When to use this skill:** You are auditing a project's compliance posture
+(SOC2, ISO27001, NIST CSF), preparing evidence packages for an auditor, or
+trying to improve the `security-standards` Brain domain's score. This skill
+scans a project's file tree for compliance evidence across 5 SOC2 Common
+Criteria (CC) control groups and tags each finding with its SOC2 CC,
+ISO27001 Annex A, and NIST CSF control IDs so teams can use output directly
+in audit evidence packages. Reach for this when a compliance question lands
+on the engineering desk, OR before the next quarterly attestation cycle.
 
 Role: operational · reference
 Methodology-step: health

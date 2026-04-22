@@ -1,8 +1,12 @@
 # Dual Review Protocol
 
-Two-pass review for skills, hooks, and architectural decisions. Apply when correctness
-and principle alignment both matter — a Technical Reviewer and a Philosophy Reviewer
-evaluate independently, then the results are synthesized with philosophy taking precedence.
+**When to use this skill:** You need a two-pass review for a new skill, a new
+hook, or an architectural decision — when both technical correctness AND
+principle alignment matter. A Technical Reviewer and a Philosophy Reviewer
+evaluate independently, then the results are synthesized with philosophy taking
+precedence. Reach for this skill before merging a skill, hook, or architectural
+change; single-pass review has selection bias that this protocol is designed to
+correct.
 
 Role: meta
 

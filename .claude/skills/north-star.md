@@ -1,4 +1,11 @@
-# North Star
+# North Star — Vision + Stage Alignment Check
+
+**When to use this skill:** You are about to commit to a plan, just finished
+significant work, or are trying to decide which backlog item to prioritize next —
+and want a lightweight alignment check against the project's vision. This skill
+asks: *does this advance us toward the north-star stage?* Reach for it before
+scoping any sizable piece of work, after closing an epic, or whenever a
+stakeholder asks "are we on track".
 
 Role: meta · guiding
 Governs: .claude/roadmap/VISION.md, .claude/roadmap/ROADMAP.md

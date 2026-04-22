@@ -1,12 +1,18 @@
-# secret-refs
+# Secret Refs — Safe Secret Catalog for Agents
 
-**Purpose:** Give agents a complete, safe catalog of every secret a project uses —
-where each credential lives, what it is for, and how to access it — without ever
-exposing a value in the model context.
+**When to use this skill:** You need an agent to work with secrets (generate
+code that fetches a credential, audit which secrets a project uses, onboard a
+new credential) without ever exposing the secret value in the model's context.
+The `secret-refs` domain catalogs where each credential lives, what it's for,
+and how to access it — the agent reads the reference pattern (the safe lookup),
+never the value itself. Positive containment: if a secret isn't in the manifest,
+the agent does not know it exists.
 
-Agents read `secret_catalog` from the CMDB to generate correct secret-access code.
-The value stays in the secret manager. The reference pattern — the safe lookup — is
-what the agent sees.
+Role: reference · configuration
+Trigger phrases: "secret", "credential", "API key", "secret manager",
+"how do I access", "where is the secret", "secret-refs", "fetch credentials",
+"secret catalog"
+Methodology-step: skills
 
 ---
 
