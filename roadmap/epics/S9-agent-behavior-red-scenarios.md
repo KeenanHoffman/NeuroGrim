@@ -1,7 +1,7 @@
 # Epic: Agent Behavior Verification — Red Scenarios & Judge Integrity
 
 **Stage:** 9
-**Status:** In progress (2026-04-21) — RED-1/2/3 shipped + pushed; RED-4 promoted from backlog B-06 back into this epic's scope per operator request; will fully close after RED-4 ships.
+**Status:** **Complete** (2026-04-21) — all 4 stories shipped + pushed. v1 ships both architectures: pre-recorded red samples (RED-1..3, Architecture A) AND mock-bad-agent live generation (RED-4, Architecture B). 173/173 pytest green; 53 new tests added across the epic; zero regressions in prior 85.
 **Priority:** Medium
 **Goal:** Prove the `agent-behavior` harness has a real red path. Today
 the suite can only tell us agents scored green; it cannot tell us
@@ -303,10 +303,7 @@ After human triage, a new entry (not an edit — append-only) carries:
 
 ### S9-ABV-RED-4: Mock-Bad-Agent Red Mode
 
-**Status:** In progress (2026-04-21) — promoted from BACKLOG B-06
-back into this epic's scope per operator request; v1 pulls the
-stretch forward so the epic closes with both architectures
-shipped.
+**Status:** **Complete** (2026-04-21) — shipped in LSP-Brains `bd8119b` (red-mode-report-v1 schema + skill mirror), NeuroGrim `3b9822b` (taxonomy Architecture B section + skill mirror), and ecosystem `f9b10b6` (adversary prompts library with 7 entries, `mock_adversary.py` loader, `red_mode.py` orchestrator with canary gate, `abv-run red-mode` CLI subcommand, 35 new tests, worked-example extension with cost/cadence table). Promoted from BACKLOG B-06 mid-epic per operator request.
 **Effort:** L
 **Depends on:** S9-ABV-RED-1..3 complete.
 

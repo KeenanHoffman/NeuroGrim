@@ -3,7 +3,7 @@
 **North star:** `VISION.md`
 **Dependencies:** `DEPENDENCIES.md`
 **Data architecture:** `DATA-ARCHITECTURE.md`
-**Last updated:** 2026-04-21 (Stage 9 Red Scenarios & Judge Integrity — stories 1/2/3 shipped + pushed across all three repos; story 4 (mock-bad-agent) promoted from backlog B-06 back into epic scope; B-06 marked absorbed)
+**Last updated:** 2026-04-21 (Stage 9 Red Scenarios & Judge Integrity — **Complete**: all 4 stories shipped; v1 delivers both architectures (pre-recorded red samples + mock-bad-agent live generation). 173/173 pytest green; 53 new tests across the epic)
 
 ---
 
@@ -19,7 +19,7 @@
 | 6 | Dual Brain via A2A (prior name: Dual Brain Implementation) | **Complete** — DB-1..5 + DB-7 all shipped; DB-6 (Python SDK helper) remains as stretch only; Remote-Agent Topology (bearer + Caddy + webhook-sync + CEO template + e2e-sim) shipped 2026-04-21 | 1 epic (7 stories) + Remote-Agent Topology sub-epic (5 phases, all shipped) |
 | 7 | Agent Behavior Verification | **Complete** (2026-04-21) — all 7 stories shipped + committed; worked-example score-delta stub awaits first operator run | 1 epic (7 stories) — `S7-agent-behavior-verification.md` |
 | 8 | Agent Behavior Verification Extensions | **Complete** (2026-04-21) — all 3 stories (calibration audit + multi-judge consensus + execution-based rubrics) shipped. Agent-behavior domain is calibration-gated and ready for the promotion-past-advisory decision (requires operator-led calibration audit) | 1 epic (3 stories) — `S8-agent-behavior-extensions.md` |
-| 9 | Agent Behavior Verification — Red Scenarios & Judge Integrity | In progress (2026-04-21) — RED-1/2/3 shipped + pushed: red-sample schema + harness, 13-sample library across 6 scenarios + failure-mode taxonomy, judge-integrity ledger + triage CLI + `refine-judge-integrity.md` skill. RED-4 (mock-bad-agent red mode) promoted from backlog B-06 to complete the epic. | 1 epic (4 stories) — `S9-agent-behavior-red-scenarios.md` |
+| 9 | Agent Behavior Verification — Red Scenarios & Judge Integrity | **Complete** (2026-04-21) — all 4 stories shipped: red-sample schema + harness (RED-1), 13-sample library across 6 scenarios + failure-mode taxonomy (RED-2), judge-integrity ledger + triage CLI + `refine-judge-integrity.md` skill (RED-3), mock-bad-agent red-mode + adversary library + `abv-run red-mode` CLI (RED-4). Agent-behavior domain now has both Architecture A (deterministic pre-recorded) and Architecture B (live-generation) coverage. | 1 epic (4 stories) — `S9-agent-behavior-red-scenarios.md` |
 
 Stages are sequential but overlapping. Each stage must produce a working system, not just
 scaffolding.
