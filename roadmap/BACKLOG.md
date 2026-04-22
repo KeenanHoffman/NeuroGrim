@@ -11,7 +11,7 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (added B-08: red-mode cross-scenario mode-applicability matrix, surfaced by S10-DP-4 Haiku #1 red-mode audit; deferred until B-07 or pre-retry of S10-DP-4).
+**Last updated:** 2026-04-22 (added B-09: CLI-mode sensory access alternative to MCP, and B-10: LSP-style lazy context loading for skills+tools — both surfaced during S10 session close-out as per-session tooling-overhead concerns).
 
 ---
 
@@ -112,6 +112,209 @@ verification harness without sandboxing is a blast-radius problem.
 
 **Dependencies:** sandbox (Docker or VM-level), execution budget,
 tool-output mocking for deterministic tests.
+
+---
+
+## Identified 2026-04-22 (post S10-DP-4 audit close-out)
+
+Surfaced during the S10 session wrap-up. Both items address
+per-session tooling-overhead concerns raised by the operator when
+thinking about how context windows are consumed by tool schemas +
+skill descriptions at session start, before any real work happens.
+
+### B-09: CLI-mode sensory access (power-user alternative to MCP)
+
+**Why it's here.** MCP is the default tooling protocol because it
+offers uniform tool-discovery, schema validation, and LLM-friendly
+error handling. For small local sessions with a power user who
+already knows the tool surface, MCP's overhead (thousands of
+tokens of tool-schema documentation injected into the model's
+system prompt at session start, plus per-call JSON-RPC wrapping)
+dominates what could be faster subprocess CLI invocations.
+
+Concrete overhead: each MCP server typically injects 500-2000
+tokens of tool-schema documentation into context. For NeuroGrim's
+stack (sensory tools via MCP, potentially multiple servers for
+different domains), this compounds to 5-10k tokens consumed
+before any actual work.
+
+**What B-09 delivers.** An OPT-IN alternative mode where NeuroGrim
+bypasses MCP for its sensory tool path and expects the agent to
+invoke CLI commands directly (`neurogrim sense <domain>` or
+equivalent subprocess calls). Default stays MCP to avoid
+confusion — this is a deliberate opt-in for power users who
+understand the tradeoff.
+
+**Work items (stories):**
+- **DP-1**: Feature flag on `neurogrim agent` (and related entry
+  points). `--tools=cli` vs `--tools=mcp` (default). Rust CLI
+  change + threading through sensory-dispatch path.
+- **DP-2**: CLI surface documentation. Enumerate the exact
+  commands the agent should invoke, with input/output formats,
+  for each sensory domain. Replaces MCP auto-discovery with
+  authored docs.
+- **DP-3**: New skill `cli-mode-sensory-tools.md` documenting
+  the CLI path for agents. Loaded only when the feature flag is
+  set, so MCP-path users don't see it.
+- **DP-4**: Benchmark harness. Measure token savings on a
+  reference session (baseline MCP vs CLI). Document results in
+  the epic for future decision-making.
+- **DP-5**: Operator guidance in NeuroGrim CLAUDE.md + README.md:
+  when to consider CLI mode, what's lost (auto-discovery,
+  schema validation, uniform error shapes).
+
+**Plan when:** an operator expresses a token-budget concern OR
+benchmarks show MCP overhead dominates session startup for
+specific workflows. Speculative until then — could ship any
+time post-S10.
+
+**Dependencies:** none blocking.
+
+**Risks / adversarial review notes:**
+- CLI mode loses MCP's schema-validation safety net. An agent
+  might call a tool with malformed args; error handling is less
+  uniform than MCP's typed responses.
+- Two code paths to maintain (MCP + CLI); test coverage doubles.
+- Documentation becomes load-bearing — if docs diverge from CLI
+  behavior, the agent gets wrong info. Needs an automated test
+  that exercises the CLI commands documented in the skill.
+- Default-MCP, opt-in-CLI posture is correct; flipping defaults
+  would be a separate decision requiring an evidence base that
+  MCP's value (discovery + validation) is less useful than its
+  token cost.
+
+---
+
+### B-10: LSP-style lazy context loading for skills + tools
+
+**Why it's here.** Both skills (surfaced as summaries in the
+context window at session start) and MCP tools (injected as
+schemas) consume significant tokens BEFORE the model does any
+actual work. For a project with many skills or multiple MCP
+servers, this "awareness overhead" can be 10-50k tokens per
+session.
+
+The insight: the Language Server Protocol (LSP) that names this
+methodology works by NOT loading the entire codebase into the
+editor. The editor makes targeted queries (`textDocument/hover`,
+`workspace/symbol`, etc.) and the server answers on demand. If
+skills and tools were surfaced via a similar lazy-fetch pattern,
+per-session overhead could drop dramatically — a true
+"LSP Brains" architecture at the tooling layer, not just the
+naming.
+
+**Problem statement.**
+- Today: agent context starts with N skills × ~200 tokens +
+  M tools × ~500 tokens ≈ 10-50k tokens of "stuff available."
+  Agent may use 0-3 skills/tools per session; the rest is
+  cold-start overhead the agent never needed.
+- Aspirational: agent context starts with a COMPACT TOC of
+  available resources (~1-2k tokens) + a load primitive. Agent
+  queries for specific skill/tool details on demand. Per-session
+  baseline drops to ~1-5k tokens; load-per-item ~500-2000 tokens
+  but only for what's actually used.
+
+**This is a research epic, not a ship-this-next item.** No
+concrete implementation is obvious — several dimensions need
+investigation before scoping:
+- Who holds the "load primitive" — Claude Code itself? A custom
+  MCP server acting as a meta-tool? A skill that orchestrates?
+- How does cache invalidation work when a skill/tool changes
+  mid-session?
+- What does the TOC look like — keyword-searchable? Hierarchical
+  by domain? Scenario-scoped?
+- How does the model learn WHEN to ask? Discovery bootstrap is
+  critical — the TOC must be comprehensive enough to trigger
+  the right lookups but compact enough to justify the pattern.
+- How do error cases degrade — unloaded skill referenced by
+  name → "fetch first" retry vs error out?
+
+**Candidate approaches to explore (Phase 2 would pick one):**
+
+1. **Meta-MCP tool.** Single MCP server exposing `load_skill(id)`
+   and `load_tool_schema(name)`. Model's initial context has the
+   TOC; lookups happen via this one tool. Simplest architecture;
+   loses MCP's native per-tool discovery for served items.
+
+2. **Skills-as-RAG.** Store skill bodies in a vector DB. Context
+   has TOC + short summaries; similarity search on task
+   description surfaces relevant skills. Adds a DB dependency
+   and retrieval latency per session.
+
+3. **Scenario-scoped context assembly.** Front-end classifier
+   decides "this task is about X" → assemble only X-relevant
+   skills/tools. Requires a classifier layer; less predictable
+   scaling.
+
+4. **Short-description + on-demand expansion.** Keep TOC-style
+   short descriptions in context; long-form content fetched on
+   first use. Simplest evolution of current system; possibly
+   requires no new infrastructure if existing descriptions can
+   be shrunk to 1-liners.
+
+5. **Hybrid.** TOC in context + opt-in full-load per skill via a
+   hooks/slash-command. Closest to current system; lowest
+   integration risk.
+
+**Plan when:**
+- Token budget becomes a demonstrable friction point, OR
+- Claude Code's context window compression improves enough that
+  lazy loading is unnecessary, OR
+- Phase 1 measurement shows the overhead is worth the
+  architectural investment.
+
+**Research deliverables (before ANY implementation):**
+
+- **Phase 1: Measurement.** Write a script that tokenizes all
+  skills + MCP schemas for the four Brains; report "cold-start
+  overhead" per Brain. Identifies whether the problem is big
+  enough to justify B-10's complexity. Could surface that
+  current overhead is, say, 15k tokens — not 50k — and the
+  problem is less urgent than intuition suggests.
+- **Phase 2: Approach selection.** Based on measurements, pick
+  one candidate approach (or propose a new one) and scope a
+  minimum-viable prototype. Run plan-critic adversarial review
+  on the prototype's design before implementing.
+- **Phase 3: Prototype on one skill surface + benchmark.** Pick
+  ONE Brain's skills; implement the selected lazy-loading
+  approach for just those; benchmark token savings vs latency
+  cost. Go/no-go on broader rollout.
+
+**Dependencies:**
+- B-09 (CLI-mode tools) overlaps — both reduce tool overhead.
+  B-09 ships a specific power-user escape hatch; B-10 is a
+  methodological architecture shift. They're complementary.
+- Requires understanding Claude Code's current extension points
+  (does it support lazy-loaded skills? Can MCP be used this
+  way? Is a meta-tool pattern already supported?).
+
+**Risks / adversarial review notes:**
+- **Premature optimization trap.** Without Phase 1 measurements,
+  this could be solving a non-problem. Phase 1 is load-bearing
+  before any implementation decision. A healthy Phase 1 outcome
+  might be "overhead is 8k tokens per session, not worth the
+  complexity — drop B-10."
+- **UX complexity.** Lazy loading adds latency users notice. If
+  skill lookups add 500ms per use, the productivity gain from
+  saved tokens may be offset by felt slowdowns.
+- **Cache coherence.** Stale cached skill/tool in mid-session
+  produces hard-to-debug behavior. Needs explicit invalidation
+  model.
+- **Platform compatibility.** Claude Code's skill system may not
+  support this natively; building in a wrapper adds a layer the
+  harness has to maintain against upstream API changes.
+- **Naming alignment risk.** Shipping "LSP-style skill loading"
+  inside a methodology CALLED "LSP Brains" could blur the
+  distinction between the methodology's core pattern (sensors
+  observing state) and this tooling-layer optimization. The
+  methodology chapter and this epic must stay clearly
+  differentiated in the spec.
+
+**Methodology note.** If B-10 Phase 3 goes well, this may
+eventually justify its own stage (S11 or beyond) rather than
+remaining a backlog item — the architectural shift would be
+big enough to warrant stage treatment. Premature to commit to
+stage-hood without Phase 1 data.
 
 ---
 
