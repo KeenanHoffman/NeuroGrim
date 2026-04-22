@@ -23,6 +23,12 @@
 # Judge-integrity ledger (S9-ABV-RED-3) — red-miss entries +
 # triage decisions; per-deployment, never commit.
 .claude/brain/judge-integrity-ledger.jsonl
+# Domain-promotion ledger (S10-DP-2) — promotion / rollback /
+# failed-attempt entries; per-deployment governance trail.
+.claude/brain/domain-promotion-ledger.jsonl
+# Audit artifacts (S10-DP-4) — calibrate + red-mode JSON reports
+# per audit cycle; per-deployment, never commit.
+.claude/brain/audit/
 
 # Local machine awareness — machine-specific facts, never commit
 .claude/brain/local-awareness.json
