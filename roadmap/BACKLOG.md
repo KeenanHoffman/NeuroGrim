@@ -11,7 +11,7 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-21 (B-06 added during S9-ABV-RED planning).
+**Last updated:** 2026-04-21 (B-06 absorbed back into S9-ABV-RED-4 per operator request; v1 ships both Architectures A and B).
 
 ---
 
@@ -108,38 +108,24 @@ tool-output mocking for deterministic tests.
 
 ---
 
-## Identified 2026-04-21 (deferred from S9-ABV-RED plan-critic review)
+## Absorbed 2026-04-21
 
-Stretch item cleaved off the S9-ABV-RED epic during planning
-(see `epics/S9-agent-behavior-red-scenarios.md` §S9-ABV-RED-4).
-v1 ships Architecture A (pre-recorded red samples) only.
+### B-06: Mock-bad-agent red mode — ABSORBED into S9-ABV-RED-4
 
-### B-06: Mock-bad-agent red mode (live-generated red responses)
+**Original framing** (2026-04-21). Mock-bad-agent generation was
+initially cleaved off S9-ABV-RED as stretch and captured here.
 
-**Why it's here.** S9-ABV-RED uses pre-recorded red samples — the
-judge scores a fixed library of bad responses and a miss produces
-a ledger entry. This is cheap and deterministic, but covers only
-the failure slice the library was authored against. A mock-bad-
-agent that GENERATES novel bad responses per run (second Claude
-prompted to deliberately violate the scenario's rubric) would
-test judges against fresh phrasings the library can't pre-bake.
-The trade is richer coverage vs non-determinism + doubled cost
-+ a new trust surface ("how bad is the mock agent, really?").
+**Absorption** (2026-04-21, same day). Per operator request, the
+stretch was pulled back into the active epic as S9-ABV-RED-4. v1
+of S9-ABV-RED ships both architectures:
 
-**Plan when:** S9-ABV-RED has been in operation for ≥ 2
-calibration cycles and the judge-integrity ledger shows either
-(a) coverage saturation — all new misses are variations of
-taxonomy modes already in the library, suggesting live
-generation would surface novel modes faster — or (b) a specific
-failure mode nobody can reliably pre-record (e.g., "tool-use
-chains that LOOK disciplined but aren't"). Mock-bad-agent lives
-as its own epic (tentative: S10-ABV-MOCK).
+- Architecture A (pre-recorded red samples, deterministic, cheap)
+  — RED-1..3.
+- Architecture B (live mock-bad-agent generation, non-deterministic,
+  richer coverage) — RED-4.
 
-**Dependencies:** S9-ABV-RED complete; a documented "badness
-dial" design — how do we control mock agent's failure severity
-so it's neither cartoonish nor imperceptible? Likely requires a
-calibrated adversary system prompt; probably a small library of
-adversary prompts each targeting one failure mode.
+See `epics/S9-agent-behavior-red-scenarios.md` §S9-ABV-RED-4 for
+the live scoping. No separate epic is planned.
 
 ---
 

@@ -1,7 +1,7 @@
 # Epic: Agent Behavior Verification — Red Scenarios & Judge Integrity
 
 **Stage:** 9
-**Status:** Not started — plan-critic reviewed, ready to sequence.
+**Status:** In progress (2026-04-21) — RED-1/2/3 shipped + pushed; RED-4 promoted from backlog B-06 back into this epic's scope per operator request; will fully close after RED-4 ships.
 **Priority:** Medium
 **Goal:** Prove the `agent-behavior` harness has a real red path. Today
 the suite can only tell us agents scored green; it cannot tell us
@@ -85,7 +85,7 @@ is consistent with a judge that can only say green.
 
 ### S9-ABV-RED-1: Schema + Harness Extension
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21) — shipped in LSP-Brains `236f31b` (spec §15.3 "Red samples" subsection + v2.4 changelog + METH-EV §12 + schema extensions) and ecosystem `b70da80` (harness: `RedSample` dataclass, `classify_red_miss`, `--skip-red-calibration` CLI flag, `judge-integrity:red-miss` CMDB finding, 27 new tests).
 **Effort:** M
 **Depends on:** —
 
@@ -151,7 +151,7 @@ influence whether the CMDB is written as `status: "trusted"` vs
 
 ### S9-ABV-RED-2: Red-Sample Library + Failure-Mode Taxonomy
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21) — shipped in NeuroGrim `b778626` (docs/agent-behavior-red-taxonomy.md — 285 lines covering six modes + canary, authoring checklist, retirement discipline) and ecosystem `a80e668` (13 red samples across 6 scenarios + 10-test library coverage suite + skill update + CEO-template README update).
 **Effort:** M
 **Depends on:** S9-ABV-RED-1
 
@@ -217,7 +217,7 @@ an agent problem.
 
 ### S9-ABV-RED-3: Judge-Integrity Ledger + `refine-judge-integrity` Skill
 
-**Status:** Not started
+**Status:** **Complete** (2026-04-21) — shipped in LSP-Brains `cbf971f` (skill mirror + gitignore), NeuroGrim `1716a66` (skill mirror + gitignore), and ecosystem `a7c3e4c` (`judge_integrity_ledger.py` with append-only discipline + privacy allow-list + ABV_OPERATOR triage guard, `abv-run judge-integrity list|triage` CLI, calibrator auto-append wiring, `refine-judge-integrity.md` skill across all three Brain dirs, worked-example extension, 16 new tests).
 **Effort:** S
 **Depends on:** S9-ABV-RED-1, S9-ABV-RED-2
 
@@ -301,24 +301,92 @@ After human triage, a new entry (not an edit — append-only) carries:
 
 ---
 
-### S9-ABV-RED-4 (stretch): Mock-Bad-Agent Red Mode
+### S9-ABV-RED-4: Mock-Bad-Agent Red Mode
 
-**Status:** **Deferred to backlog** (tracked as B-06 — see
-`roadmap/BACKLOG.md`).
-**Effort:** L (when scoped)
-**Depends on:** S9-ABV-RED-1..3 complete; calibrated judge-
-integrity ledger in use for ≥ 2 calibration cycles.
+**Status:** In progress (2026-04-21) — promoted from BACKLOG B-06
+back into this epic's scope per operator request; v1 pulls the
+stretch forward so the epic closes with both architectures
+shipped.
+**Effort:** L
+**Depends on:** S9-ABV-RED-1..3 complete.
 
-Architecture A (pre-recorded red samples) is the v1 path because
-it's deterministic, cheap, and doesn't introduce a second model
-family we have to trust. Architecture B (a mock-bad-agent that
-generates novel red responses per run) is richer but has distinct
-failure modes — a mock agent that's "too bad" (cartoonish) grades
-a judge's ability to detect caricature, not subtle failure. It
-lands as its own epic once we have enough pre-recorded-red
-experience to calibrate the mock agent's "badness dial."
+Architecture A (pre-recorded red samples) is the deterministic
+path shipped in RED-1..3: a fixed library of bad responses with
+ceilings, judged once per calibration cycle. Architecture B
+(this story) is the live-generation path: a second Claude call
+prompted to deliberately display a specific failure mode produces
+a novel response per run; the response is scored by the same
+judge that grades real agents. Richer coverage (novel surfaces
+per run), non-deterministic by construction, and introduces a new
+trust surface — the adversary's "badness dial."
 
-Captured in BACKLOG as B-06 so it's not forgotten. Not in v1.
+**Deliverables:**
+
+- `.claude/agent-behavior-adversary-prompts.yaml` — library of
+  system prompts keyed by failure mode. Each entry has
+  `default_ceiling` + `system_prompt`. Covers the six v1 modes
+  + canary.
+- `agent_behavior_runner/mock_adversary.py` — prompt loader +
+  adversary client (wraps existing claude-proxy client).
+- `agent_behavior_runner/red_mode.py` — orchestrator. For each
+  (scenario × mode × trial): generate adversary response, score
+  with live judge, collect result. Produces a mock-mode report.
+- `abv-run red-mode <scenario-dir>` CLI subcommand:
+  `--prompts-file` (defaults to ecosystem path), `--mode` (filter
+  to specific mode; default = all), `--trials N` (default 3),
+  `--output` (report JSON path; stdout if omitted), `--profile`
+  (inherited from existing calibrate pattern).
+- **Adversary gate.** Before scaling to full mode-sweep, run the
+  `canary` adversary first. Judge MUST score its output ≤ canary
+  ceiling. If not, abort — either the adversary is miscalibrated
+  or the judge stack is broken. Mirrors the pre-recorded canary
+  discipline.
+- Mock-mode report schema (new
+  `red-mode-report-v1.schema.json`): per-(scenario, mode, trial)
+  records carrying adversary response, judge score,
+  `over_ceiling`, status (pass | red-miss | error). NOT the
+  judge-integrity ledger — mock runs are interpretive, not
+  triage-enforcing.
+- `refine-judge-integrity.md` skill update: new subsection on
+  mock-mode triage. Fourth implicit decision branch:
+  "adversary-miscalibrated" — when mock responses cluster above
+  ceiling OR well below zero, the adversary prompt needs
+  tightening, not the judge.
+- `worked-example.md` update: one new section demonstrating a
+  full mock-mode sweep end-to-end.
+- `docs/agent-behavior-red-taxonomy.md` update: note that
+  adversary prompts are the live-generation sibling to
+  pre-recorded samples; same six modes, same ceiling philosophy.
+
+**Design choices:**
+
+- **Mock misses do NOT auto-append to judge-integrity ledger**
+  in v1. Mock runs produce interpretive reports; if a specific
+  mock response is worth preserving as evidence, operators
+  author it as a pre-recorded red sample (manual promotion
+  preserves the ledger's stable-ID discipline).
+- **Same judge configuration as the scenario declares.** Mock
+  responses flow through exactly the same scoring path as real
+  agent-under-test responses. No separate judge path.
+- **Per-mode ceiling defaults** colocated with the adversary
+  prompts. Hardcoded per authoring intent; overridable per run
+  via a future flag if needed.
+- **No cross-provider adversary in v1.** Same Claude family for
+  adversary and judge — mirrors the RED-1..3 constraint. Cross-
+  provider is a stretch (BACKLOG B-02 direction).
+
+**Acceptance criteria:**
+- [ ] `abv-run red-mode --help` covers the subcommand.
+- [ ] Unit test: adversary-prompt loader round-trip + every v1
+      mode covered.
+- [ ] Unit test: canary gate fires when scripted judge
+      over-scores the canary adversary's output.
+- [ ] Unit test: scripted adversary + scripted judge, per-mode
+      filter honored; one mode runs when `--mode X` passed.
+- [ ] Unit test: report schema validates; per-trial records
+      carry mode, ceiling, judge_score, over_ceiling, status.
+- [ ] Full pytest suite green (no regression in prior 138 tests).
+- [ ] Skill + worked-example + taxonomy doc updated.
 
 ---
 
