@@ -4,6 +4,7 @@
 //! All tools implement the same contract: accept project_root, return CMDB.
 
 pub mod agent_behavior;
+pub mod capability_hygiene;
 pub mod cmdb;
 pub mod code_quality;
 pub mod coherence;
@@ -13,4 +14,5 @@ pub mod git_health;
 pub mod human_comms;
 pub mod secret_refs;
 pub mod security_standards;
+pub mod skill_coherence;
 pub mod test_results;

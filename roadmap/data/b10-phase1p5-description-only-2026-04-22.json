@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-04-22T09:16:16.746848300+00:00",
+  "generated_at": "2026-04-22T09:37:46.838778400+00:00",
   "hygiene_distribution": {
     "excellent (10-25%)": 9,
-    "good (5-10% or 25-40%)": 15,
+    "good (5-10% or 25-40%)": 16,
     "over-described (>40%)": 0,
-    "under-described (<5%)": 17
+    "under-described (<5%)": 16
   },
   "hypothesis": "Agents need only the description (when-to-use block) + section outline to route; full body loads on demand.",
   "interpretation": {
@@ -270,14 +270,14 @@
           "reduction_pct": 80.06430868167203
         },
         {
-          "combined_tokens": 126,
-          "description_tokens": 18,
-          "full_tokens": 2043,
-          "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 0.8810572687224669,
-          "outline_tokens": 108,
+          "combined_tokens": 255,
+          "description_tokens": 154,
+          "full_tokens": 2122,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 7.257304429783224,
+          "outline_tokens": 101,
           "path": "coherence.md",
-          "reduction_pct": 93.83259911894272
+          "reduction_pct": 87.98303487276155
         },
         {
           "combined_tokens": 236,
@@ -440,31 +440,31 @@
           "reduction_pct": 87.27057430432208
         },
         {
-          "combined_tokens": 321,
+          "combined_tokens": 337,
           "description_tokens": 99,
-          "full_tokens": 3459,
+          "full_tokens": 4026,
           "hygiene_bucket": "under-described (<5%)",
-          "hygiene_pct_desc_of_body": 2.862098872506505,
-          "outline_tokens": 222,
+          "hygiene_pct_desc_of_body": 2.459016393442623,
+          "outline_tokens": 238,
           "path": "write-skill.md",
-          "reduction_pct": 90.71986123156982
+          "reduction_pct": 91.6294088425236
         }
       ],
       "totals": {
-        "description_only": 2561,
-        "description_plus_outline": 4623,
-        "full_body": 48992,
-        "outline_only": 2062,
-        "reduction_pct_desc_plus_outline": 90.56376551273678
+        "description_only": 2697,
+        "description_plus_outline": 4768,
+        "full_body": 49638,
+        "outline_only": 2071,
+        "reduction_pct_desc_plus_outline": 90.39445586042952
       }
     }
   },
   "stack_totals": {
-    "description_only": 5656,
-    "description_plus_outline": 10016,
-    "full_body": 104705,
-    "outline_contribution": 4360,
-    "stack_reduction_pct_with_desc_plus_outline": 90.43407669165751
+    "description_only": 5792,
+    "description_plus_outline": 10161,
+    "full_body": 105351,
+    "outline_contribution": 4369,
+    "stack_reduction_pct_with_desc_plus_outline": 90.35509867015975
   },
   "tokenizer": "tiktoken-rs cl100k_base"
 }

@@ -17,7 +17,9 @@
       "coherence": 0.0,
       "human-comms": 0.0,
       "secret-refs": 0.0,
-      "agent-behavior": 0.0
+      "agent-behavior": 0.0,
+      "skill-coherence": 0.0,
+      "capability-hygiene": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -94,6 +96,33 @@
         "scoring_source": {
           "type": "cmdb",
           "path": ".claude/agent-behavior-cmdb.json"
+        }
+      },
+      "skill-coherence": {
+        "_doc": "B-11 (2026-04-22, drift-detection scope): byte-level coherence between duplicated skill files across sibling/child Brains in the fractal topology. Refresh: `neurogrim sensory skill-coherence --project-root . > .claude/skill-coherence-cmdb.json`. Advisory-only in v1.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/skill-coherence-cmdb.json"
+        },
+        "exported_variables": {
+          "skill-coherence:brains_discovered":         { "field": "brains_discovered",         "type": "number" },
+          "skill-coherence:total_duplicated_basenames":{ "field": "total_duplicated_basenames","type": "number" },
+          "skill-coherence:in_sync_count":             { "field": "in_sync_count",             "type": "number" },
+          "skill-coherence:drift_count":               { "field": "drift_count",               "type": "number" }
+        }
+      },
+      "capability-hygiene": {
+        "_doc": "B-12 (2026-04-22, contracted scope): scores skill description-block quality against the authoring standard in write-skill.md. The 1,536-char description block IS the routing contract in Claude Code's native skill index. Refresh: `neurogrim sensory capability-hygiene --project-root . > .claude/capability-hygiene-cmdb.json`. Advisory-only in v1.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/capability-hygiene-cmdb.json"
+        },
+        "exported_variables": {
+          "capability-hygiene:total_skills":               { "field": "total_skills",               "type": "number" },
+          "capability-hygiene:compliant_count":            { "field": "compliant_count",            "type": "number" },
+          "capability-hygiene:under_described_count":      { "field": "under_described_count",      "type": "number" },
+          "capability-hygiene:missing_when_to_use_count":  { "field": "missing_when_to_use_count",  "type": "number" },
+          "capability-hygiene:over_budget_count":          { "field": "over_budget_count",          "type": "number" }
         }
       }
     },

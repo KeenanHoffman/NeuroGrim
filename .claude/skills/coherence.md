@@ -1,13 +1,16 @@
-# coherence
+# Coherence — Cross-Domain Correlation Health
 
-**Purpose:** Surface cross-domain relationships that individual domains cannot see alone.
+**When to use this skill:** Your unified health score seems inconsistent with observed
+risk; two domains are trending in divergent directions; you want to define a named
+compound risk for your project; or you are preparing to promote a domain from advisory
+(0.0) to weighted. Coherence surfaces cross-domain relationships — compound risks,
+dependencies, reinforcing patterns — that individual domains cannot see alone.
 
-## When to Use This Skill
-
-- Health score seems inconsistent with observed risk
-- Two domains are trending in divergent directions
-- You want to define a named compound risk for your project
-- Preparing to promote a domain from advisory (0.0) to weighted
+Role: reference · diagnostic
+Trigger phrases: "coherence", "cross-domain", "correlation", "compound risk",
+"correlation fired", "authoring correlations", "domain drift together",
+"unified score doesn't match reality", "promote domain"
+Methodology-step: skills
 
 ---
 

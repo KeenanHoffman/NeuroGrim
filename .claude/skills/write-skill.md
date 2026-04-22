@@ -25,6 +25,62 @@ immediately, it's probably better as a comment in the relevant script.
 
 ---
 
+## The Lead Paragraph — Routing-Critical
+
+Claude Code's native skill index loads only the skill's **name + description block**
+at session start (up to a 1,536-char budget per skill). **The description block IS
+the routing contract** — it is what the agent reads to decide whether to invoke this
+skill at all. Full bodies load on demand via the `Skill` tool, but only if the
+description routes correctly.
+
+**Every skill's lead paragraph** — the text between the `# Title` and the first `## `
+section header — is parsed as the description block by the `capability-hygiene`
+domain (B-12). Put your "when to use this skill" signal **here**, not under a
+`## When to Use` heading (which gets excluded from the description block by
+convention).
+
+**Required shape:**
+
+```markdown
+# <Imperative Verb Phrase>
+
+**When to use this skill:** <2-4 sentences naming the situations that trigger
+this skill. Concrete situations — symptoms, task descriptions, error messages —
+beat abstract descriptions.>
+
+Role: <role-tag from taxonomy below>
+Trigger phrases: "phrase one", "phrase two", "phrase three", ...
+Methodology-step: skills
+
+---
+
+## First real section starts here
+```
+
+**Size targets (enforced by `capability-hygiene` domain):**
+
+| Description length | Meaning |
+|---|---|
+| < 40 tokens | Under-described. Agent can't route reliably. Flag for rewrite. |
+| 40-200 tokens | Sweet spot. Plenty of routing signal, fits within the 1,536-char budget. |
+| > 300 tokens | Over-described. Move narrative into the body; keep lead terse. |
+
+**Anti-patterns:**
+- Using `## When to Use This Skill` as a section header instead of the lead
+  paragraph — the description-block extractor stops at the first `## ` header, so
+  this content never appears in the routing index. (The `coherence.md` skill was
+  the canonical example of this bug before its 2026-04-22 fix.)
+- Leading with "Purpose:" or "Overview:" or "What this does" — these frame the
+  skill statically. Lead with *when to reach for it*.
+- Leading with a huge TL;DR code block before any prose. Readers learn *what* to
+  run but not *when* to reach for the skill.
+
+**Why this matters**: when the lead paragraph is weak, the agent skips the skill
+even if the body is excellent — because the agent never sees the body unless the
+description routes them to it. Description quality dominates skill ROI.
+
+---
+
 ## Required Sections
 
 Every skill must have all of these:

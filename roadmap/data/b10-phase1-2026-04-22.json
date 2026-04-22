@@ -120,7 +120,7 @@
         },
         {
           "path": "coherence.md",
-          "tokens": 2043
+          "tokens": 2122
         },
         {
           "path": "dual-review.md",
@@ -188,12 +188,12 @@
         },
         {
           "path": "write-skill.md",
-          "tokens": 3459
+          "tokens": 4026
         }
       ],
       "totals": {
-        "cold_start": 51654,
-        "delta": 47275,
+        "cold_start": 52300,
+        "delta": 47921,
         "toc_projected": 4379
       }
     },
@@ -365,12 +365,12 @@
       "waste_on_full_stack": 3459
     }
   ],
-  "generated_at": "2026-04-22T09:15:43.299656800+00:00",
+  "generated_at": "2026-04-22T09:37:11.609227500+00:00",
   "summary": {
     "decision_zone_verdict_preliminary": "proceed to Phase 2",
     "dup_waste_total": 49730,
-    "median_skill_tokens": 2050,
-    "p90_skill_tokens": 3954,
+    "median_skill_tokens": 2122,
+    "p90_skill_tokens": 3975,
     "worst_cold_start_brain": "ecosystem",
     "worst_tokens": 53170
   },

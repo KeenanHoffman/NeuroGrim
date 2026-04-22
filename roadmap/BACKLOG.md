@@ -11,17 +11,18 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (**Record correction** after
-`claude-code-guide` verification that Claude Code lazy-loads
-skill bodies natively — Phase 1's 53k figure was disk cost, not
-context cost. **B-10 PARKED** (measurement invalidated). **B-11
-contracted** to Approach 2 (drift-detection Brain domain only).
-**B-12 contracted** to authoring-standard + `capability-hygiene`
-domain only (no TOC generator — Claude Code has the index
-natively). **S11 closed** — will not activate as a Stage.
-Earlier same-day entries documented the original arc (now
-superseded by this correction): B-09 COMPLETE, B-10 Phase 1 +
-1.5, B-11 dedup-as-token-saver, B-12 TOC-generator, S11 stub.).
+**Last updated:** 2026-04-22 (**B-11 + B-12 SHIPPED** to their
+contracted scopes. `skill-coherence` domain detects byte-level
+drift between duplicated skills across Brains; `capability-
+hygiene` domain scores each skill's lead-paragraph description
+against the authoring standard. write-skill.md carries the new
+"Lead Paragraph — Routing-Critical" section. coherence.md fixed
+as the canonical example. Both domains registered at advisory
+weight 0.0. First scoring run: skill-coherence=70 (3 drifts from
+this session's edits), capability-hygiene=78 (9 skills need
+when-to-use signal in their leads). Earlier same-day: record
+correction parking B-10, contracting B-11/B-12, closing S11 —
+see B-10 banner below. B-09 shipped earlier the same day.).
 
 ---
 
@@ -465,7 +466,32 @@ arc.
 
 ---
 
-### B-11: Cross-Brain skill byte-duplication cleanup — CONTRACTED 2026-04-22 (drift-detection only)
+### B-11: Cross-Brain skill byte-duplication cleanup — SHIPPED 2026-04-22 (drift-detection domain)
+
+**Status: SHIPPED 2026-04-22.** Approach 2 (byte-equality Brain
+domain) landed as the new `skill-coherence` sensory tool.
+
+**Delivered:**
+- `neurogrim-sensory/src/skill_coherence.rs` — auto-discovers
+  sibling + child Brains via `.claude/skills/` probing, compares
+  byte-identical duplicates, reports drifts. 6 unit tests.
+- `neurogrim-cli/src/main.rs` — `neurogrim sensory skill-coherence`
+  CLI dispatch.
+- `.claude/brain-registry.json` — domain registered at weight
+  0.0 (advisory per spec principle #2) with exported variables
+  for correlation rules.
+- `.claude/skill-coherence-cmdb.json` — initial CMDB: score 70,
+  3 drifts detected (`coherence.md`, `rubber-duck.md`,
+  `write-skill.md` — all from same-session authoring edits that
+  haven't propagated to sibling Brains yet).
+
+**Scoring formula:** 100 baseline, -10 points per drifted
+basename; floor at 0. Each "drift" is one basename whose bytes
+differ across the Brains that carry it — 3 basenames divergent
+across 2+ Brains = -30 = score 70.
+
+**Original contracted-scope framing preserved for historical
+record below:**
 
 **Contracted scope 2026-04-22.** The loading-model correction
 (see B-10 PARK banner above) removed the token-savings motivation
@@ -554,7 +580,65 @@ B-10 Phase 2. See `epics/` staging candidates when promoted.
 
 ---
 
-### B-12: Skill description authoring standard + capability-hygiene Brain domain — CONTRACTED 2026-04-22
+### B-12: Skill description authoring standard + capability-hygiene Brain domain — SHIPPED 2026-04-22
+
+**Status: SHIPPED 2026-04-22.** Both contracted deliverables
+landed.
+
+**Delivered (Part A — authoring standard):**
+- `.claude/skills/write-skill.md` — new section "The Lead
+  Paragraph — Routing-Critical" codifies the 1,536-char
+  description-block contract, the required "when to use"
+  lead-paragraph signal, size targets (40-200 tokens ideal,
+  <40 under-described, >300 over-described), and the anti-
+  pattern that caused `coherence.md`'s original miss (using
+  `## When to Use` as a section header instead of the lead).
+- `.claude/skills/coherence.md` — fixed: lead paragraph now
+  carries a full "**When to use this skill:**" block before
+  the first `##` header. Canonical example of the pattern.
+
+**Delivered (Part B — capability-hygiene Brain domain):**
+- `neurogrim-sensory/src/capability_hygiene.rs` — scores each
+  skill's lead-paragraph description against the authoring
+  standard. Checks: under-description (< 40 approx tokens),
+  missing when-to-use signal, index-budget overflow (> 1,536
+  chars). 6 unit tests.
+- `neurogrim-cli/src/main.rs` — `neurogrim sensory
+  capability-hygiene` CLI dispatch.
+- `.claude/brain-registry.json` — domain registered at weight
+  0.0 with exported variables.
+- `.claude/capability-hygiene-cmdb.json` — initial CMDB: score
+  78, 11/20 skills compliant, 9 flagged as missing when-to-use
+  signal (description length adequate but no canonical phrase).
+
+**Scoring formula:** each skill earns 0-10 points:
+- 10: compliant (≥ 40 approx tokens + when-to-use signal, ≤
+  1,536 chars).
+- 7: over-budget (description exceeds the 1,536-char index
+  truncation threshold).
+- 5: missing when-to-use signal (length OK, but no canonical
+  phrase).
+- 0: under-described (< 40 approx tokens — the `coherence.md`
+  anti-pattern).
+Final = `round(100 * earned / possible)`, clamped 0-100.
+
+**Remaining operator work (not committed here):** the 9
+`missing-when-to-use` skills that the first scoring run flagged
+(dual-review, human-comms, imagination-mode, north-star,
+pilot-protocol, secret-refs, security-standards, skill-
+deprecation, subagent-patterns) could be brought to compliant
+with lead-paragraph rewrites. The `capability-hygiene` CMDB
+will tick up toward 100 as authors adopt the convention.
+
+**Body-size optimization follow-on (operator insight
+2026-04-22)** remains uncommitted. Candidates for compression:
+`subagent-patterns.md` (7.2k), `write-skill.md` (3.5k),
+`pilot-protocol.md` (4.0k), `plan-critic.md` (3.2k),
+`write-agent-behavior-scenario.md` (3.9k). Track as B-13 if
+operator-felt context pressure justifies the refactor.
+
+**Original contracted-scope framing preserved for historical
+record below:**
 
 **Contracted scope 2026-04-22.** The loading-model correction
 (see B-10 PARK banner above) invalidated B-12's original

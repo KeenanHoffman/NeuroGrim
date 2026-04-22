@@ -1,0 +1,77 @@
+{
+  "brain_paths": [
+    {
+      "id": "self",
+      "path": "\\\\?\\D:\\Brains\\NeuroGrim",
+      "skill_count": 20
+    },
+    {
+      "id": "Brains",
+      "path": "\\\\?\\D:\\Brains",
+      "skill_count": 19
+    },
+    {
+      "id": "LSP-Brains",
+      "path": "\\\\?\\D:\\Brains\\LSP-Brains",
+      "skill_count": 2
+    }
+  ],
+  "brains_discovered": 3,
+  "drift_count": 3,
+  "drift_details": [
+    {
+      "basename": "coherence.md",
+      "bytes_match": false,
+      "present_in": [
+        "Brains",
+        "self"
+      ]
+    },
+    {
+      "basename": "rubber-duck.md",
+      "bytes_match": false,
+      "present_in": [
+        "Brains",
+        "LSP-Brains",
+        "self"
+      ]
+    },
+    {
+      "basename": "write-skill.md",
+      "bytes_match": false,
+      "present_in": [
+        "Brains",
+        "self"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "detail": "`coherence.md` differs across 2 brain(s): Brains, self",
+      "name": "drift:coherence.md",
+      "points": -10,
+      "status": "drift"
+    },
+    {
+      "detail": "`rubber-duck.md` differs across 3 brain(s): Brains, LSP-Brains, self",
+      "name": "drift:rubber-duck.md",
+      "points": -10,
+      "status": "drift"
+    },
+    {
+      "detail": "`write-skill.md` differs across 2 brain(s): Brains, self",
+      "name": "drift:write-skill.md",
+      "points": -10,
+      "status": "drift"
+    }
+  ],
+  "in_sync_count": 14,
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-22T09:34:47.709645100+00:00",
+    "updated_by": "skill-coherence"
+  },
+  "score": 70,
+  "total_duplicated_basenames": 17,
+  "updated_at": "2026-04-22T09:34:47.709645100+00:00"
+}

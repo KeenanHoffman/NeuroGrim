@@ -81,7 +81,7 @@ enum Commands {
     /// Run a built-in sensory tool directly (produces CMDB JSON)
     #[command(visible_alias = "cast")]
     Sensory {
-        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior
+        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene
         name: String,
         /// Project root path
         #[arg(long, default_value = ".")]
@@ -270,7 +270,9 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
         "secret-refs" => neurogrim_sensory::secret_refs::analyze_secret_refs(project_root).await,
         "docker-topology" => neurogrim_sensory::docker_topology::analyze_docker_topology(project_root).await?,
         "agent-behavior" => neurogrim_sensory::agent_behavior::analyze_agent_behavior(project_root).await?,
-        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior", name),
+        "skill-coherence" => neurogrim_sensory::skill_coherence::analyze_skill_coherence(project_root).await,
+        "capability-hygiene" => neurogrim_sensory::capability_hygiene::analyze_capability_hygiene(project_root).await,
+        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene", name),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
