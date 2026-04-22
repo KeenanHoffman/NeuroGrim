@@ -353,7 +353,7 @@ Key fields:
 - **`write-agent-behavior-scenario.md`** — when a
   `scenario-rubric-gap` triage results in editing or adding a
   rubric criterion, this skill covers the authoring contract.
-- **`plan-critic.md`** — when the triage implies a systemic change
+- **`plan-critic/SKILL.md`** — when the triage implies a systemic change
   (not a per-sample edit), run plan-critic on the proposed response
   before landing.
 

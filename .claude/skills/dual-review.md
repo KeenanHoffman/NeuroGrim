@@ -264,7 +264,7 @@ specific questions change.
 
 ## See Also
 
-- `write-skill.md` — authoring guide + companion hook evaluation
+- `write-skill/SKILL.md` — authoring guide + companion hook evaluation
 - `archived/devops-philosophy.md` — the 8 principles P1–P4 test against
 - `archived/skill-hook-pairs.md` — catalog of skill↔hook pairs; new pairs should pass dual review
 - `assess-skill-on-edit.sh` — automated T/P pass that fires on every skill edit

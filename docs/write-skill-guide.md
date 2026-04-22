@@ -1,14 +1,47 @@
 # Write a Skill — Full Guide
 
-Deep reference for the `write-skill.md` skill. The skill itself carries
-the decision surface (what a good skill is, the lead-paragraph
-contract, required sections list, length targets, quality checklist).
-This guide carries the depth: role taxonomy with examples, Governs
-field, the full template, style conventions, the Why-This-Matters
-requirement, companion hook rubric, wiring steps, and troubleshooting.
+Deep reference for the `write-skill/SKILL.md` skill. The skill itself
+carries the decision surface (what a good skill is, the plugin vs
+legacy format table, the routing contract, required sections list,
+length targets, quality checklist). This guide carries the depth:
+role taxonomy with examples, Governs field, the full template, style
+conventions, the Why-This-Matters requirement, companion hook rubric,
+wiring steps, and troubleshooting.
 
 Read the skill first. Come here when you need the role taxonomy,
 the template, or the philosophy behind a specific rule.
+
+## Format: plugin (SKILL.md) vs legacy (.md)
+
+As of 2026-04-22, new skills ship in **plugin format**:
+`.claude/skills/<name>/SKILL.md` with YAML frontmatter. Legacy
+`.claude/skills/<name>.md` files still work for agents navigating
+with Read, but are **invisible** to Claude Code's `Skill` tool —
+they cannot be invoked by auto-routing and their usage cannot be
+observed by the Axis 4 invocation ledger.
+
+Frontmatter fields — full reference at
+[code.claude.com/docs/en/skills#frontmatter-reference](https://code.claude.com/docs/en/skills.md#frontmatter-reference):
+
+| Field | Purpose |
+|-------|---------|
+| `name` | Lowercase, hyphens, max 64 chars. Should match directory name. |
+| `description` | Required. Routing signal — what the skill does and when to reach for it. |
+| `when_to_use` | Optional but strongly recommended. Appended to `description` at routing time. Trigger cues, symptoms, user phrasings. |
+| `allowed-tools` | Pre-approve tools without per-use prompting. |
+| `disable-model-invocation: true` | Manual-only skills (rollback runbooks, destructive ops). |
+| `paths` | Glob patterns; only auto-load when working with matching files. |
+| `usage-rarity: rare` | Extend `capability-hygiene` dead window from 90 to 365 days. Use only for genuinely niche skills. |
+
+**Key constraint:** `description` + `when_to_use` are **concatenated
+and truncated at 1,536 chars combined** in the skill index.
+Everything past that is invisible to Claude's auto-invocation.
+
+**Migration** (legacy → plugin): create `.claude/skills/<name>/`,
+move body to `SKILL.md`, add frontmatter. Capability-hygiene + skill-
+coherence sensors scan both patterns, so incremental migration is
+safe — each migrated skill immediately becomes Skill-tool invocable
+and ledger-observable.
 
 ---
 

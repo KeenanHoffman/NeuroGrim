@@ -1,3 +1,9 @@
+---
+name: plan-critic
+description: Adversarial plan reviewer. Spawn this skill before implementing any plan — it surfaces pitfalls, missing rollback paths, gate gaps, and compatibility risks before a single line of code is written or a single `apply` is run. Reviews a plan file in `.claude/plans/` and returns findings tagged 🔴 Blocking / 🟡 Concern / 🔵 Suggestion / 🟢 Strength plus a PROCEED / PROCEED WITH CAUTION / REVISE verdict. Invokes the `adversary` hat.
+when_to_use: Run whenever you see a plan file in `.claude/plans/`, or when the user says "review my plan", "devil's advocate", "critique this plan", "before I implement", "what could go wrong", "sanity check my plan", "adversarial review", "poke holes", or "stress test this plan." Default rule — run the critic unless the plan is exceedingly simple (one file, documented pattern, no ripple effects).
+---
+
 # Plan Critic
 
 Use this skill before implementing any plan. The plan critic performs an adversarial review
@@ -25,7 +31,7 @@ This skill invokes the `adversary` hat. Declare it at the start:
 > Wear Hat: adversary — reviewing [plan name] before implementation.
 ```
 
-See `hats.md` for the full hat system, subagent briefing format, and
+See `hats/SKILL.md` for the full hat system, subagent briefing format, and
 adversary checklist.
 
 ---
@@ -63,7 +69,7 @@ Decide: full protocol or light mode? Full guide in
   behavior across sessions, establishes patterns, cross-cutting — OR (b)
   novelty is high — first instance of a technique, new skill, new abstraction.
 - **Light mode** only when both narrow: one file, documented pattern, no
-  ripple. Light mode runs the DevOps checklist from `hats.md` inline without
+  ripple. Light mode runs the DevOps checklist from `hats/SKILL.md` inline without
   spawning subagents.
 
 ---
@@ -198,7 +204,7 @@ artifact it validates.
   domain subagent template, full tone rules, worked example of a 🔴
   Language-Version finding, cost-of-skipping lessons, research category
   briefing expansions.
-- `hats.md` — full hat system, subagent briefing format, adversary
+- `hats/SKILL.md` — full hat system, subagent briefing format, adversary
   checklist.
 - `review-loop.md` — iterative T+P+Code Reviewer loop for plans involving
   skill or code authoring.

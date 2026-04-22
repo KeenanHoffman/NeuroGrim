@@ -1,3 +1,15 @@
+---
+name: hats
+description: Agent hat system — declared operational lenses (adversary, architect, incident-commander, rubber-duck, security-auditor, visionary, source-reader) that the pilot agent announces at the start of a task to make mindset, tone, and subagent-briefing style explicit. Scoped to a single task; NOT permanent character changes. Includes per-hat operational checklists, Brain integration notes (incident-commander uses correlation check; security-auditor uses score --hat security), and the subagent-briefing template.
+when_to_use: >-
+  An agent needs to adopt a named lens for a specific task ("wear
+  the adversary hat", "put on the architect hat"), or you want to
+  calibrate how subagents report under a hat. Trigger phrases —
+  "hat", "wear hat", "persona", "adopt a role", "switch modes",
+  "adversary mode", "architect mode", "incident commander",
+  "security auditor", "what hat", "what persona", "agent role".
+---
+
 # Agent Hats
 
 Use this skill when an agent needs to adopt a named operational lens for a specific task —
@@ -32,7 +44,7 @@ Hats are **scoped to a single task.** The pilot agent returns to default mode wh
 task completes. They are not permanent character changes — they are deliberate lenses
 applied to specific work.
 
-Hats are invoked by skills (e.g., `plan-critic.md` invokes `adversary`) or explicitly
+Hats are invoked by skills (e.g., `plan-critic/SKILL.md` invokes `adversary`) or explicitly
 by the user ("wear the incident-commander hat").
 
 Not to be confused with **human personas**, which shape OUTPUT format for different human
@@ -45,7 +57,7 @@ readers (executive, manager, developer, specialist, product-manager). Hats shape
 
 | Hat | When to invoke | Mindset | Wired in |
 |---------|---------------|---------|---------|
-| `adversary` | Plan review, pre-implementation critique | Skeptical — find what can go wrong; praise genuine strengths | `plan-critic.md`, `fix-apply-failure.md` |
+| `adversary` | Plan review, pre-implementation critique | Skeptical — find what can go wrong; praise genuine strengths | `plan-critic/SKILL.md`, `fix-apply-failure.md` |
 | `architect` | System design, scoping a new feature or service | Generative — explore tradeoffs, propose structure, think in layers | `add-new-app.md`, `git-strategy.md` |
 | `incident-commander` | Live incidents, broken deploys, data loss scenarios | Calm and decisive — stabilize first, understand second, explain third | `incident-response.md`, `debug-cloud-run.md`, `explain-error.md` |
 | `rubber-duck` | Explaining complex systems to someone new to the project | Patient teacher — no jargon, first principles, check for understanding | `archived/devops-for-developers.md`, `setup.md` |
@@ -234,7 +246,7 @@ shows the context switch clearly. This is **Observability Before Action** from
 
 ## See Also
 
-- `plan-critic.md` — first concrete use of the `adversary` hat; plan review protocol
+- `plan-critic/SKILL.md` — first concrete use of the `adversary` hat; plan review protocol
 - `review-loop.md` — iterative 3-agent review workflow using T+P reviewers and a synthesizing Code Reviewer
 - `dual-review.md` — T+P review protocol (complementary technique for skill/infrastructure review)
 - `subagent-patterns.md` — patterns for coordinating subagents in complex workflows

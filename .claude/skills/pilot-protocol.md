@@ -187,4 +187,4 @@ time.
   example, hat chain traceability, integration points.
 - `subagent-patterns.md` — coordination patterns (fan-out, convergence,
   hand-off) that wrap this envelope protocol.
-- `hats.md` — hat system, hat catalog, and synthesis-type hat selection.
+- `hats/SKILL.md` — hat system, hat catalog, and synthesis-type hat selection.

@@ -11,23 +11,33 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (**Axis 4 v1 shipped** — empirical
-self-observability. PostToolUse hook captures every `Skill`
-tool invocation to `.claude/brain/invocation-ledger.jsonl` (name
-+ timestamp only, privacy-by-design). `capability-hygiene`
-extended with ledger reader + usage-rarity frontmatter + dead-
-skill classifier (alive/dead/new with 30-day grace period,
-default 90-day window, 365-day for `usage-rarity: rare`). Dead
-findings are advisory — no hygiene points deducted, marked
-`low-confidence-*` when ledger is sparse. All 4 Brains at
-100/100. 281 workspace tests pass (+10 new). Hook contract
-validated against Claude Code 2.1.111 (matcher `"Skill"` fires;
-stdin JSON on Git Bash via plain `cat`). v2 (miss rate —
-scenario-driven) still gated on v1 dogfoods cleanly for 2 weeks.
-Earlier same-day: Tier 2 generalized capability-hygiene to 6
+**Last updated:** 2026-04-22 (**Tier A migration — pilot batch
+shipped**. 4 skills (`rubber-duck`, `plan-critic`, `write-skill`,
+`hats`) migrated from legacy `.claude/skills/<name>.md` to plugin
+`.claude/skills/<name>/SKILL.md` with YAML frontmatter — now
+genuinely `Skill`-tool invocable and visible to the Axis 4
+ledger. Cross-references updated across live skills + three
+CLAUDE.md files. 16 legacy skills remain to migrate; both
+formats are supported by the sensor tooling during the staged
+rollout. **Correction to Axis 4 v1:** earlier today's ledger
+matcher `"Skill"` only fires for plugin-structured skills with
+`SKILL.md` + frontmatter. Plain `.claude/skills/*.md` files are
+Read by agents, not Skill-invoked — the v1 ledger captured zero
+Brain skills until this migration landed. Sensor tooling now
+scans both patterns so unmigrated legacy skills still appear in
+`capability-hygiene` (scored off lead paragraph), but they
+remain invisible to the ledger until migrated. Earlier today:
+Axis 4 v1 empirical-self-observability shipped (PostToolUse
+hook, `capability-hygiene` ledger reader, dead-skill classifier
+with 30-day grace / 90-day default window / 365-day for
+`usage-rarity: rare`; advisory findings only, no hygiene points
+deducted). Same-day Tier 2 generalized `capability-hygiene` to 6
 capability types; Tier 1 (B-13 full rollout + Axis 2
 registration); B-11/B-12 shipped; B-10 parked; S11 closed;
-B-09 shipped.).
+B-09 shipped. Hook contract validated against Claude Code
+2.1.111 (matcher `"Skill"` fires; stdin via plain `cat` on Git
+Bash); `CLAUDE_PROJECT_DIR` guardrail added to hook (concern C1
+from 2026-04-22 deep audit). All 4 Brains at 100/100.).
 
 ---
 

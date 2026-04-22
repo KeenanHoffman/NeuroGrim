@@ -108,7 +108,7 @@ If the task still exists but the workflow changed:
    > **Updated 2026-04-06**: Reflects new `detect-changes` job in deploy-dev.yml.
    > Prior to this, all jobs ran unconditionally.
    ```
-4. Run the quality checklist from `write-skill.md`
+4. Run the quality checklist from `write-skill/SKILL.md`
 5. Commit with a clear message: `docs: update ci-workflows.md for detect-changes DAG`
 
 ---
@@ -199,7 +199,7 @@ grep -h "\.md\`" .claude/skills/*.md CLAUDE.md | \
 |-----------|-----------------|
 | Deployment / CI skills | After any significant CI or terraform refactor |
 | Operation skills (debug, rollback) | After any GCP API changes or service renames |
-| Meta-skills (this file, write-skill.md) | After any change to the skills system itself |
+| Meta-skills (this file, write-skill/SKILL.md) | After any change to the skills system itself |
 | Reference skills (environments.md, setup.md) | Quarterly |
 
 When a skill is updated, note the date at the bottom:

@@ -1,3 +1,9 @@
+---
+name: rubber-duck
+description: A Socratic listener subagent for when you are stuck or circling on a problem. The duck asks clarifying questions, surfaces hidden assumptions, and plays back what it heard — it does NOT jump to solutions or give advice unless explicitly invited. Use it when you feel overconfident, can't choose between approaches, or want a second pair of eyes without taking on someone else's opinion. First concrete user of the cultural substrate (spec §14).
+when_to_use: You are stuck, circling, or about to commit to an approach you haven't tested in conversation. The user has asked you to "duck it" or "talk it out." You feel overconfident and suspect you're missing something. A teammate agent needs a second pair of eyes but does not need advice.
+---
+
 # Skill: Rubber Duck
 
 **When to use this skill:** You are stuck, circling, or about to commit to an approach
@@ -94,7 +100,7 @@ advisor — two options, one tradeoff, no preaching.
 
 ## Relationship to other skills
 
-- **`plan-critic.md`** — adversarial plan review. Different tool: plan-critic attacks a
+- **`plan-critic/SKILL.md`** — adversarial plan review. Different tool: plan-critic attacks a
   plan you already have. The duck helps you build a plan. Use the duck first.
 - **`imagination-mode.md`** — conversational approach exploration. Overlaps slightly;
   imagination-mode is broader (whole design space) and the duck is narrower (one stuck

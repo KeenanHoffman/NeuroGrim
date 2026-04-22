@@ -155,7 +155,7 @@ S6-DB-7.
 
 ## Related skills
 
-- `rubber-duck.md` — use if you're unsure whether a flagged drift item should be adopted
+- `rubber-duck/SKILL.md` — use if you're unsure whether a flagged drift item should be adopted
 - `archived/brain.md` (in NeuroGrim repo) — operational guide for the NeuroGrim child
 - Future `peer-archived/brain.md` — running an A2A peer (Stage 6 S6-DB-3)
 

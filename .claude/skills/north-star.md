@@ -98,7 +98,7 @@ When in doubt, choose the option that advances these.
 ## See Also
 
 - `imagination-mode.md` — pre-plan exploration (visionary hat)
-- `plan-critic.md` — adversarial review before implementation
+- `plan-critic/SKILL.md` — adversarial review before implementation
 - `archived/brain.md` — current Brain reference
 - `archived/devops-philosophy.md` — the 8 DevOps principles underlying domain weights
 - `.claude/roadmap/DEPENDENCIES.md` — critical path and parallelization

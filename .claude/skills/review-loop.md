@@ -167,6 +167,6 @@ produces consistent quality outcomes rather than relying on reviewer memory and 
 ## See Also
 
 - `dual-review.md` — the T+P protocol this loop wraps; T1–T5 and P1–P4 question definitions
-- `hats.md` — hat system; hat isolation during loop orchestration
-- `plan-critic.md` — adversarial plan review (complement to the review loop)
+- `hats/SKILL.md` — hat system; hat isolation during loop orchestration
+- `plan-critic/SKILL.md` — adversarial plan review (complement to the review loop)
 - `subagent-patterns.md` — Pattern 3 (Sequential Hand-Off) for spawning T and P as agents

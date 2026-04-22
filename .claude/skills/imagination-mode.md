@@ -190,7 +190,7 @@ That shapes which approach is worth going deeper on.
 | "What would it look like if..." — speculation | Yes — imagination territory |
 | "Fix this bug in Z" — specific known fix | No — go straight to implementation |
 | "Do what we did last time for X" — established pattern | No — follow the pattern |
-| A plan already exists and needs review | No — use `plan-critic.md` instead |
+| A plan already exists and needs review | No — use `plan-critic/SKILL.md` instead |
 
 ---
 
@@ -199,7 +199,7 @@ That shapes which approach is worth going deeper on.
 ```
 imagination-mode.md      (explore approaches — no code, no files)
   → plan mode            (write the plan file)
-  → plan-critic.md       (adversarial review before implementing)
+  → plan-critic/SKILL.md       (adversarial review before implementing)
   → implementation
 ```
 
@@ -207,7 +207,7 @@ Imagination feeds plan mode with a considered direction. Plan mode feeds the cri
 documented approach. The critic feeds implementation with a reviewed, de-risked plan.
 
 Skipping imagination is fine for narrow, established patterns. Skipping the critic is only
-fine for exceedingly simple plans. See `plan-critic.md` for the when-to-run heuristic.
+fine for exceedingly simple plans. See `plan-critic/SKILL.md` for the when-to-run heuristic.
 
 ---
 
@@ -225,7 +225,7 @@ wrong approach at the conversation layer, not the plan layer, not the implementa
 
 ## See Also
 
-- `plan-critic.md` — adversarial review of the plan that follows imagination; includes when-to-run heuristic
-- `hats.md` — full hat system; `visionary` is the pre-planning lens
+- `plan-critic/SKILL.md` — adversarial review of the plan that follows imagination; includes when-to-run heuristic
+- `hats/SKILL.md` — full hat system; `visionary` is the pre-planning lens
 - `archived/skill-chain.md` — skill sequences; imagination → plan → plan-critic → implement
 - `weigh-time-risk.md` — after imagination, calibrate how much planning depth the change needs

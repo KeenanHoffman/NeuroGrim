@@ -62,17 +62,17 @@ Skills corresponding to Rust Brain sensor domains:
 
 | Task | Skill |
 |------|-------|
-| Adversarial plan review before implementation | `plan-critic.md` |
+| Adversarial plan review before implementation | `plan-critic/SKILL.md` |
 | Pre-plan ideation: explore approaches conversationally | `imagination-mode.md` |
 | North star alignment check | `north-star.md` |
-| Rubber-duck a stuck problem with a Socratic listener | `rubber-duck.md` |
+| Rubber-duck a stuck problem with a Socratic listener | `rubber-duck/SKILL.md` |
 
 ### Meta (Skills System)
 
 | Task | Skill |
 |------|-------|
-| Authoring guide for new skills | `write-skill.md` |
-| Agent hat system (adversary, architect, etc.) | `hats.md` |
+| Authoring guide for new skills | `write-skill/SKILL.md` |
+| Agent hat system (adversary, architect, etc.) | `hats/SKILL.md` |
 | Pilot↔subagent interface protocol | `pilot-protocol.md` |
 | Coordinate subagents / parallel workflows | `subagent-patterns.md` |
 | Dual-agent T+P review protocol | `dual-review.md` |
