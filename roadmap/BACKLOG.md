@@ -11,16 +11,19 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (**Cleanup pass + B-13 pilot**:
-all 9 skills flagged by capability-hygiene received explicit
-"when to use" rewrites; all drifted duplicates propagated across
-Brains; `subagent-patterns.md` piloted the B-13 body-size
-compression pattern (7,208 → ~1,433 tokens, ~80% reduction)
-with deep content extracted to `docs/subagent-patterns-guide.md`.
-Both `skill-coherence` and `capability-hygiene` now report
-100/100 across the four-Brain stack. Earlier same-day:
-B-11+B-12 shipped; record correction parked B-10, contracted
-B-11/B-12, closed S11; B-09 shipped earlier the same day.).
+**Last updated:** 2026-04-22 (**Tier 1 broader-adoption
+shipped**: B-13 rolled out across 4 remaining fat skills
+(write-skill, pilot-protocol, plan-critic, write-agent-behavior-
+scenario); both `skill-coherence` + `capability-hygiene` domains
+registered + scored at advisory weight 0.0 in all four Brains
+(NeuroGrim, LSP-Brains, python-starter, ecosystem). All four
+Brains score 100/100 on both. Self-observability now ecosystem-
+wide. Tier 2 (Axis 3 — generalize to tools/subagents/hats/
+correlations/personas) ready to start after a 2-week compliance
+settle window. Earlier same-day: B-11/B-12 shipped + flagged-
+skill rewrites + B-13 pilot on subagent-patterns.md; record
+correction parked B-10, contracted B-11/B-12, closed S11;
+B-09 shipped.).
 
 ---
 
@@ -628,15 +631,16 @@ deprecation, subagent-patterns) could be brought to compliant
 with lead-paragraph rewrites. The `capability-hygiene` CMDB
 will tick up toward 100 as authors adopt the convention.
 
-**Body-size optimization (B-13 pilot shipped 2026-04-22).** See
-B-13 below — the `subagent-patterns.md` pilot validated the
-compression pattern (7,208 → ~1,433 tokens, ~80% reduction per
-invocation) with the deep reference preserved in
-`docs/subagent-patterns-guide.md`. Remaining candidates for the
-same treatment: `write-skill.md` (3.5k), `pilot-protocol.md`
-(4.0k), `plan-critic.md` (3.2k),
-`write-agent-behavior-scenario.md` (3.9k). Each refactor is
-tractable in <1 hour now that the pattern is proven.
+**Body-size optimization (B-13 pilot + full rollout shipped
+2026-04-22).** See B-13 below — `subagent-patterns.md` piloted
+the pattern (7,208 → ~1,433 tokens, ~80% reduction), and the
+remaining 4 fat skills completed the rollout the same day:
+`write-skill.md`, `pilot-protocol.md`, `plan-critic.md`, and
+`write-agent-behavior-scenario.md` (the last with a moderate
+split per plan-critic flag — procedure-dense skill stays largely
+inline; red-sample authoring + scoping + related reading moved
+to `D:/Brains/docs/write-agent-behavior-scenario-guide.md`).
+All 5 fat skills now have companion guides.
 
 **Original contracted-scope framing preserved for historical
 record below:**
@@ -833,21 +837,29 @@ invocation — which reaches for the decision table + pattern
 summary without needing every calibration block — saves ~5,775
 tokens per invocation per session.
 
-**Remaining candidates for the same treatment** (each ~1 hour of
-work now that the pattern is validated):
-- `write-skill.md` (~3,459 tokens) — extract the template, the
-  companion-hook rubric, and the wiring checklist to a guide;
-  keep the authoring standard + "Lead Paragraph" section inline.
-- `pilot-protocol.md` (~3,975 tokens) — extract envelope schema
-  deep details + legacy-format notes; keep the request/response
-  summary inline.
-- `plan-critic.md` (~3,209 tokens) — extract the full adversary-
-  check catalog; keep the invocation pattern inline.
-- `write-agent-behavior-scenario.md` (~3,954 tokens) — extract
-  the rubric-authoring how-to; keep the step-by-step inline.
+**Remaining candidates — all shipped 2026-04-22:**
+- ✅ `write-skill.md` (~3,459 → ~1,500 tokens) — extracted
+  template, role taxonomy, companion-hook rubric, wiring steps,
+  style conventions, Why-This-Matters details to
+  `docs/write-skill-guide.md`.
+- ✅ `pilot-protocol.md` (~3,975 → ~1,400 tokens) — extracted
+  per-responsibility-type `data` schemas, full subagent system
+  prompt template, capability discovery, Interface Contract
+  YAML example, hat chain traceability, integration points to
+  `docs/pilot-protocol-guide.md`.
+- ✅ `plan-critic.md` (~3,209 → ~1,700 tokens) — extracted
+  Step 0 full calibration Qs, Step 2b Symbol Impact Audit
+  tables, Step 2a Scaled Review variant, tone rules, worked
+  example to `docs/plan-critic-guide.md`.
+- ✅ `write-agent-behavior-scenario.md` (~3,954 → ~2,800 tokens;
+  moderate split per plan-critic flag — procedure-dense skill)
+  — extracted red-sample authoring (S9-ABV-RED), common failure
+  modes, scoping rubric, "when NOT to write", related-reading
+  bibliography to `D:/Brains/docs/write-agent-behavior-scenario-
+  guide.md`.
 
-**Plan when:** opportunistically. No blocker. Each one-skill
-refactor is a <1-hour task.
+**Plan when:** COMPLETE. Pattern fully rolled out across all 5
+originally-flagged fat skills.
 
 **Dependencies:** none. The pattern is validated; adoption is
 pure authoring work.

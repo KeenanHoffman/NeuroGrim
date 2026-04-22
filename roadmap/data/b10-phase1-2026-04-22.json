@@ -30,11 +30,11 @@
         },
         {
           "path": "pilot-protocol.md",
-          "tokens": 4047
+          "tokens": 1719
         },
         {
           "path": "plan-critic.md",
-          "tokens": 3209
+          "tokens": 1958
         },
         {
           "path": "refine-agent-behavior.md",
@@ -74,16 +74,16 @@
         },
         {
           "path": "write-agent-behavior-scenario.md",
-          "tokens": 3954
+          "tokens": 2359
         },
         {
           "path": "write-skill.md",
-          "tokens": 4026
+          "tokens": 1581
         }
       ],
       "totals": {
-        "cold_start": 48607,
-        "delta": 44407,
+        "cold_start": 40988,
+        "delta": 36788,
         "toc_projected": 4200
       }
     },
@@ -148,11 +148,11 @@
         },
         {
           "path": "pilot-protocol.md",
-          "tokens": 4047
+          "tokens": 1719
         },
         {
           "path": "plan-critic.md",
-          "tokens": 3209
+          "tokens": 1958
         },
         {
           "path": "refine-judge-integrity.md",
@@ -188,12 +188,12 @@
         },
         {
           "path": "write-skill.md",
-          "tokens": 4026
+          "tokens": 1581
         }
       ],
       "totals": {
-        "cold_start": 47091,
-        "delta": 42712,
+        "cold_start": 41067,
+        "delta": 36688,
         "toc_projected": 4379
       }
     },
@@ -269,8 +269,8 @@
         "ecosystem",
         "neurogrim"
       ],
-      "tokens_each": 4047,
-      "waste_on_full_stack": 4047
+      "tokens_each": 1719,
+      "waste_on_full_stack": 1719
     },
     {
       "file_basename": "plan-critic.md",
@@ -278,8 +278,8 @@
         "ecosystem",
         "neurogrim"
       ],
-      "tokens_each": 3209,
-      "waste_on_full_stack": 3209
+      "tokens_each": 1958,
+      "waste_on_full_stack": 1958
     },
     {
       "file_basename": "refine-judge-integrity.md",
@@ -361,18 +361,18 @@
         "ecosystem",
         "neurogrim"
       ],
-      "tokens_each": 4026,
-      "waste_on_full_stack": 4026
+      "tokens_each": 1581,
+      "waste_on_full_stack": 1581
     }
   ],
-  "generated_at": "2026-04-22T09:54:41.069510300+00:00",
+  "generated_at": "2026-04-22T10:28:37.398443200+00:00",
   "summary": {
     "decision_zone_verdict_preliminary": "proceed to Phase 2",
-    "dup_waste_total": 45167,
-    "median_skill_tokens": 2050,
-    "p90_skill_tokens": 3954,
-    "worst_cold_start_brain": "ecosystem",
-    "worst_tokens": 48607
+    "dup_waste_total": 39143,
+    "median_skill_tokens": 1928,
+    "p90_skill_tokens": 3005,
+    "worst_cold_start_brain": "neurogrim",
+    "worst_tokens": 41067
   },
   "tokenizer": "tiktoken-rs cl100k_base",
   "tokenizer_caveat": "cl100k_base is not Claude's tokenizer; ±10-20%. Re-run via Anthropic token-counting API in the ambiguous zone."
