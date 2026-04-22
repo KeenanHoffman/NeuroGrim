@@ -269,9 +269,29 @@ human-initiated; the detector just says "consider rolling back."
 
 ### S10-DP-4 (pending-operator): Dog-food flip in NeuroGrim
 
-**Status:** **Pending operator audit** — infrastructure ships in
-S10-DP-1..3 this session; flip executes when operator runs the
-audit and records a pass.
+**Status:** **Pending B-08 remediation** (2026-04-22) — audit #1
+was attempted against live Haiku 4.5 + Sonnet 4.5 via
+claude-proxy. Calibrate passed cleanly (6/6 scenarios, max_drift
+= 10, zero within-scenario red-misses) across 7 shipped
+remediation increments (judge JSON hardening + false-specifics &
+false-humility library expansion + rubric tightening + gold-bad
+re-labeling + ceiling adjustment + canary prompt tightening +
+model-id typo fix). Red-mode surfaced a cross-scenario
+mode-applicability structural issue documented in BACKLOG B-08:
+6/36 (scenario × mode) pairs red-missed due to modes authored
+for specific scenarios producing inevitable ceiling violations
+when cross-pollinated with scenarios whose rubrics don't penalize
+that surface. Failed-attempt ledger entry recorded at
+`NeuroGrim/.claude/brain/domain-promotion-ledger.jsonl`
+(classification: `mock-mode-miss`, ts 1776834120.37,
+operator=claude-code-session). Do not retry audit against
+current config; post-B-08 remediation will restore a meaningful
+red-mode pass criterion.
+
+Total live-audit cost through audit #1: $0.9322 (Sonnet
+adversary + Haiku judge) across 309 API calls. Infrastructure
+fully proven end-to-end; promotion path is operator-ready once
+B-08 resolves the red-mode cross-scenario gating semantics.
 **Effort:** S (once unblocked)
 **Depends on:** S10-DP-1..3 complete; operator-led calibration audit
 passed per the runbook in S10-DP-1.
