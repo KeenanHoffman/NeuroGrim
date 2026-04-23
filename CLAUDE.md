@@ -151,39 +151,71 @@ NeuroGrim a peer relationship with an adoption-template Brain and
 exercises the multi-hop A2A pattern (ecosystem → NeuroGrim →
 python-starter).
 
-## Brain Access Patterns — Dispatch Rule (2026-04-23)
+## Brain Access Patterns — Tentative Findings (2026-04-23)
 
-> **Inject Brain context (L1) only when the expected correct answer
-> requires referencing project-specific definitions or state data
-> that the model cannot reasonably generate from the prompt alone.
-> Otherwise, use the plain-assistant baseline (L0). Injecting context
-> on tasks without that requirement risks over-assertion, context
-> regurgitation, or groundedness regressions.**
+> **CAVEAT (2026-04-23 held-out update):** A dispatch rule was
+> proposed ("inject L1 only when the answer requires project-specific
+> facts; otherwise L0"). On the original 12-task benchmark it
+> captured ~89% of the oracle ceiling. **It did NOT generalize to a
+> 22-task held-out set** — direct agreement with oracle dropped to
+> 40.9%, within-5-pts to 68.2%, both below the pre-registered kill
+> thresholds. The rule is therefore *indicative but not validated*.
+> Full post-mortem:
+> [`reframe-post-mortem.md`](../.claude/experiments/brain-vs-control/reports/reframe-post-mortem.md).
 
-**When in doubt, err toward L0.** In the 12-task benchmark, L1's
-catastrophic-loss tasks outnumbered its decisive-win tasks 2:1 — and
-L0 was the best single arm equal-weighted. Brain value concentrates on
-a narrow shape: *queries whose correct answer is content the model
-cannot produce unaided* (definitional questions about project concepts;
-current-project-state questions).
+What the experiments DO support:
 
-**Model tier:** prefer Sonnet+ for Brain-augmented sessions. Haiku's
-Phase 1 pilot scored *worse* with context across every class.
+- **L1 helps broadly on Sonnet**, not narrowly. On the held-out 22-task
+  set, L1 won 18/22 tasks including generic coding and explanation
+  tasks. The "factual-augmentation service" framing was directly
+  contradicted.
+- **L0 remains best on trivial tasks** (greetings, unit conversion,
+  arithmetic) where context overhead + over-assertion hurt response
+  quality.
+- **Agent self-routing works** at the tool-invocation level (L2 Phase
+  3). When given a `brain_query` tool with per-domain cost warnings,
+  Sonnet invoked the Brain ~100% on repo-aware tasks and 0% on
+  trivial tasks.
+- **L1 can fail catastrophically on factual-lookup tasks** when the
+  injected content is stale or wrong (held-out: 3/6 factual-lookup
+  tasks went L0 by large margins). Content freshness is load-bearing.
 
-**Evidence base** (summary; full reports linked below):
+What the experiments DO NOT support (as of 2026-04-23):
 
-| Arm | Best class | Worst class | Cost vs L0 | Tested |
-|---|---|---|---|---|
-| L0 — no Brain | Trivial (90.3) | Repo-aware (64.9) | 1.0× | 240 trials |
-| L1 — static context (~6k tokens) | Repo-aware (73.9) | Trivial (79.9) | ~3× | 240 trials |
-| L2 — live `brain_query` tool | Trivial (91.3) | Repo-aware (61.1) | ~2× | 144 trials |
+- A sharp "when to inject" rule. The held-out contradiction means
+  any simple operator heuristic needs broader validation.
+- The "Brain is a factual-augmentation service" reframe. Directly
+  contradicted by held-out L1 wins on generic tasks.
+- Class-level extrapolation. The per-task variance dominates class
+  averages at N=12 and N=22.
 
-L2 validates self-routing (100% tool use on repo-aware, 0% on trivial)
-but its synthesis under multi-turn tool use currently lags L1 on
-repo-aware (−12.75 pts, statistically significant). Believed to be a
-prompt-engineering frontier, not architectural. Exploration of a
-sharper "factual-augmentation" reframe is live on the
-`reframe/factual-augmentation` branch.
+**Tentative operator guidance** (revise if follow-up experiments
+contradict):
+
+- **Prefer Sonnet+ for Brain-augmented sessions.** Haiku's Phase 1
+  pilot scored worse with context across every class.
+- **Skip Brain context for trivial tasks** (greetings, short
+  conversions, single-line regex). L1's overhead dominates.
+- **Consider Brain context for tasks where the model might
+  over-assert without reference material** — the Brain's injected
+  context appears to help broadly on Sonnet, not just on
+  "project-specific-facts" queries. The operative question isn't
+  "does the answer require Brain data" but "would the model hedge
+  or hallucinate without grounding content."
+- **Check Brain content freshness before injecting.** Stale or wrong
+  content produces worse L1 outcomes than no context at all on
+  factual-lookup tasks.
+
+**Experiment results** (summary):
+
+| Arm | Behavior summary |
+|---|---|
+| L0 — no Brain | Best on trivial (~90 pts). Catastrophic on factual-lookup (scored 3-61 when answers require unknowable content). |
+| L1 — static context (~6k tokens) | Broadly helpful on Sonnet (won 18/22 held-out tasks). Catastrophic on trivial tasks where context is pure overhead. Catastrophic on factual-lookup when context is stale/wrong. |
+| L2 — live `brain_query` tool | Self-routing validated; synthesis under multi-turn tool use lags L1 on repo-aware (−12.75 pts). Matches L0 on trivial (tool refused 100%). |
+
+Evidence base: Phase 2 (240 trials, N=10 Sonnet), Phase 3 (144 L2
+trials), held-out Phase 4 (440 L0+L1 trials on 22 held-out tasks).
 
 **Deeper evidence reading** (not all capabilities are tested — most
 Brain features were never the independent variable):

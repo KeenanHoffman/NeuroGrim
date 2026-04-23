@@ -1132,6 +1132,28 @@ held-out tasks with ≥75% direct agreement OR ≥85% within-5-pt
 agreement with oracle winner. Until then the rule stays operator
 guidance, not normative spec.
 
+**Update 2026-04-23 (held-out contradiction).** The `reframe/
+factual-augmentation` branch executed the held-out back-test (22
+tasks, 440 trials, Sonnet). Result: direct agreement **40.9%**,
+within-5-pts **68.2%**. Both kill-criterion thresholds tripped
+(< 50% direct, < 70% within-5-pts). Pre-registered K1 fired;
+branch ABANDONED (not merged) at commit `reframe/factual-
+augmentation@4856aa8`.
+
+The rule did not generalize. L1 won 18 of 22 held-out tasks —
+broader than the "factual-augmentation service" framing predicted.
+B-14 stays CANDIDATE but with stronger skepticism: any future
+attempt to elevate a dispatch rule to first-class status needs a
+task set substantially more diverse than the original 12-task
+benchmark (candidate: N≥50 stratified across shapes with
+rubric-sensitivity controls).
+
+Full post-mortem:
+[`reports/reframe-post-mortem.md`](../.claude/experiments/brain-vs-control/reports/reframe-post-mortem.md).
+Pre-registration discipline saved ~20 hrs engineering + ~$50-100
+API that would have gone into prototype + validation before the
+gate fired.
+
 ---
 
 ### B-15: Capability-audit-driven review process — CANDIDATE
