@@ -1076,6 +1076,39 @@ the live scoping. No separate epic is planned.
 
 ---
 
+### B-14: Task-class dispatch as first-class Brain capability — CANDIDATE
+
+**Why it's here.** The 2026-04-22/23 brain-vs-control experiment
+(Phase 1-3, shipped at `0db4a41`; full reports under
+`.claude/experiments/brain-vs-control/reports/`) measured three
+Brain access patterns across three task classes and found no single
+pattern dominates: L0 (no Brain) wins trivial tasks, L1 (static
+context) wins repo-aware, L2 (live tool access) ties L0 on trivial
+but lags L1 on repo-aware. Visionary-hat synthesis (2026-04-23)
+argued the methodology's unit of analysis should shift from "does
+the session have the Brain?" to "which access pattern fits this
+task?" — and that **task-class dispatch is the real first-class
+capability** the methodology hasn't named yet.
+
+Documented in spec `METHODOLOGY-EVOLUTION.md` §14 as observational.
+
+**Plan when** Tier 2a oracle-ceiling analysis on the existing
+ledger shows ≥5 pt headroom over the best single arm equal-weighted
+AND Tier 2b realistic-dispatcher experiment validates that the
+ceiling is achievable by a real agent. Details in
+`C:/Users/koff0/.claude/plans/parallel-hugging-eich.md`.
+
+**Dependencies:** L2 harness complete (`0db4a41`); `analyze.py`
+oracle extension (Tier 2a of the methodology-reframe plan).
+
+**Adversarial note.** One experiment with 12 tasks is not enough
+evidence to promote dispatch to a first-class capability. This
+entry is scoped to a CANDIDATE state precisely to force an evidence
+gate before scope expansion; spec/VISION changes are explicitly NOT
+in scope at this status.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

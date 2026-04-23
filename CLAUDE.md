@@ -151,38 +151,60 @@ NeuroGrim a peer relationship with an adoption-template Brain and
 exercises the multi-hop A2A pattern (ecosystem → NeuroGrim →
 python-starter).
 
-## When to Use Brain Context (2026-04-23 finding)
+## Brain Access Patterns — When and How to Use the Brain (2026-04-23)
 
-Empirical result from the brain-vs-control experiment (commit
-`fcf7d60`; full report at
-[`D:\Brains\.claude\experiments\brain-vs-control\reports\phase2-report.md`](../.claude/experiments/brain-vs-control/reports/phase2-report.md)):
+Empirical result from the three-arm brain-vs-control experiment
+(commit `0db4a41`; Phase 2 L0/L1 report at
+[`D:\Brains\.claude\experiments\brain-vs-control\reports\phase2-report.md`](../.claude/experiments/brain-vs-control/reports/phase2-report.md),
+Phase 3 L2 report at
+[`D:\Brains\.claude\experiments\brain-vs-control\reports\phase3-report.md`](../.claude/experiments/brain-vs-control/reports/phase3-report.md),
+cross-phase synthesis at
+[`reports/synthesis.md`](../.claude/experiments/brain-vs-control/reports/synthesis.md)):
 
-Static Brain-context injection (skill index + `CLAUDE.md` excerpt +
-health snapshot at ~6k tokens) has **asymmetric value by task class**:
+**The Brain is plural, not singular.** There is no one "Brain
+architecture" that wins across task classes. The experiments compared
+three access patterns and every one won at a different class:
 
-| Task class | Capability delta | Cost ratio | Verdict |
+| Access pattern | Best at | Worst at | Notes |
 |---|---|---|---|
-| Repo-aware (project state, drift, readiness, principle application) | **+9 pts** | 2.5× | Worth the cost |
-| Concept / repo-neutral (pure code, math explanation, debugging) | −2 pts | 2.7× | Wash; slight drag |
-| Trivial (greetings, unit conversion, one-line regex, arithmetic) | **−10 pts** | 6.7× | Pure overhead; also drops groundedness by ~7 pts |
+| **L0** — no Brain | Trivial tasks (90.3) | Repo-aware (64.9) | Cheapest. "Just answer the question." |
+| **L1** — static context injection (~6k tokens up front) | Repo-aware (73.9) | Trivial (79.9) | Most expensive on trivial (6.7× L0); drops groundedness by ~7 pts on trivial via "context regurgitation." |
+| **L2** — live `brain_query` tool access | Trivial (91.3, ties L0) | Repo-aware (61.1, worse than L1) | Agent self-routes perfectly: 100% tool use on repo-aware, 0% on trivial. But synthesis under multi-turn tool use lags pre-loaded context by −12.75 pts on repo-aware. |
+
+No single arm dominates equal-weighted. On the 3-class mixed
+workload: L0 = 79.5, L1 = 78.4, L2 = 77.3 — all within 2 points.
+What differs is cost and the class-specific wins/losses.
 
 **Operator guidance:**
 
-- **Route Brain-equipped sessions to repo-aware work.** Use Brain
-  context when the task benefits from project-state knowledge
-  (health, drift, readiness, repo conventions). Skip the Brain for
-  concept-only or trivial tasks — equal-weighted, context injection
-  is ~neutral capability at ~3× cost.
-- **Prefer Sonnet+ for Brain-augmented sessions.** Haiku handles
-  large context less gracefully: the Phase-1 pilot (Haiku, N=2)
-  showed Haiku scored *worse* with Brain context across every class.
-  Sonnet recovers meaningful gains on repo-aware but still suffers
-  on trivial tasks.
-- **Favor on-demand over eager injection.** This aligns with Claude
-  Code's native `Skill` tool model (names + descriptions at session
-  start; full bodies on demand). Measuring the live-tool architecture
-  (L2) directly is tracked work; the experiment's footnote already
-  notes this upper bound is untested.
+- **Route Brain-equipped sessions to repo-aware work.** Static context
+  (L1) wins meaningfully on project-state questions, drift analysis,
+  readiness checks, and principle-application tasks. Skip the Brain
+  for trivial or concept-only tasks — you pay 3-7× more cost for
+  neutral or negative capability.
+- **Prefer Sonnet+ for Brain-augmented sessions.** The Phase 1 Haiku
+  pilot showed Haiku scored *worse* with static Brain context across
+  every class. Sonnet handles context overload better but still
+  suffers on trivial tasks.
+- **Self-routing works.** Given a well-described tool, the agent
+  invokes the Brain precisely when the task warrants and never when
+  it doesn't. Architectures that depend on agents deciding their own
+  context-fetching are viable — Phase 3's L2 arm empirically
+  validated the binary classifier.
+- **Live tool access trades repo-aware capability for overall
+  efficiency.** L2 costs ~30% less than L1 on a mixed workload and
+  fixes L1's anti-Brain drag entirely, but currently applies tool
+  results less effectively than pre-loaded context on repo-aware
+  tasks. The gap is believed to be prompt-engineering (groundedness
+  drops, context accumulation across turns), not architectural.
+- **The Brain is a menu, not a preset.** Different task shapes want
+  different information-gathering patterns. An ideal deployment
+  combines L0, L1, and L2 with dispatch between them per task —
+  which is operationally close to how Claude Code already works
+  (native `Skill` tool + `Read` + no-tool for trivial tasks). This
+  framing is the 2026-04-23 methodology reframe (spec
+  METHODOLOGY-EVOLUTION §14); candidate future work tracked as
+  BACKLOG B-14.
 
 ## Agent Philosophy
 
