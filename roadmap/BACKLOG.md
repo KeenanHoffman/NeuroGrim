@@ -1134,6 +1134,38 @@ guidance, not normative spec.
 
 ---
 
+### B-15: Capability-audit-driven review process — CANDIDATE
+
+**Why it's here.** The 2026-04-23 Brain capability audit
+(`docs/brain-capability-audit-2026-04-23.md`) classified 13 of ~16
+Brain capabilities as "plausibly valuable but untested" against the
+432-row brain-vs-control ledger. Most of the methodology's machinery
+(individual sensors, correlations, hats, culture, trajectory, gated
+governance, A2A, MCP, skills, invocation ledger, capability-hygiene
+domain) has never been the *independent variable* in a controlled
+experiment. This is an evidence gap, not a value judgment — but it
+needs a structured review cadence rather than ad-hoc worry.
+
+**Plan when** operator requests a review cycle OR a specific
+capability comes up for retirement / promotion consideration. At
+that point, this candidate becomes an epic scoping the review
+process: (a) which capability to prioritize, (b) what targeted
+experiment would fill its evidence gap, (c) what outcome
+criteria would move it from "untested" to "supported" or
+"contradicted."
+
+**Dependencies:** B-14 dispatch rule validated or contradicted on
+held-out tasks (per the `reframe/factual-augmentation` branch).
+Branch outcome informs which capabilities still need independent
+measurement vs. which are absorbed into the reframe.
+
+**Adversarial note.** The audit is *not* a retire-list. Absence of
+evidence ≠ evidence of absence. This candidate's job is to close
+evidence gaps, not prune capabilities. Any retirement decision
+stays its own case-by-case review with its own adversarial gate.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

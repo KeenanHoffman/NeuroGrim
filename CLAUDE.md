@@ -151,32 +151,7 @@ NeuroGrim a peer relationship with an adoption-template Brain and
 exercises the multi-hop A2A pattern (ecosystem → NeuroGrim →
 python-starter).
 
-## Brain Access Patterns — When and How to Use the Brain (2026-04-23)
-
-Empirical result from the three-arm brain-vs-control experiment
-(commit `0db4a41`; Phase 2 L0/L1 report at
-[`D:\Brains\.claude\experiments\brain-vs-control\reports\phase2-report.md`](../.claude/experiments/brain-vs-control/reports/phase2-report.md),
-Phase 3 L2 report at
-[`D:\Brains\.claude\experiments\brain-vs-control\reports\phase3-report.md`](../.claude/experiments/brain-vs-control/reports/phase3-report.md),
-cross-phase synthesis at
-[`reports/synthesis.md`](../.claude/experiments/brain-vs-control/reports/synthesis.md)):
-
-**The Brain is plural, not singular.** There is no one "Brain
-architecture" that wins across task classes. The experiments compared
-three access patterns and every one won at a different class:
-
-| Access pattern | Best at | Worst at | Notes |
-|---|---|---|---|
-| **L0** — no Brain | Trivial tasks (90.3) | Repo-aware (64.9) | Cheapest. "Just answer the question." |
-| **L1** — static context injection (~6k tokens up front) | Repo-aware (73.9) | Trivial (79.9) | Most expensive on trivial (6.7× L0); drops groundedness by ~7 pts on trivial via "context regurgitation." |
-| **L2** — live `brain_query` tool access | Trivial (91.3, ties L0) | Repo-aware (61.1, worse than L1) | Agent self-routes perfectly: 100% tool use on repo-aware, 0% on trivial. But synthesis under multi-turn tool use lags pre-loaded context by −12.75 pts on repo-aware. |
-
-No single arm dominates equal-weighted. On the 3-class mixed
-workload: L0 = 79.5, L1 = 78.4, L2 = 77.3 — all within 2 points.
-What differs is cost and the class-specific wins/losses.
-
-**The dispatch rule** (Tier 2b-rule, 2026-04-23 —
-[dispatcher-rule-analysis.md](../.claude/experiments/brain-vs-control/reports/dispatcher-rule-analysis.md)):
+## Brain Access Patterns — Dispatch Rule (2026-04-23)
 
 > **Inject Brain context (L1) only when the expected correct answer
 > requires referencing project-specific definitions or state data
@@ -185,46 +160,47 @@ What differs is cost and the class-specific wins/losses.
 > on tasks without that requirement risks over-assertion, context
 > regurgitation, or groundedness regressions.**
 
-Applied to the 12-task benchmark, this rule captures **~89% of the
-oracle-dispatcher ceiling** (+7.82 of the +8.78 pts headroom). Two
-tasks in our set need L1 decisively: definitional questions about
-project-specific concepts (e.g., "what does *honest-scoring* mean in
-this codebase?") and current-project-state questions (e.g., "is this
-repo ready to ship?"). Everything else — including ostensibly
-"repo-aware" questions that are actually answerable by general
-reasoning, like "which subsystem has the most drift?" — works better
-with L0.
+**When in doubt, err toward L0.** In the 12-task benchmark, L1's
+catastrophic-loss tasks outnumbered its decisive-win tasks 2:1 — and
+L0 was the best single arm equal-weighted. Brain value concentrates on
+a narrow shape: *queries whose correct answer is content the model
+cannot produce unaided* (definitional questions about project concepts;
+current-project-state questions).
 
-**Operator guidance:**
+**Model tier:** prefer Sonnet+ for Brain-augmented sessions. Haiku's
+Phase 1 pilot scored *worse* with context across every class.
 
-- **Apply the dispatch rule per task.** Most tasks want L0. Only
-  invoke Brain context when the answer requires facts or definitions
-  the model can't produce on its own. When in doubt, err toward L0 —
-  L1's catastrophic-loss tasks in the benchmark outnumbered its
-  decisive-win tasks 2:1.
-- **Prefer Sonnet+ for Brain-augmented sessions.** The Phase 1 Haiku
-  pilot showed Haiku scored *worse* with static Brain context across
-  every class. Sonnet handles context overload better but still
-  suffers on trivial tasks.
-- **Self-routing works.** Given a well-described tool, the agent
-  invokes the Brain precisely when the task warrants and never when
-  it doesn't. Architectures that depend on agents deciding their own
-  context-fetching are viable — Phase 3's L2 arm empirically
-  validated the binary classifier.
-- **Live tool access trades repo-aware capability for overall
-  efficiency.** L2 costs ~30% less than L1 on a mixed workload and
-  fixes L1's anti-Brain drag entirely, but currently applies tool
-  results less effectively than pre-loaded context on repo-aware
-  tasks. The gap is believed to be prompt-engineering (groundedness
-  drops, context accumulation across turns), not architectural.
-- **The Brain is a menu, not a preset.** Different task shapes want
-  different information-gathering patterns. An ideal deployment
-  combines L0, L1, and L2 with dispatch between them per task —
-  which is operationally close to how Claude Code already works
-  (native `Skill` tool + `Read` + no-tool for trivial tasks). This
-  framing is the 2026-04-23 methodology reframe (spec
-  METHODOLOGY-EVOLUTION §14); candidate future work tracked as
-  BACKLOG B-14.
+**Evidence base** (summary; full reports linked below):
+
+| Arm | Best class | Worst class | Cost vs L0 | Tested |
+|---|---|---|---|---|
+| L0 — no Brain | Trivial (90.3) | Repo-aware (64.9) | 1.0× | 240 trials |
+| L1 — static context (~6k tokens) | Repo-aware (73.9) | Trivial (79.9) | ~3× | 240 trials |
+| L2 — live `brain_query` tool | Trivial (91.3) | Repo-aware (61.1) | ~2× | 144 trials |
+
+L2 validates self-routing (100% tool use on repo-aware, 0% on trivial)
+but its synthesis under multi-turn tool use currently lags L1 on
+repo-aware (−12.75 pts, statistically significant). Believed to be a
+prompt-engineering frontier, not architectural. Exploration of a
+sharper "factual-augmentation" reframe is live on the
+`reframe/factual-augmentation` branch.
+
+**Deeper evidence reading** (not all capabilities are tested — most
+Brain features were never the independent variable):
+[`docs/brain-capability-audit-2026-04-23.md`](docs/brain-capability-audit-2026-04-23.md).
+
+**Experiment reports:** Phase 2 L0/L1
+[phase2-report.md](../.claude/experiments/brain-vs-control/reports/phase2-report.md),
+Phase 3 L2
+[phase3-report.md](../.claude/experiments/brain-vs-control/reports/phase3-report.md),
+cross-phase
+[synthesis.md](../.claude/experiments/brain-vs-control/reports/synthesis.md),
+dispatch-rule
+[dispatcher-rule-analysis.md](../.claude/experiments/brain-vs-control/reports/dispatcher-rule-analysis.md),
+spec discovery log
+[METHODOLOGY-EVOLUTION.md §14](../LSP-Brains/spec/METHODOLOGY-EVOLUTION.md).
+Candidate future work: BACKLOG B-14 (dispatch) + B-15 (audit-driven
+review process).
 
 ## Agent Philosophy
 
