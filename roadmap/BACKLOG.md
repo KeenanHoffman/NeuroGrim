@@ -1107,6 +1107,31 @@ entry is scoped to a CANDIDATE state precisely to force an evidence
 gate before scope expansion; spec/VISION changes are explicitly NOT
 in scope at this status.
 
+**Decision 2026-04-23 (Tier 2b outcome — realistic-dispatcher
+experiment DECLINED).** Tier 2a oracle-ceiling came in at +8.78 pts
+(5-10 bucket per the pre-registered decision rule). Tier 2b-rule
+(descriptive analysis at
+`.claude/experiments/brain-vs-control/reports/dispatcher-rule-analysis.md`)
+surfaced a one-sentence operator rule that captures ~89% of the
+oracle ceiling:
+
+> *Inject Brain context (L1) only when the expected correct answer
+> requires referencing project-specific definitions or state data
+> that the model cannot reasonably generate from the prompt alone.
+> Otherwise, use the plain-assistant baseline (L0). Injecting
+> context on tasks without that requirement risks over-assertion,
+> context regurgitation, or groundedness regressions.*
+
+Building a code-level LLM-classifier dispatcher (Tier 2b-arch) would
+at best approximate this rule and would cost API credits to re-derive
+what the rule already captures. **Tier 2b-arch declined;** shippable
+output is the operator-guidance update instead.
+
+**New gate for Tier 3 (spec changes):** rule back-tested on N≥20
+held-out tasks with ≥75% direct agreement OR ≥85% within-5-pt
+agreement with oracle winner. Until then the rule stays operator
+guidance, not normative spec.
+
 ---
 
 ## How to author a new backlog entry

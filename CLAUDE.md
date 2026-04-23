@@ -175,13 +175,33 @@ No single arm dominates equal-weighted. On the 3-class mixed
 workload: L0 = 79.5, L1 = 78.4, L2 = 77.3 — all within 2 points.
 What differs is cost and the class-specific wins/losses.
 
+**The dispatch rule** (Tier 2b-rule, 2026-04-23 —
+[dispatcher-rule-analysis.md](../.claude/experiments/brain-vs-control/reports/dispatcher-rule-analysis.md)):
+
+> **Inject Brain context (L1) only when the expected correct answer
+> requires referencing project-specific definitions or state data
+> that the model cannot reasonably generate from the prompt alone.
+> Otherwise, use the plain-assistant baseline (L0). Injecting context
+> on tasks without that requirement risks over-assertion, context
+> regurgitation, or groundedness regressions.**
+
+Applied to the 12-task benchmark, this rule captures **~89% of the
+oracle-dispatcher ceiling** (+7.82 of the +8.78 pts headroom). Two
+tasks in our set need L1 decisively: definitional questions about
+project-specific concepts (e.g., "what does *honest-scoring* mean in
+this codebase?") and current-project-state questions (e.g., "is this
+repo ready to ship?"). Everything else — including ostensibly
+"repo-aware" questions that are actually answerable by general
+reasoning, like "which subsystem has the most drift?" — works better
+with L0.
+
 **Operator guidance:**
 
-- **Route Brain-equipped sessions to repo-aware work.** Static context
-  (L1) wins meaningfully on project-state questions, drift analysis,
-  readiness checks, and principle-application tasks. Skip the Brain
-  for trivial or concept-only tasks — you pay 3-7× more cost for
-  neutral or negative capability.
+- **Apply the dispatch rule per task.** Most tasks want L0. Only
+  invoke Brain context when the answer requires facts or definitions
+  the model can't produce on its own. When in doubt, err toward L0 —
+  L1's catastrophic-loss tasks in the benchmark outnumbered its
+  decisive-win tasks 2:1.
 - **Prefer Sonnet+ for Brain-augmented sessions.** The Phase 1 Haiku
   pilot showed Haiku scored *worse* with static Brain context across
   every class. Sonnet handles context overload better but still
