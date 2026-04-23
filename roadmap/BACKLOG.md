@@ -11,7 +11,38 @@ this backlog entry with a pointer.
 2. They're explicitly closed as won't-do with a brief rationale.
 3. They're absorbed into another epic (document the absorption here).
 
-**Last updated:** 2026-04-22 (**Tier A migration — COMPLETE**.
+**Last updated:** 2026-04-23 (**Brain-vs-control experiment — Phase 2
+SHIPPED, L2 arm scoped**. The first rigorous delta-vs-no-Brain
+measurement landed at commit `fcf7d60`: static Brain-context injection
+(L1) helps repo-aware tasks by +9 pts (CI barely crosses 0), hurts
+anti-Brain trivial tasks by −10 pts (statistically significant, CI
+entirely below 0), drops groundedness by ~7 pts on trivial tasks,
+and costs 3.07× L0 equal-weighted. Two of four pre-registered
+falsification criteria triggered (anti-Brain drag exceeds repo-aware
+gain; groundedness regression on anti-Brain class). Mixed verdict is
+the pre-registration-anticipated outcome: *"the simplest claim — add
+the Brain, get better agent behavior — is not supported on aggregate;
+selective access when the task benefits IS supported."* Findings
+absorbed into `NeuroGrim/CLAUDE.md` as operator guidance (route
+Brain-equipped sessions to repo-aware work; prefer Sonnet+ for
+Brain-augmented sessions; favor on-demand over eager injection).
+Phase 1 pilot (Haiku, N=2, 48 trials, $0.47) + Phase 2 full (Sonnet,
+N=10, 240 trials, $4.79) ran with blind judge (pinned 2026-04-22),
+judge model + SHA-pinned arm prompts per ledger entry,
+bootstrap-CI (10k resamples) per delta. Experiment reproducer:
+`py -3 .claude/experiments/brain-vs-control/analyze.py --phase 2
+--falsification`.
+
+Follow-on in progress: **L2 arm (live `brain_query` tool access)** —
+tests whether agents SELF-ROUTE to the Brain on repo-aware tasks and
+SKIP it on trivial ones. Same 12 tasks, same rubric, same blind
+judge. Hypothesis: L2 beats L1 on repo-aware (always-on context is
+wasted by L1 when unused) AND matches L0 on anti-Brain (agent skips
+the tool). New pre-registered criterion: tool-refusal rate > 50% on
+repo-aware = L2 declared unhelpful. Plan in
+`C:/Users/koff0/.claude/plans/parallel-hugging-eich.md`.
+
+Prior entry preserved: **Tier A migration — COMPLETE**.
 All 22 live Brain skills migrated from legacy
 `.claude/skills/<name>.md` to plugin
 `.claude/skills/<name>/SKILL.md` with YAML frontmatter. Every

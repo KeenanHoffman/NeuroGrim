@@ -151,6 +151,39 @@ NeuroGrim a peer relationship with an adoption-template Brain and
 exercises the multi-hop A2A pattern (ecosystem → NeuroGrim →
 python-starter).
 
+## When to Use Brain Context (2026-04-23 finding)
+
+Empirical result from the brain-vs-control experiment (commit
+`fcf7d60`; full report at
+[`D:\Brains\.claude\experiments\brain-vs-control\reports\phase2-report.md`](../.claude/experiments/brain-vs-control/reports/phase2-report.md)):
+
+Static Brain-context injection (skill index + `CLAUDE.md` excerpt +
+health snapshot at ~6k tokens) has **asymmetric value by task class**:
+
+| Task class | Capability delta | Cost ratio | Verdict |
+|---|---|---|---|
+| Repo-aware (project state, drift, readiness, principle application) | **+9 pts** | 2.5× | Worth the cost |
+| Concept / repo-neutral (pure code, math explanation, debugging) | −2 pts | 2.7× | Wash; slight drag |
+| Trivial (greetings, unit conversion, one-line regex, arithmetic) | **−10 pts** | 6.7× | Pure overhead; also drops groundedness by ~7 pts |
+
+**Operator guidance:**
+
+- **Route Brain-equipped sessions to repo-aware work.** Use Brain
+  context when the task benefits from project-state knowledge
+  (health, drift, readiness, repo conventions). Skip the Brain for
+  concept-only or trivial tasks — equal-weighted, context injection
+  is ~neutral capability at ~3× cost.
+- **Prefer Sonnet+ for Brain-augmented sessions.** Haiku handles
+  large context less gracefully: the Phase-1 pilot (Haiku, N=2)
+  showed Haiku scored *worse* with Brain context across every class.
+  Sonnet recovers meaningful gains on repo-aware but still suffers
+  on trivial tasks.
+- **Favor on-demand over eager injection.** This aligns with Claude
+  Code's native `Skill` tool model (names + descriptions at session
+  start; full bodies on demand). Measuring the live-tool architecture
+  (L2) directly is tracked work; the experiment's footnote already
+  notes this upper bound is untested.
+
 ## Agent Philosophy
 
 When wearing a hat, announce it visibly: `Wear Hat: <hat-name>`.
