@@ -138,38 +138,69 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
     let accepted = accepted::read(root).unwrap_or_default();
 
     // Union OSV + RustSec, deduplicating by (advisory id, package
-    // name, package version). If both sources surface the same
-    // advisory for the same package, prefer OSV's entry (it's the
-    // primary source; RustSec-local is cross-reference).
+    // name, package version). When both sources surface the same
+    // advisory, prefer the entry with a non-empty `informational`
+    // field — OSV batch responses don't carry that metadata but
+    // RustSec-local does, so preferring "richer" lets the Finding
+    // detail distinguish `unmaintained` notices from real CVEs.
     let all_advisories: Vec<Advisory> = {
-        let mut seen: std::collections::HashSet<(String, String, String)> =
-            std::collections::HashSet::new();
-        let mut out: Vec<Advisory> = Vec::new();
+        use std::collections::HashMap;
+        let mut by_key: HashMap<(String, String, String), Advisory> = HashMap::new();
         for adv in osv_result
             .advisories
             .iter()
             .cloned()
             .chain(rustsec_advisories.into_iter())
         {
-            let key = (adv.id.clone(), adv.package.name.clone(), adv.package.version.clone());
-            if seen.insert(key) {
-                out.push(adv);
+            let key = (
+                adv.id.clone(),
+                adv.package.name.clone(),
+                adv.package.version.clone(),
+            );
+            match by_key.entry(key) {
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(adv);
+                }
+                std::collections::hash_map::Entry::Occupied(mut o) => {
+                    let existing_has_info = o
+                        .get()
+                        .informational
+                        .as_deref()
+                        .is_some_and(|s| !s.is_empty());
+                    let new_has_info = adv
+                        .informational
+                        .as_deref()
+                        .is_some_and(|s| !s.is_empty());
+                    // Upgrade only if we're gaining information.
+                    if !existing_has_info && new_has_info {
+                        o.insert(adv);
+                    }
+                }
             }
         }
-        out
+        by_key.into_values().collect()
     };
 
-    // Identify advisories that came from RustSec with no OSV
-    // counterpart — the "OSV miss, locally caught" signal that
-    // motivates keeping the submodule pinned. Surfacing the IDs (not
-    // just the count) lets the operator see exactly what slipped
-    // through OSV's ingestion pipeline.
-    let rustsec_only: Vec<&Advisory> = all_advisories
+    // Identify advisories that OSV did NOT return — the "OSV miss,
+    // locally caught" signal that motivates keeping the submodule
+    // pinned. Surfacing the IDs (not just the count) lets the
+    // operator see exactly what slipped through OSV's ingestion
+    // pipeline.
+    //
+    // Note: we compute this against the ORIGINAL OSV ID set, not by
+    // inspecting `.source` on the unioned list. The dedup above
+    // prefers entries with richer metadata (RustSec-local carries
+    // `informational`, OSV doesn't), so a RustSec entry can "win"
+    // even for an ID OSV also knew about. This counter must reflect
+    // "did OSV see it at all," not "which source won the dedup."
+    let osv_ids: std::collections::HashSet<&str> =
+        osv_result.advisories.iter().map(|a| a.id.as_str()).collect();
+    let osv_missed: Vec<&Advisory> = all_advisories
         .iter()
-        .filter(|a| a.source == AdvisorySource::RustsecLocal)
+        .filter(|a| !osv_ids.contains(a.id.as_str()))
         .collect();
-    let rustsec_only_count = rustsec_only.len();
-    let rustsec_only_ids: Vec<Value> = rustsec_only
+    let rustsec_only_count = osv_missed.len();
+    let rustsec_only_ids: Vec<Value> = osv_missed
         .iter()
         .map(|a| {
             json!({
@@ -204,7 +235,8 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
     extras.push(("rustsec_local_unique_ids", json!(rustsec_only_ids)));
     extras.push((
         "_impl_status",
-        json!("Step 6 complete: OSV + RustSec-local wired; accepted/scoring stubbed"),
+        json!("Steps 1-8 complete: OSV + RustSec-local + accepted-list + scoring live. \
+               MCP wrapper (Step 9) and integration tests (Step 10) pending."),
     ));
 
     crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras))

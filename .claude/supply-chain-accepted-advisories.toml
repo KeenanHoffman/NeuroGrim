@@ -1,0 +1,32 @@
+# Supply-chain advisories that NeuroGrim operators have reviewed and
+# consciously accepted. Entries here do NOT deduct from the
+# supply-chain-sca score, but they DO appear in CMDB findings with
+# status = "accepted" for transparency.
+#
+# Format: one [[accepted]] table per advisory. `id` + `note` are
+# required; `package`, `expires_at` are optional. The `note` field
+# is a hygiene lever — entries without a rationale are skipped
+# (see neurogrim-sensory/src/supply_chain_sca/accepted.rs docs).
+#
+# When the E-SC-6 2-phase supply-chain-decision-ledger ships, this
+# file migrates to the append-only JSONL ledger. v1 uses TOML for
+# operator-authored simplicity.
+
+[[accepted]]
+id = "RUSTSEC-2024-0436"
+package = "paste"
+note = """
+Unmaintained-notice from RustSec. Transitive via rmcp (MCP
+protocol library); proc-macro only, no runtime attack surface.
+rmcp upstream owns the migration; a drop-in replacement (`pastey`)
+exists but forcing it via `[patch.crates-io]` would be a
+speculative fork we'd own long-term. Escalation trigger: if
+RUSTSEC upgrades this from unmaintained-notice to an actual CVE,
+or if a compromise of the `paste` crate on crates.io is reported,
+re-evaluate immediately (ROLLBACK-PLAYBOOK § Universal playbook).
+First triaged 2026-04-24 during E-SC-0 Phase 0 self-audit; re-
+affirmed 2026-04-24 during E-SC-2 dogfood.
+"""
+# No expires_at — the escalation triggers are what force re-review,
+# not a calendar deadline. Operators should scan for news of rmcp
+# migrating away from `paste` periodically (pastey adoption signal).
