@@ -58,6 +58,16 @@ tiktoken-rs = "0.6"
 # URL parsing / validation (shared across a2a + ecosystem)
 url = { version = "2", features = ["serde"] }
 
+# Supply-chain SCA (E-SC-2):
+# - `cargo-lock` (note: hyphen on crates.io; imported as `cargo_lock` in
+#   Rust) is RustSec-maintained; parses Cargo.lock V1..V4 natively with a
+#   tiny trust surface. Pinned to major "11" (compatible-semver). Avoids
+#   us ever shelling out to `cargo audit` or `trivy` for SCA.
+# - `toml` is needed in `neurogrim-sensory` to parse the RustSec
+#   advisory-db TOML frontmatter (vendored at `vendor/rustsec-advisory-db/`).
+cargo-lock = "11"
+toml = "0.8"
+
 # Workspace crates
 # Both `path` and `version` are required for `cargo publish` to resolve
 # intra-workspace deps from crates.io. Keep versions in lock-step with

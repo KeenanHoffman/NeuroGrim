@@ -25,6 +25,19 @@ schemars = { workspace = true }
 tracing = { workspace = true }
 neurogrim-core = { workspace = true }
 
+# Supply-chain SCA (E-SC-2): native lockfile parsing + OSV.dev HTTPS
+# client + RustSec advisory-db TOML parsing. No external scanner
+# binaries (per the 2026-04-24 locked decision — Trivy was the
+# LiteLLM attack vector; we do not shell out to scanners).
+cargo-lock = { workspace = true }
+toml = { workspace = true }
+# reqwest is crate-locally pinned here to match `neurogrim-a2a`'s
+# TLS posture (rustls-tls-native-roots — reads the OS trust store,
+# supports enterprise / private CAs, avoids OpenSSL in Docker images).
+# Keep in lock-step with `crates/neurogrim-a2a/Cargo.toml`.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
+sha2 = "0.10"
+
 [dev-dependencies]
 # §3.8 Testing Discipline — validate CMDB envelope output against the
 # canonical cmdb-envelope-v1 JSON Schema at integration-test time.
