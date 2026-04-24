@@ -19,7 +19,8 @@
       "secret-refs": 0.0,
       "agent-behavior": 0.0,
       "skill-coherence": 0.0,
-      "capability-hygiene": 0.0
+      "capability-hygiene": 0.0,
+      "supply-chain-sca": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -123,6 +124,21 @@
           "capability-hygiene:under_described_count":      { "field": "under_described_count",      "type": "number" },
           "capability-hygiene:missing_when_to_use_count":  { "field": "missing_when_to_use_count",  "type": "number" },
           "capability-hygiene:over_budget_count":          { "field": "over_budget_count",          "type": "number" }
+        }
+      },
+      "supply-chain-sca": {
+        "_doc": "E-SC-2 (2026-04-24): native-Rust Software Composition Analysis for crates.io ecosystem. NO external scanner binaries (no Trivy, no cargo-audit binary, etc.). Pipeline: cargo-lock parse → OSV.dev batch + 24h file cache → RustSec-advisory-db pinned-submodule local cross-reference → operator-accepted-advisories filter → count-based scoring. Refresh: `neurogrim sensory supply-chain-sca --project-root neurogrim > .claude/supply-chain-sca-cmdb.json` (note: project_root points at the cargo workspace subdir; the sensor falls back one level up to find .claude/ and vendor/). Override 24h OSV cache with NEUROGRIM_OSV_NO_CACHE=1. Operator acceptances live in .claude/supply-chain-accepted-advisories.toml. Advisory weight 0.0 for v1; publish-gate uses own-dep score==100 as a binary check, not a numeric contribution. Master gate per BEFORE-PUBLIC-RELEASE.md §11.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/supply-chain-sca-cmdb.json"
+        },
+        "exported_variables": {
+          "supply-chain-sca:total_packages_scanned":   { "field": "total_packages_scanned",   "type": "number" },
+          "supply-chain-sca:advisories_found":         { "field": "advisories_found",         "type": "number" },
+          "supply-chain-sca:advisories_unaccepted":    { "field": "advisories_unaccepted",    "type": "number" },
+          "supply-chain-sca:advisories_accepted":      { "field": "advisories_accepted",      "type": "number" },
+          "supply-chain-sca:osv_reachable":            { "field": "osv_reachable",            "type": "bool"   },
+          "supply-chain-sca:rustsec_local_unique_hits":{ "field": "rustsec_local_unique_hits","type": "number" }
         }
       }
     },

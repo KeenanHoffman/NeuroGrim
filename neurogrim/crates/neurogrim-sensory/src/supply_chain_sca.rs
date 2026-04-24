@@ -317,8 +317,8 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
     extras.push(("rustsec_local_unique_ids", json!(rustsec_only_ids)));
     extras.push((
         "_impl_status",
-        json!("Steps 1-8 complete: OSV + RustSec-local + accepted-list + scoring live. \
-               MCP wrapper (Step 9) and integration tests (Step 10) pending."),
+        json!("E-SC-2 complete: OSV + RustSec-local + accepted-list + scoring + MCP \
+               wrapper + 72 tests (64 unit + 8 integration) all green."),
     ));
 
     crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras))

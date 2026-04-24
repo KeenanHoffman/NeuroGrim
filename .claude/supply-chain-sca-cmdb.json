@@ -1,0 +1,33 @@
+{
+  "_impl_status": "E-SC-2 complete: OSV + RustSec-local + accepted-list + scoring + MCP wrapper + 72 tests (64 unit + 8 integration) all green.",
+  "accepted_advisory_ids": [
+    "RUSTSEC-2024-0436"
+  ],
+  "advisories_accepted": 1,
+  "advisories_found": 1,
+  "advisories_unaccepted": 0,
+  "findings": [
+    {
+      "detail": "paste 1.0.15: RustSec-local advisory (unmaintained) — accepted by operator",
+      "name": "RUSTSEC-2024-0436",
+      "points": 0,
+      "status": "accepted"
+    }
+  ],
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-24T21:44:34.715621900+00:00",
+    "updated_by": "supply-chain-sca"
+  },
+  "osv_cache_bypassed": true,
+  "osv_cache_hits": 0,
+  "osv_live_queries": 353,
+  "osv_oldest_cache_age_seconds": null,
+  "osv_reachable": true,
+  "rustsec_local_unique_hits": 0,
+  "rustsec_local_unique_ids": [],
+  "score": 100,
+  "sensor_status": "ok",
+  "total_packages_scanned": 353,
+  "updated_at": "2026-04-24T21:44:34.715621900+00:00"
+}
