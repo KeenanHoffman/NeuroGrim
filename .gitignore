@@ -37,6 +37,16 @@
 # Local machine awareness — machine-specific facts, never commit
 .claude/brain/local-awareness.json
 
+# Supply-chain SCA caches (E-SC-2): per-key OSV advisory responses
+# cached for 24h. Regenerated on demand; never commit — the cache
+# can balloon to thousands of entries in large workspaces and is
+# fully reproducible from `neurogrim sensory supply-chain-sca`.
+# The `**/` prefix matches .claude/brain/cache/ at any depth;
+# NeuroGrim's unusual layout (repo-root .claude/ + neurogrim/
+# workspace subdir) can produce caches in either location depending
+# on which --project-root the operator scans.
+**/.claude/brain/cache/
+
 # Editor and OS
 .vscode/
 .idea/

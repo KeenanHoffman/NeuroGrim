@@ -123,15 +123,24 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
         }
     };
 
-    // Steps 5-8 (OSV query + RustSec cross-check + accepted filter +
-    // scoring) are stubbed at Step 3-4. The entry fn already calls
-    // the submodule stubs so wire-up breakage surfaces early.
-    let osv_advisories = osv::query_batch(&packages).await.unwrap_or_default();
+    // Step 5 wires the OSV client (batch query + 24h file cache).
+    // RustSec cross-check + accepted-filter + scoring remain stubbed;
+    // Steps 6-8 fill them in.
+    let cache_dir = root.join(".claude").join("brain").join("cache").join("osv");
+    let osv_result = match osv::query_batch(&packages, &cache_dir).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("OSV query_batch returned Err (should be rare): {:#}", e);
+            osv::OsvQueryResult::default()
+        }
+    };
     let rustsec_advisories = rustsec::scan_local(&packages, root).unwrap_or_default();
     let accepted = accepted::read(root).unwrap_or_default();
 
-    let all_advisories: Vec<Advisory> = osv_advisories
-        .into_iter()
+    let all_advisories: Vec<Advisory> = osv_result
+        .advisories
+        .iter()
+        .cloned()
         .chain(rustsec_advisories.into_iter())
         .collect();
 
@@ -139,13 +148,24 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
         scoring::compute(&all_advisories, &accepted, packages.len());
 
     // Compose the full extras vec: scoring contributions + lockfile
-    // stats that scoring doesn't need to care about.
+    // stats + OSV metadata.
     let mut extras: Vec<(&str, Value)> = extras_from_scoring;
     extras.push(("total_packages_scanned", json!(packages.len())));
     extras.push(("sensor_status", json!("ok")));
+    extras.push(("osv_cache_hits", json!(osv_result.cache_hits)));
+    extras.push(("osv_live_queries", json!(osv_result.live_queries)));
+    extras.push((
+        "osv_oldest_cache_age_seconds",
+        match osv_result.oldest_cache_age_seconds {
+            Some(s) => json!(s),
+            None => Value::Null,
+        },
+    ));
+    extras.push(("osv_reachable", json!(osv_result.osv_reachable)));
+    extras.push(("osv_cache_bypassed", json!(osv_result.cache_bypassed)));
     extras.push((
         "_impl_status",
-        json!("Step 3-4 scaffold: lockfile wired; OSV/RustSec/scoring stubbed"),
+        json!("Step 5 complete: OSV wired; RustSec/accepted/scoring stubbed"),
     ));
 
     crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras))
