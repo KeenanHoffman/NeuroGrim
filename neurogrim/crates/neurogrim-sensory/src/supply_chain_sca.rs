@@ -137,18 +137,55 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
     let rustsec_advisories = rustsec::scan_local(&packages, root).unwrap_or_default();
     let accepted = accepted::read(root).unwrap_or_default();
 
-    let all_advisories: Vec<Advisory> = osv_result
-        .advisories
+    // Union OSV + RustSec, deduplicating by (advisory id, package
+    // name, package version). If both sources surface the same
+    // advisory for the same package, prefer OSV's entry (it's the
+    // primary source; RustSec-local is cross-reference).
+    let all_advisories: Vec<Advisory> = {
+        let mut seen: std::collections::HashSet<(String, String, String)> =
+            std::collections::HashSet::new();
+        let mut out: Vec<Advisory> = Vec::new();
+        for adv in osv_result
+            .advisories
+            .iter()
+            .cloned()
+            .chain(rustsec_advisories.into_iter())
+        {
+            let key = (adv.id.clone(), adv.package.name.clone(), adv.package.version.clone());
+            if seen.insert(key) {
+                out.push(adv);
+            }
+        }
+        out
+    };
+
+    // Identify advisories that came from RustSec with no OSV
+    // counterpart — the "OSV miss, locally caught" signal that
+    // motivates keeping the submodule pinned. Surfacing the IDs (not
+    // just the count) lets the operator see exactly what slipped
+    // through OSV's ingestion pipeline.
+    let rustsec_only: Vec<&Advisory> = all_advisories
         .iter()
-        .cloned()
-        .chain(rustsec_advisories.into_iter())
+        .filter(|a| a.source == AdvisorySource::RustsecLocal)
+        .collect();
+    let rustsec_only_count = rustsec_only.len();
+    let rustsec_only_ids: Vec<Value> = rustsec_only
+        .iter()
+        .map(|a| {
+            json!({
+                "id": a.id,
+                "package": a.package.name,
+                "version": a.package.version,
+                "informational": a.informational,
+            })
+        })
         .collect();
 
     let (score, findings, extras_from_scoring) =
         scoring::compute(&all_advisories, &accepted, packages.len());
 
     // Compose the full extras vec: scoring contributions + lockfile
-    // stats + OSV metadata.
+    // stats + OSV metadata + RustSec-local metadata.
     let mut extras: Vec<(&str, Value)> = extras_from_scoring;
     extras.push(("total_packages_scanned", json!(packages.len())));
     extras.push(("sensor_status", json!("ok")));
@@ -163,9 +200,11 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
     ));
     extras.push(("osv_reachable", json!(osv_result.osv_reachable)));
     extras.push(("osv_cache_bypassed", json!(osv_result.cache_bypassed)));
+    extras.push(("rustsec_local_unique_hits", json!(rustsec_only_count)));
+    extras.push(("rustsec_local_unique_ids", json!(rustsec_only_ids)));
     extras.push((
         "_impl_status",
-        json!("Step 5 complete: OSV wired; RustSec/accepted/scoring stubbed"),
+        json!("Step 6 complete: OSV + RustSec-local wired; accepted/scoring stubbed"),
     ));
 
     crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras))

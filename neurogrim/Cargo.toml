@@ -65,8 +65,13 @@ url = { version = "2", features = ["serde"] }
 #   us ever shelling out to `cargo audit` or `trivy` for SCA.
 # - `toml` is needed in `neurogrim-sensory` to parse the RustSec
 #   advisory-db TOML frontmatter (vendored at `vendor/rustsec-advisory-db/`).
+# - `semver` is RustLang-team maintained; provides VersionReq for
+#   matching advisory version-range strings against concrete versions
+#   (Step 6 rustsec.rs). Already transitively in our tree via cargo-lock;
+#   this declaration just makes the direct `use` legal.
 cargo-lock = "11"
 toml = "0.8"
+semver = "1"
 
 # Workspace crates
 # Both `path` and `version` are required for `cargo publish` to resolve

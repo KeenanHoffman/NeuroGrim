@@ -31,6 +31,7 @@ neurogrim-core = { workspace = true }
 # LiteLLM attack vector; we do not shell out to scanners).
 cargo-lock = { workspace = true }
 toml = { workspace = true }
+semver = { workspace = true }
 # reqwest is crate-locally pinned here to match `neurogrim-a2a`'s
 # TLS posture (rustls-tls-native-roots — reads the OS trust store,
 # supports enterprise / private CAs, avoids OpenSSL in Docker images).
