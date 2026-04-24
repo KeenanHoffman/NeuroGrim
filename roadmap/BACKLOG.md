@@ -1330,6 +1330,46 @@ over the same period (not currently measurable).
 
 ---
 
+### B-20: PyPI publish of `lsp-brains` SDK — CANDIDATE (post-incident-review)
+
+**Why it's here.** v3.0-rc.1 originally planned to publish the
+`lsp-brains` Python SDK to PyPI alongside the Rust crates. On
+2026-04-23 — the same window we were finalizing the release — a
+PyPI supply-chain incident emerged. Operator decision: **pause
+PyPI publish until an incident review + supply-chain audit
+complete.** The Rust track (crates.io) continues on its own
+schedule; the SDK ships as "install from source" until this gate
+closes.
+
+**What's unchanged.** The package name is reserved but not
+published; `pyproject.toml` metadata lives in the repo; source
+install works today (`pip install -e NeuroGrim/sdk-python/`).
+`NeuroGrim-python-starter/README.md` and the v3.0-rc.1 release
+notes both document the source-install path as the supported
+adoption path.
+
+**Plan when:**
+1. PyPI incident post-mortem is publicly available and understood.
+2. A supply-chain audit covers our SDK's transitive dependency
+   graph (ideally including attestations / SBOM).
+3. A 2FA / trusted-publishing story is in place for the publish
+   credential.
+4. The Rust publish (B-20-adjacent preparation) has landed
+   successfully — gives us experience with the irreversibility.
+
+**Dependencies.** Independent of B-14 through B-19. Depends on
+the operator's read of the incident landscape, not on any
+internal-to-Brain capability.
+
+**Adversarial note.** The conservative stance here is the right
+one: PyPI package names are irrevocable, and a release made under
+incident-window pressure is exactly when supply-chain footguns
+fire. Deferring buys optionality at the cost of a small adoption-
+friction increase (source install vs `pip install`). The cost is
+acceptable for this release.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

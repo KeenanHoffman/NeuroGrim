@@ -4,7 +4,14 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "NeuroGrim CLI — LSP Brains scoring engine"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+description = "NeuroGrim CLI — LSP Brains scoring engine and MCP server binary"
 
 [[bin]]
 name = "neurogrim"

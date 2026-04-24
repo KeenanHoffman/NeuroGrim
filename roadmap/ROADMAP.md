@@ -192,7 +192,7 @@ hooks, add hats.
 |-------|------|--------|--------|
 | S5-TP-1 | Starter Kit / Template Project | **Complete** (archived 2026-04-17) | XL |
 | S5-TP-2 | LSP Brains Specification + Documentation | **Complete** | XL |
-| S5-TP-3 | Product Delivery + External Adoption | Not started | XL |
+| S5-TP-3 | Product Delivery + External Adoption | **Post-publication milestone** (re-framed 2026-04-23; see note below) | XL |
 | S5-TP-4 | Trajectory Intelligence | **Complete** | L |
 | S5-TP-5 | Human User Personas | **Complete** | M |
 | S5-TP-6 | Zero-Config Base Brain | **Complete** | M |
@@ -220,7 +220,13 @@ hooks, add hats.
 - [x] Dual brain architecture designed (local + external, shared state sync protocol)
 - [x] Whitepaper updated with LSP Brains framing and new concepts (rewritten as `whitepaper/WHITEPAPER.md`)
 - [x] No references to "Operator Methodology" except in historical context
-- [ ] Someone outside LaaS successfully adopts the pattern
+- [ ] Someone outside LaaS successfully adopts the pattern *(re-framed
+      2026-04-23 as a **post-publication milestone**: v3.0-rc.1 ships
+      the adoption surface — `docs/getting-started.md`,
+      `examples/hello-brain/`, CHANGELOG, READMEs, LICENSE,
+      whitepaper §11 — and adopter-found is tracked separately rather
+      than as a release blocker. See CHANGELOG for the open-gate
+      status; see the v3.0-rc.1 release notes for the full framing.)*
 
 ---
 

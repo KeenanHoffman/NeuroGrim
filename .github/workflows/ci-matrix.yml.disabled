@@ -1,0 +1,79 @@
+# CI Matrix (cross-OS + MSRV + cargo audit)
+#
+# THIS FILE IS NOT ACTIVE. GitHub Actions only runs `.yml` files under
+# `.github/workflows/`. To enable this matrix, rename this file to
+# `ci-matrix.yml`. The operator controls activation so the matrix doesn't
+# surprise anyone with unexpected minutes-usage before we're ready to
+# absorb any flakes it surfaces.
+#
+# WHAT THIS ADDS on top of the existing `ci.yml`:
+#   - Cross-OS: ubuntu-latest + macos-latest + windows-latest
+#   - Rust versions: stable + 1.75 (declared as workspace rust-version)
+#   - `cargo audit` — security advisory scan (part of gate 5)
+#
+# Keep `ci.yml` (the ubuntu-only baseline) enabled; this file extends
+# coverage rather than replacing it.
+#
+# Scope notes:
+#   - No Docker compose step here. macos-latest and windows-latest
+#     runners don't have Docker ready; compose smoke stays in `ci.yml`.
+#   - Python SDK matrix stays in `ci.yml` (Linux-only is plenty for
+#     a pure-Python package pending PyPI publish — see BACKLOG B-20).
+
+name: CI Matrix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly cargo audit even without pushes, so advisories surface
+    # against the current dependency set without waiting for a PR.
+    - cron: '0 12 * * 1'
+
+jobs:
+  rust-matrix:
+    name: cargo test (${{ matrix.os }} / rust ${{ matrix.rust }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, "1.75"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: neurogrim
+          key: ${{ matrix.os }}-${{ matrix.rust }}
+
+      - name: cargo check --workspace
+        working-directory: neurogrim
+        run: cargo check --workspace --all-targets
+
+      - name: cargo test --workspace
+        working-directory: neurogrim
+        run: cargo test --workspace --all-targets
+
+  cargo-audit:
+    name: cargo audit (security advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: cargo audit
+        working-directory: neurogrim
+        # Non-zero exit on advisory. Adjust with --ignore RUSTSEC-XXXX
+        # if a specific advisory becomes a known-accepted risk.
+        run: cargo audit

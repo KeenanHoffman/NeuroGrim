@@ -32,7 +32,11 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/KeenanHoffman/NeuroGrim"
+Repository = "https://github.com/KeenanHoffman/NeuroGrim"
+Documentation = "https://github.com/KeenanHoffman/NeuroGrim#readme"
 Specification = "https://github.com/KeenanHoffman/LSP-Brains"
+Changelog = "https://github.com/KeenanHoffman/NeuroGrim/blob/main/CHANGELOG.md"
+Issues = "https://github.com/KeenanHoffman/NeuroGrim/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["lsp_brains"]

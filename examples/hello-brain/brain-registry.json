@@ -1,0 +1,30 @@
+{
+  "schema_version": "2",
+  "project_name": "hello-brain",
+  "description": "Minimal working example of a NeuroGrim Brain. Intended for newcomers to see the Brain produce a real score on a real (if tiny) codebase, without needing to configure anything themselves. See examples/hello-brain/README.md for the walkthrough.",
+  "weights": {
+    "git-health": 0.25,
+    "test-health": 0.35,
+    "code-quality": 0.25,
+    "deploy-readiness": 0.15
+  },
+  "domains": {
+    "git-health": {
+      "description": "VCS state: branch divergence, uncommitted changes, commit cadence.",
+      "scoring_source": { "type": "sensory" }
+    },
+    "test-health": {
+      "description": "Test framework presence + test-directory layout + recent-results availability.",
+      "scoring_source": { "type": "sensory" }
+    },
+    "code-quality": {
+      "description": "README presence + lint-config presence + documentation hygiene.",
+      "scoring_source": { "type": "sensory" }
+    },
+    "deploy-readiness": {
+      "description": "CI pipeline detection + deploy-artifact presence.",
+      "scoring_source": { "type": "sensory" }
+    }
+  },
+  "correlations": []
+}

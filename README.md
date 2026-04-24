@@ -11,6 +11,19 @@ trajectory intelligence, and gated governance. Sensory tools are small spells ca
 against the project; the Brain keeps a grimoire of their readings and tells you what
 has changed.
 
+**Current version:** `3.0.0-rc.1` — first public release candidate.
+See [CHANGELOG.md](CHANGELOG.md) for what shipped + what's open.
+
+## 🚀 Getting started in ~20 minutes
+
+New here? Start with **[docs/getting-started.md](docs/getting-started.md)** —
+a clone → build → first-score walkthrough with a working example at
+[`examples/hello-brain/`](examples/hello-brain/). It will land you on a
+real Brain score for a real project in under half an hour.
+
+Already comfortable with Rust workspaces? Jump to [Quick Start](#quick-start)
+below.
+
 ## What's Here
 
 | Directory | Contents |

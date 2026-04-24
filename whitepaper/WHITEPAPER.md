@@ -2,8 +2,8 @@
 
 ## NeuroGrim — Reference Implementation Whitepaper
 
-**Version:** 2.0
-**Date:** April 2026
+**Version:** 2.1
+**Date:** 2026-04-23 (evidence-posture refresh; see §11)
 **Specification:** https://github.com/KeenanHoffman/LSP-Brains
 
 ---
@@ -20,6 +20,7 @@
 8. [Fractal Composition](#8-fractal-composition)
 9. [Adopting LSP Brains](#9-adopting-lsp-brains)
 10. [What Success Looks Like](#10-what-success-looks-like)
+11. [Evidence Posture (2026-04-23)](#11-evidence-posture-2026-04-23)
 
 ---
 
@@ -750,6 +751,90 @@ Those three questions — health, priority, focus — are what LSP Brains is bui
 
 ---
 
+## 11. Evidence Posture (2026-04-23)
+
+> This section was added in the 2026-04-23 refresh to state honestly what
+> kind of evidence supports the Brain's value and what kind does not.
+> Earlier sections of this whitepaper predate it. When in tension, this
+> section wins.
+
+### Primary value hypothesis: longitudinal awareness
+
+The Brain's core claim is **cumulative project awareness across a session
+lifecycle.** A session is not a single prompt; it is the life of the
+project as seen by one or more AI agents working on it over days, weeks,
+and months. The Brain provides:
+
+- **Consistency over many actions.** A value system, a scoring rubric,
+  and a declared culture persist where individual agent-session memory
+  does not. The agent does not re-derive "what matters here" on every
+  prompt.
+- **Awareness agents would otherwise carry in prompt context.** Project
+  health, gate status, recent trajectory, and governance history all
+  live in files the Brain reads — not in the token budget.
+- **Cross-domain correlation.** A failing CI run and a missing
+  SECURITY.md are separately cheap facts; the Brain relates them and
+  surfaces the compound signal.
+- **Cumulative governance.** The proposal ledger, promotion ledger, and
+  capability-hygiene ledger produce history that compounds. A
+  recommendation made today can be graded when the outcome lands next
+  week. The Brain gets more honest over time, not less.
+- **Cultural substrate.** The five-value invariant (positivity,
+  integrity, honesty, critical-but-kind, respect; spec §14) acts as a
+  floor across peers and over time. It does not degrade when context is
+  trimmed.
+
+These properties are **longitudinal by nature.** They manifest in
+artifacts produced over time — ledgers, trajectory traces, cross-session
+behavior patterns — not in any single response.
+
+### Secondary measurement surface: bounded single-turn instruments
+
+The experimental artifacts at `.claude/experiments/brain-vs-control/`
+(Phase 2 L0/L1, Phase 3 L2, held-out Phase 4) are **bounded instruments**
+for specific sub-questions:
+
+- Does static context injection help or hurt a single response, and for
+  which task classes?
+- Does an agent given a `brain_query` tool route intelligently between
+  invoking it and skipping it?
+- When injected context is stale or wrong, how badly does response
+  quality degrade?
+
+These questions matter, and the experiments answered them with
+pre-registered falsification criteria honored (the held-out run killed a
+sharper "factual-augmentation only" reframe; see the post-mortem at
+`.claude/experiments/brain-vs-control/reports/reframe-post-mortem.md`).
+But they are **single-turn**: one task → one response → one judge score.
+They cannot, by construction, measure the longitudinal properties above.
+
+### What this means for readers
+
+- Treat single-turn benchmarks as **instruments, not verdicts** on Brain
+  value. They answer "which context to inject for this response"; they
+  do not answer "does the Brain make project work better over a
+  quarter."
+- Treat the longitudinal claim as a **hypothesis the Brain is
+  structured to test**, not as proven. The infrastructure is in place
+  (ledgers, trajectory, promotion, capability-hygiene) — the accumulated
+  evidence base is still young.
+- Where this whitepaper describes a capability (scoring, gates,
+  correlation, governance), assume the mechanism is implemented and
+  tested at the unit level. Where it describes an outcome ("teams ship
+  better," "agents act more wisely"), treat it as a design intent that
+  the longitudinal evidence base will either confirm or refute over
+  time.
+
+The honest framing: **we built the sensory apparatus a project needs so
+an agent can reason about its health. We have unit-level confidence that
+the apparatus works. The longitudinal payoff is what we are instrumenting
+for, not what we have yet measured.**
+
+METHODOLOGY-EVOLUTION §14 (LSP Brains spec repo) absorbs this posture in
+full, including the specific reframes tested and killed on 2026-04-23.
+
+---
+
 ## Appendix A: Core Concepts Glossary
 
 | Term | Definition |
@@ -831,9 +916,14 @@ This schema is stable across Brain versions within a major version number. Consu
 
 - **LSP Brains Specification** — https://github.com/KeenanHoffman/LSP-Brains
 - **NeuroGrim Repository** — reference implementation source
-- `roadmap/VISION.md` — seventeen guiding principles (1–17) and the north star
+- `roadmap/VISION.md` — nineteen guiding principles (1–19) and the north star
 - `roadmap/ROADMAP.md` — stage progression and current implementation status
-- `.claude/skills/brain.md` — operational Brain usage guide
-- `.claude/skills/hats.md` — hat system documentation; pairs with human personas for output shaping
-- `.claude/skills/gate-system-overview.md` — gate state machine architecture
+- `docs/getting-started.md` — ~20-minute path from clone to a working Brain
+- `CHANGELOG.md` — release history (current: `3.0.0-rc.1`)
+- `.claude/skills/hats/SKILL.md` — hat system (adversary, architect, visionary, rubber-duck, …); pairs with human personas for output shaping
+- `.claude/skills/plan-critic/SKILL.md` — adversarial plan review protocol
+- `.claude/skills/cli-mode/SKILL.md` — bypass MCP; invoke the Brain via Bash subcommands
+- `docs/invocation-ledger.md` — Axis 4 v1 capability-hygiene observability
+- `docs/cli-mode.md` + `docs/cli-sensory-surface.md` — MCP↔CLI surface mapping
+- `.claude/experiments/brain-vs-control/` — 2026-04-23 experiment artifacts, ledgers, and reports (referenced by §11)
 - `domains/laas/` — archived first-customer domain implementation (read-only reference)

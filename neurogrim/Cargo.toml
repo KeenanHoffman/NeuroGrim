@@ -10,12 +10,18 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "3.0.0-rc.1"
 edition = "2021"
 authors = ["Keenan Hoffman"]
 license = "MIT"
 description = "NeuroGrim: LSP Brains reference implementation"
 repository = "https://github.com/KeenanHoffman/NeuroGrim"
+homepage = "https://github.com/KeenanHoffman/NeuroGrim"
+documentation = "https://github.com/KeenanHoffman/NeuroGrim#readme"
+readme = "../README.md"
+keywords = ["lsp-brains", "agent", "mcp", "devops", "observability"]
+categories = ["development-tools", "command-line-utilities"]
+rust-version = "1.75"
 
 [workspace.dependencies]
 # Serialization
@@ -53,8 +59,11 @@ tiktoken-rs = "0.6"
 url = { version = "2", features = ["serde"] }
 
 # Workspace crates
-neurogrim-core = { path = "crates/neurogrim-core" }
-neurogrim-sensory = { path = "crates/neurogrim-sensory" }
-neurogrim-mcp = { path = "crates/neurogrim-mcp" }
-neurogrim-a2a = { path = "crates/neurogrim-a2a" }
-neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem" }
+# Both `path` and `version` are required for `cargo publish` to resolve
+# intra-workspace deps from crates.io. Keep versions in lock-step with
+# `workspace.package.version` above.
+neurogrim-core = { path = "crates/neurogrim-core", version = "3.0.0-rc.1" }
+neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "3.0.0-rc.1" }
+neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "3.0.0-rc.1" }
+neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "3.0.0-rc.1" }
+neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "3.0.0-rc.1" }

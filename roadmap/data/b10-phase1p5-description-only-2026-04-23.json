@@ -1,0 +1,470 @@
+{
+  "generated_at": "2026-04-23T21:51:57.727378600+00:00",
+  "hygiene_distribution": {
+    "excellent (10-25%)": 36,
+    "good (5-10% or 25-40%)": 5,
+    "over-described (>40%)": 0,
+    "under-described (<5%)": 0
+  },
+  "hypothesis": "Agents need only the description (when-to-use block) + section outline to route; full body loads on demand.",
+  "interpretation": {
+    "actionable_if_reduction_gt_80pct": "The hypothesis is empirically supported — a description+outline TOC captures the agent's routing signal at a fraction of the full-body cost.",
+    "actionable_if_reduction_lt_50pct": "The hypothesis fails — skills do not carry their routing signal in the description block; the CapProto architecture must ship more than a TOC."
+  },
+  "per_brain": {
+    "ecosystem": {
+      "skill_count": 19,
+      "skills": [
+        {
+          "combined_tokens": 402,
+          "description_tokens": 301,
+          "full_tokens": 2252,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 13.365896980461812,
+          "outline_tokens": 101,
+          "path": "coherence/SKILL.md",
+          "reduction_pct": 82.14920071047958
+        },
+        {
+          "combined_tokens": 459,
+          "description_tokens": 343,
+          "full_tokens": 3071,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 11.16900032562683,
+          "outline_tokens": 116,
+          "path": "dual-review/SKILL.md",
+          "reduction_pct": 85.05372842722241
+        },
+        {
+          "combined_tokens": 540,
+          "description_tokens": 436,
+          "full_tokens": 3260,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 13.374233128834355,
+          "outline_tokens": 104,
+          "path": "hats/SKILL.md",
+          "reduction_pct": 83.43558282208589
+        },
+        {
+          "combined_tokens": 425,
+          "description_tokens": 368,
+          "full_tokens": 2008,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 18.326693227091635,
+          "outline_tokens": 57,
+          "path": "human-comms/SKILL.md",
+          "reduction_pct": 78.83466135458167
+        },
+        {
+          "combined_tokens": 510,
+          "description_tokens": 411,
+          "full_tokens": 2203,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 18.656377666817974,
+          "outline_tokens": 99,
+          "path": "imagination-mode/SKILL.md",
+          "reduction_pct": 76.84975034044484
+        },
+        {
+          "combined_tokens": 370,
+          "description_tokens": 336,
+          "full_tokens": 1070,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 31.401869158878505,
+          "outline_tokens": 34,
+          "path": "north-star/SKILL.md",
+          "reduction_pct": 65.42056074766356
+        },
+        {
+          "combined_tokens": 467,
+          "description_tokens": 427,
+          "full_tokens": 1940,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 22.010309278350515,
+          "outline_tokens": 40,
+          "path": "pilot-protocol/SKILL.md",
+          "reduction_pct": 75.9278350515464
+        },
+        {
+          "combined_tokens": 514,
+          "description_tokens": 409,
+          "full_tokens": 2185,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 18.71853546910755,
+          "outline_tokens": 105,
+          "path": "plan-critic/SKILL.md",
+          "reduction_pct": 76.47597254004576
+        },
+        {
+          "combined_tokens": 481,
+          "description_tokens": 386,
+          "full_tokens": 2212,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 17.450271247739604,
+          "outline_tokens": 95,
+          "path": "refine-agent-behavior/SKILL.md",
+          "reduction_pct": 78.25497287522604
+        },
+        {
+          "combined_tokens": 543,
+          "description_tokens": 416,
+          "full_tokens": 3993,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 10.418231905835212,
+          "outline_tokens": 127,
+          "path": "refine-judge-integrity/SKILL.md",
+          "reduction_pct": 86.40120210368144
+        },
+        {
+          "combined_tokens": 440,
+          "description_tokens": 358,
+          "full_tokens": 1854,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 19.30960086299892,
+          "outline_tokens": 82,
+          "path": "review-loop/SKILL.md",
+          "reduction_pct": 76.26752966558792
+        },
+        {
+          "combined_tokens": 334,
+          "description_tokens": 295,
+          "full_tokens": 1225,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 24.081632653061224,
+          "outline_tokens": 39,
+          "path": "rubber-duck/SKILL.md",
+          "reduction_pct": 72.73469387755102
+        },
+        {
+          "combined_tokens": 482,
+          "description_tokens": 349,
+          "full_tokens": 2672,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 13.061377245508982,
+          "outline_tokens": 133,
+          "path": "secret-refs/SKILL.md",
+          "reduction_pct": 81.96107784431138
+        },
+        {
+          "combined_tokens": 565,
+          "description_tokens": 435,
+          "full_tokens": 2441,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 17.82056534207292,
+          "outline_tokens": 130,
+          "path": "security-standards/SKILL.md",
+          "reduction_pct": 76.85374846374437
+        },
+        {
+          "combined_tokens": 456,
+          "description_tokens": 360,
+          "full_tokens": 2113,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 17.037387600567914,
+          "outline_tokens": 96,
+          "path": "skill-deprecation/SKILL.md",
+          "reduction_pct": 78.41930903928065
+        },
+        {
+          "combined_tokens": 494,
+          "description_tokens": 458,
+          "full_tokens": 1572,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 29.134860050890584,
+          "outline_tokens": 36,
+          "path": "subagent-patterns/SKILL.md",
+          "reduction_pct": 68.57506361323155
+        },
+        {
+          "combined_tokens": 394,
+          "description_tokens": 296,
+          "full_tokens": 1865,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 15.871313672922252,
+          "outline_tokens": 98,
+          "path": "sync-ecosystem/SKILL.md",
+          "reduction_pct": 78.8739946380697
+        },
+        {
+          "combined_tokens": 475,
+          "description_tokens": 372,
+          "full_tokens": 2520,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 14.761904761904763,
+          "outline_tokens": 103,
+          "path": "write-agent-behavior-scenario/SKILL.md",
+          "reduction_pct": 81.15079365079364
+        },
+        {
+          "combined_tokens": 361,
+          "description_tokens": 297,
+          "full_tokens": 2389,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 12.43197990791126,
+          "outline_tokens": 64,
+          "path": "write-skill/SKILL.md",
+          "reduction_pct": 84.8890749267476
+        }
+      ],
+      "totals": {
+        "description_only": 7053,
+        "description_plus_outline": 8712,
+        "full_body": 42845,
+        "outline_only": 1659,
+        "reduction_pct_desc_plus_outline": 79.66623876765084
+      }
+    },
+    "lsp-brains": {
+      "skill_count": 2,
+      "skills": [
+        {
+          "combined_tokens": 543,
+          "description_tokens": 416,
+          "full_tokens": 3993,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 10.418231905835212,
+          "outline_tokens": 127,
+          "path": "refine-judge-integrity/SKILL.md",
+          "reduction_pct": 86.40120210368144
+        },
+        {
+          "combined_tokens": 334,
+          "description_tokens": 295,
+          "full_tokens": 1225,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 24.081632653061224,
+          "outline_tokens": 39,
+          "path": "rubber-duck/SKILL.md",
+          "reduction_pct": 72.73469387755102
+        }
+      ],
+      "totals": {
+        "description_only": 711,
+        "description_plus_outline": 877,
+        "full_body": 5218,
+        "outline_only": 166,
+        "reduction_pct_desc_plus_outline": 83.19279417401303
+      }
+    },
+    "neurogrim": {
+      "skill_count": 20,
+      "skills": [
+        {
+          "combined_tokens": 302,
+          "description_tokens": 251,
+          "full_tokens": 1869,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 13.42964151952916,
+          "outline_tokens": 51,
+          "path": "a2a/SKILL.md",
+          "reduction_pct": 83.84162653825575
+        },
+        {
+          "combined_tokens": 381,
+          "description_tokens": 337,
+          "full_tokens": 1128,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 29.875886524822697,
+          "outline_tokens": 44,
+          "path": "cli-mode/SKILL.md",
+          "reduction_pct": 66.22340425531915
+        },
+        {
+          "combined_tokens": 402,
+          "description_tokens": 301,
+          "full_tokens": 2252,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 13.365896980461812,
+          "outline_tokens": 101,
+          "path": "coherence/SKILL.md",
+          "reduction_pct": 82.14920071047958
+        },
+        {
+          "combined_tokens": 459,
+          "description_tokens": 343,
+          "full_tokens": 3071,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 11.16900032562683,
+          "outline_tokens": 116,
+          "path": "dual-review/SKILL.md",
+          "reduction_pct": 85.05372842722241
+        },
+        {
+          "combined_tokens": 540,
+          "description_tokens": 436,
+          "full_tokens": 3260,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 13.374233128834355,
+          "outline_tokens": 104,
+          "path": "hats/SKILL.md",
+          "reduction_pct": 83.43558282208589
+        },
+        {
+          "combined_tokens": 425,
+          "description_tokens": 368,
+          "full_tokens": 2008,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 18.326693227091635,
+          "outline_tokens": 57,
+          "path": "human-comms/SKILL.md",
+          "reduction_pct": 78.83466135458167
+        },
+        {
+          "combined_tokens": 510,
+          "description_tokens": 411,
+          "full_tokens": 2203,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 18.656377666817974,
+          "outline_tokens": 99,
+          "path": "imagination-mode/SKILL.md",
+          "reduction_pct": 76.84975034044484
+        },
+        {
+          "combined_tokens": 370,
+          "description_tokens": 336,
+          "full_tokens": 1070,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 31.401869158878505,
+          "outline_tokens": 34,
+          "path": "north-star/SKILL.md",
+          "reduction_pct": 65.42056074766356
+        },
+        {
+          "combined_tokens": 321,
+          "description_tokens": 235,
+          "full_tokens": 1648,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 14.259708737864077,
+          "outline_tokens": 86,
+          "path": "peer-brain/SKILL.md",
+          "reduction_pct": 80.52184466019418
+        },
+        {
+          "combined_tokens": 467,
+          "description_tokens": 427,
+          "full_tokens": 1940,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 22.010309278350515,
+          "outline_tokens": 40,
+          "path": "pilot-protocol/SKILL.md",
+          "reduction_pct": 75.9278350515464
+        },
+        {
+          "combined_tokens": 514,
+          "description_tokens": 409,
+          "full_tokens": 2185,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 18.71853546910755,
+          "outline_tokens": 105,
+          "path": "plan-critic/SKILL.md",
+          "reduction_pct": 76.47597254004576
+        },
+        {
+          "combined_tokens": 543,
+          "description_tokens": 416,
+          "full_tokens": 3993,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 10.418231905835212,
+          "outline_tokens": 127,
+          "path": "refine-judge-integrity/SKILL.md",
+          "reduction_pct": 86.40120210368144
+        },
+        {
+          "combined_tokens": 440,
+          "description_tokens": 358,
+          "full_tokens": 1854,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 19.30960086299892,
+          "outline_tokens": 82,
+          "path": "review-loop/SKILL.md",
+          "reduction_pct": 76.26752966558792
+        },
+        {
+          "combined_tokens": 334,
+          "description_tokens": 295,
+          "full_tokens": 1225,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 24.081632653061224,
+          "outline_tokens": 39,
+          "path": "rubber-duck/SKILL.md",
+          "reduction_pct": 72.73469387755102
+        },
+        {
+          "combined_tokens": 482,
+          "description_tokens": 349,
+          "full_tokens": 2672,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 13.061377245508982,
+          "outline_tokens": 133,
+          "path": "secret-refs/SKILL.md",
+          "reduction_pct": 81.96107784431138
+        },
+        {
+          "combined_tokens": 565,
+          "description_tokens": 435,
+          "full_tokens": 2441,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 17.82056534207292,
+          "outline_tokens": 130,
+          "path": "security-standards/SKILL.md",
+          "reduction_pct": 76.85374846374437
+        },
+        {
+          "combined_tokens": 456,
+          "description_tokens": 360,
+          "full_tokens": 2113,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 17.037387600567914,
+          "outline_tokens": 96,
+          "path": "skill-deprecation/SKILL.md",
+          "reduction_pct": 78.41930903928065
+        },
+        {
+          "combined_tokens": 494,
+          "description_tokens": 458,
+          "full_tokens": 1572,
+          "hygiene_bucket": "good (5-10% or 25-40%)",
+          "hygiene_pct_desc_of_body": 29.134860050890584,
+          "outline_tokens": 36,
+          "path": "subagent-patterns/SKILL.md",
+          "reduction_pct": 68.57506361323155
+        },
+        {
+          "combined_tokens": 394,
+          "description_tokens": 296,
+          "full_tokens": 1865,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 15.871313672922252,
+          "outline_tokens": 98,
+          "path": "sync-ecosystem/SKILL.md",
+          "reduction_pct": 78.8739946380697
+        },
+        {
+          "combined_tokens": 361,
+          "description_tokens": 297,
+          "full_tokens": 2389,
+          "hygiene_bucket": "excellent (10-25%)",
+          "hygiene_pct_desc_of_body": 12.43197990791126,
+          "outline_tokens": 64,
+          "path": "write-skill/SKILL.md",
+          "reduction_pct": 84.8890749267476
+        }
+      ],
+      "totals": {
+        "description_only": 7118,
+        "description_plus_outline": 8760,
+        "full_body": 42758,
+        "outline_only": 1642,
+        "reduction_pct_desc_plus_outline": 79.51260582814912
+      }
+    }
+  },
+  "stack_totals": {
+    "description_only": 14882,
+    "description_plus_outline": 18349,
+    "full_body": 90821,
+    "outline_contribution": 3467,
+    "stack_reduction_pct_with_desc_plus_outline": 79.79652283062288
+  },
+  "tokenizer": "tiktoken-rs cl100k_base"
+}
