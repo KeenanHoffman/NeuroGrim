@@ -191,6 +191,64 @@ check_metadata_completeness() {
   done
 }
 
+check_supply_chain_sca() {
+  # BEFORE-PUBLIC-RELEASE.md gate 11: master supply-chain gate.
+  # The supply-chain-sca CMDB at .claude/supply-chain-sca-cmdb.json
+  # MUST exist + score 100 before any cargo publish.
+  echo
+  blue "== Supply-chain SCA (gate 11 master gate) =="
+  local cmdb="$REPO_ROOT/.claude/supply-chain-sca-cmdb.json"
+  if [[ ! -f "$cmdb" ]]; then
+    fail "Missing $cmdb — run: \
+      neurogrim sensory supply-chain-sca --project-root neurogrim \
+      > .claude/supply-chain-sca-cmdb.json"
+  fi
+  pass "$cmdb present"
+
+  # Extract score via Python stdlib (no jq dependency; matches the
+  # Phase 0 helpers' approach in audit/scripts/).
+  local score
+  score="$(python -c "
+import json, sys
+d = json.load(open('$cmdb'))
+print(d.get('score', -1))
+" 2>/dev/null)" || score="$(py -3 -c "
+import json, sys
+d = json.load(open('$cmdb'))
+print(d.get('score', -1))
+" 2>/dev/null)"
+
+  if [[ "$score" != "100" ]]; then
+    fail "supply-chain-sca score is $score, must be 100. \
+Inspect findings in $cmdb; either remediate the unaccepted advisories \
+(`cargo update -p <crate>`) or accept them with rationale in \
+.claude/supply-chain-accepted-advisories.toml. See \
+$REPO_ROOT/docs/supply-chain-sca.md."
+  fi
+  pass "supply-chain-sca score = 100"
+
+  # Sanity check: CMDB must be fresh (< 24h old) before publish.
+  # An old CMDB from before a dep update would be misleading.
+  local cmdb_age_secs
+  cmdb_age_secs="$(python -c "
+import os, time
+print(int(time.time() - os.path.getmtime('$cmdb')))
+" 2>/dev/null)" || cmdb_age_secs="$(py -3 -c "
+import os, time
+print(int(time.time() - os.path.getmtime('$cmdb')))
+" 2>/dev/null)"
+
+  if [[ "$cmdb_age_secs" -gt 86400 ]]; then
+    info "supply-chain-sca CMDB is older than 24h ($cmdb_age_secs s) — \
+recommend regenerating before publish"
+    info "  cd neurogrim && NEUROGRIM_OSV_NO_CACHE=1 cargo run --release -p neurogrim-cli -- \\"
+    info "      sensory supply-chain-sca --project-root . \\"
+    info "      > ../.claude/supply-chain-sca-cmdb.json"
+  else
+    pass "supply-chain-sca CMDB is fresh ($cmdb_age_secs s old)"
+  fi
+}
+
 # ---------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------
@@ -206,6 +264,7 @@ main() {
   check_cargo_publish_dryrun
   check_cargo_audit
   check_python_sdk
+  check_supply_chain_sca
   echo
   green "=== All non-skipped gates passed. ==="
   echo "Next step: review SKIPs above, then follow docs/publish-day-runbook.md."

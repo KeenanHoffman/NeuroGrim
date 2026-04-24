@@ -1390,6 +1390,54 @@ stall.
 
 ---
 
+### B-21: Native Rust license + ban-list sensor — CANDIDATE (deferred from E-SC-2)
+
+**Why it's here.** E-SC-2's original scaffolding scope included a
+`cargo-deny`-style license + ban-list checker as part of the
+supply-chain SCA pipeline. Phase-1 research (2026-04-24) surfaced
+that embedding `cargo-deny` as a library adds ~20+ transitive deps
+and targets library use only partially (~28% docs.rs coverage).
+That conflicts with the supply-chain-sca trust-surface posture
+(small, pinned, auditable). License compliance is also a distinct
+concern from supply-chain *attack surface* — separating concerns
+kept E-SC-2 tight. Re-filed here as a separate, smaller epic.
+
+**What it would add (sketched):**
+
+- A new advisory-weight sensor (`license-compliance` or similar)
+  that reads project `Cargo.toml` files for declared licenses,
+  walks `Cargo.lock` for transitive deps, and asserts every
+  observed license against an operator-curated allow-list.
+- A complementary `dep-ban-list` sensor that asserts no entry in
+  `Cargo.lock` matches an operator-curated ban list (by name +
+  version-range).
+- **Native parsing only** — no `cargo-deny` library embed. Use
+  `spdx` crate for license-string normalization (small, focused,
+  RustLang-team-adjacent). Hand-roll the allow-list/ban-list
+  matching logic; ~100-200 LOC.
+
+**Plan when:**
+1. There is concrete operator demand for license-compliance
+   gating (rare for libraries, more common for products with
+   distribution constraints).
+2. AND the supply-chain Layer 1+2+3 (E-SC-2 through E-SC-6) is
+   complete + dogfood-stable. License compliance shouldn't take
+   resources away from finishing the immune-system core.
+
+**Dependencies.** None blocking. Cleanly slots in alongside
+E-SC-3 / E-SC-4 / E-SC-5 if/when activated.
+
+**Adversarial note.** This entry is intentionally narrower than
+"port cargo-deny." NeuroGrim's posture is: every shipped sensor
+should justify its trust-surface expansion. A 100-LOC native
+license-allow-list checker is a smaller commitment than embedding
+a 20+ transitive-dep library, even if the library would do more.
+If operator demand turns out to need the more, the right move is
+to revisit the embed-vs-rewrite decision then with fresh
+information, not to over-build now.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).
