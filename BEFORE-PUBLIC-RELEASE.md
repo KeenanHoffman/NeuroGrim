@@ -1,12 +1,15 @@
 # Before Public Release — Pre-Publish Readiness Checklist
 
-**Status: 🟡 v3.0-rc.1 ready pending remaining open gates.** The
-adoption surface is in place (Tier 1 complete: getting-started,
-examples, whitepaper §11, CHANGELOG, LICENSE, README entry-ramps);
-the publication mechanics are prepared (Tier 2 complete:
-prepublish-check script, metadata pass, CI-matrix draft); the
-publish-day runbook is written (`docs/publish-day-runbook.md`).
-Operator-controlled gates remain below.
+**Status: 🔴 v3.0-rc.1 blocked on supply-chain security work.**
+The adoption surface is in place (getting-started, examples,
+whitepaper §11, CHANGELOG, LICENSE, README entry-ramps); the
+publication mechanics are prepared (prepublish-check script,
+metadata pass, CI-matrix draft); the publish-day runbook is
+written. **What changed on 2026-04-24:** a new master gate — the
+eleven-epic supply-chain security scaffolding (E-SC-0 through
+E-SC-10) — must close before any `cargo publish` runs. Phase 0
+(self-audit baseline, E-SC-0) has already shipped and is green;
+Layers 1-3 remain.
 
 **Posture:** `cargo publish` is *irrevocable* — published crate
 names cannot be reused, yanking a version does not free the name,
@@ -14,8 +17,10 @@ and third-party tooling caches versions long after yank. This
 document exists so that when we publish, every gate below has been
 closed intentionally.
 
-**Last refresh:** 2026-04-24 (pre-publish walkthrough after Tier
-1–3 landed, Tier 2 prepared, PyPI gate deferred post-incident).
+**Last refresh:** 2026-04-24 (post-E-SC-0 + SCA-master-gate
+adoption; PyPI re-framed from "deferred post-incident" to "no
+current plan to publish" per the Python-SDK-is-dogfood-only
+decision).
 
 ---
 
@@ -202,37 +207,38 @@ Still pending:
 
 ---
 
-## 7. PyPI gate 🔴 **DEFERRED post-incident-review**
+## 7. PyPI gate ⚪ **No current plan to publish**
 
-A PyPI supply-chain incident in the 2026-04-23 window led us to
-**pause this gate** pending incident review + supply-chain audit.
-Tracked as candidate future work at **BACKLOG B-20**.
+**Status update 2026-04-24:** Re-framed from "deferred post-
+incident-review" to **"no current plan to publish."** The
+ecosystem's canonical SDK for downstream extension is
+Rust — `neurogrim-core` + `neurogrim-sensory`. See
+[`docs/sdk.md`](docs/sdk.md) for the full framing.
 
-The Python SDK continues to ship as "install from source" via
-`pip install -e NeuroGrim/sdk-python/` — see
-`NeuroGrim-python-starter/README.md` and `docs/release-notes/
-v3.0-rc.1.md` for the framing.
+The Python SDK (`lsp_brains` under `sdk-python/`) remains in-repo
+as dogfood / internal example / adopter convenience. Install is
+source-only: `pip install -e NeuroGrim/sdk-python/`. The package
+name is reserved but not published.
 
-When this gate reopens (B-20 preconditions met):
+BACKLOG **B-20** is now dormant, not active. It has
+**reactivation triggers** rather than "when this gate reopens"
+conditions — see B-20 in `roadmap/BACKLOG.md`.
 
-- [ ] **PyPI incident post-mortem publicly available and understood.**
-- [ ] **Supply-chain audit** covering SDK's transitive dependency
-      graph (attestations / SBOM ideal).
-- [ ] **2FA / trusted-publishing** in place for the publish
-      credential.
-- [ ] **`python -m build`** clean — wheel + sdist.
-- [ ] **`twine check dist/*`** clean — metadata + long-description
-      render.
-- [ ] **PyPI name re-check on publish day.**
-- [ ] **Decide: `lsp-brains` or `lsp_brains`** — PyPI normalizes
-      both; import name is `lsp_brains`.
-- [ ] **TestPyPI dry-run first** — upload, install, smoke test.
-- [ ] **Version alignment** — `sdk-python/pyproject.toml` version
-      matches (or consciously diverges from) Rust workspace version.
+Summary of what B-20 activation would require (abbreviated; full
+list in BACKLOG):
 
-Until this gate closes, `scripts/prepublish-check.sh` SKIPs the
-Python build step with an explanatory message. When re-enabling,
-flip `CHECK_PYTHON=1` in that script.
+1. Concrete user demand not servable by the Rust SDK + source-
+   install Python SDK.
+2. PyPI's trusted-publishing / attestation / SBOM story matures.
+3. Our native-Python SCA (E-SC-3) reaches Layer 2+3 parity with
+   Layer 1 + demonstrated calibration.
+4. An operator-led decision to reverse the Rust-is-canonical
+   choice.
+
+None of the above are expected in the current v3.0 release track.
+
+`scripts/prepublish-check.sh` skips the Python build step with an
+explanatory message. `CHECK_PYTHON=0` is the steady-state value.
 
 ---
 
@@ -284,7 +290,7 @@ Do not run publish commands from memory; follow the runbook.
 
 ## Summary
 
-**Gate counts (2026-04-24):**
+**Gate counts (2026-04-24, post-SCA-adoption):**
 
 | Gate | Status |
 |---|---|
@@ -292,12 +298,15 @@ Do not run publish commands from memory; follow the runbook.
 | 2. Name availability snapshot | ✅ (re-check on publish day) |
 | 3. Cargo dry-run | 🟡 (automated via prepublish-check.sh) |
 | 4. Metadata completeness | 🟡 → mostly green (per-crate README verification remains) |
-| 5. Security | 🔴 (operator-controlled) |
+| 5. Security (scanner-free SCA posture) | 🟡 — rolled into gate 11 below; gate 5 is now the narrower `cargo audit` / `cargo deny` / secret-scan / history-review subset |
 | 6. Documentation | 🟡 → mostly green (per-crate rustdoc, CONTRIBUTING remain) |
-| 7. PyPI publish | 🔴 **DEFERRED post-incident-review (B-20)** |
+| 7. PyPI publish | ⚪ **No current plan** (Python SDK is dogfood-only per 2026-04-24 reframe; see B-20) |
 | 8. CI matrix | 🟡 (draft ready; operator enables) |
 | 9. Ecosystem submodule posture | 🟢 |
 | 10. Publish-day runbook | ✓ written (`docs/publish-day-runbook.md`) |
+| **11. Supply-chain security (MASTER GATE)** | 🔴 **E-SC-0 GREEN; E-SC-1 through E-SC-10 pending.** No `cargo publish` until this closes. Scope: 11-epic scaffolding at `~/.claude/plans/parallel-hugging-eich.md`. Phase 0 self-audit baseline + remediation shipped 2026-04-24 (audit/ directory, commits e09bbd0 + 902e2bd + d4733ba). Layers 1-3 sensors + spec normative + calibration + dogfooding are E-SC-2 through E-SC-10. |
+
+**Legend:** 🟢 closed · 🟡 partial / operator-action-pending · 🔴 open / blocking · ⚪ dormant (no current plan) · ✅ closed via snapshot · ✓ closed via deliverable
 
 This document is the readiness source-of-truth. Every change to our
 publish posture should update a checkbox here.

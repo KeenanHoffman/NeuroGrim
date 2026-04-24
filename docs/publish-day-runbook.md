@@ -10,10 +10,11 @@ memory.
 
 **This runbook covers the Rust (crates.io) publish path only.**
 
-The PyPI publish gate is **deferred** pending incident review +
-supply-chain audit (see `BEFORE-PUBLIC-RELEASE.md` §7 and BACKLOG
-B-20). When that gate reopens, append a PyPI section to this
-runbook rather than inlining it now.
+The Python SDK is **not published** — dogfood-only per the
+2026-04-24 reframe. `neurogrim-core` + `neurogrim-sensory` are
+the canonical Rust SDK. See `BEFORE-PUBLIC-RELEASE.md` §7,
+BACKLOG B-20, and [`docs/sdk.md`](sdk.md). No PyPI section is
+planned for this runbook in the current release track.
 
 ---
 
@@ -21,21 +22,36 @@ runbook rather than inlining it now.
 
 Before touching any `cargo publish` command:
 
-1. **Every gate in [`BEFORE-PUBLIC-RELEASE.md`](../BEFORE-PUBLIC-RELEASE.md)
+1. **Master gate 11 — Supply-chain security — CLOSED.** All eleven
+   epics of the supply-chain security scaffolding (E-SC-0 through
+   E-SC-10) complete. Phase 0 self-audit green against NeuroGrim's
+   own deps AND Layers 1-3 shipped AND calibrated AND dogfooded
+   across all four Brains. See
+   [`../audit/ROLLBACK-PLAYBOOK.md`](../audit/ROLLBACK-PLAYBOOK.md)
+   for per-epic verification. **This is the new master gate**;
+   nothing below proceeds until this closes.
+2. **Every gate in [`../BEFORE-PUBLIC-RELEASE.md`](../BEFORE-PUBLIC-RELEASE.md)
    that blocks this release is closed** — operator has walked it end to
    end and every relevant checkbox is `[x]`.
-2. **Legal / trademark clearance** obtained (gate 1).
-3. **Security audit** completed (gate 5):
-   - `cargo audit` clean or all findings triaged.
-   - `cargo deny check` clean.
+3. **Legal / trademark clearance** obtained (gate 1).
+4. **Security audit** completed (gate 5 — now the narrow subset not
+   covered by gate 11):
+   - `cargo audit` clean or all findings triaged (by our native
+     SCA, not by shelling out to scanner binaries — see
+     `audit/TOOL-TRUST-NOTES.md`).
+   - `cargo deny check` clean (via embedded `cargo-deny-core`
+     library, not a separate binary).
    - secret-scanner sweep clean.
    - git history reviewed for secrets.
-4. **Name re-check done today** (gate 2): confirm every crate name
+5. **Phase 0 self-audit run on the publish commit** — final
+   `bash audit/phase0-run.sh` exits 0 on the tree that will be
+   packaged. Do NOT trust a week-old audit report.
+6. **Name re-check done today** (gate 2): confirm every crate name
    still `AVAILABLE` on crates.io. Do NOT trust the 2026-04-17
    snapshot.
-5. **`crates.io` API token** in `~/.cargo/credentials.toml`. If the
+7. **`crates.io` API token** in `~/.cargo/credentials.toml`. If the
    token is scoped per crate, verify it can publish all six names.
-6. **Clean working tree.** `git status` is empty on a fresh checkout
+8. **Clean working tree.** `git status` is empty on a fresh checkout
    of `main`.
 
 Do not proceed if any precondition is open.
@@ -75,7 +91,7 @@ The script:
 - Runs `cargo test --workspace --all-targets`.
 - Runs `cargo publish --dry-run` on each crate (bottom-up).
 - Runs `cargo audit` if installed.
-- Skips Python SDK (PyPI deferred).
+- Skips Python SDK (no current plan to publish; see B-20).
 
 ---
 
@@ -181,7 +197,8 @@ because crates.io publish hadn't happened yet. Now they can say
    getting-started section.
 2. Edit `D:/Brains/README.md` (ecosystem) similarly.
 3. Python-starter README: leave the SDK framing as "install from
-   source" — PyPI is still deferred.
+   source" — Python SDK remains dogfood-only (no current plan to
+   publish; see B-20 + `docs/sdk.md`).
 4. Commit + push.
 
 ---
@@ -247,18 +264,26 @@ work around the collision.
 
 ---
 
-## When PyPI gate reopens
+## If B-20 ever reactivates
 
-Append a "Step 3.5 — Publish to PyPI" section here when B-20
-closes. Include the TestPyPI dry-run. Do NOT skip straight to
-real PyPI.
+Python SDK publication is dormant (no current plan). If a
+reactivation trigger fires (see B-20 § Reactivation triggers),
+this runbook gets a new "Step 3.5 — Publish to PyPI" section
+authored at that time. Do NOT pre-author — the incident landscape
++ PyPI governance + our own SCA maturity will have changed by
+then.
 
 ---
 
 ## References
 
-- `BEFORE-PUBLIC-RELEASE.md` — gate status
+- `BEFORE-PUBLIC-RELEASE.md` — gate status (including gate 11
+  master supply-chain gate)
+- `audit/ROLLBACK-PLAYBOOK.md` — supply-chain remediation
+  procedures; per-epic populated as findings surface
 - `scripts/prepublish-check.sh` — automated pre-flight
-- `docs/release-notes/v3.0-rc.1.md` — what shipped
+- `docs/release-notes/v3.0-rc.1.md` — what shipped (and why
+  publication is blocked until the supply-chain gate closes)
+- `docs/sdk.md` — canonical Rust SDK; Python SDK framing
 - `CHANGELOG.md` — keep-a-changelog format
-- `roadmap/BACKLOG.md` — B-20 (PyPI post-incident-review)
+- `roadmap/BACKLOG.md` — B-20 (Python SDK on PyPI; dormant)

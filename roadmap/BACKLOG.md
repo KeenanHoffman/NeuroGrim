@@ -1330,43 +1330,63 @@ over the same period (not currently measurable).
 
 ---
 
-### B-20: PyPI publish of `lsp-brains` SDK — CANDIDATE (post-incident-review)
+### B-20: PyPI publish of `lsp-brains` SDK — CANDIDATE (no current plan)
+
+**Status update 2026-04-24:** Re-framed from "deferred pending
+incident review" to **"no current plan to publish."** The
+operator decision following the 2026-04-23 PyPI supply-chain
+incident + Layer-1 supply-chain design work was that the
+ecosystem's canonical SDK is Rust (`neurogrim-core` +
+`neurogrim-sensory`), not Python. The Python SDK remains in-repo
+as dogfood / internal-example / adopter-convenience, installable
+from source only. B-20 is no longer a "resume when conditions
+clear" item; it's a dormant roadmap entry that reactivates only
+on substantive new inputs (see "Reactivation triggers" below).
 
 **Why it's here.** v3.0-rc.1 originally planned to publish the
-`lsp-brains` Python SDK to PyPI alongside the Rust crates. On
-2026-04-23 — the same window we were finalizing the release — a
-PyPI supply-chain incident emerged. Operator decision: **pause
-PyPI publish until an incident review + supply-chain audit
-complete.** The Rust track (crates.io) continues on its own
-schedule; the SDK ships as "install from source" until this gate
-closes.
+`lsp-brains` Python SDK to PyPI alongside the Rust crates. The
+2026-04-23 incident (second-order scanner-chain compromise:
+trojanized security-scanner binary → exfiltrated CI credentials →
+trojanized package releases) surfaced a class of attack we would
+not confidently defend against on a PyPI artifact today. Combined
+with the Rust-first adoption posture (spec + reference impl +
+native SCA all in Rust), we chose to not ship Python at all for
+this release track.
 
-**What's unchanged.** The package name is reserved but not
-published; `pyproject.toml` metadata lives in the repo; source
-install works today (`pip install -e NeuroGrim/sdk-python/`).
-`NeuroGrim-python-starter/README.md` and the v3.0-rc.1 release
-notes both document the source-install path as the supported
-adoption path.
+**What's unchanged.** Package name `lsp-brains` remains reserved
+(we do not recommend squatting, but also will not surrender the
+name); `pyproject.toml` metadata lives in the repo; source install
+works today (`pip install -e NeuroGrim/sdk-python/`).
+`NeuroGrim-python-starter/README.md`, [`docs/sdk.md`](../docs/sdk.md),
+and the v3.0-rc.1 release notes all document the source-install
+path as the supported adoption path for Python-needing adopters.
 
-**Plan when:**
-1. PyPI incident post-mortem is publicly available and understood.
-2. A supply-chain audit covers our SDK's transitive dependency
-   graph (ideally including attestations / SBOM).
-3. A 2FA / trusted-publishing story is in place for the publish
-   credential.
-4. The Rust publish (B-20-adjacent preparation) has landed
-   successfully — gives us experience with the irreversibility.
+**Reactivation triggers** (any ONE of):
 
-**Dependencies.** Independent of B-14 through B-19. Depends on
-the operator's read of the incident landscape, not on any
-internal-to-Brain capability.
+1. Concrete user demand that cannot be served by the Rust SDK
+   (e.g., an adopter organization where Python is a hard
+   operational constraint AND `pip install -e` from source is
+   insufficient for their deployment environment).
+2. PyPI's trusted-publishing / attestation / SBOM story matures
+   to a point where our integrity posture on a PyPI artifact
+   would match or exceed the current Rust-only posture.
+3. Our own native-Python SCA coverage (E-SC-3) reaches Layer 2+3
+   parity with Layer 1 AND has demonstrated calibration against
+   fresh real-world incidents.
+4. A directional change in the ecosystem's canonical-SDK decision
+   (non-incremental; would require operator-led re-planning).
 
-**Adversarial note.** The conservative stance here is the right
-one: PyPI package names are irrevocable, and a release made under
-incident-window pressure is exactly when supply-chain footguns
-fire. Deferring buys optionality at the cost of a small adoption-
-friction increase (source install vs `pip install`). The cost is
-acceptable for this release.
+**Dependencies.** Fully independent of the eleven SCA epics. None
+of E-SC-0 through E-SC-10 require B-20 activation; B-20 remains
+dormant regardless of how those progress.
+
+**Adversarial note.** The risk of holding B-20 dormant is minor —
+adopters who need Python can install from source today; the Rust
+SDK is the canonical path. The risk of re-opening B-20 without
+clear triggers is real: PyPI package names are irrevocable, publish
+is one-way, and the "just ship it" energy is exactly what the
+2026-04-23 incident class exploits. Dormancy is a feature, not a
+stall.
 
 ---
 

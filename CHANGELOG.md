@@ -6,12 +6,55 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-## [3.0.0-rc.1] — 2026-04-23
+### Changed — v3.0-rc.1 publish gated on supply-chain work (2026-04-24)
 
-First public release candidate. The version jump from `0.1.0`
-(workspace `Cargo.toml` default) to `3.0.0-rc.1` reflects methodology
-maturity across stages S1–S10 rather than a tagged-release history
-(no prior version was ever published to crates.io or PyPI).
+Following a 2026-04-23 PyPI supply-chain incident (a second-order
+scanner-chain compromise: a trojanized security-scanner binary
+captured CI credentials, which were used to publish trojanized
+releases of an otherwise-legitimate package), we adopted a stricter
+publish posture:
+
+- **No `cargo publish` until a full three-layer supply-chain
+  awareness feature ships** and is running self-green against
+  NeuroGrim's own dependency graph. Scope: native-Rust SCA (no
+  external scanner-tool shell-outs), deep-signal vigilance,
+  agent-assisted human review with a normative decision ledger.
+- **Tag `v3.0.0-rc.1` is not created** until the supply-chain
+  gate closes. The artifacts labeled `3.0.0-rc.1` below remain the
+  target content for that release; they are not withdrawn.
+- **Python SDK becomes dogfood-only**, not a shipped artifact.
+  `neurogrim-core` + `neurogrim-sensory` are the canonical Rust
+  SDK for downstream extension. See [`docs/sdk.md`](docs/sdk.md).
+  BACKLOG B-20 (PyPI publish) is re-framed from "deferred pending
+  incident" to "no current plan to publish."
+- **Phase 0 self-audit baseline captured** (epic E-SC-0). Full
+  transitive dependency graph (261 Rust + 32 Python packages)
+  queried against OSV.dev; one active advisory remediated
+  (`rustls-webpki` 0.103.12 → 0.103.13, RUSTSEC-2026-0104); one
+  unmaintained-notice accepted with escalation trigger
+  (`paste` 1.0.15 via rmcp; transitive; proc-macro-only). Full
+  audit artifacts committed at `D:/Brains/audit/` in the ecosystem
+  repo.
+
+Why this is captured in the CHANGELOG rather than a release note:
+no release has shipped. When v3.0-rc.1 ultimately tags, its
+release-notes section will subsume this block as the "why
+publishing was delayed" context.
+
+Full scaffolding of the supply-chain work (11 epics, ~8-12 weeks):
+`audit/ROLLBACK-PLAYBOOK.md` and the ecosystem's plan at
+`~/.claude/plans/parallel-hugging-eich.md`.
+
+## [3.0.0-rc.1] — intended; NOT YET TAGGED
+
+*Originally scoped for 2026-04-23; retained here as the target
+content for the tag once the supply-chain gate closes. See
+`[Unreleased]` above for the current posture.*
+
+The version jump from `0.1.0` (workspace `Cargo.toml` default) to
+`3.0.0-rc.1` reflects methodology maturity across stages S1–S10
+rather than a tagged-release history (no prior version was ever
+published to crates.io or PyPI).
 
 ### Added — Core implementation
 - **Rust workspace** (`neurogrim/crates/*`): `neurogrim-core` (pure
@@ -92,18 +135,26 @@ maturity across stages S1–S10 rather than a tagged-release history
 - Ecosystem + NeuroGrim + LSP-Brains `LICENSE` files (MIT).
 - Release notes + publish-day runbook + prepublish-check script.
 
-### Known open gates (documented but NOT blocking v3.0-rc.1)
+### Known open gates
 See `BEFORE-PUBLIC-RELEASE.md` for the full status; short form:
 - 🟡 Legal / trademark formal clearance (operator-led).
 - 🟡 Cargo dry-run on final metadata.
 - 🟡 Metadata completeness pass.
-- 🔴 Security audit (`cargo audit` + supply-chain review).
+- 🔴 **Supply-chain security (SCA Layers 1+2+3 shipped + self-
+  green against own deps).** **This is now the master gate for
+  v3.0-rc.1 publish** per the 2026-04-24 scaffolding. Scope:
+  three-layer (mechanical / vigilance / agent-assisted review)
+  across Rust + Python + Node, with a normative decision ledger
+  and a `supply-chain-auditor` hat. See the scaffolding plan and
+  `audit/ROLLBACK-PLAYBOOK.md`. Phase 0 (self-audit baseline) has
+  shipped; Layers 1-3 are E-SC-2 through E-SC-6.
 - 🟡 Documentation (this release closes most of this gate).
-- 🔴 **PyPI publish — deferred post-incident-review.** A PyPI supply-
-  chain incident in the 2026-04-23 window led to pausing this gate.
-  The Python SDK continues to be installable from source (see the
-  python-starter README); PyPI publish is tracked as candidate future
-  work at BACKLOG B-20 pending incident review + supply-chain audit.
+- ⚪ **PyPI publish — no current plan.** The Python SDK is
+  dogfood-only per the 2026-04-24 Python SDK reframe. BACKLOG B-20
+  tracks the dormant roadmap item; source install via `pip install
+  -e sdk-python/` is the supported path for adopters who need
+  Python. See [`docs/sdk.md`](docs/sdk.md) for the canonical Rust
+  SDK story.
 - 🟡 CI matrix enablement.
 
 ### Known deferred to post-RC
