@@ -39,7 +39,12 @@ pub mod osv;
 pub mod rustsec;
 pub mod scoring;
 
-use serde::Serialize;
+use rmcp::{
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
+    model::{ServerCapabilities, ServerInfo},
+    schemars, tool, tool_router, ServerHandler,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -83,6 +88,83 @@ pub enum AdvisorySource {
     Osv,
     /// Found via local `vendor/rustsec-advisory-db/` TOML scan.
     RustsecLocal,
+}
+
+// =========================================================================
+// MCP server wrapper
+// =========================================================================
+//
+// Exposes the sensor via the same MCP-tool surface the other built-in
+// sensors use. `neurogrim serve` registers a `SupplyChainScaServer`
+// alongside the existing 12 domain servers; Claude Code sessions can
+// then call `check_supply_chain_sca` as a structured MCP tool.
+//
+// The shape mirrors `security_standards.rs` 1:1 — change both together
+// if rmcp's macro-generated API evolves.
+
+#[derive(Debug, Clone)]
+pub struct SupplyChainScaServer {
+    tool_router: ToolRouter<Self>,
+}
+
+impl SupplyChainScaServer {
+    pub fn new() -> Self {
+        Self {
+            tool_router: Self::tool_router(),
+        }
+    }
+}
+
+impl Default for SupplyChainScaServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CheckSupplyChainScaParams {
+    /// Filesystem path to the project's root directory. Must contain
+    /// a `Cargo.lock` (direct children) and optionally a
+    /// `.claude/supply-chain-accepted-advisories.toml` + a
+    /// `vendor/rustsec-advisory-db/` submodule for local cross-
+    /// reference. When `.claude/` or `vendor/` live one level up
+    /// (e.g., cargo workspace in a subdirectory), the sensor falls
+    /// back to `<project_root>/../` automatically.
+    pub project_root: String,
+}
+
+#[tool_router]
+impl SupplyChainScaServer {
+    #[tool(
+        description = "Run native-Rust supply-chain SCA against a project's Cargo.lock. \
+        No external scanner binaries. Queries OSV.dev for crates.io-sourced \
+        dependencies (batched + 24h cached; override with NEUROGRIM_OSV_NO_CACHE=1), \
+        cross-references a pinned local clone of rustsec/advisory-db, honors \
+        `.claude/supply-chain-accepted-advisories.toml` for operator triage. \
+        Returns CMDB-envelope JSON with a count-based score: 0 unaccepted advisories \
+        = 100, 1 = 75, 2 = 50, 3 = 25, 4+ = 0."
+    )]
+    async fn check_supply_chain_sca(
+        &self,
+        Parameters(p): Parameters<CheckSupplyChainScaParams>,
+    ) -> String {
+        serde_json::to_string_pretty(&analyze_supply_chain_sca(&p.project_root).await)
+            .unwrap_or_default()
+    }
+}
+
+impl ServerHandler for SupplyChainScaServer {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo {
+            instructions: Some(
+                "Native-Rust supply-chain SCA sensor. OSV.dev + \
+                 RustSec-advisory-db (pinned submodule) + operator-accepted \
+                 advisories. No external scanner binaries.".into(),
+            ),
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            ..Default::default()
+        }
+    }
 }
 
 /// Primary sensor entry point.
