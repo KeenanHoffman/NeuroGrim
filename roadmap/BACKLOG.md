@@ -1154,6 +1154,16 @@ Pre-registration discipline saved ~20 hrs engineering + ~$50-100
 API that would have gone into prototype + validation before the
 gate fired.
 
+**Scope note 2026-04-23.** Single-turn experimental evidence
+cannot settle this question. Dispatch decisions are per-response
+concerns; the Brain's primary value hypothesis is longitudinal
+(consistent project awareness across sessions). B-14 remains
+CANDIDATE with the explicit framing that even a validated
+dispatch rule would address a narrow single-turn concern — not
+the longitudinal value that makes the Brain worth shipping at
+all. See ROADMAP.md "Evidence + Hypothesis Posture" for the
+broader framing.
+
 ---
 
 ### B-15: Capability-audit-driven review process — CANDIDATE
@@ -1185,6 +1195,138 @@ measurement vs. which are absorbed into the reframe.
 evidence ≠ evidence of absence. This candidate's job is to close
 evidence gaps, not prune capabilities. Any retirement decision
 stays its own case-by-case review with its own adversarial gate.
+
+---
+
+### B-16: Content-freshness as a load-bearing Brain invariant — CANDIDATE
+
+**Why it's here.** The `reframe/factual-augmentation` branch held-out
+run surfaced a real failure mode: L1 context injection on
+factual-lookup tasks **crashed worse than L0** on 3 of 6 such tasks
+(vision-principle, culture-values, spec-section — L0 winning by 2.6,
+19.5, and 29.1 pts respectively). The plausible mechanism: L1's
+injected content was **stale or incomplete** for those specific
+topics, and the agent confidently over-asserted wrong specifics where
+L0's "I don't know" scored higher on groundedness.
+
+If true, this elevates **content freshness** from an implicit
+property of the Brain's state to a **first-class invariant** the
+methodology should surface — each Brain-sourced fact carries a
+freshness timestamp + a staleness policy; agents see freshness on
+query and can decline stale content.
+
+**Plan when** an operator hits the freshness failure mode in a real
+workflow OR when a content-freshness experiment is scoped (one
+candidate design: run the same factual-lookup tasks against stale
+vs fresh L1 context, measure the gap).
+
+**Dependencies:** none. Could ship as a CMDB-envelope metadata
+extension without touching scoring logic.
+
+**Adversarial note.** The held-out data is suggestive but doesn't
+prove the freshness-is-the-cause hypothesis. Could also be that the
+judge rewards "I don't know" over "here's wrong-but-specific" on
+these tasks regardless of content. Before scoping an epic, a targeted
+experiment should isolate freshness.
+
+---
+
+### B-17: L2 synthesis-under-multi-turn improvement — CANDIDATE
+
+**Why it's here.** Phase 3 L2 repo-aware = 61.12 vs L1 = 73.88
+(−12.75 pts, CI does not cross 0). Agent self-routing to the brain_
+query tool was perfect; the gap was in SYNTHESIS — Sonnet applies
+tool-result JSON less effectively than the same content pre-loaded
+as system-prompt context. The post-mortem characterized this as a
+**prompt-engineering frontier, not an architectural one**.
+
+CANDIDATE improvements to try:
+- Revised tool-result framing (e.g., "Brain data, authoritative for
+  project state but apply judgment" preamble on results)
+- Reduced accumulated context across turns (drop earlier tool_results
+  from the conversation once their content has been incorporated)
+- Explicit "synthesize from tool results" instruction in system prompt
+- Cached-digest pattern (agent gets a compressed pre-digest in system
+  prompt + tool for drill-down — hybrid L1/L2)
+
+**Plan when** L2 becomes a serious deployment candidate (currently
+deprioritized behind the longitudinal-value focus — see
+ROADMAP.md Evidence + Hypothesis Posture).
+
+**Dependencies:** L2 harness complete (shipped at 0db4a41).
+
+**Adversarial note.** The L2 repo-aware gap may not be worth closing
+if the Brain is primarily longitudinal. Single-turn synthesis
+quality is a narrow concern; an operator running Brain-augmented
+sessions for days at a time probably doesn't notice one-shot
++/-12 pt gaps.
+
+---
+
+### B-18: Measurement-instrument sensitivity characterization — CANDIDATE
+
+**Why it's here.** The brain-vs-control experiments rest on a rubric
+(correctness 40 / groundedness 25 / efficiency 20 / actionability 15)
+and a judge (Sonnet blind to arm). The rubric's groundedness
+weighting rewards epistemic humility — L0's "I don't know" answers
+score well because they're humble. This interacts strongly with task
+shape. The rubric is a **hidden variable** we haven't characterized.
+
+Before any future experimental claim is elevated toward spec, the
+instrument's sensitivity needs characterization: run the same tasks
+under (a) the current rubric, (b) a correctness-heavy rubric that
+penalizes humility, (c) a specificity-heavy rubric. If conclusions
+are rubric-stable, trust them. If they flip, the single-turn
+apparatus is too fragile for load-bearing claims.
+
+**Plan when** a future single-turn experiment is scoped AND the
+operator commits to making its findings load-bearing (e.g., by
+feeding them into spec).
+
+**Dependencies:** existing 432-row ledger; `comparison.py`
+infrastructure.
+
+**Adversarial note.** This entry could also be interpreted as
+"make the experiments more rigorous." That's fine, but it shouldn't
+become a prerequisite that blocks the longitudinal-value work. If
+single-turn experiments are secondary instruments (per ROADMAP
+posture), B-18 can stay CANDIDATE indefinitely — only activate when
+someone wants to make a strong single-turn claim.
+
+---
+
+### B-19: Longitudinal-value artifacts as primary evidence — CANDIDATE
+
+**Why it's here.** The Brain's primary value hypothesis is
+longitudinal (see ROADMAP Evidence + Hypothesis Posture). Controlled
+longitudinal experiments are impractical — we can't run a project
+twice, once with a Brain and once without. So the natural evidence
+base isn't controlled comparison but **artifacts the Brain produces
+over time**: invocation-ledger patterns, proposal-ledger decisions
+applied or ignored, promotion-ledger decision history, capability-
+hygiene drift-detection hits over months, skill-coherence drift over
+multi-Brain topologies, culture-substrate invariant holds.
+
+This entry proposes a study of **what "Brain is working" looks like
+in artifact patterns** — characterizing, across a 6-12 month
+operator-observable window, which artifacts correlate with felt
+value and which don't.
+
+**Plan when** the invocation ledger, proposal ledger, and promotion
+ledger have 2+ months of real operator data (currently just
+weeks). Running too early produces noise.
+
+**Dependencies:** B-01 adjacent (agent-behavior promotion flip
+produces the first promotion-ledger entry with real operator
+evidence); invocation-ledger has been accumulating since Axis 4 v1
+shipped.
+
+**Adversarial note.** This entry is particularly vulnerable to
+selection bias — operators who run the Brain for months are already
+the ones who believe in it. Falsification would require either
+artifact patterns that clearly don't show value (hard to define
+cleanly) or comparison against an operator who ran WITHOUT a Brain
+over the same period (not currently measurable).
 
 ---
 

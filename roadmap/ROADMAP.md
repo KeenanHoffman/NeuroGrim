@@ -3,7 +3,45 @@
 **North star:** `VISION.md`
 **Dependencies:** `DEPENDENCIES.md`
 **Data architecture:** `DATA-ARCHITECTURE.md`
-**Last updated:** 2026-04-21 (Stage 10 Domain Promotion — **Infrastructure Complete** — S10-DP-1/2/3 shipped: audit runbook + spec v2.5 + promote/rollback CLI + promotion ledger + swing detection. 259/259 pytest green across the harness. S10-DP-4 — actual NeuroGrim `agent-behavior` 0.0→0.05 flip — stays guarded-pending on operator-led calibration audit. Epic closes fully when operator runs the audit + `abv-run promote`.)
+**Last updated:** 2026-04-23 (evidence-and-hypothesis posture added below; Stage 10 Domain Promotion still **Infrastructure Complete** per 2026-04-21 with S10-DP-1/2/3 shipped and S10-DP-4 guarded-pending on operator-led audit).
+
+---
+
+## Evidence + Hypothesis Posture (2026-04-23)
+
+**Primary value hypothesis:** the Brain provides **cumulative project
+awareness across a session lifecycle** — consistency, caution,
+security posture, and richness of thought that persists where
+individual agent-session memory does not. This is the longitudinal
+value proposition the existing architecture is organized around:
+invocation ledger, capability-hygiene, skill-coherence, culture
+substrate, trajectory, gated governance, proposal ledger, promotion
+ledger, judge-integrity ledger. All of these are persistence /
+consistency / decision-history surfaces. They accumulate value over
+project lifetime; they don't deliver their value in any single
+agent turn.
+
+**Secondary measurement surface:** controlled single-turn benchmarks
+(see `.claude/experiments/brain-vs-control/`) are **bounded
+instruments** for specific sub-questions: context-injection
+efficiency on single responses, agent self-routing on tool access,
+content-freshness failure modes. They measure one-shot response
+quality under a specific rubric. They do **not** measure the
+primary longitudinal hypothesis. Treating them as if they did
+would be a category error — acknowledged in METHODOLOGY-EVOLUTION
+§14 and the `reframe/factual-augmentation` branch post-mortem.
+
+**Stage posture:** the stage progression below continues. Stages
+1-10 shipped-or-in-progress deliver primarily longitudinal
+infrastructure; they don't require single-turn validation to be
+worth shipping. Future stages remain gated on their stated
+criteria. Experimental evidence feeds narrow decisions (how to
+tune context injection when used, when content freshness matters,
+where self-routing is trustworthy) rather than the overall value
+of the project.
+
+The research program's next targeted absorptions are tracked in
+BACKLOG B-16..B-19 (all CANDIDATE). None require stage changes.
 
 ---
 

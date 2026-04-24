@@ -163,6 +163,22 @@ python-starter).
 > Full post-mortem:
 > [`reframe-post-mortem.md`](../.claude/experiments/brain-vs-control/reports/reframe-post-mortem.md).
 
+> **Scope note — one-shot vs longitudinal value.** The experiments
+> this section summarizes are all single-turn: one task → one
+> response → one judge score. They measure how static context
+> injection affects *that* response on *that* rubric. They do NOT —
+> and structurally cannot — measure what most of the Brain's
+> architecture is built for: **cumulative project awareness across
+> sessions**, cultural substrate persistence, capability-hygiene
+> drift detection, invocation-ledger self-observability, governance
+> decision history. Those are longitudinal properties; single-turn
+> tests are bounded instruments. Treat the guidance below as
+> applying to "which context to inject for this specific response"
+> — not to "does the Brain have value over a project's life." The
+> latter is the primary value hypothesis and is tested by
+> artifacts-over-time (proposal ledger, promotion ledger,
+> capability-hygiene history), not by one-shot comparisons.
+
 What the experiments DO support:
 
 - **L1 helps broadly on Sonnet**, not narrowly. On the held-out 22-task
