@@ -445,6 +445,24 @@ fn try_load_cache_entry(
     Some((entry, age))
 }
 
+/// Test-only helper: pre-populate the OSV cache for a given package.
+///
+/// Integration tests use this to avoid flakiness from live OSV calls
+/// — a pre-seeded cache entry means `query_batch` treats that
+/// package as a cache hit and never touches the network.
+///
+/// Hidden from public docs; visible to `tests/sensor_behavior.rs`
+/// because the integration-test target is a separate crate.
+#[doc(hidden)]
+pub fn _testing_seed_cache(
+    cache_dir: &Path,
+    ecosystem: &str,
+    pkg: &Package,
+    vuln_ids: &[String],
+) -> Result<()> {
+    write_cache_entry(cache_dir, ecosystem, pkg, vuln_ids)
+}
+
 /// Persist a cache entry. Best-effort; failures are logged but do not
 /// propagate (the live query already succeeded).
 fn write_cache_entry(
