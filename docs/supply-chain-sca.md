@@ -2,8 +2,11 @@
 
 The `supply-chain-sca` sensor is NeuroGrim's Layer 1 supply-chain
 awareness — native-Rust, no external scanner binaries, pinned trust
-surface. Epic **E-SC-2** of the supply-chain security scaffolding
-(`audit/ROLLBACK-PLAYBOOK.md`, ecosystem repo).
+surface. Epics **E-SC-2** (Rust ecosystem; shipped 2026-04-24) and
+**E-SC-3** (Python ecosystem via `uv.lock` + `requirements*.txt`;
+shipped 2026-04-25) of the supply-chain security scaffolding
+(`audit/ROLLBACK-PLAYBOOK.md`, ecosystem repo). Node/npm coverage
+ships in E-SC-4.
 
 ## Why native-Rust, not `cargo audit` / `trivy` / etc.
 

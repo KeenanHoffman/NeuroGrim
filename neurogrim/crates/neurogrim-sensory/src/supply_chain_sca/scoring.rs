@@ -133,10 +133,7 @@ mod tests {
     fn adv(id: &str, pkg: &str, version: &str, informational: Option<&str>) -> Advisory {
         Advisory {
             id: id.to_string(),
-            package: Package {
-                name: pkg.to_string(),
-                version: version.to_string(),
-            },
+            package: Package::crates_io(pkg, version),
             summary: None,
             source: AdvisorySource::Osv,
             informational: informational.map(str::to_string),
@@ -146,10 +143,7 @@ mod tests {
     fn adv_rustsec(id: &str, pkg: &str, version: &str) -> Advisory {
         Advisory {
             id: id.to_string(),
-            package: Package {
-                name: pkg.to_string(),
-                version: version.to_string(),
-            },
+            package: Package::crates_io(pkg, version),
             summary: None,
             source: AdvisorySource::RustsecLocal,
             informational: Some("unmaintained".to_string()),

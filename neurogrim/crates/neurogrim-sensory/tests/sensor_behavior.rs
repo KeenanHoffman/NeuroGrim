@@ -434,10 +434,7 @@ fn seed_empty_osv_cache(project_root: &Path, pkgs: &[(&str, &str)]) {
         .join("osv");
     std::fs::create_dir_all(&cache_dir).unwrap();
     for (name, version) in pkgs {
-        let pkg = Package {
-            name: (*name).to_string(),
-            version: (*version).to_string(),
-        };
+        let pkg = Package::crates_io(*name, *version);
         _testing_seed_cache(&cache_dir, ECOSYSTEM_CRATES_IO, &pkg, &[])
             .expect("seed cache");
     }
@@ -680,6 +677,119 @@ patched = [">= 0.103.13, < 0.104.0-alpha.1"]"#,
 
     assert_eq!(env["score"].as_u64().unwrap(), 100, "patched version not affected");
     assert_eq!(env["advisories_found"].as_u64().unwrap(), 0);
+}
+
+// =========================================================================
+// supply_chain_sca (E-SC-3) — multi-ecosystem integration tests
+// =========================================================================
+
+/// Write a uv.lock at `dir/uv.lock` listing PyPI-sourced packages.
+fn write_scs_uv_lock(dir: &Path, pkgs: &[(&str, &str)]) {
+    let mut body = String::from("version = 1\n\n");
+    for (name, version) in pkgs {
+        body.push_str(&format!(
+            "[[package]]\nname = \"{name}\"\nversion = \"{version}\"\n\
+             source = {{ registry = \"https://pypi.org/simple\" }}\n\n"
+        ));
+    }
+    std::fs::write(dir.join("uv.lock"), body).unwrap();
+}
+
+/// Write a `requirements-lock.txt` with `==X.Y.Z` pins.
+fn write_scs_requirements_txt(dir: &Path, name: &str, pkgs: &[(&str, &str)]) {
+    let body: String = pkgs
+        .iter()
+        .map(|(n, v)| format!("{n}=={v}\n"))
+        .collect();
+    std::fs::write(dir.join(name), body).unwrap();
+}
+
+/// Pre-seed empty OSV cache entries for PyPI packages.
+fn seed_empty_pypi_cache(project_root: &Path, pkgs: &[(&str, &str)]) {
+    let cache_dir = project_root
+        .join(".claude")
+        .join("brain")
+        .join("cache")
+        .join("osv");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    for (name, version) in pkgs {
+        let pkg = Package::pypi(*name, *version);
+        _testing_seed_cache(&cache_dir, "PyPI", &pkg, &[])
+            .expect("seed pypi cache");
+    }
+}
+
+#[tokio::test]
+async fn supply_chain_sca_pypi_uv_lock_clean() {
+    let tmp = TempDir::new().unwrap();
+    let pkgs = [("anyio", "4.6.0"), ("httpx", "0.27.0")];
+    write_scs_uv_lock(tmp.path(), &pkgs);
+    seed_empty_pypi_cache(tmp.path(), &pkgs);
+
+    let env = analyze_supply_chain_sca(tmp.path().to_str().unwrap()).await;
+    assert_envelope_healthy("supply_chain_sca:pypi_uv_clean", &env);
+    assert_eq!(env["score"].as_u64().unwrap(), 100);
+    assert_eq!(env["total_packages_scanned"].as_u64().unwrap(), 2);
+    let ecosystems = env["ecosystems_scanned"].as_array().unwrap();
+    let names: Vec<&str> = ecosystems.iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!(names, vec!["PyPI"]);
+    assert_eq!(env["packages_by_ecosystem"]["PyPI"].as_u64().unwrap(), 2);
+}
+
+#[tokio::test]
+async fn supply_chain_sca_pypi_requirements_txt_clean() {
+    let tmp = TempDir::new().unwrap();
+    let pkgs = [("requests", "2.32.3"), ("urllib3", "2.2.3")];
+    write_scs_requirements_txt(tmp.path(), "requirements-lock.txt", &pkgs);
+    seed_empty_pypi_cache(tmp.path(), &pkgs);
+
+    let env = analyze_supply_chain_sca(tmp.path().to_str().unwrap()).await;
+    assert_envelope_healthy("supply_chain_sca:pypi_req_clean", &env);
+    assert_eq!(env["score"].as_u64().unwrap(), 100);
+    assert_eq!(env["packages_by_ecosystem"]["PyPI"].as_u64().unwrap(), 2);
+}
+
+#[tokio::test]
+async fn supply_chain_sca_mixed_rust_python() {
+    // Both Cargo.lock and uv.lock at the same root → both ecosystems
+    // appear in packages_by_ecosystem.
+    let tmp = TempDir::new().unwrap();
+    let rust_pkgs = [("ng-test-rust", "0.1.0")];
+    let py_pkgs = [("ng-test-py", "1.0.0")];
+    write_scs_lockfile(tmp.path(), &rust_pkgs);
+    seed_empty_osv_cache(tmp.path(), &rust_pkgs);
+    write_scs_uv_lock(tmp.path(), &py_pkgs);
+    seed_empty_pypi_cache(tmp.path(), &py_pkgs);
+
+    let env = analyze_supply_chain_sca(tmp.path().to_str().unwrap()).await;
+    assert_envelope_healthy("supply_chain_sca:mixed", &env);
+    assert_eq!(env["score"].as_u64().unwrap(), 100);
+    let ecos = env["ecosystems_scanned"].as_array().unwrap();
+    let mut names: Vec<&str> = ecos.iter().map(|v| v.as_str().unwrap()).collect();
+    names.sort();
+    assert_eq!(names, vec!["PyPI", "crates.io"]);
+    assert_eq!(env["packages_by_ecosystem"]["crates.io"].as_u64().unwrap(), 1);
+    assert_eq!(env["packages_by_ecosystem"]["PyPI"].as_u64().unwrap(), 1);
+    assert_eq!(env["total_packages_scanned"].as_u64().unwrap(), 2);
+}
+
+#[tokio::test]
+async fn supply_chain_sca_no_lockfile_found_emits_error_finding() {
+    // E-SC-3 generalizes the missing-Cargo.lock error to any
+    // lockfile-missing case. Empty TempDir → finding + score 0.
+    let tmp = TempDir::new().unwrap();
+    let env = analyze_supply_chain_sca(tmp.path().to_str().unwrap()).await;
+    assert_envelope_healthy("supply_chain_sca:no_lockfile_v3", &env);
+    assert_eq!(env["score"].as_u64().unwrap(), 0);
+    assert_eq!(env["sensor_status"].as_str().unwrap(), "lockfile_unreadable");
+    let findings = env["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["name"].as_str().unwrap(), "lockfile_read_failed");
+    let detail = findings[0]["detail"].as_str().unwrap();
+    assert!(
+        detail.contains("Cargo.lock") && detail.contains("uv.lock"),
+        "error message should list supported lockfile formats; got: {detail}"
+    );
 }
 
 #[tokio::test]

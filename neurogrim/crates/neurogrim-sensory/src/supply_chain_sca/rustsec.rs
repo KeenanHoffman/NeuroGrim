@@ -346,10 +346,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn pkg(name: &str, version: &str) -> Package {
-        Package {
-            name: name.to_string(),
-            version: version.to_string(),
-        }
+        Package::crates_io(name, version)
     }
 
     fn write_advisory(dir: &Path, filename: &str, contents: &str) -> PathBuf {
@@ -703,10 +700,7 @@ patched = []
 "#,
         );
 
-        let pkg = Package {
-            name: "weird".to_string(),
-            version: "not-semver".to_string(),
-        };
+        let pkg = Package::crates_io("weird", "not-semver");
         // Returns empty (logged as warning); doesn't panic.
         let hits = scan_local(&[pkg], tmp.path()).unwrap();
         assert!(hits.is_empty());

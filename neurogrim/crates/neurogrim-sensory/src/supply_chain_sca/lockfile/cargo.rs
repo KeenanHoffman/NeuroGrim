@@ -11,7 +11,7 @@ use cargo_lock::Lockfile;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use super::Package;
+use crate::supply_chain_sca::Package;
 
 /// Parse the `Cargo.lock` at `project_root/Cargo.lock` and return the
 /// deduplicated set of packages sourced from `crates.io`.
@@ -37,7 +37,7 @@ pub fn parse(project_root: &Path) -> Result<Vec<Package>> {
 
     Ok(seen
         .into_iter()
-        .map(|(name, version)| Package { name, version })
+        .map(|(name, version)| Package::crates_io(name, version))
         .collect())
 }
 

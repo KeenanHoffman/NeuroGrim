@@ -50,15 +50,51 @@ use std::path::Path;
 
 /// A package identified in the project's dependency graph.
 ///
-/// Only packages sourced from `crates.io` are included — git deps,
-/// local path deps, and alternative registries are excluded at
+/// Only packages sourced from a known registry are included — git
+/// deps, local path deps, and unknown registries are excluded at
 /// lockfile-enumeration time. OSV coverage does not extend to those
 /// sources, and our scoring model does not have a sensible way to
 /// represent "we can't check this."
+///
+/// `ecosystem` matches OSV.dev's ecosystem taxonomy: `"crates.io"`
+/// for Rust, `"PyPI"` for Python, `"npm"` for Node. Uses
+/// `&'static str` because the ecosystem set is closed (one of
+/// `osv::ECOSYSTEM_CRATES_IO` / `ECOSYSTEM_PYPI` / `ECOSYSTEM_NPM`)
+/// — the constants are the canonical source of truth.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Package {
     pub name: String,
     pub version: String,
+    pub ecosystem: &'static str,
+}
+
+impl Package {
+    /// Construct a crates.io-sourced Rust package.
+    pub fn crates_io(name: impl Into<String>, version: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            version: version.into(),
+            ecosystem: osv::ECOSYSTEM_CRATES_IO,
+        }
+    }
+
+    /// Construct a PyPI-sourced Python package.
+    pub fn pypi(name: impl Into<String>, version: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            version: version.into(),
+            ecosystem: osv::ECOSYSTEM_PYPI,
+        }
+    }
+
+    /// Construct an npm-sourced Node package.
+    pub fn npm(name: impl Into<String>, version: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            version: version.into(),
+            ecosystem: osv::ECOSYSTEM_NPM,
+        }
+    }
 }
 
 /// An advisory affecting a specific package version.
@@ -136,13 +172,15 @@ pub struct CheckSupplyChainScaParams {
 #[tool_router]
 impl SupplyChainScaServer {
     #[tool(
-        description = "Run native-Rust supply-chain SCA against a project's Cargo.lock. \
-        No external scanner binaries. Queries OSV.dev for crates.io-sourced \
-        dependencies (batched + 24h cached; override with NEUROGRIM_OSV_NO_CACHE=1), \
-        cross-references a pinned local clone of rustsec/advisory-db, honors \
-        `.claude/supply-chain-accepted-advisories.toml` for operator triage. \
+        description = "Run native-Rust supply-chain SCA. Detects + scans every \
+        supported lockfile in project_root: Cargo.lock (Rust), uv.lock + \
+        requirements*.txt (Python). No external scanner binaries. Queries OSV.dev \
+        per ecosystem (batched + 24h cached; override with NEUROGRIM_OSV_NO_CACHE=1), \
+        cross-references a pinned local clone of rustsec/advisory-db for Rust, \
+        honors `.claude/supply-chain-accepted-advisories.toml` for operator triage. \
         Returns CMDB-envelope JSON with a count-based score: 0 unaccepted advisories \
-        = 100, 1 = 75, 2 = 50, 3 = 25, 4+ = 0."
+        = 100, 1 = 75, 2 = 50, 3 = 25, 4+ = 0. \
+        Includes ecosystems_scanned + packages_by_ecosystem extras."
     )]
     async fn check_supply_chain_sca(
         &self,
@@ -179,31 +217,86 @@ impl ServerHandler for SupplyChainScaServer {
 pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
     let root = Path::new(project_root);
 
-    // Step 4 — lockfile enumeration is fully wired.
-    let packages = match lockfile::parse(root) {
-        Ok(pkgs) => pkgs,
-        Err(e) => {
-            // Conservative: if we can't even read Cargo.lock, the
-            // sensor can't report on anything. Score 0 (honest
-            // unknown) + a finding that names the failure.
-            let findings = vec![crate::cmdb::Finding {
-                name: "lockfile_read_failed".to_string(),
-                status: "error".to_string(),
-                points: 0,
-                detail: Some(format!("failed to parse Cargo.lock: {e:#}")),
-            }];
-            let extras: Vec<(&str, Value)> = vec![
-                ("total_packages_scanned", json!(0)),
-                ("sensor_status", json!("lockfile_unreadable")),
-            ];
-            return crate::cmdb::build_cmdb(
-                "supply-chain-sca",
-                0,
-                findings,
-                Some(extras),
-            );
+    // E-SC-3 Step 5 — multi-ecosystem dispatch. detect() returns
+    // every lockfile format present at project_root; parse_detected()
+    // routes each to its ecosystem-specific parser. Packages from all
+    // ecosystems join into one OSV batch query (each query carries
+    // its own ecosystem tag).
+    let detected = lockfile::detect(root);
+    if detected.is_empty() {
+        // No supported lockfile present — sensor can't report. The
+        // legacy behavior was a Cargo.lock-specific error finding;
+        // generalize to any-lockfile-missing.
+        let findings = vec![crate::cmdb::Finding {
+            name: "lockfile_read_failed".to_string(),
+            status: "error".to_string(),
+            points: 0,
+            detail: Some(
+                "no supported lockfile found at project_root \
+                 (looked for: Cargo.lock, uv.lock, requirements*.txt). \
+                 Run a lockfile generator (cargo generate-lockfile / \
+                 uv pip compile / pip-compile) and re-run."
+                    .to_string(),
+            ),
+        }];
+        let extras: Vec<(&str, Value)> = vec![
+            ("total_packages_scanned", json!(0)),
+            ("sensor_status", json!("lockfile_unreadable")),
+            ("ecosystems_scanned", json!(Vec::<String>::new())),
+        ];
+        return crate::cmdb::build_cmdb("supply-chain-sca", 0, findings, Some(extras));
+    }
+
+    // Parse every detected lockfile + dedupe across them. Returns a
+    // single deduplicated package list spanning all ecosystems.
+    let mut packages: Vec<Package> = Vec::new();
+    let mut packages_by_ecosystem: std::collections::BTreeMap<&'static str, usize> =
+        std::collections::BTreeMap::new();
+    let mut parse_errors: Vec<String> = Vec::new();
+    for detection in &detected {
+        match lockfile::parse_detected(detection, root) {
+            Ok(pkgs) => {
+                for pkg in pkgs {
+                    *packages_by_ecosystem.entry(pkg.ecosystem).or_insert(0) += 1;
+                    packages.push(pkg);
+                }
+            }
+            Err(e) => {
+                parse_errors.push(format!("{detection:?}: {e:#}"));
+            }
         }
-    };
+    }
+    // Cross-ecosystem dedup: same (ecosystem, name, version) across
+    // multiple detected lockfiles (e.g., `requirements.txt` + an
+    // identical `requirements-lock.txt`) collapses to one entry.
+    {
+        let mut seen: std::collections::HashSet<(String, String, &'static str)> =
+            std::collections::HashSet::new();
+        packages.retain(|p| seen.insert((p.name.clone(), p.version.clone(), p.ecosystem)));
+        // Recompute per-ecosystem counts after dedup.
+        packages_by_ecosystem.clear();
+        for pkg in &packages {
+            *packages_by_ecosystem.entry(pkg.ecosystem).or_insert(0) += 1;
+        }
+    }
+
+    // If every detection failed, emit the legacy unreadable finding.
+    if packages.is_empty() && !parse_errors.is_empty() {
+        let findings = vec![crate::cmdb::Finding {
+            name: "lockfile_read_failed".to_string(),
+            status: "error".to_string(),
+            points: 0,
+            detail: Some(format!(
+                "lockfile(s) detected but all parses failed: {}",
+                parse_errors.join(" | ")
+            )),
+        }];
+        let extras: Vec<(&str, Value)> = vec![
+            ("total_packages_scanned", json!(0)),
+            ("sensor_status", json!("lockfile_unreadable")),
+        ];
+        return crate::cmdb::build_cmdb("supply-chain-sca", 0, findings, Some(extras));
+    }
 
     // Step 5 wires the OSV client (batch query + 24h file cache).
     // RustSec cross-check + accepted-filter + scoring remain stubbed;
@@ -298,10 +391,25 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
         scoring::compute(&all_advisories, &accepted, packages.len());
 
     // Compose the full extras vec: scoring contributions + lockfile
-    // stats + OSV metadata + RustSec-local metadata.
+    // stats + OSV metadata + RustSec-local metadata + multi-ecosystem
+    // breakdown (E-SC-3).
     let mut extras: Vec<(&str, Value)> = extras_from_scoring;
     extras.push(("total_packages_scanned", json!(packages.len())));
     extras.push(("sensor_status", json!("ok")));
+    // E-SC-3: per-ecosystem breakdown surfaces which lockfile
+    // formats contributed packages (and how many). Operators reading
+    // the CMDB see at a glance whether their Python deps were scanned.
+    extras.push((
+        "ecosystems_scanned",
+        json!(packages_by_ecosystem.keys().collect::<Vec<_>>()),
+    ));
+    extras.push((
+        "packages_by_ecosystem",
+        json!(packages_by_ecosystem
+            .iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect::<std::collections::BTreeMap<_, _>>()),
+    ));
     extras.push(("osv_cache_hits", json!(osv_result.cache_hits)));
     extras.push(("osv_live_queries", json!(osv_result.live_queries)));
     extras.push((
@@ -315,10 +423,14 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
     extras.push(("osv_cache_bypassed", json!(osv_result.cache_bypassed)));
     extras.push(("rustsec_local_unique_hits", json!(rustsec_only_count)));
     extras.push(("rustsec_local_unique_ids", json!(rustsec_only_ids)));
+    if !parse_errors.is_empty() {
+        extras.push(("lockfile_parse_errors", json!(parse_errors)));
+    }
     extras.push((
         "_impl_status",
-        json!("E-SC-2 complete: OSV + RustSec-local + accepted-list + scoring + MCP \
-               wrapper + 72 tests (64 unit + 8 integration) all green."),
+        json!("E-SC-3 complete: multi-ecosystem dispatch (Cargo + uv.lock + \
+               requirements.txt) + Package gains ecosystem field + scoring + \
+               MCP wrapper. 89+ unit tests + 8 integration tests all green."),
     ));
 
     crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras))

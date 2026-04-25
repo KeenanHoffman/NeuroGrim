@@ -37,6 +37,15 @@ use super::{Advisory, AdvisorySource, Package};
 /// OSV ecosystem string for Rust / crates.io. OSV's own taxonomy.
 pub const ECOSYSTEM_CRATES_IO: &str = "crates.io";
 
+/// OSV ecosystem string for Python / PyPI. PyPA advisories are
+/// already mirrored into OSV.dev — we don't need a separate local
+/// PyPA-advisory-db clone the way we do for Rust.
+pub const ECOSYSTEM_PYPI: &str = "PyPI";
+
+/// OSV ecosystem string for Node / npm. GHSA mirrors directly into
+/// OSV for npm; no separate local clone needed.
+pub const ECOSYSTEM_NPM: &str = "npm";
+
 /// OSV batch-query endpoint.
 const OSV_BATCH_URL: &str = "https://api.osv.dev/v1/querybatch";
 
@@ -121,7 +130,7 @@ pub async fn query_batch_with_options(
 
     if cache_behavior == CacheBehavior::UseCache {
         for pkg in packages {
-            match try_load_cache_entry(cache_dir, ECOSYSTEM_CRATES_IO, pkg) {
+            match try_load_cache_entry(cache_dir, pkg.ecosystem, pkg) {
                 Some((entry, age)) => {
                     // Cache hit.
                     result.cache_hits += 1;
@@ -170,7 +179,7 @@ pub async fn query_batch_with_options(
                         if cache_behavior == CacheBehavior::UseCache {
                             let _ = write_cache_entry(
                                 cache_dir,
-                                ECOSYSTEM_CRATES_IO,
+                                pkg.ecosystem,
                                 pkg,
                                 &vuln_ids,
                             );
@@ -297,13 +306,15 @@ async fn query_osv_live(
     client: &reqwest::Client,
     packages: &[&Package],
 ) -> Result<std::collections::HashMap<(String, String), Vec<String>>> {
-    // Build request body.
+    // Build request body. Each query carries its own ecosystem
+    // (crates.io / PyPI / npm / …); OSV.dev's batch endpoint
+    // handles a heterogeneous query set just fine.
     let queries: Vec<OsvQueryItem> = packages
         .iter()
         .map(|pkg| OsvQueryItem {
             package: OsvPackage {
                 name: &pkg.name,
-                ecosystem: ECOSYSTEM_CRATES_IO,
+                ecosystem: pkg.ecosystem,
             },
             version: &pkg.version,
         })
@@ -496,10 +507,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn sample_package() -> Package {
-        Package {
-            name: "serde".to_string(),
-            version: "1.0.228".to_string(),
-        }
+        Package::crates_io("serde", "1.0.228")
     }
 
     #[test]
