@@ -4,25 +4,17 @@
 //! # Design
 //!
 //! Each advisory is a Markdown file at
-//! `crates/<package>/RUSTSEC-YYYY-NNNN.md` with a ```toml ... ```
-//! frontmatter block:
+//! `crates/<package>/RUSTSEC-YYYY-NNNN.md`. The file opens with a
+//! TOML-fenced frontmatter block (literal triple-backtick `toml`
+//! line, then key/value pairs, then a closing triple-backtick line),
+//! followed by a free-form Markdown body. The frontmatter declares
+//! `[advisory]` with at minimum `id`, `package`, optionally
+//! `informational`, optionally `withdrawn`, and a `[versions]`
+//! table with `patched` and `unaffected` arrays of semver
+//! requirement strings.
 //!
-//! ```text
-//! ```toml
-//! [advisory]
-//! id = "RUSTSEC-2026-0104"
-//! package = "rustls-webpki"
-//! informational = "unmaintained"    # optional; present for non-CVE
-//!
-//! [versions]
-//! patched = [">= 0.103.13, < 0.104.0-alpha.1"]
-//! unaffected = []
-//! ```
-//!
-//! # Title
-//!
-//! Body text…
-//! ```
+//! See `vendor/rustsec-advisory-db/EXAMPLE_ADVISORY.md` in the
+//! pinned submodule for a canonical example.
 //!
 //! A concrete package version is **affected** by the advisory iff it
 //! is NOT matched by ANY `patched` range AND NOT matched by ANY

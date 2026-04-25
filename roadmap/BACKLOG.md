@@ -1438,6 +1438,47 @@ information, not to over-build now.
 
 ---
 
+### B-22: Python lockfile formats — poetry.lock + Pipfile.lock — CANDIDATE (deferred from E-SC-3)
+
+**Why it's here.** E-SC-3's locked decisions (2026-04-24) scoped
+Python lockfile coverage to `uv.lock` + `requirements*.txt` only,
+deferring `poetry.lock` and `Pipfile.lock` to a follow-on. The
+trade-off: NeuroGrim's own ecosystem doesn't use Poetry or pipenv,
+so the dogfood signal is zero; adding two more parsers without
+real test cases is speculative effort. Phase 1 research also
+flagged that there's no good Rust crate for poetry.lock — a
+hand-rolled parser would be ~200-300 LOC, which compounds the
+speculative-effort concern.
+
+**What it would add:**
+- `lockfile/poetry.rs` — hand-rolled TOML parser for poetry.lock's
+  shape (`[[package]]` arrays similar to uv.lock but with
+  Poetry-specific source fields: `source.type = "git"`,
+  `source.url`, `source.reference`, etc.).
+- `lockfile/pipenv.rs` — JSON parser (Pipfile.lock is JSON, not
+  TOML) — `serde_json` already in workspace deps.
+- Variants `PoetryLock` + `PipenvLock` added to `DetectedLockfile`.
+- ~5 unit tests per parser.
+
+**Plan when:**
+1. AND: an adopter explicitly asks for poetry/pipenv coverage
+   (signals real demand).
+2. AND: at least one of the two has a stable representative in
+   the adopter's project (gives us a real fixture).
+3. NOT BEFORE: E-SC-5/6/7/8 are done. Layer 2 vigilance and
+   Layer 3 agent review are higher-leverage than format coverage.
+
+**Dependencies.** None blocking. Slots cleanly into the
+lockfile-dispatch infrastructure shipped in E-SC-3.
+
+**Adversarial note.** Poetry's market share has plateaued/declined
+since uv launched (2024-2025). By the time this entry activates,
+the better path may be "just use uv, generate uv.lock from your
+poetry pyproject" — Astral's tooling can ingest poetry-style
+deps. We may end up never needing this entry.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

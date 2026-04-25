@@ -1,5 +1,5 @@
 {
-  "_impl_status": "E-SC-3 complete: multi-ecosystem dispatch (Cargo + uv.lock + requirements.txt) + Package gains ecosystem field + scoring + MCP wrapper. 89+ unit tests + 8 integration tests all green.",
+  "_impl_status": "E-SC-4 complete: Layer 1 SCA covers Rust + Python + Node (package-lock.json v2/v3 + yarn.lock + pnpm-lock.yaml). 128+ unit tests + 17 integration tests all green.",
   "accepted_advisory_ids": [
     "RUSTSEC-2024-0436"
   ],
@@ -19,21 +19,21 @@
   ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-25T18:51:34.186605700+00:00",
+    "updated_at": "2026-04-25T20:17:36.025833700+00:00",
     "updated_by": "supply-chain-sca"
   },
   "osv_cache_bypassed": true,
   "osv_cache_hits": 0,
-  "osv_live_queries": 353,
+  "osv_live_queries": 356,
   "osv_oldest_cache_age_seconds": null,
   "osv_reachable": true,
   "packages_by_ecosystem": {
-    "crates.io": 353
+    "crates.io": 356
   },
   "rustsec_local_unique_hits": 0,
   "rustsec_local_unique_ids": [],
   "score": 100,
   "sensor_status": "ok",
-  "total_packages_scanned": 353,
-  "updated_at": "2026-04-25T18:51:34.186605700+00:00"
+  "total_packages_scanned": 356,
+  "updated_at": "2026-04-25T20:17:36.025833700+00:00"
 }

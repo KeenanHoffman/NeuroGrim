@@ -2,11 +2,16 @@
 
 The `supply-chain-sca` sensor is NeuroGrim's Layer 1 supply-chain
 awareness — native-Rust, no external scanner binaries, pinned trust
-surface. Epics **E-SC-2** (Rust ecosystem; shipped 2026-04-24) and
-**E-SC-3** (Python ecosystem via `uv.lock` + `requirements*.txt`;
-shipped 2026-04-25) of the supply-chain security scaffolding
-(`audit/ROLLBACK-PLAYBOOK.md`, ecosystem repo). Node/npm coverage
-ships in E-SC-4.
+surface. Three ecosystems supported as of E-SC-4 (2026-04-25):
+
+- **Rust** via `Cargo.lock` (E-SC-2; shipped 2026-04-24).
+- **Python** via `uv.lock` + `requirements*.txt` (E-SC-3;
+  shipped 2026-04-25).
+- **Node** via `package-lock.json` v2/v3 + `yarn.lock` (Classic +
+  Berry) + `pnpm-lock.yaml` (E-SC-4; shipped 2026-04-25).
+
+Per the supply-chain security scaffolding
+(`audit/ROLLBACK-PLAYBOOK.md`, ecosystem repo).
 
 ## Why native-Rust, not `cargo audit` / `trivy` / etc.
 
@@ -245,7 +250,7 @@ The sensor never panics on missing files:
 - **Malformed accepted-advisories.toml** → logged + empty set;
   conservative posture (all advisories unaccepted).
 
-## Out of scope for v1 (E-SC-2)
+## Out of scope for Layer 1 (post-E-SC-4)
 
 These are NOT what this sensor does:
 
@@ -253,9 +258,12 @@ These are NOT what this sensor does:
   deferred to BACKLOG B-21. License compliance is distinct from
   supply-chain *attack surface*; separating concerns keeps E-SC-2
   tight.
-- **Python / npm dep scanning** — E-SC-3 and E-SC-4. Same OSV
-  client, different ecosystem tag + lockfile parser. No code in
-  this sensor today handles those.
+- **poetry.lock + Pipfile.lock** (Python) — deferred to BACKLOG
+  B-22. uv.lock + requirements*.txt cover NeuroGrim's own usage;
+  poetry/Pipfile add complexity without dogfood signal.
+- **package-lock.json v1** (npm 5/6 era) — npm 7+ auto-upgrades v1
+  on `npm install`; rare in 2026. Sensor logs + skips v1 with a
+  warning telling the user to re-run `npm install`.
 - **Deep-signal vigilance** (publish-cadence, maintainer-delta,
   binary-reproducibility, typosquat-proximity, exfil-indicator) —
   Layer 2, epic E-SC-5.
@@ -264,7 +272,7 @@ These are NOT what this sensor does:
 - **Active blocking / auto-rollback** — v1 is advisory + operator-
   gated. The publish-day runbook enforces the gate via
   `prepublish-check.sh`.
-- **Cross-Brain finding sharing** — E-SC-6 spec work; opt-in
+- **Cross-Brain finding sharing** — E-SC-7 spec work; opt-in
   peer-Brain A2A.
 - **Severity-weighted scoring** — see rubric rationale above;
   calibration candidate in E-SC-8.

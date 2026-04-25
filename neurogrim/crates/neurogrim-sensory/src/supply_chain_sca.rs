@@ -428,9 +428,9 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
     }
     extras.push((
         "_impl_status",
-        json!("E-SC-3 complete: multi-ecosystem dispatch (Cargo + uv.lock + \
-               requirements.txt) + Package gains ecosystem field + scoring + \
-               MCP wrapper. 89+ unit tests + 8 integration tests all green."),
+        json!("E-SC-4 complete: Layer 1 SCA covers Rust + Python + Node \
+               (package-lock.json v2/v3 + yarn.lock + pnpm-lock.yaml). \
+               128+ unit tests + 17 integration tests all green."),
     ));
 
     crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras))

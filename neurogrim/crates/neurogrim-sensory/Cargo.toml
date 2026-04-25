@@ -32,6 +32,7 @@ neurogrim-core = { workspace = true }
 cargo-lock = { workspace = true }
 toml = { workspace = true }
 semver = { workspace = true }
+yarn-lock-parser = { workspace = true }
 # reqwest is crate-locally pinned here to match `neurogrim-a2a`'s
 # TLS posture (rustls-tls-native-roots — reads the OS trust store,
 # supports enterprise / private CAs, avoids OpenSSL in Docker images).

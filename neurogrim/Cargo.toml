@@ -73,6 +73,16 @@ cargo-lock = "11"
 toml = "0.8"
 semver = "1"
 
+# Supply-chain SCA E-SC-4 (npm/yarn/pnpm):
+# - `yarn-lock-parser` parses Yarn 1.x (Classic) AND Yarn 2+ (Berry)
+#   lockfile formats. Yarn 1.x is a custom space-indented text
+#   format that's hostile to hand-rolling cleanly; this crate uses
+#   `nom` and is the smallest credible production option (170k+
+#   downloads, recent updates). v0.x — pin to compatible-semver
+#   to absorb minor fixes. SMALLEST-ATTESTED CRATE in our trust
+#   chain; documented in audit/TOOL-TRUST-NOTES.md.
+yarn-lock-parser = "0.10"
+
 # Workspace crates
 # Both `path` and `version` are required for `cargo publish` to resolve
 # intra-workspace deps from crates.io. Keep versions in lock-step with

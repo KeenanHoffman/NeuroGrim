@@ -20,7 +20,10 @@
 //! - `pnpm` — `pnpm-lock.yaml` (E-SC-4, pending)
 
 pub mod cargo;
+pub mod npm;
+pub mod pnpm;
 pub mod python;
+pub mod yarn;
 
 // Backwards-compatible re-export. The original `lockfile::parse(root)`
 // call site keeps working unchanged through Step E3.1; Step E3.5
@@ -36,14 +39,15 @@ use super::Package;
 /// One detected lockfile in the project root, with enough metadata
 /// for the dispatch hub to route to the right parser.
 ///
-/// Variants are added per-ecosystem as they ship:
+/// Variants:
 /// - `Cargo` — Rust (E-SC-2; SHIPPED).
 /// - `UvLock` — Python via Astral's uv (E-SC-3; SHIPPED).
 /// - `RequirementsTxt` — Python pip-style pinned (E-SC-3; SHIPPED;
 ///   carries the file's full path because the conventional name
 ///   varies — `requirements.txt`, `requirements-lock.txt`, etc.).
-/// - Node: `PackageLockJson` + `YarnLock` + `PnpmLock` — pending
-///   (E-SC-4).
+/// - `PackageLockJson` — npm (E-SC-4; SHIPPED).
+/// - `YarnLock` — Yarn 1.x and Berry (E-SC-4; SHIPPED).
+/// - `PnpmLock` — pnpm v6 + v9 (E-SC-4; SHIPPED).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DetectedLockfile {
     /// `<project_root>/Cargo.lock` (E-SC-2).
@@ -55,6 +59,12 @@ pub enum DetectedLockfile {
     /// `requirements-prod.txt`, etc.) so the variant carries the
     /// concrete path.
     RequirementsTxt(PathBuf),
+    /// `<project_root>/package-lock.json` (npm 7+; E-SC-4).
+    PackageLockJson,
+    /// `<project_root>/yarn.lock` (Yarn 1.x or Berry; E-SC-4).
+    YarnLock,
+    /// `<project_root>/pnpm-lock.yaml` (pnpm v6+/v9+; E-SC-4).
+    PnpmLock,
 }
 
 /// Walk `project_root` for known lockfile basenames and return the
@@ -78,6 +88,15 @@ pub fn detect(project_root: &Path) -> Vec<DetectedLockfile> {
     }
     if project_root.join("uv.lock").is_file() {
         out.push(DetectedLockfile::UvLock);
+    }
+    if project_root.join("package-lock.json").is_file() {
+        out.push(DetectedLockfile::PackageLockJson);
+    }
+    if project_root.join("yarn.lock").is_file() {
+        out.push(DetectedLockfile::YarnLock);
+    }
+    if project_root.join("pnpm-lock.yaml").is_file() {
+        out.push(DetectedLockfile::PnpmLock);
     }
     if let Ok(entries) = std::fs::read_dir(project_root) {
         for entry in entries.flatten() {
@@ -103,6 +122,9 @@ pub fn parse_detected(detected: &DetectedLockfile, project_root: &Path) -> Resul
         DetectedLockfile::Cargo => cargo::parse(project_root),
         DetectedLockfile::UvLock => python::parse_uv_lock(project_root),
         DetectedLockfile::RequirementsTxt(path) => python::parse_requirements_txt(path),
+        DetectedLockfile::PackageLockJson => npm::parse_package_lock(project_root),
+        DetectedLockfile::YarnLock => yarn::parse_yarn_lock(project_root),
+        DetectedLockfile::PnpmLock => pnpm::parse_pnpm_lock(project_root),
     }
 }
 
@@ -168,6 +190,44 @@ mod tests {
             .filter(|d| matches!(d, DetectedLockfile::RequirementsTxt(_)))
             .count();
         assert_eq!(req_count, 2, "expected both requirements files; got {detected:?}");
+    }
+
+    #[test]
+    fn detect_finds_package_lock_json() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("package-lock.json"),
+            r#"{"name": "x", "lockfileVersion": 3}"#,
+        )
+        .unwrap();
+        let detected = detect(tmp.path());
+        assert!(detected
+            .iter()
+            .any(|d| matches!(d, DetectedLockfile::PackageLockJson)));
+    }
+
+    #[test]
+    fn detect_finds_yarn_lock() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("yarn.lock"), "# yarn lockfile v1\n").unwrap();
+        let detected = detect(tmp.path());
+        assert!(detected
+            .iter()
+            .any(|d| matches!(d, DetectedLockfile::YarnLock)));
+    }
+
+    #[test]
+    fn detect_finds_pnpm_lock_yaml() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("pnpm-lock.yaml"),
+            "lockfileVersion: '9.0'\n",
+        )
+        .unwrap();
+        let detected = detect(tmp.path());
+        assert!(detected
+            .iter()
+            .any(|d| matches!(d, DetectedLockfile::PnpmLock)));
     }
 
     #[test]
