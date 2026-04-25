@@ -13,6 +13,14 @@ surface. Three ecosystems supported as of E-SC-4 (2026-04-25):
 Per the supply-chain security scaffolding
 (`audit/ROLLBACK-PLAYBOOK.md`, ecosystem repo).
 
+The behavior of this sensor is the **reference implementation**
+of LSP-Brains spec §16.2 "Layer 1 — Mechanical SCA" (v2.6,
+2026-04-25). The contracts described below — direct OSV.dev
+queries, no external scanner binaries in the primary scoring
+path, accepted-advisories file with required-`note` hygiene
+lever, count-based scoring rubric, graceful degradation — all
+correspond to normative requirements in §16.2.
+
 ## Why native-Rust, not `cargo audit` / `trivy` / etc.
 
 On 2026-04-23 a PyPI supply-chain incident surfaced where a
@@ -278,6 +286,25 @@ These are NOT what this sensor does:
   calibration candidate in E-SC-8.
 
 ## Cross-references
+
+**Spec (LSP-Brains v2.6, 2026-04-25):**
+
+- §16 Supply-chain awareness — three-layer normative framework.
+- §16.2 Layer 1 — Mechanical SCA — the contract this sensor
+  implements (direct vulnerability-database query, no external
+  scanner binaries in primary scoring path, accepted-advisories
+  hygiene lever, graceful degradation).
+- §16.4 Layer 3 — Agent-assisted human review — the contract
+  E-SC-6 will implement (read-only static analysis, decision
+  ledger, human-decision gate).
+- §16.6 A2A signal sharing — the contract for cross-Brain
+  finding sharing under bidirectional opt-in consent.
+- METHODOLOGY-EVOLUTION §15 — rationale, LiteLLM 2026-04-23
+  motivating incident, spec-impl-alignment observation.
+- Schemas: `supply-chain-decision-ledger-v1.schema.json`,
+  `a2a-supply-chain-signal-v1.schema.json` (both new in v2.6).
+
+**Plans + scaffolding:**
 
 - Ecosystem plan: `~/.claude/plans/parallel-hugging-eich.md` (E-SC-2)
 - Per-epic plan: `~/.claude/plans/parallel-hugging-eich-e-sc-2.md`
