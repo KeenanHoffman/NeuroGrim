@@ -248,6 +248,92 @@ update every `Cargo.toml` (`package.name`), update README +
 CHANGELOG, bump, re-run the full pre-publish check. Do not try to
 work around the collision.
 
+### Supply-chain rollback window between tag and publish
+
+(E-SC-10, 2026-04-26.) Between **Step 2 (tag)** and **Step 3
+(publish)**, a window exists where new advisories could surface
+in OSV.dev or registry-side trust signals could shift. The
+`prepublish-check.sh` script defends this window with three
+gates (LSP-Brains v2.6 §16):
+
+- **L1 strict** — fresh `NEUROGRIM_OSV_NO_CACHE=1` rerun of
+  supply-chain-sca; score MUST be 100.
+- **L2 strict-with-bypass** — every Layer 2 vigilance finding
+  must have a matching `review-triaged` ledger entry (bypass
+  via canonical `sca-review resolve` flow).
+- **L3 strict** — `tickets_open == 0` in supply-chain-review-
+  cmdb.json.
+
+If a NEW advisory or vigilance finding surfaces AFTER tag is
+pushed but BEFORE `cargo publish` runs:
+
+1. **Stop.** Do not run `cargo publish`.
+2. **Re-run `bash scripts/prepublish-check.sh`** to confirm the
+   gate is failing on the new signal. The fresh-OSV-rerun
+   should have caught it.
+3. **Force-delete the tag** locally + remotely. Yes, force —
+   the alternative is publishing compromised code:
+   ```bash
+   git tag -d v3.0.0-rc.1
+   git push origin :refs/tags/v3.0.0-rc.1
+   ```
+   This is destructive but necessary. Future operators reading
+   the git history will see the deletion + the documented
+   reason.
+4. **Triage the new signal:**
+   - **L1 advisory:** evaluate; either remediate via
+     `cargo update -p <crate>` or accept via
+     `.claude/supply-chain-accepted-advisories.toml` with
+     non-empty `note`.
+   - **L2 finding:** triage via `neurogrim sca-review resolve`
+     through the canonical L3 flow.
+   - **L3 ticket:** resolve via `neurogrim sca-review resolve`.
+5. **Re-run `prepublish-check.sh`** until clean.
+6. **Re-tag:**
+   - If state materially changed (rebased, dep bumped, new
+     commits): bump to `3.0.0-rc.2`, update CHANGELOG, re-tag.
+     Semver discipline.
+   - If state did NOT change (you're confident the gate flapped
+     transiently): re-tag the same version. Document in the
+     commit log why this is safe.
+7. **Continue from Step 3.**
+
+**Why force-delete a pushed tag is the right call here:** the
+alternative is publishing a version of NeuroGrim that contains
+(or transitively depends on) a known-compromised dep. Yanking
+post-publish is harder + leaves a permanent published artifact
+on crates.io. Deleting an unused tag is recoverable; publishing
+a bad version is not.
+
+Cross-reference: `audit/ROLLBACK-PLAYBOOK.md` § E-SC-2/3/4
+(Layer 1 procedures), § E-SC-5 (Layer 2), § E-SC-6 (Layer 3),
+§ E-SC-8 (calibration regression), § Universal playbook.
+
+### v2 candidates (deferred work, post-publish)
+
+These are documented as candidate work for v2 of the supply-
+chain stack:
+
+- **Cross-Brain A2A `supply-chain-signal` wire-up** — specced
+  in LSP-Brains v2.6 §16.6 with bidirectional opt-in consent.
+  Wire-up of sender + receiver in `neurogrim-a2a` is a future
+  enhancement that lets peer Brains share supply-chain findings
+  for cross-aggregation (e.g., "two independent peers flagged
+  this package"). Not a publish-gate dependency.
+- **L1 fixture-library OSV pre-caching** — calibration v1
+  ships clean (no advisory matching against pre-cached OSV
+  responses); v2 candidate adds a per-fixture `.osv-cache/`
+  directory so calibration runs become deterministic.
+- **L3 human-agreement metric ratification** — collect ≥30
+  days of operator triage data; compute against fixture
+  reference decisions; promote L3 to `pass` status.
+- **Fixture-library quarterly refresh discipline** — automated
+  drift detection on fixture freshness (last refresh date,
+  reference-stale-CVE).
+- **`supply-chain-calibration-report-v1` schema spec-promotion**
+  — lift the NeuroGrim-internal schema to LSP-Brains v2.7 once
+  cross-implementation adoption surfaces.
+
 ---
 
 ## Post-publish checklist

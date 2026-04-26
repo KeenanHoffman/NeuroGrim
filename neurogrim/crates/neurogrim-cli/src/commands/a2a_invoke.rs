@@ -148,6 +148,7 @@ fn message_type_wire_name(mt: &MessageType) -> String {
         MessageType::ProposalCreated => "proposal.created".into(),
         MessageType::ProposalResolved => "proposal.resolved".into(),
         MessageType::ConfigChanged => "config.changed".into(),
+        MessageType::SupplyChainSignal => "supply-chain-signal".into(),
     }
 }
 

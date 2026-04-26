@@ -195,13 +195,41 @@ check_supply_chain_sca() {
   # BEFORE-PUBLIC-RELEASE.md gate 11: master supply-chain gate.
   # The supply-chain-sca CMDB at .claude/supply-chain-sca-cmdb.json
   # MUST exist + score 100 before any cargo publish.
+  #
+  # E-SC-10 (2026-04-26): adds the LiteLLM-equivalent rollback
+  # discipline. We FIRST run a fresh OSV scan (NEUROGRIM_OSV_NO_CACHE=1)
+  # BEFORE checking the CMDB. This catches advisories that surfaced in
+  # OSV between the last cached scan and now. The fresh scan
+  # OVERWRITES the cached CMDB; if a new advisory landed, the score
+  # drops and prepublish fails — which is the correct rollback signal
+  # for the tag-vs-publish window.
   echo
-  blue "== Supply-chain SCA (gate 11 master gate) =="
+  blue "== Supply-chain SCA (gate 11 master gate, E-SC-10 fresh-OSV-rerun) =="
   local cmdb="$REPO_ROOT/.claude/supply-chain-sca-cmdb.json"
+
+  info "Running fresh OSV-bypassed SCA scan (LiteLLM-equivalent rollback gate)..."
+  local fresh_tmp="$cmdb.fresh.$$"
+  if (cd "$WORKSPACE" && \
+      NEUROGRIM_OSV_NO_CACHE=1 cargo run --release --quiet -p neurogrim-cli -- \
+        sensory supply-chain-sca --project-root . 2>/dev/null) > "$fresh_tmp"; then
+    if [[ -s "$fresh_tmp" ]]; then
+      mv -f "$fresh_tmp" "$cmdb"
+      pass "Fresh SCA scan complete; $cmdb updated"
+    else
+      rm -f "$fresh_tmp"
+      info "Fresh scan produced empty output; falling back to cached $cmdb"
+    fi
+  else
+    rm -f "$fresh_tmp"
+    info "Fresh OSV-bypassed scan failed (network unreachable?). Falling back to cached CMDB."
+    info "  Manual fresh scan: cd neurogrim && NEUROGRIM_OSV_NO_CACHE=1 cargo run --release -p neurogrim-cli -- \\"
+    info "      sensory supply-chain-sca --project-root . > ../.claude/supply-chain-sca-cmdb.json"
+  fi
+
   if [[ ! -f "$cmdb" ]]; then
     fail "Missing $cmdb — run: \
-      neurogrim sensory supply-chain-sca --project-root neurogrim \
-      > .claude/supply-chain-sca-cmdb.json"
+      cd neurogrim && cargo run --release -p neurogrim-cli -- sensory supply-chain-sca --project-root . \
+      > ../.claude/supply-chain-sca-cmdb.json"
   fi
   pass "$cmdb present"
 
@@ -221,31 +249,156 @@ print(d.get('score', -1))
   if [[ "$score" != "100" ]]; then
     fail "supply-chain-sca score is $score, must be 100. \
 Inspect findings in $cmdb; either remediate the unaccepted advisories \
-(`cargo update -p <crate>`) or accept them with rationale in \
+(\`cargo update -p <crate>\`) or accept them with rationale in \
 .claude/supply-chain-accepted-advisories.toml. See \
 $REPO_ROOT/docs/supply-chain-sca.md."
   fi
   pass "supply-chain-sca score = 100"
+}
 
-  # Sanity check: CMDB must be fresh (< 24h old) before publish.
-  # An old CMDB from before a dep update would be misleading.
-  local cmdb_age_secs
-  cmdb_age_secs="$(python -c "
-import os, time
-print(int(time.time() - os.path.getmtime('$cmdb')))
-" 2>/dev/null)" || cmdb_age_secs="$(py -3 -c "
-import os, time
-print(int(time.time() - os.path.getmtime('$cmdb')))
+check_supply_chain_vigilance_strict_with_bypass() {
+  # E-SC-10 (2026-04-26): Layer 2 strict-with-bypass gate.
+  #
+  # Each L2 vigilance finding (typosquat / publish-cadence /
+  # signature-gap / etc.) MUST have a corresponding RESOLVED entry
+  # in the supply-chain-decision-ledger.jsonl. Bypass: the auto-
+  # create bridge in supply_chain_review creates a ticket for each
+  # finding; operator runs `neurogrim sca-review resolve` to triage
+  # via the canonical L3 flow, which writes a `review-triaged`
+  # entry that satisfies this gate.
+  #
+  # Match key: (ecosystem, package_name, signal_kind) where
+  # signal_kind = "vigilance:<finding-kind>".
+  echo
+  blue "== Supply-chain Vigilance (gate 11 strict-with-bypass, E-SC-10 L2) =="
+  local vig_cmdb="$REPO_ROOT/.claude/supply-chain-vigilance-cmdb.json"
+  local ledger="$REPO_ROOT/.claude/supply-chain-decision-ledger.jsonl"
+
+  if [[ ! -f "$vig_cmdb" ]]; then
+    info "No vigilance CMDB at $vig_cmdb — skipping L2 gate (no Layer 2 scan has been run)"
+    info "  To activate: cd neurogrim && cargo run --release -p neurogrim-cli -- \\"
+    info "      sensory supply-chain-vigilance --project-root . > ../.claude/supply-chain-vigilance-cmdb.json"
+    return 0
+  fi
+  pass "$vig_cmdb present"
+
+  # Walk findings + cross-check ledger. Python helper because we
+  # need JSON + JSONL handling. Fail with operator-actionable
+  # guidance if any finding is un-triaged.
+  local py_script
+  py_script="
+import json, os, sys
+vig_path = r'$vig_cmdb'
+ledger_path = r'$ledger'
+vig = json.load(open(vig_path))
+findings = vig.get('findings', [])
+triaged = set()
+if os.path.exists(ledger_path):
+    for line in open(ledger_path):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except Exception:
+            continue
+        kind = entry.get('entry_kind')
+        if kind not in ('review-triaged', 'accept', 'reject', 'pin-to-last-good'):
+            continue
+        pkg = entry.get('package', {}) or {}
+        eco = pkg.get('ecosystem', '')
+        name = pkg.get('name', '')
+        for sig in entry.get('triggering_signals', []) or []:
+            sk = sig.get('signal_kind', '')
+            if eco and name and sk:
+                triaged.add((eco, name, sk))
+untriaged = []
+for f in findings:
+    name = f.get('name', '')
+    parts = name.split(':', 2)
+    if len(parts) != 3:
+        continue
+    kind, eco, pkg_name = parts
+    if kind == 'sensor-degradation':
+        continue
+    sig_key = 'vigilance:' + kind
+    if (eco, pkg_name, sig_key) not in triaged:
+        untriaged.append((eco, pkg_name, kind))
+if untriaged:
+    print('UNTRIAGED:')
+    for eco, pkg, kind in untriaged:
+        print('  ' + eco + ' ' + pkg + ' ' + kind)
+    sys.exit(1)
+else:
+    total = len([f for f in findings if not f.get('name', '').startswith('sensor-degradation')])
+    print('all ' + str(total) + ' findings have matching ledger entries')
+    sys.exit(0)
+"
+  local untriaged_output
+  if untriaged_output="$(py -3 -c "$py_script" 2>&1)"; then
+    pass "L2 strict gate: $untriaged_output"
+  elif untriaged_output="$(python3 -c "$py_script" 2>&1)"; then
+    pass "L2 strict gate: $untriaged_output"
+  else
+    red "  [FAIL] L2 strict gate: un-triaged findings present"
+    echo "$untriaged_output" | sed 's/^/    /'
+    info "Bypass path: triage each finding via the L3 review flow:"
+    info "  1. List open tickets:   neurogrim sca-review list --open-only --project-root ."
+    info "  2. Review each ticket;  see docs/supply-chain-review.md for the auditor checklist."
+    info "  3. Resolve each:        neurogrim sca-review resolve --id <id> \\"
+    info "                            --decision <accept|reject|pin-to-last-good|no-action> \\"
+    info "                            --note '<rationale>' --operator <handle>"
+    info "  4. Re-run prepublish-check.sh."
+    fail "supply-chain-vigilance gate failed — see bypass path above"
+  fi
+}
+
+check_supply_chain_review_strict() {
+  # E-SC-10 (2026-04-26): Layer 3 strict gate.
+  #
+  # supply-chain-review-cmdb.json's tickets_open MUST be 0 before
+  # publish. Open tickets are pending operator decisions; publishing
+  # while un-triaged would mean publishing without operator
+  # acknowledgement of every flagged dep.
+  #
+  # Bypass: resolve each ticket via `neurogrim sca-review resolve`.
+  echo
+  blue "== Supply-chain Review (gate 11 strict, E-SC-10 L3) =="
+  local rev_cmdb="$REPO_ROOT/.claude/supply-chain-review-cmdb.json"
+
+  if [[ ! -f "$rev_cmdb" ]]; then
+    info "No review CMDB at $rev_cmdb — skipping L3 gate (framework hasn't recorded any tickets)"
+    info "  To activate: cd neurogrim && cargo run --release -p neurogrim-cli -- \\"
+    info "      sensory supply-chain-review --project-root . > ../.claude/supply-chain-review-cmdb.json"
+    return 0
+  fi
+  pass "$rev_cmdb present"
+
+  local open_count
+  open_count="$(py -3 -c "
+import json
+d = json.load(open(r'$rev_cmdb'))
+print(d.get('tickets_open', -1))
+" 2>/dev/null)" || open_count="$(python3 -c "
+import json
+d = json.load(open(r'$rev_cmdb'))
+print(d.get('tickets_open', -1))
 " 2>/dev/null)"
 
-  if [[ "$cmdb_age_secs" -gt 86400 ]]; then
-    info "supply-chain-sca CMDB is older than 24h ($cmdb_age_secs s) — \
-recommend regenerating before publish"
-    info "  cd neurogrim && NEUROGRIM_OSV_NO_CACHE=1 cargo run --release -p neurogrim-cli -- \\"
-    info "      sensory supply-chain-sca --project-root . \\"
-    info "      > ../.claude/supply-chain-sca-cmdb.json"
+  if [[ "$open_count" == "0" ]]; then
+    pass "L3 strict gate: 0 open tickets"
+  elif [[ "$open_count" == "-1" ]]; then
+    fail "Could not parse tickets_open from $rev_cmdb"
   else
-    pass "supply-chain-sca CMDB is fresh ($cmdb_age_secs s old)"
+    red "  [FAIL] L3 strict gate: $open_count open ticket(s)"
+    info "Bypass path: resolve each open ticket via the canonical L3 flow:"
+    info "  1. List open tickets:   neurogrim sca-review list --open-only --project-root ."
+    info "  2. Review each ticket;  see docs/supply-chain-review.md."
+    info "  3. Resolve each:        neurogrim sca-review resolve --id <id> \\"
+    info "                            --decision <accept|reject|pin-to-last-good|no-action> \\"
+    info "                            --note '<rationale>' --operator <handle>"
+    info "  4. Re-run prepublish-check.sh."
+    fail "supply-chain-review gate failed — see bypass path above"
   fi
 }
 
@@ -265,6 +418,8 @@ main() {
   check_cargo_audit
   check_python_sdk
   check_supply_chain_sca
+  check_supply_chain_vigilance_strict_with_bypass
+  check_supply_chain_review_strict
   echo
   green "=== All non-skipped gates passed. ==="
   echo "Next step: review SKIPs above, then follow docs/publish-day-runbook.md."

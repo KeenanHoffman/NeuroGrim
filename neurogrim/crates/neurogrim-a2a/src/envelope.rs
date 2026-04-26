@@ -43,7 +43,7 @@ pub struct A2aEnvelope {
     pub metadata: BTreeMap<String, Value>,
 }
 
-/// The 10 canonical A2A message types defined in spec §10.4.
+/// Canonical A2A message types defined in spec §10.4 + §16.6.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageType {
@@ -67,6 +67,13 @@ pub enum MessageType {
     ProposalResolved,
     #[serde(rename = "config.changed")]
     ConfigChanged,
+    /// Supply-chain finding shared across peer Brains under
+    /// bidirectional opt-in consent (spec §16.6, v2.6).
+    /// Payload conforms to `a2a-supply-chain-signal-v1.schema.json`.
+    /// Both peers MUST declare this type in their Agent Card
+    /// `accepts[]` before signals flow.
+    #[serde(rename = "supply-chain-signal")]
+    SupplyChainSignal,
 }
 
 impl A2aEnvelope {
@@ -111,7 +118,7 @@ mod tests {
     }
 
     #[test]
-    fn all_ten_message_types_roundtrip() {
+    fn all_message_types_roundtrip() {
         let types = [
             MessageType::ScoreUpdated,
             MessageType::GateChanged,
@@ -123,11 +130,22 @@ mod tests {
             MessageType::ProposalCreated,
             MessageType::ProposalResolved,
             MessageType::ConfigChanged,
+            MessageType::SupplyChainSignal,
         ];
         for mt in types {
             let s = serde_json::to_string(&mt).unwrap();
             let back: MessageType = serde_json::from_str(&s).unwrap();
             assert_eq!(mt, back);
         }
+    }
+
+    #[test]
+    fn supply_chain_signal_wire_format() {
+        // Per LSP-Brains v2.6 §16.6 + spec a2a-envelope-v1 enum
+        // extension (E-SC-7).
+        let s = serde_json::to_string(&MessageType::SupplyChainSignal).unwrap();
+        assert_eq!(s, r#""supply-chain-signal""#);
+        let back: MessageType = serde_json::from_str(&s).unwrap();
+        assert_eq!(back, MessageType::SupplyChainSignal);
     }
 }

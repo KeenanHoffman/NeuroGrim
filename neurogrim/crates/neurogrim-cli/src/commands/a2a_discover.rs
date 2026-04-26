@@ -91,5 +91,6 @@ fn wire_name(mt: &MessageType) -> &'static str {
         MessageType::ProposalCreated => "proposal.created",
         MessageType::ProposalResolved => "proposal.resolved",
         MessageType::ConfigChanged => "config.changed",
+        MessageType::SupplyChainSignal => "supply-chain-signal",
     }
 }

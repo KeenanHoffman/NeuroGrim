@@ -36,6 +36,7 @@ pub mod client;
 pub mod envelope;
 pub mod error;
 pub mod server;
+pub mod supply_chain_signal;
 pub mod token_store;
 pub mod transport;
 
