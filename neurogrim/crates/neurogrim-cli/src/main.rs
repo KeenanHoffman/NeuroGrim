@@ -81,7 +81,7 @@ enum Commands {
     /// Run a built-in sensory tool directly (produces CMDB JSON)
     #[command(visible_alias = "cast")]
     Sensory {
-        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance
+        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review
         name: String,
         /// Project root path
         #[arg(long, default_value = ".")]
@@ -109,6 +109,16 @@ enum Commands {
         project_root: String,
         #[command(subcommand)]
         subcommand: Option<commands::awareness::AwarenessCmd>,
+    },
+
+    /// Supply-chain Layer 3 review CLI — open / list / resolve review tickets
+    /// (LSP-Brains v2.6 §16.4). Tickets carry the human-decision gate for
+    /// flagged dependencies; resolution writes to the append-only decision
+    /// ledger at .claude/supply-chain-decision-ledger.jsonl.
+    #[command(name = "sca-review")]
+    ScaReview {
+        #[command(subcommand)]
+        subcommand: commands::sca_review::ScaReviewCmd,
     },
 
     /// Serve this Brain as an A2A peer (spec §13). Publishes an Agent Card
@@ -223,6 +233,7 @@ async fn main() -> Result<()> {
             project_root,
             subcommand,
         } => commands::awareness::run(&project_root, subcommand).await,
+        Commands::ScaReview { subcommand } => commands::sca_review::run(subcommand).await,
         Commands::A2aServe {
             port,
             bind,
@@ -274,7 +285,8 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
         "capability-hygiene" => neurogrim_sensory::capability_hygiene::analyze_capability_hygiene(project_root).await,
         "supply-chain-sca" => neurogrim_sensory::supply_chain_sca::analyze_supply_chain_sca(project_root).await,
         "supply-chain-vigilance" => neurogrim_sensory::supply_chain_vigilance::analyze_supply_chain_vigilance(project_root).await,
-        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance", name),
+        "supply-chain-review" => neurogrim_sensory::supply_chain_review::analyze_supply_chain_review(project_root),
+        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review", name),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())

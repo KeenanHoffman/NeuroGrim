@@ -21,7 +21,8 @@
       "skill-coherence": 0.0,
       "capability-hygiene": 0.0,
       "supply-chain-sca": 0.0,
-      "supply-chain-vigilance": 0.0
+      "supply-chain-vigilance": 0.0,
+      "supply-chain-review": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -154,6 +155,19 @@
           "supply-chain-vigilance:vigilance_reachable":    { "field": "vigilance_reachable",    "type": "bool"   },
           "supply-chain-vigilance:registry_cache_hits":    { "field": "registry_cache_hits",    "type": "number" },
           "supply-chain-vigilance:registry_live_queries":  { "field": "registry_live_queries",  "type": "number" }
+        }
+      },
+      "supply-chain-review": {
+        "_doc": "E-SC-6 (2026-04-26): Layer 3 review framework per LSP-Brains v2.6 §16.4. supply-chain-auditor hat + decision-ledger writer + review-ticket file format + supply-chain-review CMDB sensor + AUTO-CREATE bridge from Layer 2 vigilance findings (dedup by ecosystem/package/finding_kind). Score model v1: 100 - 10 × open_tickets, capped 0. Default weight 0.0 (advisory) — promotion past advisory requires §15.5-equivalent calibration evidence (E-SC-8). Read-only static analysis MUST per §16.4: framework never downloads or extracts package source. Human decision is the gate: `neurogrim sca-review resolve` requires non-empty --note + valid --decision (accept|reject|pin-to-last-good|no-action). Append-only discipline: triage entries supersede pending entries via supersedes_ts. v1 has NO automated LLM invocation — agent_findings are operator-edited (agent piece is post-v1 follow-on). Refresh: `neurogrim sensory supply-chain-review --project-root neurogrim > .claude/supply-chain-review-cmdb.json`. Decision ledger: .claude/supply-chain-decision-ledger.jsonl. Tickets: .claude/brain/supply-chain-tickets/.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/supply-chain-review-cmdb.json"
+        },
+        "exported_variables": {
+          "supply-chain-review:tickets_open":           { "field": "tickets_open",           "type": "number" },
+          "supply-chain-review:tickets_resolved_total": { "field": "tickets_resolved_total", "type": "number" },
+          "supply-chain-review:tickets_total":          { "field": "tickets_total",          "type": "number" },
+          "supply-chain-review:ledger_entries_total":   { "field": "ledger_entries_total",   "type": "number" }
         }
       }
     },

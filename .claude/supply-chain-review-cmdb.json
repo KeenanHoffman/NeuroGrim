@@ -1,0 +1,26 @@
+{
+  "_impl_status": "E-SC-6 (Layer 3 review framework): supply-chain-auditor hat + decision-ledger writer + review-ticket file format + supply-chain-review CMDB sensor + auto-create from Layer 2 vigilance findings + CLI (sca-review create/list/resolve). Default weight 0.0 (advisory) per spec §16.4. v1 score model: 100 - 10 × open_tickets. Calibration: E-SC-8.",
+  "decision_kinds_seen": {
+    "review-pending": 1,
+    "review-triaged": 1
+  },
+  "findings": [],
+  "latest_decision_per_package": {
+    "PyPI:litellm": {
+      "kind": "review-triaged",
+      "ts": 1777228705.6522796
+    }
+  },
+  "ledger_entries_total": 2,
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-26T18:38:50.990556100+00:00",
+    "updated_by": "supply-chain-review"
+  },
+  "score": 100,
+  "score_model": "open-ticket-count-v1",
+  "tickets_open": 0,
+  "tickets_resolved_total": 1,
+  "tickets_total": 1,
+  "updated_at": "2026-04-26T18:38:50.990556100+00:00"
+}

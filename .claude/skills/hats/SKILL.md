@@ -1,6 +1,6 @@
 ---
 name: hats
-description: Agent hat system — declared operational lenses (adversary, architect, incident-commander, rubber-duck, security-auditor, visionary, source-reader) that the pilot agent announces at the start of a task to make mindset, tone, and subagent-briefing style explicit. Scoped to a single task; NOT permanent character changes. Includes per-hat operational checklists, Brain integration notes (incident-commander uses correlation check; security-auditor uses score --hat security), and the subagent-briefing template.
+description: Agent hat system — declared operational lenses (adversary, architect, incident-commander, rubber-duck, security-auditor, supply-chain-auditor, visionary, source-reader) that the pilot agent announces at the start of a task to make mindset, tone, and subagent-briefing style explicit. Scoped to a single task; NOT permanent character changes. Includes per-hat operational checklists, Brain integration notes (incident-commander uses correlation check; security-auditor uses score --hat security; supply-chain-auditor uses sca-review CLI), and the subagent-briefing template.
 when_to_use: >-
   An agent needs to adopt a named lens for a specific task ("wear
   the adversary hat", "put on the architect hat"), or you want to
@@ -62,6 +62,7 @@ readers (executive, manager, developer, specialist, product-manager). Hats shape
 | `incident-commander` | Live incidents, broken deploys, data loss scenarios | Calm and decisive — stabilize first, understand second, explain third | `incident-response.md`, `debug-cloud-run.md`, `explain-error.md` |
 | `rubber-duck` | Explaining complex systems to someone new to the project | Patient teacher — no jargon, first principles, check for understanding | `archived/devops-for-developers.md`, `setup.md` |
 | `security-auditor` | IAM changes, secret rotation, access topology review | Paranoid — assume breach, verify every permission, minimize surface area | `access-topology.md`, `diagnose-iap.md` |
+| `supply-chain-auditor` | Triaging Layer 3 supply-chain review tickets — flagged dependency under human-decision gate (LSP-Brains v2.6 §16.4 + §16.5) | Paranoid-but-fair — assume the package is suspect; verify provenance + diff intent + remediation path; remember the human decides, the agent advises | `neurogrim sca-review create/list/resolve`, `docs/supply-chain-review.md` |
 | `visionary` | Pre-plan ideation, exploring approaches before committing | Divergent and curious — surface options, name tradeoffs, defer specifics | `imagination-mode/SKILL.md` |
 | `source-reader` | Bulk read-only queries — subagent role only | Read-only executor: runs assigned query commands (e.g., `neurogrim sensory <name>`), returns structured JSON; never edits, commits, or applies | `subagent-patterns/SKILL.md` Pattern 5 |
 
@@ -121,6 +122,37 @@ checklist when synthesizing subagent findings or scanning a plan directly.
 - Blocking-severity exported variables (e.g., `security:unreviewed_existential == true`) surface in the score output — treat them as immediate action items
 - High cumulative penalty in a security-adjacent domain means the risk is critical before any infra change
 
+### `supply-chain-auditor`
+
+This hat is the operator persona that handles per-package Layer 3 review
+when Layer 1 (`supply-chain-sca`) or Layer 2 (`supply-chain-vigilance`)
+flags a dependency. Per spec §16.4 the human decision is the gate; the
+agent (when invoked) advises but does not auto-decide.
+
+- Provenance verification — does the package's declared
+  provenance (Sigstore attestation, PyPI trusted publisher, npm
+  signed publish, crates.io trusted-publishing) match the registry's
+  records? Has it dropped between the prior version and this one?
+- Unreviewed-dep audit — enumerate dependencies introduced or
+  upgraded since the last review checkpoint; surface them for triage.
+- Remediation gate — when a finding is suspicious, recommend
+  pin-to-last-good before recommending replace/remove; remember
+  the operator can re-review the pin once upstream context clarifies.
+- Read-only static-analysis only — never `npm install` / `pip install`
+  / `cargo build` flagged packages in the review pipeline. If you
+  need to inspect source, fetch the registry tarball or pull the diff
+  from the source repo directly; do not let install hooks fire.
+- Non-attributive language — "this package's release pattern…"
+  not "maintainer X introduced…" (per §16.4 + R-7 in the
+  scaffolding). Conservative phrasing keeps findings publishable
+  without per-finding legal review.
+
+**Brain integration:** the lifecycle commands.
+- `neurogrim sensory supply-chain-review --project-root . > .claude/supply-chain-review-cmdb.json` — refresh the CMDB. Score = 100 - 10 × open_tickets, floored 0.
+- `neurogrim sca-review list --open-only` — see open tickets needing decisions.
+- `neurogrim sca-review create --ecosystem PyPI --package <n> --version <v> --signal manual:reason --note "<why>"` — open a ticket manually (Layer 2 vigilance findings auto-create tickets via dedup-keyed bridge).
+- `neurogrim sca-review resolve --id <id> --decision <accept|reject|pin-to-last-good|no-action> --note "<rationale>"` — append a `review-triaged` ledger entry that supersedes the `review-pending` predecessor.
+
 ### `visionary`
 - Breadth — are at least two meaningfully different approaches on the table?
 - Tradeoffs named — is the cost of each approach visible (not solved, just named)?
@@ -168,6 +200,7 @@ The calibration line is what distinguishes one hat's subagents from another's:
 - **`incident-commander`**: "prioritize speed and blast radius — depth comes after stabilization"
 - **`rubber-duck`**: "flag any step that assumes prior knowledge the reader might not have"
 - **`security-auditor`**: "flag anything that could be narrowed — assume the reviewer wants to minimize access"
+- **`supply-chain-auditor`**: "flag anything that doesn't fit the package's prior pattern — assume the reviewer wants to know what changed; prefer pin-to-last-good over remove until upstream context clarifies"
 - **`visionary`**: "stay generalized — no specific filenames, commands, or code; name the tradeoff then stop"
 - **`source-reader`**: "return raw tool output verbatim — do not interpret, summarize, or editorialize; preserve exact output format for parent synthesis"
 
@@ -204,6 +237,7 @@ to say — the answer is always "as little as possible."
 | `incident-commander` | Blast radius + action taken. "2/4 services down, rolled back chat." | Cloud Run logs link, PR if hotfix |
 | `rubber-duck` | Concept explained + verification question. "Does this match your mental model?" | Doc/skill links for further reading |
 | `security-auditor` | Binding count + highest risk. "4 unreviewed, 1 existential." | Access topology path |
+| `supply-chain-auditor` | Open ticket count + highest-confidence finding. "3 open, 1 with attestation drop." | `supply-chain-review-cmdb.json` + ticket ids |
 | `visionary` | Options named. "3 approaches explored, recommend A." | Plan or imagination output |
 | `source-reader` | N/A (subagent-only, returns JSON to parent) | N/A |
 

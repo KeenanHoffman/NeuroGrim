@@ -298,8 +298,25 @@ pub async fn analyze_supply_chain_vigilance(project_root: &str) -> Value {
     // Persist updated per-package state for next run's deltas.
     state::persist_after_scan(&packages, &metadata_result, &state_dir);
 
+    // Auto-create Layer 3 review tickets for findings that don't
+    // already have an open ticket. Per the 2026-04-26 E-SC-6
+    // AskUserQuestion lock: auto-create from Layer 2 findings is
+    // ON. The dedup key is (ecosystem, package, finding_kind) —
+    // repeated scans don't multiply tickets.
+    let auto_created_tickets = match crate::supply_chain_review::auto_create_from_vigilance(
+        &all_findings,
+        root,
+    ) {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::warn!("vigilance: auto-create review tickets failed: {:#}", e);
+            0
+        }
+    };
+
     // Score + build CMDB envelope.
     let score = scoring::score(&all_findings);
+    let _ = auto_created_tickets; // Currently surfaced via supply-chain-review CMDB; reserved for future vigilance-side extras.
 
     scoring::build_cmdb_envelope(
         score,
