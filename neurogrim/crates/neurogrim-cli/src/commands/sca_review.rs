@@ -221,3 +221,187 @@ fn resolve_operator(cli_arg: Option<&str>) -> String {
     }
     std::env::var("NEUROGRIM_OPERATOR").unwrap_or_else(|_| "unknown".to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tests added 2026-04-26 PRE-RELEASE Cluster 11 (C19 fix).
+    //! Previous coverage of `sca_review.rs` arg-parsing was zero.
+    use super::*;
+    use clap::Parser;
+
+    /// Wrapper for parse-only testing — clap requires a top-level
+    /// derive(Parser) to drive arg-parsing tests for a Subcommand.
+    #[derive(Parser, Debug)]
+    struct TestCli {
+        #[command(subcommand)]
+        cmd: ScaReviewCmd,
+    }
+
+    #[test]
+    fn resolve_operator_uses_cli_arg_when_set() {
+        assert_eq!(resolve_operator(Some("alice")), "alice");
+    }
+
+    #[test]
+    fn resolve_operator_ignores_empty_cli_arg() {
+        // Empty / whitespace-only fallthrough to env or default.
+        // We can't reliably set $NEUROGRIM_OPERATOR for the test
+        // (it's a global env var) so just assert the cli-arg path
+        // doesn't return empty.
+        let result = resolve_operator(Some(""));
+        assert_ne!(result, "");
+        let result = resolve_operator(Some("   "));
+        assert_ne!(result, "   ");
+    }
+
+    #[test]
+    fn resolve_operator_falls_back_to_default_when_no_env() {
+        // Clear env to ensure default fallback path. (Test is
+        // single-threaded scoped via the env-var convention.)
+        std::env::remove_var("NEUROGRIM_OPERATOR");
+        assert_eq!(resolve_operator(None), "unknown");
+    }
+
+    #[test]
+    fn clap_accepts_valid_resolve_command() {
+        let parsed = TestCli::try_parse_from([
+            "test",
+            "resolve",
+            "--id",
+            "t-2026-04-26-0001",
+            "--decision",
+            "accept",
+            "--note",
+            "FP — package is well-known",
+        ]);
+        assert!(parsed.is_ok(), "parse error: {:?}", parsed.err());
+        match parsed.unwrap().cmd {
+            ScaReviewCmd::Resolve { id, decision, note, .. } => {
+                assert_eq!(id, "t-2026-04-26-0001");
+                assert_eq!(decision, "accept");
+                assert_eq!(note, "FP — package is well-known");
+            }
+            other => panic!("expected Resolve, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn clap_rejects_invalid_decision() {
+        // C9 regression guard: PossibleValuesParser must reject
+        // unknown decision values at parse time, before reaching
+        // the sensory layer.
+        let parsed = TestCli::try_parse_from([
+            "test",
+            "resolve",
+            "--id",
+            "t-1",
+            "--decision",
+            "yolo",
+            "--note",
+            "x",
+        ]);
+        assert!(parsed.is_err(), "expected error for invalid decision");
+        let err = parsed.unwrap_err().to_string();
+        assert!(
+            err.contains("yolo"),
+            "error must name the bad value; got: {err}"
+        );
+        assert!(
+            err.contains("accept") && err.contains("reject"),
+            "error must list valid values; got: {err}"
+        );
+    }
+
+    #[test]
+    fn clap_accepts_each_valid_decision() {
+        for decision in ["accept", "reject", "pin-to-last-good", "no-action"] {
+            let parsed = TestCli::try_parse_from([
+                "test",
+                "resolve",
+                "--id",
+                "t-1",
+                "--decision",
+                decision,
+                "--note",
+                "x",
+            ]);
+            assert!(
+                parsed.is_ok(),
+                "decision {decision:?} should parse; err: {:?}",
+                parsed.err()
+            );
+        }
+    }
+
+    #[test]
+    fn clap_rejects_resolve_missing_required_args() {
+        // Missing --id, --decision, --note all must error.
+        let no_id = TestCli::try_parse_from([
+            "test", "resolve", "--decision", "accept", "--note", "x",
+        ]);
+        assert!(no_id.is_err());
+        let no_decision = TestCli::try_parse_from([
+            "test", "resolve", "--id", "t-1", "--note", "x",
+        ]);
+        assert!(no_decision.is_err());
+        let no_note = TestCli::try_parse_from([
+            "test", "resolve", "--id", "t-1", "--decision", "accept",
+        ]);
+        assert!(no_note.is_err());
+    }
+
+    #[test]
+    fn clap_accepts_valid_create_command() {
+        let parsed = TestCli::try_parse_from([
+            "test",
+            "create",
+            "--ecosystem",
+            "PyPI",
+            "--package",
+            "litellm",
+            "--version",
+            "1.82.7",
+            "--signal",
+            "manual:operator-spotted",
+            "--note",
+            "high-base64-payload",
+        ]);
+        assert!(parsed.is_ok(), "parse error: {:?}", parsed.err());
+    }
+
+    #[test]
+    fn clap_rejects_create_missing_required_args() {
+        let no_eco = TestCli::try_parse_from([
+            "test",
+            "create",
+            "--package",
+            "x",
+            "--signal",
+            "y",
+            "--note",
+            "z",
+        ]);
+        assert!(no_eco.is_err());
+        let no_pkg = TestCli::try_parse_from([
+            "test",
+            "create",
+            "--ecosystem",
+            "PyPI",
+            "--signal",
+            "y",
+            "--note",
+            "z",
+        ]);
+        assert!(no_pkg.is_err());
+    }
+
+    #[test]
+    fn clap_list_open_only_flag_parses() {
+        let parsed = TestCli::try_parse_from(["test", "list", "--open-only"]);
+        assert!(parsed.is_ok());
+        match parsed.unwrap().cmd {
+            ScaReviewCmd::List { open_only, .. } => assert!(open_only),
+            other => panic!("expected List, got {:?}", other),
+        }
+    }
+}

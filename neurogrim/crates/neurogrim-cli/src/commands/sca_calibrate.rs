@@ -248,3 +248,95 @@ fn print_l3_summary(layer: &neurogrim_sensory::supply_chain_calibration::LayerRe
         eprintln!("  fixtures with reference_decision: {}/{}", c, layer.sample_size);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tests added 2026-04-26 PRE-RELEASE Cluster 11 (C19 fix).
+    //! Previous coverage of `sca_calibrate.rs` arg-parsing was zero.
+    use super::*;
+    use clap::Parser;
+
+    /// Wrapper for parse-only testing — clap drives arg-parsing
+    /// tests via a top-level derive(Parser) wrapper.
+    #[derive(Parser, Debug)]
+    struct TestCli {
+        #[command(flatten)]
+        args: ScaCalibrateArgs,
+    }
+
+    #[test]
+    fn clap_default_args_parse() {
+        let parsed = TestCli::try_parse_from(["test"]);
+        assert!(parsed.is_ok(), "default parse: {:?}", parsed.err());
+        let args = parsed.unwrap().args;
+        assert_eq!(args.project_root, ".");
+        assert_eq!(args.output, None);
+        assert_eq!(args.fixtures_dir, None);
+        assert!(!args.check_promotion_ready);
+    }
+
+    #[test]
+    fn clap_check_promotion_ready_flag_parses() {
+        let parsed = TestCli::try_parse_from(["test", "--check-promotion-ready"]).unwrap();
+        assert!(parsed.args.check_promotion_ready);
+    }
+
+    #[test]
+    fn clap_custom_fixtures_dir_parses() {
+        let parsed = TestCli::try_parse_from([
+            "test",
+            "--fixtures-dir",
+            "/some/other/path",
+        ])
+        .unwrap();
+        assert_eq!(args_with(parsed).fixtures_dir.as_deref(), Some("/some/other/path"));
+    }
+
+    #[test]
+    fn clap_output_path_parses() {
+        let parsed = TestCli::try_parse_from([
+            "test",
+            "--output",
+            ".claude/supply-chain-calibration-report.json",
+        ])
+        .unwrap();
+        assert_eq!(
+            parsed.args.output.as_deref(),
+            Some(".claude/supply-chain-calibration-report.json")
+        );
+    }
+
+    #[tokio::test]
+    async fn run_errors_when_fixture_dir_missing() {
+        // C7 regression guard: error message must include the
+        // canonicalized path (or the canonicalize-failed marker)
+        // so operators running from a different CWD can see what
+        // the CLI actually checked.
+        let tmp = tempfile::tempdir().unwrap();
+        let nonexistent = tmp.path().join("definitely-not-here");
+        let args = ScaCalibrateArgs {
+            project_root: tmp.path().to_str().unwrap().to_string(),
+            output: None,
+            fixtures_dir: Some(nonexistent.to_str().unwrap().to_string()),
+            check_promotion_ready: false,
+        };
+        let err = run(args).await.expect_err("missing fixture dir must error");
+        let msg = format!("{:#}", err);
+        assert!(
+            msg.contains("fixture library not found"),
+            "error must explain the failure; got: {msg}"
+        );
+        assert!(
+            msg.contains("definitely-not-here") || msg.contains("canonicalize failed"),
+            "error must include the path that was checked; got: {msg}"
+        );
+        assert!(
+            msg.contains("--fixtures-dir") || msg.contains("supply-chain-calibration"),
+            "error must point at how to fix; got: {msg}"
+        );
+    }
+
+    fn args_with(parsed: TestCli) -> ScaCalibrateArgs {
+        parsed.args
+    }
+}
