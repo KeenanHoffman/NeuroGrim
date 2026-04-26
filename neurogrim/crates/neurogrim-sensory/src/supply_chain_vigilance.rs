@@ -304,16 +304,37 @@ pub async fn analyze_supply_chain_vigilance(project_root: &str) -> Value {
     // AskUserQuestion lock: auto-create from Layer 2 findings is
     // ON. The dedup key is (ecosystem, package, finding_kind) —
     // repeated scans don't multiply tickets.
-    let auto_created_tickets = match crate::supply_chain_review::auto_create_from_vigilance(
+    //
+    // 2026-04-26 PRE-RELEASE-ASSESSMENT A2 fix: bridge failures
+    // were previously logged at warn level only and the count
+    // discarded; operators reading the CMDB had no visibility.
+    // We now surface the failure as a SensorDegradation finding
+    // (weight 0; informational; skipped by the strict gate per
+    // its kind == 'sensor-degradation' rule).
+    let auto_create_outcome = crate::supply_chain_review::auto_create_from_vigilance(
         &all_findings,
         root,
-    ) {
-        Ok(n) => n,
+    );
+    let auto_created_tickets = match &auto_create_outcome {
+        Ok(n) => *n,
         Err(e) => {
             tracing::warn!("vigilance: auto-create review tickets failed: {:#}", e);
             0
         }
     };
+    if let Err(e) = &auto_create_outcome {
+        all_findings.push(scoring::VigilanceFinding {
+            kind: scoring::VigilanceKind::SensorDegradation,
+            package: Package {
+                name: "supply-chain-review-bridge".to_string(),
+                version: "n/a".to_string(),
+                ecosystem: "internal",
+            },
+            summary: format!("Layer 3 auto-create failed: {:#}", e),
+            evidence: None,
+            confidence: 0.0,
+        });
+    }
 
     // Score + build CMDB envelope.
     let score = scoring::score(&all_findings);

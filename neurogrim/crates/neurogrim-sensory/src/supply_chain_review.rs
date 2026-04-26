@@ -167,6 +167,25 @@ use crate::supply_chain_vigilance::scoring::VigilanceFinding;
 ///
 /// Returns the count of NEWLY created tickets so the orchestrator
 /// can surface it in the vigilance CMDB extras.
+///
+/// # Atomicity ordering
+///
+/// Per the 2026-04-26 PRE-RELEASE-ASSESSMENT findings A3 / A21:
+/// the on-disk write order is **ticket-first, then ledger-append**.
+/// Rationale: if `ledger::append` fails after `ticket::write_one`
+/// succeeds, the ticket file is the source-of-truth and a future
+/// recovery scan can reconstruct the matching `review-pending`
+/// ledger entry from the ticket's `pending_ledger_ts` +
+/// `triggering_signals`. The inverse (ledger entry referencing a
+/// ticket id with no on-disk file) is unrecoverable.
+///
+/// # Within-batch dedup
+///
+/// Per 2026-04-26 finding A31: the loop tracks
+/// `newly_created_keys` so two findings within the same batch
+/// that share `(ecosystem, package_name, signal_kind)` do not
+/// produce duplicate tickets. The pre-existing-tickets snapshot
+/// alone is insufficient — it only catches across-batch dedup.
 pub fn auto_create_from_vigilance(
     findings: &[VigilanceFinding],
     project_root: &Path,
@@ -174,22 +193,18 @@ pub fn auto_create_from_vigilance(
     if findings.is_empty() {
         return Ok(0);
     }
-    let claude_root = if project_root.join(".claude").is_dir() {
-        project_root.to_path_buf()
-    } else if project_root
-        .parent()
-        .map(|p| p.join(".claude").is_dir())
-        .unwrap_or(false)
-    {
-        project_root.parent().unwrap().to_path_buf()
-    } else {
-        project_root.to_path_buf()
-    };
+    let claude_root = resolve_claude_root(project_root);
     let tickets_dir = ticket::default_tickets_dir(&claude_root);
     let ledger_path = ledger::default_ledger_path(&claude_root);
 
     let existing_tickets = ticket::read_all(&tickets_dir).unwrap_or_default();
     let mut created = 0usize;
+    // Track keys created in THIS batch so a second finding with the
+    // same dedup tuple in the same call doesn't open a duplicate
+    // ticket (A31). Across-batch dedup is handled by `existing_tickets`
+    // above.
+    let mut newly_created_keys: std::collections::HashSet<(String, String, String)> =
+        std::collections::HashSet::new();
 
     for f in findings {
         // Skip the informational sensor-degradation kind.
@@ -200,8 +215,17 @@ pub fn auto_create_from_vigilance(
             continue;
         }
         let signal_kind = format!("vigilance:{}", f.kind.as_str());
+        let batch_key = (
+            f.package.ecosystem.to_string(),
+            f.package.name.clone(),
+            signal_kind.clone(),
+        );
 
-        // Dedup against open tickets.
+        // Dedup against (a) tickets already created earlier in this
+        // batch (A31), and (b) pre-existing open tickets on disk.
+        if newly_created_keys.contains(&batch_key) {
+            continue;
+        }
         if ticket::find_open_by_dedup_key(
             &existing_tickets,
             f.package.ecosystem,
@@ -223,25 +247,11 @@ pub fn auto_create_from_vigilance(
             confidence: Some(f.confidence as f64),
         };
         let pending_ts = ledger::now_ts();
-        let pending_entry = ledger::LedgerEntry::ReviewPending(ledger::ReviewPendingEntry {
-            ts: pending_ts,
-            schema_version: "1".to_string(),
-            package: ledger::PackageRef {
-                name: f.package.name.clone(),
-                ecosystem: f.package.ecosystem.to_string(),
-                version_range: None,
-            },
-            from_version: Some(f.package.version.clone()),
-            to_version: None,
-            triggering_signals: vec![triggering_signal.clone()],
-            agent_findings: vec![],
-            human_operator: Some("auto".to_string()),
-            human_notes: Some(format!("Auto-created from Layer 2 vigilance: {}", f.summary)),
-            audit_reports: vec![],
-            review_ticket_id: Some(id.clone()),
-        });
-        ledger::append(&ledger_path, &pending_entry)?;
 
+        // ATOMICITY: write the ticket first (atomic via temp+rename
+        // inside `ticket::write_one`), THEN append the ledger entry.
+        // Rationale documented in the function-level comment above
+        // (A3 / A21).
         let ticket_obj = ticket::ReviewTicket {
             id: id.clone(),
             created_at: now,
@@ -252,7 +262,7 @@ pub fn auto_create_from_vigilance(
             },
             from_version: Some(f.package.version.clone()),
             to_version: None,
-            triggering_signals: vec![triggering_signal],
+            triggering_signals: vec![triggering_signal.clone()],
             agent_findings: vec![],
             created_by: "auto".to_string(),
             creation_notes: Some(f.summary.clone()),
@@ -264,6 +274,27 @@ pub fn auto_create_from_vigilance(
             schema_version: 1,
         };
         ticket::write_one(&tickets_dir, &ticket_obj)?;
+
+        let pending_entry = ledger::LedgerEntry::ReviewPending(ledger::ReviewPendingEntry {
+            ts: pending_ts,
+            schema_version: "1".to_string(),
+            package: ledger::PackageRef {
+                name: f.package.name.clone(),
+                ecosystem: f.package.ecosystem.to_string(),
+                version_range: None,
+            },
+            from_version: Some(f.package.version.clone()),
+            to_version: None,
+            triggering_signals: vec![triggering_signal],
+            agent_findings: vec![],
+            human_operator: Some("auto".to_string()),
+            human_notes: Some(format!("Auto-created from Layer 2 vigilance: {}", f.summary)),
+            audit_reports: vec![],
+            review_ticket_id: Some(id.clone()),
+        });
+        ledger::append(&ledger_path, &pending_entry)?;
+
+        newly_created_keys.insert(batch_key);
         created += 1;
     }
 
@@ -297,25 +328,8 @@ pub fn cli_create(
         confidence: None,
     };
     let pending_ts = ledger::now_ts();
-    let pending = ledger::LedgerEntry::ReviewPending(ledger::ReviewPendingEntry {
-        ts: pending_ts,
-        schema_version: "1".to_string(),
-        package: ledger::PackageRef {
-            name: package_name.to_string(),
-            ecosystem: package_ecosystem.to_string(),
-            version_range: None,
-        },
-        from_version: package_version.map(String::from),
-        to_version: None,
-        triggering_signals: vec![triggering.clone()],
-        agent_findings: vec![],
-        human_operator: Some(operator.to_string()),
-        human_notes: Some(note.to_string()),
-        audit_reports: vec![],
-        review_ticket_id: Some(id.clone()),
-    });
-    ledger::append(&ledger_path, &pending)?;
 
+    // ATOMICITY: write ticket first, then append ledger (A3 / A21).
     let t = ticket::ReviewTicket {
         id: id.clone(),
         created_at: now,
@@ -326,7 +340,7 @@ pub fn cli_create(
         },
         from_version: package_version.map(String::from),
         to_version: None,
-        triggering_signals: vec![triggering],
+        triggering_signals: vec![triggering.clone()],
         agent_findings: vec![],
         created_by: operator.to_string(),
         creation_notes: Some(note.to_string()),
@@ -338,6 +352,26 @@ pub fn cli_create(
         schema_version: 1,
     };
     ticket::write_one(&tickets_dir, &t)?;
+
+    let pending = ledger::LedgerEntry::ReviewPending(ledger::ReviewPendingEntry {
+        ts: pending_ts,
+        schema_version: "1".to_string(),
+        package: ledger::PackageRef {
+            name: package_name.to_string(),
+            ecosystem: package_ecosystem.to_string(),
+            version_range: None,
+        },
+        from_version: package_version.map(String::from),
+        to_version: None,
+        triggering_signals: vec![triggering],
+        agent_findings: vec![],
+        human_operator: Some(operator.to_string()),
+        human_notes: Some(note.to_string()),
+        audit_reports: vec![],
+        review_ticket_id: Some(id.clone()),
+    });
+    ledger::append(&ledger_path, &pending)?;
+
     Ok(id)
 }
 
@@ -632,6 +666,71 @@ mod tests {
         };
         let n = auto_create_from_vigilance(&[finding], dir.path()).unwrap();
         assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn auto_create_dedups_within_batch() {
+        // A31 regression: two findings sharing
+        // (ecosystem, package, signal_kind) in the same call must
+        // produce only ONE ticket, not two. Pre-existing-tickets
+        // snapshot alone is insufficient — it captures across-call
+        // dedup only.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".claude")).unwrap();
+        let f1 = VigilanceFinding {
+            kind: VigilanceKind::TyposquatProximity,
+            package: Package::pypi("litelm", "1.0.0"),
+            summary: "first signal".to_string(),
+            evidence: None,
+            confidence: 0.7,
+        };
+        // Same (eco, name, kind) tuple — dedup key collides.
+        let f2 = VigilanceFinding {
+            kind: VigilanceKind::TyposquatProximity,
+            package: Package::pypi("litelm", "1.0.1"), // different version, same name+eco+kind
+            summary: "second signal, same dedup key".to_string(),
+            evidence: None,
+            confidence: 0.8,
+        };
+        let n = auto_create_from_vigilance(&[f1, f2], dir.path()).unwrap();
+        assert_eq!(n, 1, "within-batch duplicate dedup keys must collapse to 1 ticket");
+    }
+
+    #[test]
+    fn auto_create_writes_ticket_and_ledger_atomically() {
+        // A3 / A21 regression: after auto_create_from_vigilance
+        // returns Ok, BOTH the ticket file AND the matching ledger
+        // entry must exist. The new ordering writes ticket first
+        // then ledger; this test verifies both ended up on disk.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".claude")).unwrap();
+        let finding = VigilanceFinding {
+            kind: VigilanceKind::TyposquatProximity,
+            package: Package::pypi("litelm", "1.0.0"),
+            summary: "test".to_string(),
+            evidence: None,
+            confidence: 0.7,
+        };
+        let n = auto_create_from_vigilance(&[finding], dir.path()).unwrap();
+        assert_eq!(n, 1);
+
+        let claude_root = resolve_claude_root(dir.path());
+        let tickets_dir = ticket::default_tickets_dir(&claude_root);
+        let ledger_path = ledger::default_ledger_path(&claude_root);
+
+        let tickets = ticket::read_all(&tickets_dir).unwrap();
+        assert_eq!(tickets.len(), 1, "ticket file must be on disk");
+
+        let entries = ledger::read_all(&ledger_path).unwrap();
+        assert_eq!(entries.len(), 1, "ledger entry must be on disk");
+        // Ledger ts must match the ticket's pending_ledger_ts.
+        let ts_match = (tickets[0].pending_ledger_ts - entries[0].ts()).abs() < 1e-6;
+        assert!(
+            ts_match,
+            "ticket.pending_ledger_ts ({}) must equal ledger entry ts ({})",
+            tickets[0].pending_ledger_ts,
+            entries[0].ts()
+        );
     }
 
     #[test]
