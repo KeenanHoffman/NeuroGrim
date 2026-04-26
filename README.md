@@ -143,6 +143,27 @@ and must not be conflated.
 another Brain, use A2A. See `spec/METHODOLOGY-EVOLUTION.md` §6 for the rationale behind
 the split.
 
+## Containers + claude-proxy (opt-in)
+
+NeuroGrim's day-one usage runs natively on the host (`cargo build`
++ invoke via CLI/MCP). **Containers and the companion
+`claude-proxy` are opt-in capabilities** for deployments that
+need them — multi-host A2A peer topologies, multi-agent
+credential isolation, sealed CI runtimes. You don't need any of
+this to use NeuroGrim.
+
+When you DO want them:
+
+- [`Dockerfile`](Dockerfile) + [`docs/EXTERNAL-BRAIN-DEPLOYMENT.md`](docs/EXTERNAL-BRAIN-DEPLOYMENT.md)
+  — package `neurogrim a2a-serve` for any Docker host.
+- [`claude-proxy/README.md`](../claude-proxy/README.md) — host-
+  side credential mediator: containers get per-scope tokens
+  (`nb_sct_…`); the real Anthropic API key never leaves the host;
+  audit metadata only (no prompts on disk); instant per-token
+  revocation.
+- [`docs/container-brain.md`](docs/container-brain.md) —
+  decision matrix + threat-model + cross-references.
+
 ## Built-In Domains
 
 Ten domains ship with NeuroGrim, organized in two tiers:

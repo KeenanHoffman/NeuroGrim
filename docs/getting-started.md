@@ -238,6 +238,47 @@ freshly-regenerated CMDBs.
   scores from children. See `D:/Brains/.claude/brain-registry.json`
   (if you're running the full ecosystem clone).
 
+### Running in containers (optional)
+
+NeuroGrim's day-one usage runs natively: `cargo build` + invoke
+via CLI/MCP. **Containers and the companion `claude-proxy` are
+opt-in capabilities** for deployments where they earn their
+complexity:
+
+- Multi-host A2A peer topologies (one container per Brain).
+- Multi-tenant or multi-agent environments where credential
+  isolation matters.
+- CI/CD environments that prefer a sealed runtime.
+- Operators who want to share a Brain endpoint between local +
+  remote agents without distributing build toolchains.
+
+**You do not need any of this to use NeuroGrim.** If your usage
+fits the native flow above (single host, day-one adoption),
+skip this section.
+
+When you DO want containers, the supported paths:
+
+1. **NeuroGrim as an A2A peer in Docker** —
+   [`docs/EXTERNAL-BRAIN-DEPLOYMENT.md`](EXTERNAL-BRAIN-DEPLOYMENT.md)
+   walks through the reference deployment (Dockerfile +
+   docker-compose + verification script). Same `neurogrim
+   a2a-serve` binary, packaged for any Docker host.
+2. **Containerized agents that need Anthropic API access** —
+   [`claude-proxy/README.md`](../../claude-proxy/README.md)
+   sits between containers and `api.anthropic.com`. Real API
+   key on the host; per-container scope tokens with instant
+   revocation; audit metadata only (no prompts on disk).
+3. **Decision matrix + threat-model** —
+   [`docs/container-brain.md`](container-brain.md) is the
+   comprehensive guide on when to enable each piece, what the
+   trade-offs are, and what's deliberately NOT in scope.
+
+The `docker-topology` Brain domain (registered in your
+`brain-registry.json`) scores Docker-related drift when present;
+it's `weight: 0.0` (advisory) by default and silently scores
+100 when there's no Docker content. Leaving it registered
+costs nothing.
+
 ---
 
 ## What you haven't seen yet (and is fine)
