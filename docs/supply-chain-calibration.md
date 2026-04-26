@@ -101,11 +101,19 @@ neurogrim sca-calibrate \
     --check-promotion-ready
 ```
 
-Returns exit code 0 if the report indicates promotion-readiness
-across all three layers; exit code 1 otherwise. **v1 always
-returns exit 1 by design** — we lack ≥30 fixtures + ≥30 days of
-L3 triage data. This is honest signal: do not promote any
-supply-chain domain past advisory weight yet.
+**Exit-code contract (clarified per 2026-04-26 PRE-RELEASE C15):**
+
+| Invocation | Exit code | Meaning |
+|---|---|---|
+| `sca-calibrate` (no flag) | 0 on harness success, 1 on harness error | The calibration ran; report was emitted. Operators reading this exit code learn only "did the harness itself succeed", not "is the supply-chain stack promotion-ready". |
+| `sca-calibrate --check-promotion-ready` | 0 if all three layers pass + sample size sufficient + ≥80% L3 human-agreement; 1 otherwise | The CI-gating shape. **v1 always returns exit 1 with this flag** — we lack ≥30 fixtures + ≥30 days of L3 triage data. This is honest signal: do not promote any supply-chain domain past advisory weight yet. |
+
+The previous prose conflated these two cases ("v1 always returns
+exit 1 by design") in a way that suggested the unflagged
+invocation also always failed. It does not — the unflagged form
+exits 0 on a successful harness run, regardless of promotion-
+readiness. CI scripts that want to gate on promotion-readiness
+MUST use `--check-promotion-ready`.
 
 ### Cargo test integration
 

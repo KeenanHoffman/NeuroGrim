@@ -147,6 +147,36 @@ Score floor at 0; never negative. Severity-weighted scoring is
 an E-SC-8 calibration candidate (see METHODOLOGY-EVOLUTION §15
 "Deferred").
 
+## Calibration targets (per spec §16.3 + §15.5)
+
+All seven sub-sensors share the same Layer 2 calibration
+contract:
+
+| Metric | Target |
+|---|---|
+| False-positive rate | ≤ 5% |
+| False-negative rate | ≤ 20% |
+| Sample size for statistical validity | ≥ 30 fixtures per sensor |
+| Default weight | 0.0 (advisory) |
+| Promotion past advisory | requires §15.5-equivalent calibration evidence + LSP-Brains v2.6 §16.3 conformance |
+
+**Documented per 2026-04-26 PRE-RELEASE C13** to give all seven
+sub-sensors uniform calibration framing rather than implicit-
+per-sensor targets. The §15.5 promotion path is the same gating
+mechanism Layer 1 (`supply-chain-sca`) uses — all three Layers
+are advisory by default and promote only on calibration
+evidence.
+
+Run calibration for vigilance (and the other layers):
+
+```bash
+neurogrim sca-calibrate --project-root . \
+    --output .claude/supply-chain-calibration-report.json
+```
+
+See `docs/supply-chain-calibration.md` for the full harness +
+fixture-library convention + promotion-readiness gating.
+
 ## Running the sensor
 
 ### Quick scan (always-on sensors only)

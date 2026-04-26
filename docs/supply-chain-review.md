@@ -58,6 +58,44 @@ What the framework depends on:
 Documented in `audit/TOOL-TRUST-NOTES.md` (2026-04-26 E-SC-6
 entry).
 
+### Partial / corrupt input handling (2026-04-26 PRE-RELEASE C20)
+
+Two read paths are operationally important to understand:
+
+- **`ledger::read_all`** (when the CMDB sensor reads
+  `.claude/supply-chain-decision-ledger.jsonl` for scoring):
+  malformed JSONL lines are **logged at `warn` level via
+  `tracing`** (with line number + truncated content) and
+  **skipped**. The sensor proceeds with the remaining valid
+  entries. Rationale: a single corrupt entry must not block
+  the entire CMDB from emitting.
+- **`ledger::append`** (when the CLI writes a new entry): the
+  entry is **validated against the §16.7 schema BEFORE write**.
+  Schema-invalid entries are rejected at write time, not
+  silently appended. The append itself uses POSIX-atomic
+  single-line append.
+- **`scripts/_supply-chain-bypass-check.py`** (the
+  prepublish-check.sh strict gate): malformed JSONL lines are
+  **FATAL** (exit code 2). Different posture than the sensor
+  read because the gate is a publish-time correctness check —
+  a corrupt entry could mask a real triage decision and the
+  operator would unknowingly publish on a flawed audit trail.
+  See `scripts/_supply-chain-bypass-check.py` module docstring
+  for the C5 + C6 rationale.
+
+Operator action when the sensor logs a parse warning:
+1. Inspect the warning's line number + content.
+2. Manually edit
+   `.claude/supply-chain-decision-ledger.jsonl` to repair OR
+   delete the malformed line. (Editing the append-only ledger
+   in-place is a deliberate exception — the alternative is the
+   gate stays red forever.)
+3. Re-run the sensor; verify no warnings.
+
+Operator action when prepublish-check.sh fails with rc=2 from
+the bypass-check helper: same as above, but publish is blocked
+until the ledger is repaired.
+
 ## Lifecycle
 
 ### 1. Ticket creation
