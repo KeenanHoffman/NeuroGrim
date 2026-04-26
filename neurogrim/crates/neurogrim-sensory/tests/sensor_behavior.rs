@@ -993,3 +993,83 @@ patched = []"#,
     assert_eq!(env["score"].as_u64().unwrap(), 100, "withdrawn advisory ignored");
     assert_eq!(env["advisories_found"].as_u64().unwrap(), 0);
 }
+
+// =========================================================================
+// supply_chain_vigilance (E-SC-5) — Tier-A schema-conformance tests
+//
+// Added 2026-04-26 PRE-RELEASE B11+B16 fix. Spec §16.3 requires Layer 2
+// findings MUST conform to cmdb-envelope-v1.schema.json; previously no test
+// asserted the contract. These tests run on a minimal fixture with no
+// lockfile so they don't hit the network.
+// =========================================================================
+
+#[tokio::test]
+async fn supply_chain_vigilance_no_lockfile_yields_valid_envelope() {
+    let tmp = TempDir::new().unwrap();
+    let env = neurogrim_sensory::supply_chain_vigilance::analyze_supply_chain_vigilance(
+        tmp.path().to_str().unwrap(),
+    )
+    .await;
+    assert_envelope_healthy("supply_chain_vigilance:no_lockfile", &env);
+}
+
+#[tokio::test]
+async fn supply_chain_vigilance_empty_cargo_lock_yields_valid_envelope() {
+    let tmp = TempDir::new().unwrap();
+    // Empty Cargo.lock — parses to zero deps; no registry calls fire.
+    std::fs::write(
+        tmp.path().join("Cargo.lock"),
+        "version = 4\n",
+    )
+    .unwrap();
+    let env = neurogrim_sensory::supply_chain_vigilance::analyze_supply_chain_vigilance(
+        tmp.path().to_str().unwrap(),
+    )
+    .await;
+    assert_envelope_healthy("supply_chain_vigilance:empty_lock", &env);
+}
+
+// =========================================================================
+// supply_chain_review (E-SC-6) — Tier-A schema-conformance tests
+//
+// Added 2026-04-26 PRE-RELEASE B11+B16 fix. Spec §16.4 requires Layer 3
+// CMDB output MUST conform to cmdb-envelope-v1.schema.json. Tests run on
+// an empty .claude/ fixture (no tickets, no ledger) — no network, fast.
+// =========================================================================
+
+#[tokio::test]
+async fn supply_chain_review_empty_yields_valid_envelope() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+    let env = neurogrim_sensory::supply_chain_review::analyze_supply_chain_review(
+        tmp.path().to_str().unwrap(),
+    );
+    assert_envelope_healthy("supply_chain_review:empty", &env);
+    assert_eq!(
+        env["score"].as_u64().unwrap(),
+        100,
+        "empty review state must score 100 (no open tickets)"
+    );
+}
+
+#[tokio::test]
+async fn supply_chain_review_with_one_open_ticket_validates() {
+    use neurogrim_sensory::supply_chain_review::{cli_create, analyze_supply_chain_review};
+    let tmp = TempDir::new().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+    cli_create(
+        tmp.path(),
+        "PyPI",
+        "litellm",
+        Some("1.82.7"),
+        "manual:operator-spotted",
+        "high-base64-payload count noticed in upstream diff",
+        "alice",
+    )
+    .unwrap();
+    let env = analyze_supply_chain_review(tmp.path().to_str().unwrap());
+    assert_envelope_healthy("supply_chain_review:one_open", &env);
+    // 100 - 1×10 = 90 per the v1 score model.
+    assert_eq!(env["score"].as_u64().unwrap(), 90);
+    assert_eq!(env["tickets_open"].as_u64().unwrap(), 1);
+}
