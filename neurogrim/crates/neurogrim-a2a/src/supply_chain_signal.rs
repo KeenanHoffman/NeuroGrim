@@ -208,6 +208,20 @@ pub fn default_received_signals_path(project_root: &Path) -> PathBuf {
 
 /// Append a received signal entry to the log. Atomic single-line
 /// JSONL append.
+///
+/// # Error semantics
+///
+/// Returns `Err` for any of:
+/// - parent-directory creation failed (I/O)
+/// - log file open-for-append failed (I/O)
+/// - entry serialized to invalid JSON (`InvalidData`)
+/// - serialized line contained an embedded newline
+///   (`InvalidData`; defensive — `serde_json::to_string` escapes
+///   `\n` by default so this only fires if the serializer config
+///   ever changes to `to_string_pretty` or similar; 2026-04-26
+///   A16 fix: error message names the specific failure class
+///   rather than the generic "must serialize to a single line").
+/// - write or flush failed (I/O)
 pub fn append_received_signal(
     log_path: &Path,
     entry: &ReceivedSignalEntry,
@@ -220,12 +234,26 @@ pub fn append_received_signal(
         .create(true)
         .append(true)
         .open(log_path)?;
-    let line = serde_json::to_string(entry)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let line = serde_json::to_string(entry).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("supply-chain-signal entry serialize failed: {}", e),
+        )
+    })?;
     if line.contains('\n') {
+        // Defensive guard: with `serde_json::to_string` (compact)
+        // this is unreachable. If a future change switches to
+        // `to_string_pretty` or similar, the JSONL format breaks
+        // silently — surface a clear actionable error instead.
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
-            "signal entry must serialize to a single line",
+            format!(
+                "supply-chain-signal serialized line contains an embedded newline \
+                 (received from {}, message_id {}). JSONL log requires \
+                 single-line entries; do not switch the serializer to \
+                 to_string_pretty without updating the log format.",
+                entry.from_brain_id, entry.envelope_message_id,
+            ),
         ));
     }
     writeln!(f, "{}", line)?;

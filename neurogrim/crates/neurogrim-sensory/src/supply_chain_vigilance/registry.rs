@@ -177,6 +177,13 @@ pub struct FetchAllResult {
     /// Per-ecosystem reachability bookkeeping for the CMDB extras.
     pub unreachable_ecosystems: Vec<String>,
     pub cache_bypassed: bool,
+    /// 2026-04-26 PRE-RELEASE A11 fix: surfaces an
+    /// HTTP-client-setup failure (e.g., TLS cert problem, native
+    /// roots load failure) so the CMDB can show the partial-data
+    /// state instead of silently degrading. `None` on the happy
+    /// path; `Some(detail)` when reqwest::Client::builder().build()
+    /// returns Err.
+    pub client_error: Option<String>,
 }
 
 impl FetchAllResult {
@@ -223,6 +230,10 @@ pub async fn fetch_all(
         Ok(c) => Some(c),
         Err(e) => {
             tracing::warn!("vigilance: HTTP client build failed: {:#}", e);
+            // 2026-04-26 PRE-RELEASE A11 fix: capture the reason so
+            // the CMDB can surface "registry_client_error" rather
+            // than only logging at warn level.
+            result.client_error = Some(format!("{:#}", e));
             None
         }
     };

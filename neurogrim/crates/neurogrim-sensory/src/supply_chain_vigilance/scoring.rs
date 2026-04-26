@@ -201,6 +201,18 @@ pub fn build_cmdb_envelope(
             "registry_unreachable_ecosystems",
             json!(metadata_result.unreachable_ecosystems),
         ),
+        // 2026-04-26 PRE-RELEASE A11 fix: when the HTTP client
+        // itself failed to build, surface the reason so operators
+        // see "client setup failed" not only "all registries
+        // unreachable". Null on the happy path.
+        (
+            "registry_client_error",
+            metadata_result
+                .client_error
+                .as_deref()
+                .map(|s| json!(s))
+                .unwrap_or(json!(null)),
+        ),
         (
             "lockfile_parse_errors",
             json!(parse_errors.iter().cloned().collect::<Vec<_>>()),
