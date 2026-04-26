@@ -274,11 +274,17 @@ check_supply_chain_vigilance_strict_with_bypass() {
   local vig_cmdb="$REPO_ROOT/.claude/supply-chain-vigilance-cmdb.json"
   local ledger="$REPO_ROOT/.claude/supply-chain-decision-ledger.jsonl"
 
+  # 2026-04-26 PRE-RELEASE C4 fix: previously this branch logged
+  # an info + returned 0 (silent skip). The strict-with-bypass
+  # posture requires fail-closed when the gate's CMDB is absent —
+  # operators who deleted/bootstrapped fresh must regenerate
+  # before re-running prepublish-check.sh.
   if [[ ! -f "$vig_cmdb" ]]; then
-    info "No vigilance CMDB at $vig_cmdb — skipping L2 gate (no Layer 2 scan has been run)"
-    info "  To activate: cd neurogrim && cargo run --release -p neurogrim-cli -- \\"
-    info "      sensory supply-chain-vigilance --project-root . > ../.claude/supply-chain-vigilance-cmdb.json"
-    return 0
+    fail "L2 vigilance gate requires $vig_cmdb (strict-with-bypass posture). \
+Bootstrap: cd neurogrim && cargo run --release -p neurogrim-cli -- \
+sensory supply-chain-vigilance --project-root . > ../.claude/supply-chain-vigilance-cmdb.json. \
+Then re-run prepublish-check.sh. \
+See docs/publish-day-runbook.md § First-run bootstrap."
   fi
   pass "$vig_cmdb present"
 
@@ -367,10 +373,14 @@ check_supply_chain_review_strict() {
   local rev_cmdb="$REPO_ROOT/.claude/supply-chain-review-cmdb.json"
 
   if [[ ! -f "$rev_cmdb" ]]; then
-    info "No review CMDB at $rev_cmdb — skipping L3 gate (framework hasn't recorded any tickets)"
-    info "  To activate: cd neurogrim && cargo run --release -p neurogrim-cli -- \\"
-    info "      sensory supply-chain-review --project-root . > ../.claude/supply-chain-review-cmdb.json"
-    return 0
+    # 2026-04-26 PRE-RELEASE C4 fix (L3 side): the strict-with-bypass
+    # posture requires fail-closed when the gate's CMDB is absent.
+    # See docs/publish-day-runbook.md § First-run bootstrap.
+    fail "L3 review gate requires $rev_cmdb (strict-with-bypass posture). \
+Bootstrap: cd neurogrim && cargo run --release -p neurogrim-cli -- \
+sensory supply-chain-review --project-root . > ../.claude/supply-chain-review-cmdb.json. \
+Then re-run prepublish-check.sh. \
+See docs/publish-day-runbook.md § First-run bootstrap."
   fi
   pass "$rev_cmdb present"
 

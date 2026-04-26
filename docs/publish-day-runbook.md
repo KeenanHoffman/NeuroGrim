@@ -53,8 +53,59 @@ Before touching any `cargo publish` command:
    token is scoped per crate, verify it can publish all six names.
 8. **Clean working tree.** `git status` is empty on a fresh checkout
    of `main`.
+9. **Supply-chain CMDBs present.** `.claude/supply-chain-{sca,
+   vigilance,review}-cmdb.json` exist (NeuroGrim tracks these in git
+   so a fresh clone is sufficient). If any are absent, see
+   § First-run bootstrap below — the strict-with-bypass L2 + L3
+   gates fail-closed when their CMDBs are missing.
 
 Do not proceed if any precondition is open.
+
+---
+
+## First-run bootstrap
+
+The L1 (SCA), L2 (Vigilance), and L3 (Review) strict gates in
+`scripts/prepublish-check.sh` fail-closed when their respective
+CMDBs are absent (per the 2026-04-26 PRE-RELEASE assessment C4
+fix). For NeuroGrim itself, the three CMDBs are tracked in git
+so a fresh clone is sufficient and you can skip this section.
+
+For **adopter projects** (or NeuroGrim post-deletion recovery),
+bootstrap the three CMDBs in this order from the repo root:
+
+```bash
+cd neurogrim
+
+# Layer 1 — Mechanical SCA. Queries OSV.dev; needs network.
+cargo run --release -p neurogrim-cli -- \
+    sensory supply-chain-sca --project-root . \
+    > ../.claude/supply-chain-sca-cmdb.json
+
+# Layer 2 — Vigilance. Queries crates.io / PyPI / npm; needs network.
+cargo run --release -p neurogrim-cli -- \
+    sensory supply-chain-vigilance --project-root . \
+    > ../.claude/supply-chain-vigilance-cmdb.json
+
+# Layer 3 — Review framework. Reads tickets + ledger; offline.
+cargo run --release -p neurogrim-cli -- \
+    sensory supply-chain-review --project-root . \
+    > ../.claude/supply-chain-review-cmdb.json
+
+cd ..
+```
+
+Then re-run `./scripts/prepublish-check.sh`. The first run after
+bootstrap may surface findings that require triage via the L3
+review flow before publish — that is the strict-with-bypass
+posture working as intended.
+
+For air-gapped operators: Layer 1 + Layer 2 require initial
+network access to populate their caches at
+`.claude/brain/cache/{osv,vigilance}/`. Once cached, subsequent
+runs work offline (cache TTL is 24h for OSV, 7d for vigilance
+registries). See `docs/supply-chain-sca.md` and
+`docs/supply-chain-vigilance.md` for cache override env vars.
 
 ---
 
