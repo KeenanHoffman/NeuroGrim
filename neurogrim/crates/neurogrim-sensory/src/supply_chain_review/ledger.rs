@@ -270,7 +270,20 @@ impl LedgerEntry {
                 }
             }
             LedgerEntry::ReviewPending(e) => {
-                common_check(&e.schema_version, e.human_operator.as_deref(), None)?;
+                // 2026-04-26 PRE-RELEASE B10 fix: schema tightened
+                // human_operator from optional to required. The
+                // conventional value for auto-created tickets is
+                // "auto"; real operators use their handle. This
+                // matches existing impl callers
+                // (auto_create_from_vigilance + cli_create both
+                // already pass Some(...)).
+                let op = e
+                    .human_operator
+                    .as_deref()
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "review-pending entries require human_operator (use \"auto\" for system-opened tickets per spec §16.4)"
+                    ))?;
+                common_check(&e.schema_version, Some(op), None)?;
                 if e.package.name.is_empty() || e.package.ecosystem.is_empty() {
                     bail!("package.name and package.ecosystem must be non-empty");
                 }
@@ -468,6 +481,11 @@ mod tests {
 
     #[test]
     fn validate_review_pending_requires_signals() {
+        // Provides a valid human_operator so the test isolates the
+        // signals-check branch (per the 2026-04-26 B10 schema fix,
+        // a missing human_operator would also trigger Err on a
+        // different path — set it to a real value here so this
+        // test stays focused on the empty-signals branch).
         let bad = LedgerEntry::ReviewPending(ReviewPendingEntry {
             ts: 1.0,
             schema_version: "1".to_string(),
@@ -476,12 +494,64 @@ mod tests {
             to_version: None,
             triggering_signals: vec![], // empty — must reject
             agent_findings: vec![],
-            human_operator: None,
+            human_operator: Some("auto".to_string()),
             human_notes: None,
             audit_reports: vec![],
             review_ticket_id: None,
         });
         assert!(bad.validate().is_err());
+    }
+
+    #[test]
+    fn validate_review_pending_requires_human_operator() {
+        // 2026-04-26 PRE-RELEASE B10 regression: schema tightened
+        // human_operator from optional to required for ReviewPending
+        // (operator-identity discipline applies to every ledger
+        // entry kind per spec §16.4). This test guards the
+        // tightened constraint from being relaxed.
+        let bad = LedgerEntry::ReviewPending(ReviewPendingEntry {
+            ts: 1.0,
+            schema_version: "1".to_string(),
+            package: make_pkg(),
+            from_version: None,
+            to_version: None,
+            triggering_signals: vec![make_signal()],
+            agent_findings: vec![],
+            human_operator: None, // missing — must reject
+            human_notes: None,
+            audit_reports: vec![],
+            review_ticket_id: None,
+        });
+        let err = bad.validate().unwrap_err();
+        let msg = format!("{:#}", err);
+        assert!(
+            msg.contains("human_operator"),
+            "error must mention human_operator; got: {msg}"
+        );
+        assert!(
+            msg.contains("auto"),
+            "error must mention 'auto' as the conventional value; got: {msg}"
+        );
+    }
+
+    #[test]
+    fn validate_review_pending_accepts_auto_operator() {
+        // Sanity: the conventional 'auto' value used by the Layer 2
+        // vigilance bridge is accepted. Documents the contract.
+        let good = LedgerEntry::ReviewPending(ReviewPendingEntry {
+            ts: 1.0,
+            schema_version: "1".to_string(),
+            package: make_pkg(),
+            from_version: None,
+            to_version: None,
+            triggering_signals: vec![make_signal()],
+            agent_findings: vec![],
+            human_operator: Some("auto".to_string()),
+            human_notes: Some("Auto-created from Layer 2".to_string()),
+            audit_reports: vec![],
+            review_ticket_id: Some("t-2026-04-26-0001".to_string()),
+        });
+        assert!(good.validate().is_ok());
     }
 
     #[test]
