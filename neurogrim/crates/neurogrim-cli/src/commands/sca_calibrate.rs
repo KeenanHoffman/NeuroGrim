@@ -54,9 +54,20 @@ pub async fn run(args: ScaCalibrateArgs) -> Result<()> {
         .unwrap_or_else(|| project_root.join("tests").join("supply-chain-fixtures"));
 
     if !fixtures_dir.is_dir() {
+        // 2026-04-26 PRE-RELEASE C7 fix: report the canonicalized
+        // absolute path so operators running from a different CWD
+        // can see exactly where the CLI looked.
+        let canonical = fixtures_dir
+            .canonicalize()
+            .ok()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(canonicalize failed; path may not exist)".to_string());
         anyhow::bail!(
-            "fixture library not found at {} — see docs/supply-chain-calibration.md for setup",
-            fixtures_dir.display()
+            "fixture library not found at {} (resolved to {}). \
+             See docs/supply-chain-calibration.md § Running calibration for setup. \
+             Pass --fixtures-dir to point at a non-default location.",
+            fixtures_dir.display(),
+            canonical
         );
     }
 

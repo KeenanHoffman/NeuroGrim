@@ -63,7 +63,17 @@ pub enum ScaReviewCmd {
         #[arg(long)]
         id: String,
         /// One of accept | reject | pin-to-last-good | no-action.
-        #[arg(long)]
+        ///
+        /// 2026-04-26 PRE-RELEASE C9 fix: validated at CLI parse time
+        /// via PossibleValuesParser so typos like `--decision yolo`
+        /// fail fast with clap's standard "invalid value" error
+        /// instead of reaching the sensory layer.
+        #[arg(
+            long,
+            value_parser = clap::builder::PossibleValuesParser::new([
+                "accept", "reject", "pin-to-last-good", "no-action",
+            ]),
+        )]
         decision: String,
         /// Resolution rationale (required, non-empty).
         #[arg(long)]
