@@ -70,8 +70,23 @@ pub enum MessageType {
     /// Supply-chain finding shared across peer Brains under
     /// bidirectional opt-in consent (spec §16.6, v2.6).
     /// Payload conforms to `a2a-supply-chain-signal-v1.schema.json`.
-    /// Both peers MUST declare this type in their Agent Card
-    /// `accepts[]` before signals flow.
+    ///
+    /// **Bidirectional opt-in (spec §16.6 normative):** before
+    /// signals flow A↔B, BOTH peers MUST declare
+    /// `supply-chain-signal` — sender in `capabilities.emits[]`
+    /// and receiver in `capabilities.accepts[]`. The check is
+    /// implemented in
+    /// [`crate::supply_chain_signal::bidirectional_opt_in_satisfied`].
+    /// This is a tighter posture than the one-direction-by-Agent-
+    /// Card-declaration default for other A2A message types; the
+    /// rationale is legal exposure + false-positive multiplication
+    /// (see §16.6 prose).
+    ///
+    /// **Default receive handler:** see
+    /// [`crate::supply_chain_signal::default_handle_received`]
+    /// — operators wanting custom handling (e.g., immediate
+    /// ticket auto-creation) override via
+    /// `TaskServer::register_handler`.
     #[serde(rename = "supply-chain-signal")]
     SupplyChainSignal,
 }
