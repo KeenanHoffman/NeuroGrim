@@ -1,0 +1,29 @@
+{
+  "id": "fx-l3-01-pin-on-acceleration",
+  "created_at": "2026-04-26T10:00:00Z",
+  "package": {
+    "name": "fakepkg-cadence",
+    "ecosystem": "PyPI",
+    "version_range": null
+  },
+  "from_version": "1.0.8",
+  "to_version": null,
+  "triggering_signals": [
+    {
+      "layer": "2",
+      "signal_kind": "vigilance:publish-cadence-acceleration",
+      "advisory_id": null,
+      "source_uri": null,
+      "confidence": 0.7
+    }
+  ],
+  "agent_findings": [],
+  "created_by": "auto",
+  "creation_notes": "Auto-created from Layer 2 vigilance: scanned version 1.0.8 published 30x faster than historical median (30d → 1d gap)",
+  "resolved_at": null,
+  "resolution": null,
+  "resolved_by": null,
+  "resolution_notes": null,
+  "pending_ledger_ts": 1714125600.0,
+  "schema_version": 1
+}

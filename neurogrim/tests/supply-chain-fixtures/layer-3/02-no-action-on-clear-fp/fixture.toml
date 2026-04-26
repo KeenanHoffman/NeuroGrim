@@ -1,0 +1,27 @@
+id = "02-no-action-on-clear-fp"
+label = "known-good"
+layer = "3"
+description = """
+A Layer 2 maintainer-delta hit auto-created a ticket, but on
+review it's a CLEAR false positive: the new maintainer is a
+well-known long-time contributor whose username changed (e.g.,
+GitHub handle update). Reference decision: no-action. This
+fixture exercises the operator's ability to dismiss FPs without
+escalating them up the layer-3 cost chain.
+"""
+attack_pattern = "false-positive-maintainer-delta"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+reference_decision = "no-action"
+reference_rationale = """
+The "new maintainer" is a known long-time contributor whose
+identifier changed (verifiable via GitHub commit history; their
+old + new identifiers are tied to the same email). No security
+concern. Resolve no-action; the ledger entry documents why so
+future operators reviewing similar patterns can fold the prior
+decision.
+"""
+fixture_author_confidence = 0.85
+defensible_alternatives = ["accept"]

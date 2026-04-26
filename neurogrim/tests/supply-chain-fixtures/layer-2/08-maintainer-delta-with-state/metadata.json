@@ -1,0 +1,15 @@
+{
+  "PyPI:fakepkg-maint-delta": {
+    "ecosystem": "PyPI",
+    "name": "fakepkg-maint-delta",
+    "versions": [
+      { "version": "1.0.0", "published_days_ago": 60, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" }
+    ],
+    "owners": [
+      { "login": "alice", "name": null, "url": null },
+      { "login": "carol", "name": null, "url": null }
+    ],
+    "repository_url": null,
+    "homepage_url": null
+  }
+}

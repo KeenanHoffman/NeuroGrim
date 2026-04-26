@@ -1,0 +1,17 @@
+{
+  "PyPI:fakepkg-attest-drop": {
+    "ecosystem": "PyPI",
+    "name": "fakepkg-attest-drop",
+    "versions": [
+      { "version": "1.0.0", "published_days_ago": 90, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "sigstore" },
+      { "version": "1.0.1", "published_days_ago": 60, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "sigstore" },
+      { "version": "1.0.2", "published_days_ago": 30, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "sigstore" },
+      { "version": "1.0.3", "published_days_ago": 5, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" }
+    ],
+    "owners": [
+      { "login": "synthetic-author", "name": null, "url": null }
+    ],
+    "repository_url": null,
+    "homepage_url": null
+  }
+}

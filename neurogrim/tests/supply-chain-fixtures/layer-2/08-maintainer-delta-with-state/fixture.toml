@@ -1,0 +1,20 @@
+id = "08-maintainer-delta-with-state"
+label = "known-bad"
+layer = "2"
+description = """
+Maintainer-delta fixture WITH paired prior-state.json. State
+records that the package has been observed for 90 days
+(first_scan_at) with `alice` as the long-term maintainer; only
+`carol` was observed within the last 5 days. Sensor MUST fire
+maintainer-delta on `carol`. Tests the post-E-SC-5 dogfood-tuning
+that introduced the first_scan_at calibration window (suppressing
+the FP swarm on second-scan-after-state-populated).
+"""
+attack_pattern = "maintainer-delta"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+findings = [
+  { kind = "maintainer-delta", package = "fakepkg-maint-delta", ecosystem = "PyPI" },
+]

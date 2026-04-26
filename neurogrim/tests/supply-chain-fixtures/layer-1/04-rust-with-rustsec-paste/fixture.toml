@@ -1,0 +1,40 @@
+id = "04-rust-with-rustsec-paste"
+label = "known-bad"
+layer = "1"
+description = """
+Cargo.lock containing the `paste` crate (1.0.15), which has
+RUSTSEC-2024-0436 (informational, "unmaintained"). Sensor SHOULD
+detect this advisory via either OSV or the pinned RustSec local
+submodule. v1 limitation: this fixture requires either live OSV
+OR a populated `vendor/rustsec-advisory-db/` submodule at the
+project root one-level-up from the fixture directory. Calibration
+runs that lack both will skip + log a "network/local-cross-
+reference unavailable" note rather than report this as a FN.
+"""
+attack_pattern = "advisory-match"
+references = [
+  "https://rustsec.org/advisories/RUSTSEC-2024-0436.html",
+]
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+# v1 limitation: this fixture would IDEALLY assert
+# advisory_ids = ["RUSTSEC-2024-0436"], but advisory-coverage
+# enforcement requires either:
+# (a) live OSV.dev access during calibration — non-deterministic,
+#     network-dependent.
+# (b) a populated `vendor/rustsec-advisory-db/` submodule one level
+#     up from the fixture directory — requires the fixture-runner
+#     to set up symlinks or vendor-dir-shadowing, which v1 doesn't
+#     do.
+#
+# v1 ships this fixture for STRUCTURAL coverage (ensure the sensor
+# doesn't panic on a Cargo.lock that contains a known
+# advisory-bearing crate). Advisory-MATCHING coverage is exercised
+# in crates/neurogrim-sensory/tests/sensor_behavior.rs which uses
+# the live OSV path.
+#
+# v2 candidate: pre-cache OSV responses per fixture in
+# `<fixture>/.osv-cache/` so the harness can run with deterministic
+# advisory-detection.

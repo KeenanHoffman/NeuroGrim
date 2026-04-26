@@ -1,0 +1,36 @@
+{
+  "id": "fx-l3-03-reject-on-attestation-drop",
+  "created_at": "2026-04-26T12:00:00Z",
+  "package": {
+    "name": "fakepkg-compromised",
+    "ecosystem": "PyPI",
+    "version_range": null
+  },
+  "from_version": "2.5.0",
+  "to_version": null,
+  "triggering_signals": [
+    {
+      "layer": "2",
+      "signal_kind": "vigilance:signature-gap",
+      "advisory_id": null,
+      "source_uri": null,
+      "confidence": 0.6
+    },
+    {
+      "layer": "2",
+      "signal_kind": "vigilance:publish-cadence-acceleration",
+      "advisory_id": null,
+      "source_uri": null,
+      "confidence": 0.7
+    }
+  ],
+  "agent_findings": [],
+  "created_by": "auto",
+  "creation_notes": "Compound Layer 2 hit: signature-gap + acceleration on same version. Operator triage required.",
+  "resolved_at": null,
+  "resolution": null,
+  "resolved_by": null,
+  "resolution_notes": null,
+  "pending_ledger_ts": 1714132800.0,
+  "schema_version": 1
+}

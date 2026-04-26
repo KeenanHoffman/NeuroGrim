@@ -1,0 +1,17 @@
+id = "02-pypi-clean-uv-lock"
+label = "known-good"
+layer = "1"
+description = """
+Minimal uv.lock containing httpx. No known advisories. Sensor
+MUST parse + report a non-zero total_packages_scanned. As with
+the Rust clean fixture, advisory-detection depends on live OSV;
+this fixture exercises parser correctness, not advisory coverage.
+"""
+attack_pattern = "none"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+# See 01-rust-clean-cargo-lock for the v1 expected-shape rationale:
+# we don't assert specific sensor_status values on known-good
+# fixtures because they're driven by live OSV behavior.

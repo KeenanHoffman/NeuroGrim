@@ -1,0 +1,24 @@
+id = "06-known-good-stable-pkg"
+label = "known-good"
+layer = "2"
+description = """
+Known-good control: package with steady release cadence, stable
+maintainers, no attestation churn, and a name that's NOT one edit
+from any popular package. Sensor MUST fire NO findings. Any
+finding here is a false positive.
+"""
+attack_pattern = "none"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+# Empty findings list = sensor must produce zero output.
+findings = []
+forbidden_findings = [
+  { kind = "typosquat-proximity" },
+  { kind = "publish-cadence-acceleration" },
+  { kind = "publish-cadence-post-dormancy" },
+  { kind = "transitive-surface-delta" },
+  { kind = "signature-gap" },
+  { kind = "maintainer-delta" },
+]

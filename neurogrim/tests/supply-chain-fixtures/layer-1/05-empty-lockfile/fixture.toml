@@ -1,0 +1,19 @@
+id = "05-empty-lockfile"
+label = "edge-case"
+layer = "1"
+description = """
+Empty Cargo.lock — file exists but contains no package entries.
+Sensor MUST handle this gracefully, reporting either
+sensor_status=lockfile_unreadable OR
+total_packages_scanned=0 with a non-error sensor_status. Tests
+the parser's robustness on degenerate but technically-valid input.
+"""
+attack_pattern = "none"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+# v1 doesn't strictly assert which graceful-degradation path the
+# sensor takes; both `lockfile_unreadable` and zero-package empty
+# scan are acceptable. This fixture is structural; calibration
+# alerts on PANIC, not on choice of degradation path.

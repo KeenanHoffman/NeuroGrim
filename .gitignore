@@ -25,6 +25,8 @@
 .claude/supply-chain-decision-ledger.jsonl
 # E-SC-5 (2026-04-25) — supply-chain Layer 2 vigilance cache + per-package state.
 .claude/brain/cache/vigilance/
+# E-SC-8 (2026-04-26) — supply-chain calibration report (operator-local).
+.claude/supply-chain-calibration-report.json
 .claude/coherence-cmdb.json
 # Agent-behavior verification state (spec §15 / S7-ABV). Feedback
 # ledger is per-deployment; per-run result records are ephemeral.

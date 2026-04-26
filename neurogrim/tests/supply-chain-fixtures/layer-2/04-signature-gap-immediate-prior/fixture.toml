@@ -1,0 +1,19 @@
+id = "04-signature-gap-immediate-prior"
+label = "known-bad"
+layer = "2"
+description = """
+Signature-gap fixture: package's IMMEDIATE prior version was
+attested (sigstore) but the latest version has no attestation.
+Sensor MUST fire signature-gap. Tests the post-E-SC-5 dogfood-
+tuning that switched signature_gap to immediate-prior comparison
+(suppressing the FP swarm of "old version had trustpub, new
+doesn't but neither do the 50 versions in between").
+"""
+attack_pattern = "signature-gap"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+findings = [
+  { kind = "signature-gap", package = "fakepkg-attest-drop", ecosystem = "PyPI" },
+]

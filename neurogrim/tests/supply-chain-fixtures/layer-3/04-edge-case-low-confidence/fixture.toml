@@ -1,0 +1,28 @@
+id = "04-edge-case-low-confidence"
+label = "edge-case"
+layer = "3"
+description = """
+A typosquat-proximity hit on a package the operator's project
+intentionally uses (e.g., a fork of a popular package with a
+deliberate one-edit name). Reference decision is "accept" with
+high fixture-author confidence — but defensible alternatives
+include "no-action" if the operator wants to track without
+greenlighting. Tests the operator's ability to distinguish
+legitimate-but-suspicious-looking from actually-suspicious.
+"""
+attack_pattern = "typosquat-proximity-legitimate-fork"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+reference_decision = "accept"
+reference_rationale = """
+The package is a deliberate fork of a popular library, named
+with a one-edit-distance suffix (e.g., `lodash-es-fork`). The
+operator's own project chose to depend on it explicitly; the
+typosquat-proximity hit is a v1-tunable false-positive class.
+Accept-with-note is appropriate; future operators reviewing
+similar patterns can fold this decision.
+"""
+fixture_author_confidence = 0.6
+defensible_alternatives = ["no-action"]

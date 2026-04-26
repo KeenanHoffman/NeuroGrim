@@ -1,0 +1,15 @@
+id = "03-no-lockfile-error"
+label = "edge-case"
+layer = "1"
+description = """
+Fixture directory with NO supported lockfile. Sensor MUST
+gracefully report sensor_status=lockfile_unreadable + score 0
+WITHOUT panicking. Tests the graceful-degradation path the
+sensor inherits from E-SC-2's `analyze_supply_chain_sca`.
+"""
+attack_pattern = "none"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+sensor_status = "lockfile_unreadable"

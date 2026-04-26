@@ -1,0 +1,17 @@
+id = "05-transitive-surface-surge"
+label = "known-bad"
+layer = "2"
+description = """
+Transitive-surface-delta fixture: package's latest version pulls
+in 25 dependencies (vs the prior version's 4). Sensor MUST fire
+transitive-surface-delta. Pattern observed in some malicious
+package compromises (the payload pulls in utility libraries).
+"""
+attack_pattern = "transitive-surface-delta"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+findings = [
+  { kind = "transitive-surface-delta", package = "fakepkg-dep-surge", ecosystem = "npm" },
+]

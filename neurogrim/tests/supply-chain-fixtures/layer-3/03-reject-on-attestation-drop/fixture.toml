@@ -1,0 +1,29 @@
+id = "03-reject-on-attestation-drop"
+label = "known-bad"
+layer = "3"
+description = """
+Layer 2 fired BOTH signature-gap AND publish-cadence-acceleration
+on the same package version (the `triggering_signals` array on
+the ticket has both). Two independent suspicious signals raises
+the bar from "watch this dep" to "this version isn't trustworthy."
+Reference decision: reject (remove the package; replace with a
+fork or alternative).
+"""
+attack_pattern = "compound-vigilance-hit"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+reference_decision = "reject"
+reference_rationale = """
+Signature-gap (attestation dropped vs the immediate prior) PAIRED
+with publish-cadence-acceleration is the classic "credential
+compromise" signature: an attacker pushed a new version using
+captured credentials, bypassing the normal trusted-publisher
+pipeline. Reject is the conservative posture — pin-to-last-good
+also valid but reject signals "this maintainer chain is
+compromised; don't accept the next release either without
+re-verification."
+"""
+fixture_author_confidence = 0.65
+defensible_alternatives = ["pin-to-last-good"]

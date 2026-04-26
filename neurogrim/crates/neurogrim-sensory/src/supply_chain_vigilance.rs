@@ -74,6 +74,7 @@ pub mod exfil_indicator;
 pub mod maintainer_delta;
 pub mod publish_cadence;
 pub mod registry;
+pub mod scan_with_metadata;
 pub mod scoring;
 pub mod signature_gap;
 pub mod state;

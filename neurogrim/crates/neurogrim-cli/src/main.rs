@@ -121,6 +121,13 @@ enum Commands {
         subcommand: commands::sca_review::ScaReviewCmd,
     },
 
+    /// Run supply-chain calibration against the fixture library and emit a
+    /// calibration report (E-SC-8). Use --check-promotion-ready to gate CI on
+    /// promotion-readiness; in v1 this always returns exit 1 by design (the
+    /// framework ships before the data does).
+    #[command(name = "sca-calibrate")]
+    ScaCalibrate(commands::sca_calibrate::ScaCalibrateArgs),
+
     /// Serve this Brain as an A2A peer (spec §13). Publishes an Agent Card
     /// and accepts peer invocations (snapshot.requested, score.updated ack).
     #[command(name = "a2a-serve", visible_alias = "beacon")]
@@ -234,6 +241,7 @@ async fn main() -> Result<()> {
             subcommand,
         } => commands::awareness::run(&project_root, subcommand).await,
         Commands::ScaReview { subcommand } => commands::sca_review::run(subcommand).await,
+        Commands::ScaCalibrate(args) => commands::sca_calibrate::run(args).await,
         Commands::A2aServe {
             port,
             bind,

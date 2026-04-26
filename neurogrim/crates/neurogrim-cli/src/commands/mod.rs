@@ -7,6 +7,7 @@ pub mod awareness;
 pub mod context;
 pub mod health;
 pub mod init;
+pub mod sca_calibrate;
 pub mod sca_review;
 pub mod score;
 pub mod serve;

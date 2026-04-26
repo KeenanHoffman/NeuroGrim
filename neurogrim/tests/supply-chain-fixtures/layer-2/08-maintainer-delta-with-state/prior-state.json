@@ -1,0 +1,21 @@
+{
+  "PyPI:fakepkg-maint-delta": {
+    "observed_maintainers": {
+      "alice": {
+        "display_name": null,
+        "url": null,
+        "first_seen_days_ago": 90,
+        "last_seen_days_ago": 1
+      },
+      "carol": {
+        "display_name": null,
+        "url": null,
+        "first_seen_days_ago": 5,
+        "last_seen_days_ago": 1
+      }
+    },
+    "first_scan_days_ago": 90,
+    "last_scan_days_ago": 1,
+    "schema_version": 1
+  }
+}

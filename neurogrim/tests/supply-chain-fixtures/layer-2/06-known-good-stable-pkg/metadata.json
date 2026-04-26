@@ -1,0 +1,19 @@
+{
+  "PyPI:neurogrim-test-stable-utility-xyz": {
+    "ecosystem": "PyPI",
+    "name": "neurogrim-test-stable-utility-xyz",
+    "versions": [
+      { "version": "1.0.0", "published_days_ago": 240, "yanked": false, "dependency_count": 3, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.0.1", "published_days_ago": 210, "yanked": false, "dependency_count": 3, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.0.2", "published_days_ago": 180, "yanked": false, "dependency_count": 3, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.0.3", "published_days_ago": 150, "yanked": false, "dependency_count": 3, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.0.4", "published_days_ago": 120, "yanked": false, "dependency_count": 3, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.0.5", "published_days_ago": 90, "yanked": false, "dependency_count": 3, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" }
+    ],
+    "owners": [
+      { "login": "synthetic-author", "name": null, "url": null }
+    ],
+    "repository_url": null,
+    "homepage_url": null
+  }
+}

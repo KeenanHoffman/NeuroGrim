@@ -1,0 +1,20 @@
+id = "03-post-dormancy"
+label = "known-bad"
+layer = "2"
+description = """
+Post-dormancy release pattern: package was dormant for >365 days
+between two adjacent versions, then released the latest version
+within the recent window (last 30 days). Sensor MUST fire
+publish-cadence-post-dormancy.
+"""
+attack_pattern = "publish-cadence-post-dormancy"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+findings = [
+  { kind = "publish-cadence-post-dormancy", package = "fakepkg-dormant", ecosystem = "PyPI" },
+]
+forbidden_findings = [
+  { kind = "typosquat-proximity" },
+]

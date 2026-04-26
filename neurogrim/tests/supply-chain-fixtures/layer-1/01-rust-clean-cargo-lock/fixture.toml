@@ -1,0 +1,27 @@
+id = "01-rust-clean-cargo-lock"
+label = "known-good"
+layer = "1"
+description = """
+Minimal Cargo.lock containing serde + tokio. No known advisories.
+Sensor MUST parse + report a non-zero total_packages_scanned and
+score 100 (assuming live OSV finds nothing — see note below).
+"""
+attack_pattern = "none"
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+# v1 note: advisory matching depends on live OSV.dev (or cached
+# responses). When OSV returns advisories on these packages, this
+# fixture's expected score drops accordingly. Calibration is a
+# regression check, not an absolute claim — at minimum, the sensor
+# must PARSE the lockfile and produce a CMDB.
+#
+# We deliberately do NOT assert sensor_status or specific advisory
+# IDs because:
+# - OSV may surface new advisories on serde/proc-macro2/etc. over
+#   time (then the fixture's known-good label becomes operator-
+#   needs-to-triage territory and the fixture should be refreshed).
+# - The test surface is "did the sensor produce a CMDB without
+#   panicking" — advisory-coverage testing happens in
+#   crates/neurogrim-sensory/tests/sensor_behavior.rs (live OSV).
+[expected]

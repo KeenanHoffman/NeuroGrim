@@ -1,0 +1,29 @@
+{
+  "id": "fx-l3-02-no-action-on-clear-fp",
+  "created_at": "2026-04-26T11:00:00Z",
+  "package": {
+    "name": "well-known-utility",
+    "ecosystem": "npm",
+    "version_range": null
+  },
+  "from_version": "5.2.1",
+  "to_version": null,
+  "triggering_signals": [
+    {
+      "layer": "2",
+      "signal_kind": "vigilance:maintainer-delta",
+      "advisory_id": null,
+      "source_uri": null,
+      "confidence": 0.5
+    }
+  ],
+  "agent_findings": [],
+  "created_by": "auto",
+  "creation_notes": "Auto-created from Layer 2 vigilance: new maintainer in last 30 days: alice-the-second",
+  "resolved_at": null,
+  "resolution": null,
+  "resolved_by": null,
+  "resolution_notes": null,
+  "pending_ledger_ts": 1714129200.0,
+  "schema_version": 1
+}

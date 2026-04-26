@@ -1,0 +1,28 @@
+id = "01-pin-on-acceleration"
+label = "known-bad"
+layer = "3"
+description = """
+A Layer 2 vigilance hit on publish-cadence-acceleration auto-
+created a ticket. The reference decision is `pin-to-last-good`:
+the operator-with-hat should pin to the last known-good version
+pending upstream context.
+"""
+attack_pattern = "publish-cadence-acceleration"
+references = [
+  "Layer 2 fixture 02-publish-cadence-acceleration (the source signal pattern)",
+]
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+reference_decision = "pin-to-last-good"
+reference_rationale = """
+Publish-cadence acceleration alone is diagnostic — not enough to
+reject the package outright, but enough to pin to a known-good
+version while observing upstream behavior. If the cadence
+normalizes within 30 days, operator can revert the pin. If
+additional Layer 2 signals fire (e.g., signature-gap on the same
+package), escalate to reject.
+"""
+fixture_author_confidence = 0.7
+defensible_alternatives = ["no-action"]

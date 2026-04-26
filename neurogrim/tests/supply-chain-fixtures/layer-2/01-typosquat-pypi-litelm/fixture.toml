@@ -1,0 +1,25 @@
+id = "01-typosquat-pypi-litelm"
+label = "known-bad"
+layer = "2"
+description = """
+Typosquat-proximity fixture. Package `litelm` is one Levenshtein
+edit from the popular `litellm` (PyPI top-N list). Sensor MUST
+fire typosquat-proximity. The package's other metrics are
+intentionally clean (steady cadence, stable maintainer) so this
+fixture isolates typosquat detection.
+"""
+attack_pattern = "typosquat-proximity"
+references = [
+  "https://pypi.org/project/litellm/  (the legitimate target)",
+]
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+findings = [
+  { kind = "typosquat-proximity", package = "litelm", ecosystem = "PyPI" },
+]
+forbidden_findings = [
+  { kind = "publish-cadence-acceleration" },
+  { kind = "signature-gap" },
+]

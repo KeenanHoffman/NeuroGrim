@@ -1,0 +1,20 @@
+{
+  "PyPI:litellm-synthetic-1827": {
+    "ecosystem": "PyPI",
+    "name": "litellm-synthetic-1827",
+    "versions": [
+      { "version": "1.81.0", "published_days_ago": 120, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.81.5", "published_days_ago": 105, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.82.0", "published_days_ago": 90, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.82.3", "published_days_ago": 75, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.82.5", "published_days_ago": 60, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.82.6", "published_days_ago": 5, "yanked": false, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" },
+      { "version": "1.82.7", "published_days_ago": 4, "yanked": true, "dependency_count": null, "dependency_names": null, "tarball_url": null, "tarball_sha256": null, "attestation_status": "none" }
+    ],
+    "owners": [
+      { "login": "synthetic-author", "name": null, "url": null }
+    ],
+    "repository_url": null,
+    "homepage_url": null
+  }
+}

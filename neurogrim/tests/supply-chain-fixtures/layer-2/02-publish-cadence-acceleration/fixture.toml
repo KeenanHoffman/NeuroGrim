@@ -1,0 +1,23 @@
+id = "02-publish-cadence-acceleration"
+label = "known-bad"
+layer = "2"
+description = """
+Publish-cadence acceleration: package with steady ~30-day release
+cadence over 6+ historical versions, then a sudden 1-day gap to
+the latest version (which is in the recent window). Sensor MUST
+fire publish-cadence-acceleration on the scanned (latest) version.
+"""
+attack_pattern = "publish-cadence-acceleration"
+references = [
+  "(synthetic) — pattern observed in LiteLLM 1.82.7 incident, reproduced here.",
+]
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+findings = [
+  { kind = "publish-cadence-acceleration", package = "fakepkg-cadence", ecosystem = "PyPI" },
+]
+forbidden_findings = [
+  { kind = "typosquat-proximity" },
+]

@@ -1,0 +1,38 @@
+id = "07-litellm-1827-synthetic"
+label = "known-bad"
+layer = "2"
+description = """
+SYNTHETIC reproduction of the LiteLLM 1.82.7 publishing pattern.
+Per the 2026-04-26 E-SC-8 user-locked decision, this fixture
+recreates the timing signature WITHOUT the live malicious
+payload — see ../README.md "LiteLLM-fixture safety posture."
+
+Pattern reproduced:
+- Publish-cadence acceleration: ~16-day median historical gap,
+  then 1-day gap to the scanned version.
+- (We do NOT reproduce the exfil-indicator pattern here; that
+  requires live tarball + extraction discipline. Operators who
+  want full-fidelity test fetch the live payload separately.)
+
+Operators wanting the strictest test:
+  curl -O https://files.pythonhosted.org/packages/.../litellm-1.82.7.tar.gz \
+    --header 'expected-sha256: <captured-elsewhere>'
+  # Verify hash
+  # Run E-SC-5's exfil_indicator with NEUROGRIM_VIGILANCE_EXFIL=1
+  # against a project that depends on the captured tarball.
+"""
+attack_pattern = "litellm-pattern-synthetic"
+references = [
+  "https://news.ycombinator.com/item?id=47501426",
+  "METHODOLOGY-EVOLUTION §15 (LSP-Brains v2.6)",
+]
+author = "neurogrim-fixture-library"
+authored_at = "2026-04-26"
+
+[expected]
+findings = [
+  { kind = "publish-cadence-acceleration", package = "litellm-synthetic-1827", ecosystem = "PyPI" },
+]
+forbidden_findings = [
+  { kind = "typosquat-proximity" },
+]
