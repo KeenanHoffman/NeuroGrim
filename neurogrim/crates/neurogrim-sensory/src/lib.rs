@@ -16,4 +16,5 @@ pub mod secret_refs;
 pub mod security_standards;
 pub mod skill_coherence;
 pub mod supply_chain_sca;
+pub mod supply_chain_vigilance;
 pub mod test_results;

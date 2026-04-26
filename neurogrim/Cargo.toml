@@ -83,6 +83,18 @@ semver = "1"
 #   chain; documented in audit/TOOL-TRUST-NOTES.md.
 yarn-lock-parser = "0.10"
 
+# Supply-chain vigilance E-SC-5 (Layer 2 deep-signal sensors):
+# - `tar` (alexcrichton-maintained, RustSec-tracked) for safe tarball
+#   extraction in the exfil_indicator sensor. Used with explicit
+#   `set_preserve_permissions(false)` + path-traversal guards.
+# - `flate2` (alexcrichton-maintained) for gunzip the registry
+#   tarballs (.tar.gz / .tgz). RustSec-tracked, well-audited.
+# Both are opt-in: exfil_indicator only activates with
+# NEUROGRIM_VIGILANCE_EXFIL=1; binary_reproducibility only with
+# NEUROGRIM_VIGILANCE_REPRO=1. Documented in audit/TOOL-TRUST-NOTES.md.
+tar = "0.4"
+flate2 = "1"
+
 # Workspace crates
 # Both `path` and `version` are required for `cargo publish` to resolve
 # intra-workspace deps from crates.io. Keep versions in lock-step with

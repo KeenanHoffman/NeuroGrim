@@ -20,7 +20,8 @@
       "agent-behavior": 0.0,
       "skill-coherence": 0.0,
       "capability-hygiene": 0.0,
-      "supply-chain-sca": 0.0
+      "supply-chain-sca": 0.0,
+      "supply-chain-vigilance": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -139,6 +140,20 @@
           "supply-chain-sca:advisories_accepted":      { "field": "advisories_accepted",      "type": "number" },
           "supply-chain-sca:osv_reachable":            { "field": "osv_reachable",            "type": "bool"   },
           "supply-chain-sca:rustsec_local_unique_hits":{ "field": "rustsec_local_unique_hits","type": "number" }
+        }
+      },
+      "supply-chain-vigilance": {
+        "_doc": "E-SC-5 (2026-04-25): native-Rust Layer 2 deep-signal vigilance per LSP-Brains v2.6 §16.3. Seven sub-sensors: typosquat-proximity (Levenshtein ≤1 to top-popular), publish-cadence (acceleration + post-dormancy), maintainer-delta (new maintainer in 30d window), transitive-surface-delta (dep-count surge), signature-gap (attestation drop), binary-reproducibility (registry-checksum verification — opt-in via NEUROGRIM_VIGILANCE_REPRO=1), exfil-indicator (base64/eval/exec/subprocess static analysis on extracted tarballs — opt-in via NEUROGRIM_VIGILANCE_EXFIL=1). Direct registry JSON-API queries (crates.io / PyPI / npm-registry) with 7-day file cache; override via NEUROGRIM_VIGILANCE_NO_CACHE=1. NO external scanner binaries. Refresh: `neurogrim sensory supply-chain-vigilance --project-root neurogrim > .claude/supply-chain-vigilance-cmdb.json`. Per-package historical state for maintainer-delta lives at .claude/brain/cache/vigilance/state/. Advisory weight 0.0 in v1 — promotion past advisory requires §15.5-equivalent calibration evidence (E-SC-8). Findings are advisory; never auto-gate per §16.3.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/supply-chain-vigilance-cmdb.json"
+        },
+        "exported_variables": {
+          "supply-chain-vigilance:total_packages_scanned": { "field": "total_packages_scanned", "type": "number" },
+          "supply-chain-vigilance:findings_total":         { "field": "findings_total",         "type": "number" },
+          "supply-chain-vigilance:vigilance_reachable":    { "field": "vigilance_reachable",    "type": "bool"   },
+          "supply-chain-vigilance:registry_cache_hits":    { "field": "registry_cache_hits",    "type": "number" },
+          "supply-chain-vigilance:registry_live_queries":  { "field": "registry_live_queries",  "type": "number" }
         }
       }
     },

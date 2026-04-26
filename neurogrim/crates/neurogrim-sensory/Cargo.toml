@@ -39,6 +39,12 @@ yarn-lock-parser = { workspace = true }
 # Keep in lock-step with `crates/neurogrim-a2a/Cargo.toml`.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 sha2 = "0.10"
+# Supply-chain vigilance E-SC-5: opt-in tarball-fetch + safe
+# extraction for binary_reproducibility + exfil_indicator. Off by
+# default; activated by NEUROGRIM_VIGILANCE_REPRO=1 +
+# NEUROGRIM_VIGILANCE_EXFIL=1 respectively.
+tar = { workspace = true }
+flate2 = { workspace = true }
 
 [dev-dependencies]
 # §3.8 Testing Discipline — validate CMDB envelope output against the

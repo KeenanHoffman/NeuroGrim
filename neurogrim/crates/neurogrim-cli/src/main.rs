@@ -81,7 +81,7 @@ enum Commands {
     /// Run a built-in sensory tool directly (produces CMDB JSON)
     #[command(visible_alias = "cast")]
     Sensory {
-        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca
+        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance
         name: String,
         /// Project root path
         #[arg(long, default_value = ".")]
@@ -273,7 +273,8 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
         "skill-coherence" => neurogrim_sensory::skill_coherence::analyze_skill_coherence(project_root).await,
         "capability-hygiene" => neurogrim_sensory::capability_hygiene::analyze_capability_hygiene(project_root).await,
         "supply-chain-sca" => neurogrim_sensory::supply_chain_sca::analyze_supply_chain_sca(project_root).await,
-        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca", name),
+        "supply-chain-vigilance" => neurogrim_sensory::supply_chain_vigilance::analyze_supply_chain_vigilance(project_root).await,
+        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance", name),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
