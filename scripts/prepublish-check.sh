@@ -288,63 +288,38 @@ See docs/publish-day-runbook.md § First-run bootstrap."
   fi
   pass "$vig_cmdb present"
 
-  # Walk findings + cross-check ledger. Python helper because we
-  # need JSON + JSONL handling. Fail with operator-actionable
-  # guidance if any finding is un-triaged.
-  local py_script
-  py_script="
-import json, os, sys
-vig_path = r'$vig_cmdb'
-ledger_path = r'$ledger'
-vig = json.load(open(vig_path))
-findings = vig.get('findings', [])
-triaged = set()
-if os.path.exists(ledger_path):
-    for line in open(ledger_path):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except Exception:
-            continue
-        kind = entry.get('entry_kind')
-        if kind not in ('review-triaged', 'accept', 'reject', 'pin-to-last-good'):
-            continue
-        pkg = entry.get('package', {}) or {}
-        eco = pkg.get('ecosystem', '')
-        name = pkg.get('name', '')
-        for sig in entry.get('triggering_signals', []) or []:
-            sk = sig.get('signal_kind', '')
-            if eco and name and sk:
-                triaged.add((eco, name, sk))
-untriaged = []
-for f in findings:
-    name = f.get('name', '')
-    parts = name.split(':', 2)
-    if len(parts) != 3:
-        continue
-    kind, eco, pkg_name = parts
-    if kind == 'sensor-degradation':
-        continue
-    sig_key = 'vigilance:' + kind
-    if (eco, pkg_name, sig_key) not in triaged:
-        untriaged.append((eco, pkg_name, kind))
-if untriaged:
-    print('UNTRIAGED:')
-    for eco, pkg, kind in untriaged:
-        print('  ' + eco + ' ' + pkg + ' ' + kind)
-    sys.exit(1)
-else:
-    total = len([f for f in findings if not f.get('name', '').startswith('sensor-degradation')])
-    print('all ' + str(total) + ' findings have matching ledger entries')
-    sys.exit(0)
-"
-  local untriaged_output
-  if untriaged_output="$(py -3 -c "$py_script" 2>&1)"; then
+  # Walk findings + cross-check ledger via the extracted helper at
+  # scripts/_supply-chain-bypass-check.py. The helper enforces:
+  #   * strict JSONL parse (corrupt ledger lines fail the gate
+  #     instead of being silently skipped — 2026-04-26 C5 fix)
+  #   * `<kind>:<eco>:<pkg>` finding-name format validation
+  #     (unknown formats fail the gate instead of being silently
+  #     skipped — 2026-04-26 C6 fix)
+  # Exit codes from the helper:
+  #   0 = all findings triaged
+  #   1 = un-triaged findings present
+  #   2 = script error (parse/format/usage)
+  local helper="$REPO_ROOT/scripts/_supply-chain-bypass-check.py"
+  local untriaged_output rc
+  if untriaged_output="$(py -3 "$helper" "$vig_cmdb" "$ledger" 2>&1)"; then
+    rc=0
+  else
+    rc=$?
+    if untriaged_output="$(python3 "$helper" "$vig_cmdb" "$ledger" 2>&1)"; then
+      rc=0
+    else
+      rc=$?
+    fi
+  fi
+
+  if [[ "$rc" -eq 0 ]]; then
     pass "L2 strict gate: $untriaged_output"
-  elif untriaged_output="$(python3 -c "$py_script" 2>&1)"; then
-    pass "L2 strict gate: $untriaged_output"
+  elif [[ "$rc" -eq 2 ]]; then
+    red "  [FAIL] L2 strict gate: helper reported a script-level error"
+    echo "$untriaged_output" | sed 's/^/    /'
+    info "Likely causes: corrupt ledger JSONL line OR finding-name format drift."
+    info "Inspect the helper output above + repair the underlying file."
+    fail "supply-chain-vigilance gate failed — see helper output"
   else
     red "  [FAIL] L2 strict gate: un-triaged findings present"
     echo "$untriaged_output" | sed 's/^/    /'
