@@ -101,7 +101,7 @@ impl SupplyChainReviewServer {
         &self,
         Parameters(p): Parameters<CheckSupplyChainReviewParams>,
     ) -> String {
-        serde_json::to_string_pretty(&analyze_supply_chain_review(&p.project_root))
+        serde_json::to_string_pretty(&analyze_supply_chain_review(&p.project_root).await)
             .unwrap_or_default()
     }
 }
@@ -123,7 +123,16 @@ impl ServerHandler for SupplyChainReviewServer {
 }
 
 /// Primary sensor entry point. Reads tickets + ledger + emits CMDB.
-pub fn analyze_supply_chain_review(project_root: &str) -> Value {
+///
+/// **Async signature** — per the 2026-04-26 PRE-RELEASE C11 fix
+/// this matches the async-by-default pattern of every other
+/// sensory entry point (`analyze_supply_chain_sca`,
+/// `analyze_supply_chain_vigilance`, `analyze_code_quality`,
+/// etc.). The body is currently fully synchronous (small file
+/// reads through `std::fs`); the async signature is for caller
+/// consistency. If the body grows network or other genuinely-
+/// async I/O later, the dispatch surface won't need to change.
+pub async fn analyze_supply_chain_review(project_root: &str) -> Value {
     let root = Path::new(project_root);
     // Fall back to parent if .claude/ isn't at project_root (mirrors
     // supply_chain_sca's workspace-subdir handling).
@@ -510,12 +519,69 @@ mod tests {
     use crate::supply_chain_sca::Package;
     use crate::supply_chain_vigilance::scoring::{VigilanceFinding, VigilanceKind};
 
-    #[test]
-    fn analyze_empty_returns_score_100() {
+    #[tokio::test]
+    async fn analyze_empty_returns_score_100() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".claude")).unwrap();
-        let result = analyze_supply_chain_review(dir.path().to_str().unwrap());
+        let result = analyze_supply_chain_review(dir.path().to_str().unwrap()).await;
         assert_eq!(result.get("score").and_then(|v| v.as_u64()), Some(100));
+    }
+
+    #[test]
+    fn review_module_has_no_exec_paths() {
+        // 2026-04-26 PRE-RELEASE B6 (test-side) regression guard.
+        //
+        // Spec §16.4 normative MUST: "read-only static analysis
+        // only — no execution of package source." This module's
+        // header comment already asserts the constraint; this
+        // test is the runtime guard against future code that
+        // accidentally introduces an execution path.
+        //
+        // We scan the module's source text for symbols that would
+        // permit execution. Bypass via #[allow]-style suppression
+        // is intentionally NOT supported — every match is a
+        // failure.
+        //
+        // If you have a legitimate need to add one of these (e.g.,
+        // shelling out to git for a non-execution side use), update
+        // this test deliberately + cite the spec text that
+        // permits the exception.
+        let src = include_str!("supply_chain_review.rs");
+        let forbidden_substrings = [
+            "std::process::Command",
+            "process::Command::",
+            "Command::new(",
+            "tokio::process::",
+            "duct::",
+            "subprocess::",
+            // tar / zip extract — package-extraction surface that
+            // §16.4 forbids in this layer (Layer 2's
+            // exfil_indicator handles tarball reads in isolation
+            // with safe-extract discipline).
+            "tar::Archive",
+            "zip::ZipArchive",
+            // Library-level exec helpers that have appeared in
+            // Rust ecosystem dependencies historically.
+            ".spawn()",
+            ".output()",
+            ".status()",
+        ];
+        // Allow this test itself to mention the symbols it's
+        // looking for. Strip the test body before scanning so
+        // self-reference doesn't trip the guard.
+        let test_marker = "fn review_module_has_no_exec_paths()";
+        let cutoff = src.find(test_marker).unwrap_or(src.len());
+        let scope = &src[..cutoff];
+
+        for needle in forbidden_substrings {
+            assert!(
+                !scope.contains(needle),
+                "supply_chain_review.rs contains forbidden symbol {needle:?} \
+                 (spec §16.4: read-only static analysis only). If this is \
+                 intentional, update the regression test in \
+                 review_module_has_no_exec_paths with the rationale."
+            );
+        }
     }
 
     #[test]

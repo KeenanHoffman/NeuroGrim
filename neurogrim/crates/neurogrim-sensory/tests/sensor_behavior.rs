@@ -1043,7 +1043,8 @@ async fn supply_chain_review_empty_yields_valid_envelope() {
     std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
     let env = neurogrim_sensory::supply_chain_review::analyze_supply_chain_review(
         tmp.path().to_str().unwrap(),
-    );
+    )
+    .await;
     assert_envelope_healthy("supply_chain_review:empty", &env);
     assert_eq!(
         env["score"].as_u64().unwrap(),
@@ -1067,7 +1068,7 @@ async fn supply_chain_review_with_one_open_ticket_validates() {
         "alice",
     )
     .unwrap();
-    let env = analyze_supply_chain_review(tmp.path().to_str().unwrap());
+    let env = analyze_supply_chain_review(tmp.path().to_str().unwrap()).await;
     assert_envelope_healthy("supply_chain_review:one_open", &env);
     // 100 - 1×10 = 90 per the v1 score model.
     assert_eq!(env["score"].as_u64().unwrap(), 90);
