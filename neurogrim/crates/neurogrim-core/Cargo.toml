@@ -19,6 +19,20 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 url = { version = "2", features = ["serde"] }
+# E-B2-2 C3: calibration-ledger writer uses anyhow::Context for
+# I/O-error chaining (open / append / parse). Same convention as
+# neurogrim-sensory's existing supply-chain-decision-ledger writer.
+anyhow = { workspace = true }
+# E-B2-2 C3: calibration-ledger reader logs malformed-line skip
+# events via tracing::warn — same posture as the supply-chain
+# ledger reader (parse-failure on a bad line should never block
+# the sensor, but the operator should see the warning).
+tracing = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+# E-B2-2 C3: tempfile-backed integration tests for the
+# calibration-ledger writer (atomic write + read roundtrip,
+# malformed-line skip, fold-reconstruct). Same posture as
+# `neurogrim-sensory` already uses for its ledger tests.
+tempfile = "3"

@@ -600,6 +600,11 @@ mod tests {
             correlations: vec![],
             incident_patterns: vec![],
             sensory_servers: HashMap::new(),
+            // E-B2-2 C3: per spec §17.3, default false means the
+            // calibration-ledger writer is silent unless an operator
+            // explicitly opts in. Test fixtures pre-date the field
+            // and don't exercise it.
+            enable_calibration_writes: false,
             extra: HashMap::new(),
         }
     }

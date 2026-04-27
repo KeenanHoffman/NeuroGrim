@@ -365,6 +365,9 @@ mod tests {
                 correlations: vec![],
                 incident_patterns: vec![],
                 sensory_servers: Default::default(),
+                // E-B2-2 C3: spec §17.3 default. Test-fixture
+                // BrainConfig with calibration writer disabled.
+                enable_calibration_writes: false,
                 extra: Default::default(),
             },
         }

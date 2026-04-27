@@ -1388,11 +1388,14 @@ dependencies = [
 name = "neurogrim-core"
 version = "3.0.0-rc.1"
 dependencies = [
+ "anyhow",
  "chrono",
  "proptest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
+ "tracing",
  "url",
 ]
 

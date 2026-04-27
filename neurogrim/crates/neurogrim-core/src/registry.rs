@@ -96,6 +96,14 @@ pub struct BrainConfig {
     pub incident_patterns: Vec<serde_json::Value>,
     #[serde(default)]
     pub sensory_servers: HashMap<String, SensoryServerConfig>,
+    /// Brains-2.0 E-B2-2 §17.3 — global gate for the calibration-
+    /// ledger writer. Defaults to `false` (writer is silent). Even
+    /// when `true`, per-domain auto-fire requires a non-Manual
+    /// `calibration_trigger` on the domain's definition. Both opt-ins
+    /// must be set for an entry to be auto-created. Manual triage via
+    /// the CLI is unaffected by this flag.
+    #[serde(default)]
+    pub enable_calibration_writes: bool,
     // Allow additional fields without breaking parsing
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
@@ -109,6 +117,15 @@ pub struct DomainDefinition {
     pub floor: Option<FloorConfig>,
     #[serde(default)]
     pub exported_variables: HashMap<String, ExportedVariable>,
+    /// Brains-2.0 E-B2-2 §17.3 — per-domain calibration trigger
+    /// configuration. None means "no auto-trigger; operator-only
+    /// manual entries via CLI" (the safe default for new domains).
+    /// Some(Manual) is the same posture explicitly stated. Other
+    /// variants opt the domain into auto-fire on the build_scorecard
+    /// hot path. See `crate::calibration_ledger::CalibrationTrigger`
+    /// for the discriminated union.
+    #[serde(default)]
+    pub calibration_trigger: Option<crate::calibration_ledger::CalibrationTrigger>,
     // Allow additional fields
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,

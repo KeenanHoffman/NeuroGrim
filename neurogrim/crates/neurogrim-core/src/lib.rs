@@ -1,5 +1,6 @@
 pub mod agent_output;
 pub mod awareness;
+pub mod calibration_ledger;
 pub mod confidence;
 pub mod correlation;
 pub mod ecosystem;
