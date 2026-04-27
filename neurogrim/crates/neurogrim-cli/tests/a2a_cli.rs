@@ -117,3 +117,156 @@ async fn cli_discovery_rejects_unreachable_peer() {
         "error should name the discovery failure; got: {msg}"
     );
 }
+
+#[tokio::test]
+async fn supply_chain_signal_e2e_over_loopback() {
+    // 2026-04-26 PRE-RELEASE Round 2 R2-5 (D2-G3) regression guard.
+    //
+    // E-SC-7 + E-SC-10 shipped MessageType::SupplyChainSignal +
+    // SupplyChainSignalPayload + default_handle_received without a
+    // full HTTP-loopback E2E test. Unit tests in
+    // `crates/neurogrim-a2a/src/supply_chain_signal.rs` cover the
+    // helpers individually; this test exercises the full sender →
+    // network → receiver → received-signals.jsonl flow.
+    //
+    // Validates three contracts simultaneously:
+    //   1. bidirectional_opt_in_satisfied returns true when both
+    //      peers' Agent Cards declare `supply-chain-signal` correctly.
+    //   2. Sender can serialize a SupplyChainSignalPayload + wrap
+    //      it in an A2aEnvelope + send via TaskClient.
+    //   3. Receiver runs default_handle_received, persists the
+    //      signal to the log file, and returns an ack envelope
+    //      whose payload references the original message id.
+    use neurogrim_a2a::supply_chain_signal::{
+        bidirectional_opt_in_satisfied, default_handle_received, DiscoverySource, PackageRef,
+        SeverityClass, SupplyChainSignalPayload,
+    };
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    // ---- Set up a temp log file unique to this test run ----
+    let log_path: PathBuf = std::env::temp_dir().join(format!(
+        "neurogrim-r2-r5-supply-chain-signal-log-{}.jsonl",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&log_path); // start clean
+
+    // ---- Build a receiver card that ACCEPTS supply-chain-signal ----
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let endpoint = format!("http://{addr}/");
+
+    let mut receiver_card = card(&endpoint);
+    receiver_card.id = "receiver-brain".into();
+    receiver_card
+        .capabilities
+        .accepts
+        .push(MessageType::SupplyChainSignal);
+
+    // ---- Build a sender card that EMITS supply-chain-signal ----
+    let mut sender_card = card("http://localhost:0/");
+    sender_card.id = "sender-brain".into();
+    sender_card
+        .capabilities
+        .emits
+        .push(MessageType::SupplyChainSignal);
+
+    // Contract 1: bidirectional opt-in satisfied.
+    assert!(
+        bidirectional_opt_in_satisfied(&sender_card, &receiver_card),
+        "sender emits + receiver accepts → opt-in must be satisfied"
+    );
+    // Negative control: swap roles → receiver-as-sender does NOT
+    // emit, so opt-in fails.
+    assert!(
+        !bidirectional_opt_in_satisfied(&receiver_card, &sender_card),
+        "receiver doesn't emit → opt-in must NOT be satisfied"
+    );
+
+    // ---- Wire up the receiver server with default_handle_received ----
+    let log_path_for_handler = Arc::new(log_path.clone());
+    let mut server = TaskServer::new(receiver_card.clone());
+    server.register_handler(MessageType::SupplyChainSignal, move |req| {
+        let log_path = Arc::clone(&log_path_for_handler);
+        async move {
+            default_handle_received(&req, &log_path, "receiver-brain")
+                .map_err(neurogrim_a2a::error::A2aError::InvalidEnvelope)
+        }
+    });
+
+    let router = server.router();
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, router).await.ok();
+    });
+
+    // ---- Sender constructs a signal + sends over HTTP loopback ----
+    let payload = SupplyChainSignalPayload {
+        schema_version: "1".to_string(),
+        advisory_id: Some("RUSTSEC-NG-TEST-R2".to_string()),
+        package: PackageRef {
+            name: "fakepkg".to_string(),
+            ecosystem: "crates.io".to_string(),
+            version: "0.1.0".to_string(),
+            version_range: None,
+        },
+        severity_class: SeverityClass::Medium,
+        discovery_source: DiscoverySource::Vigilance,
+        peer_brain_id: "sender-brain".to_string(),
+        cross_brain_count: None,
+        discovered_at: None,
+        advisory_uri: None,
+        summary: Some("R2-5 E2E test signal".to_string()),
+        legal_disclaimer: Some(
+            "This signal is shared under non-attributive language discipline per spec section 16.4."
+                .to_string(),
+        ),
+        recommended_action: None,
+        metadata: serde_json::Map::new(),
+    };
+    let payload_value = serde_json::to_value(&payload).unwrap();
+    let envelope = A2aEnvelope::new("sender-brain", MessageType::SupplyChainSignal, payload_value);
+    let original_id = envelope.message_id.clone();
+
+    let url = Url::parse(&endpoint).unwrap();
+    let client = TaskClient::new_http();
+    let reply = client
+        .invoke(&url, envelope)
+        .await
+        .expect("invoke must succeed");
+
+    // Contract 2 + 3: sender side worked, receiver replied with ack.
+    // The default handler returns a ScoreUpdated-shaped ack envelope
+    // whose payload references the original message_id.
+    assert_eq!(
+        reply.message_type,
+        MessageType::ScoreUpdated,
+        "default_handle_received returns a ScoreUpdated-shaped ack"
+    );
+    assert_eq!(
+        reply.payload["ack"].as_str(),
+        Some("supply-chain-signal-received"),
+        "ack payload must declare receipt"
+    );
+    assert_eq!(
+        reply.payload["envelope_message_id"].as_str(),
+        Some(original_id.as_str()),
+        "ack must reference the original message_id"
+    );
+
+    // Contract 3 (cont.): receiver appended to received-signals.jsonl.
+    let log_contents = std::fs::read_to_string(&log_path)
+        .expect("default_handle_received should have written the log file");
+    let lines: Vec<&str> = log_contents.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert_eq!(lines.len(), 1, "exactly one signal expected in log");
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(lines[0]).expect("logged signal must be valid JSON");
+    assert_eq!(parsed["from_brain_id"].as_str(), Some("sender-brain"));
+    assert_eq!(parsed["envelope_message_id"].as_str(), Some(original_id.as_str()));
+    assert_eq!(parsed["payload"]["advisory_id"].as_str(), Some("RUSTSEC-NG-TEST-R2"));
+    assert_eq!(parsed["payload"]["package"]["name"].as_str(), Some("fakepkg"));
+
+    // ---- Cleanup ----
+    let _ = std::fs::remove_file(&log_path);
+    handle.abort();
+}
