@@ -190,6 +190,63 @@ neurogrim sensory test-health --project-root . > .claude/test-health-cmdb.json
 Then re-run `neurogrim score` — the score now reflects the
 freshly-regenerated CMDBs.
 
+### 3e. Your first Layer 2 vigilance scan
+
+The supply-chain Layer 2 vigilance sensor watches for behavior
+patterns in your dependencies (publish-cadence anomalies, new
+maintainers, signature drops, typosquats). It's advisory by
+default — calibration data must accumulate before findings
+factor into score (see [`docs/supply-chain-calibration.md`](supply-chain-calibration.md)).
+
+Run it once to populate the CMDB:
+
+```bash
+neurogrim sensory supply-chain-vigilance --project-root . \
+    > .claude/supply-chain-vigilance-cmdb.json
+```
+
+**On a clean project** the output looks like:
+
+```json
+{
+  "score": 100,
+  "findings": [],
+  "total_packages_scanned": 42,
+  "vigilance_reachable": true
+}
+```
+
+**When a finding fires** (e.g., a recent publish-cadence
+acceleration), each finding appears with a kind tag like
+`publish-cadence-acceleration:crates.io:somepkg`. Layer 2
+findings auto-create review tickets in
+`.claude/brain/supply-chain-tickets/` so you can triage them
+with the operator-driven Layer 3 flow.
+
+To see open review tickets:
+
+```bash
+neurogrim sca-review list --open-only --project-root .
+```
+
+To resolve one:
+
+```bash
+neurogrim sca-review resolve --id <ticket-id> \
+    --decision <accept|reject|pin-to-last-good|no-action> \
+    --note 'rationale here' --operator '<your-handle>'
+```
+
+Each `resolve` appends a `review-triaged` entry to the
+append-only `.claude/supply-chain-decision-ledger.jsonl` —
+the durable audit record. Full triage workflow:
+[`docs/supply-chain-review.md`](supply-chain-review.md).
+
+The first scan on a cold cache may take ~30s for projects with
+~100 deps; subsequent scans hit the 7-day registry cache and
+finish in seconds. Set `NEUROGRIM_VIGILANCE_NO_CACHE=1` to
+force a fresh scan.
+
 ---
 
 ## 4. Next steps (choose your own adventure)
