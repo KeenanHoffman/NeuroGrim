@@ -44,6 +44,44 @@ pub fn unified_score(domain_scores: &HashMap<String, DomainScore>) -> Score {
     Score::new(weighted_sum.floor() as i64)
 }
 
+/// Compute the unified confidence — weighted mean of per-domain
+/// confidence across scored (non-advisory) domains (E-B2-1, spec §6.X).
+///
+/// Formula: `round(sum(d.confidence * d.weight) / sum(d.weight))`.
+/// Mirrors how `unified_score` aggregates effective scores; the only
+/// shape difference is normalization-by-weight-sum (because we want a
+/// mean, not a weighted contribution).
+///
+/// Advisory domains (weight = 0.0) are excluded from both numerator
+/// and denominator. Empty scored set OR zero total weight → 0.
+///
+/// Receivers SHOULD use the resulting `unified_confidence` for
+/// peer-to-peer trust decisions: a peer with score=85 but
+/// unified_confidence=20 is a low-quality signal regardless of the
+/// score itself.
+pub fn unified_confidence(domain_scores: &HashMap<String, DomainScore>) -> Confidence {
+    let scored: Vec<&DomainScore> = domain_scores
+        .values()
+        .filter(|ds| !ds.weight.is_advisory())
+        .collect();
+
+    if scored.is_empty() {
+        return Confidence::zero();
+    }
+
+    let weight_sum: f64 = scored.iter().map(|ds| ds.weight.value()).sum();
+    if weight_sum <= 0.0 {
+        return Confidence::zero();
+    }
+
+    let weighted_conf_sum: f64 = scored
+        .iter()
+        .map(|ds| ds.confidence.value() as f64 * ds.weight.value())
+        .sum();
+
+    Confidence::new((weighted_conf_sum / weight_sum).round())
+}
+
 /// Apply domain floor constraints (spec Section 4.6).
 ///
 /// If a domain's effective score falls below its floor min_score, the unified score
@@ -403,5 +441,113 @@ mod tests {
         let now = Utc::now();
         let result = resolve_confidence(Some(200), Some(now), now, &test_confidence_config());
         assert_eq!(result.value(), 100);
+    }
+
+    #[test]
+    fn unified_confidence_weighted_mean_three_domains() {
+        // E-B2-1 C6: weighted-mean across three scored domains.
+        // domain A: confidence=80, weight=0.5
+        // domain B: confidence=60, weight=0.3
+        // domain C: confidence=40, weight=0.2
+        // weighted_sum = 80*0.5 + 60*0.3 + 40*0.2 = 40 + 18 + 8 = 66
+        // weight_sum = 1.0 → unified = round(66 / 1.0) = 66
+        let mut domains = HashMap::new();
+        domains.insert(
+            "a".to_string(),
+            DomainScore {
+                domain: "a".to_string(),
+                raw_score: Score::new(85),
+                confidence: Confidence::new(80.0),
+                effective_score: Score::new(85),
+                weight: Weight::new(0.5),
+                trajectory: None,
+            },
+        );
+        domains.insert(
+            "b".to_string(),
+            DomainScore {
+                domain: "b".to_string(),
+                raw_score: Score::new(70),
+                confidence: Confidence::new(60.0),
+                effective_score: Score::new(70),
+                weight: Weight::new(0.3),
+                trajectory: None,
+            },
+        );
+        domains.insert(
+            "c".to_string(),
+            DomainScore {
+                domain: "c".to_string(),
+                raw_score: Score::new(50),
+                confidence: Confidence::new(40.0),
+                effective_score: Score::new(50),
+                weight: Weight::new(0.2),
+                trajectory: None,
+            },
+        );
+        let result = unified_confidence(&domains);
+        assert_eq!(result.value(), 66);
+    }
+
+    #[test]
+    fn unified_confidence_empty_domains_returns_zero() {
+        // No domains → no signal to aggregate → 0 (honest unknown).
+        let domains: HashMap<String, DomainScore> = HashMap::new();
+        let result = unified_confidence(&domains);
+        assert_eq!(result.value(), 0);
+    }
+
+    #[test]
+    fn unified_confidence_only_advisory_domains_returns_zero() {
+        // All-advisory (weight=0.0) registries have nothing to weight by.
+        // Spec §16.3 supply-chain campaign declared all three sensors at
+        // weight 0.0 for v1; this case must return 0 (matches unified_score
+        // semantics — advisory-only Brains have unified_score = 0 too).
+        let mut domains = HashMap::new();
+        domains.insert(
+            "advisory-only".to_string(),
+            DomainScore {
+                domain: "advisory-only".to_string(),
+                raw_score: Score::new(75),
+                confidence: Confidence::new(85.0),
+                effective_score: Score::new(75),
+                weight: Weight::new(0.0),
+                trajectory: None,
+            },
+        );
+        let result = unified_confidence(&domains);
+        assert_eq!(result.value(), 0);
+    }
+
+    #[test]
+    fn unified_confidence_excludes_advisory_in_aggregate() {
+        // Mixed scored + advisory: only the scored domain contributes.
+        // Without the filter, naive mean = (90+10)/2 = 50; with the
+        // filter, only the scored domain (90) counts → 90.
+        let mut domains = HashMap::new();
+        domains.insert(
+            "scored".to_string(),
+            DomainScore {
+                domain: "scored".to_string(),
+                raw_score: Score::new(80),
+                confidence: Confidence::new(90.0),
+                effective_score: Score::new(80),
+                weight: Weight::new(1.0),
+                trajectory: None,
+            },
+        );
+        domains.insert(
+            "advisory".to_string(),
+            DomainScore {
+                domain: "advisory".to_string(),
+                raw_score: Score::new(10),
+                confidence: Confidence::new(10.0),
+                effective_score: Score::new(10),
+                weight: Weight::new(0.0),
+                trajectory: None,
+            },
+        );
+        let result = unified_confidence(&domains);
+        assert_eq!(result.value(), 90);
     }
 }

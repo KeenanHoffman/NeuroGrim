@@ -29,6 +29,22 @@ pub struct AgentOutput {
     pub incident_patterns: Vec<AgentIncident>,
     pub skipped_temporal: Vec<String>,
 
+    // --- Brains-2.0 E-B2-1: peer of `score`, weighted-mean confidence ---
+    /// Weighted-mean confidence across scored (non-advisory) domains:
+    /// `round(sum(d.confidence * d.weight) / sum(d.weight))`. Mirrors how
+    /// `score` (unified score) is aggregated. Receivers SHOULD use this
+    /// for peer-to-peer trust decisions ("their score is 85 but
+    /// confidence is 20 — discount").
+    ///
+    /// `#[serde(default)]` ensures backward-compat with v2.6 A2A peers
+    /// that do not yet emit this field — deserialization succeeds with
+    /// `unified_confidence == 0`. Combined with v2.7's spec-glossary
+    /// disambiguation (envelope.confidence vs unified_confidence vs
+    /// children[].confidence), this gives graceful upgrade across the
+    /// four-Brain ecosystem.
+    #[serde(default)]
+    pub unified_confidence: u8,
+
     // --- Optional Fields ---
     #[serde(skip_serializing_if = "Option::is_none")]
     pub proposal_effectiveness: Option<HashMap<String, ActionEffectiveness>>,
@@ -149,6 +165,9 @@ pub fn build_agent_output(
         schema_version: "1".to_string(),
         scored_at: scorecard.scored_at.to_rfc3339(),
         score: scorecard.unified_score.value(),
+        // E-B2-1 C6: weighted-mean of per-domain confidence over
+        // non-advisory domains. See scoring::unified_confidence.
+        unified_confidence: crate::scoring::unified_confidence(&scorecard.domains).value(),
         domains,
         dirty_gates,
         stale_artifacts,
@@ -251,12 +270,17 @@ mod tests {
         assert_eq!(output.schema_version, "1");
         assert_eq!(output.score, 85);
         assert!(output.domains.contains_key("test-health"));
+        // E-B2-1 C6: unified_confidence is the weighted-mean of
+        // per-domain confidence. Single domain with weight=1.0 +
+        // Confidence::full() → unified_confidence = 100.
+        assert_eq!(output.unified_confidence, 100);
 
         // Verify it serializes to valid JSON
         let json = serde_json::to_value(&output).unwrap();
         assert!(json.get("schema_version").is_some());
         assert!(json.get("scored_at").is_some());
         assert!(json.get("score").is_some());
+        assert!(json.get("unified_confidence").is_some());
         assert!(json.get("domains").is_some());
         assert!(json.get("dirty_gates").is_some());
         assert!(json.get("stale_artifacts").is_some());
@@ -265,6 +289,31 @@ mod tests {
         assert!(json.get("correlations_fired").is_some());
         assert!(json.get("incident_patterns").is_some());
         assert!(json.get("skipped_temporal").is_some());
+    }
+
+    #[test]
+    fn agent_output_unified_confidence_defaults_when_absent() {
+        // E-B2-1 C6: backward-compat for v2.6 A2A peers. When a peer
+        // sends AgentOutput JSON without `unified_confidence`,
+        // serde's default kicks in (u8 default = 0). This is the
+        // graceful-upgrade contract — receivers SHOULD treat
+        // unified_confidence == 0 as "peer is at v2.6 or earlier".
+        let json = serde_json::json!({
+            "schema_version": "1",
+            "scored_at": "2026-04-27T12:00:00Z",
+            "score": 75,
+            "domains": {},
+            "dirty_gates": [],
+            "stale_artifacts": [],
+            "domain_variables": {},
+            "top_recommendations": [],
+            "correlations_fired": [],
+            "incident_patterns": [],
+            "skipped_temporal": []
+        });
+        let output: AgentOutput = serde_json::from_value(json)
+            .expect("v2.6 AgentOutput (no unified_confidence) must still deserialize");
+        assert_eq!(output.unified_confidence, 0);
     }
 
     #[test]

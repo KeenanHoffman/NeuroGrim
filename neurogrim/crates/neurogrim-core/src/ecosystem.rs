@@ -545,6 +545,9 @@ mod tests {
             schema_version: "1".into(),
             scored_at: scored_at.to_rfc3339(),
             score,
+            // E-B2-1 C6 fixture: single domain at given confidence,
+            // weight=1.0 → unified_confidence == confidence.
+            unified_confidence: confidence,
             domains,
             dirty_gates: vec![],
             stale_artifacts: vec![],
