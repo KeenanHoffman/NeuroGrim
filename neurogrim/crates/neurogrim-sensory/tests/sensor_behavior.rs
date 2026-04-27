@@ -19,30 +19,13 @@
 //! sibling `LSP-Brains/`), tests print a skip marker instead of failing —
 //! same pattern as `schema_conformance.rs`.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use jsonschema::JSONSchema;
 use serde_json::Value;
 use tempfile::TempDir;
 
-fn locate_cmdb_schema() -> Option<PathBuf> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let candidates = [
-        manifest_dir.join("../../../../LSP-Brains/schemas/cmdb-envelope-v1.schema.json"),
-        manifest_dir.join("../../../LSP-Brains/schemas/cmdb-envelope-v1.schema.json"),
-    ];
-    candidates.into_iter().find(|p| p.is_file())
-}
-
-fn load_schema() -> Option<JSONSchema> {
-    let path = locate_cmdb_schema()?;
-    let raw = std::fs::read_to_string(&path).ok()?;
-    let value: Value = serde_json::from_str(&raw).ok()?;
-    JSONSchema::options()
-        .with_draft(jsonschema::Draft::Draft7)
-        .compile(&value)
-        .ok()
-}
+mod test_support;
+use test_support::load_schema;
 
 /// Validate an envelope against the canonical schema + score-range assertion.
 /// When the schema isn't reachable, skips the schema check but still asserts

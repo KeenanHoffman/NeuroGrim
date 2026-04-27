@@ -15,41 +15,12 @@
 //!  - `build_cmdb` forgetting a required envelope field
 //!  - Schema evolved in LSP-Brains without the Rust side following
 
-use std::path::PathBuf;
-
 use jsonschema::JSONSchema;
 use neurogrim_sensory::cmdb::{build_cmdb, Finding};
 use serde_json::{json, Value};
 
-/// Locate `cmdb-envelope-v1.schema.json` by walking known layouts:
-///
-/// 1. Ecosystem layout: `<repo>/NeuroGrim/neurogrim/crates/neurogrim-sensory/`
-///    → `<repo>/LSP-Brains/schemas/cmdb-envelope-v1.schema.json`
-/// 2. Sibling layout (two repos side-by-side): `<parent>/NeuroGrim/…`
-///    → `<parent>/LSP-Brains/schemas/cmdb-envelope-v1.schema.json`
-///
-/// Returns `None` when the schema isn't reachable (standalone checkout).
-fn locate_cmdb_schema() -> Option<PathBuf> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // crate dir → crates/ → neurogrim/ → NeuroGrim/ → repo-parent
-    let candidates = [
-        // Ecosystem layout: .../NeuroGrim/neurogrim/crates/neurogrim-sensory/
-        manifest_dir.join("../../../../LSP-Brains/schemas/cmdb-envelope-v1.schema.json"),
-        // Standalone-sibling: .../NeuroGrim/neurogrim/crates/neurogrim-sensory/
-        manifest_dir.join("../../../LSP-Brains/schemas/cmdb-envelope-v1.schema.json"),
-    ];
-    candidates.into_iter().find(|p| p.is_file())
-}
-
-fn load_schema() -> Option<JSONSchema> {
-    let path = locate_cmdb_schema()?;
-    let raw = std::fs::read_to_string(&path).ok()?;
-    let value: Value = serde_json::from_str(&raw).ok()?;
-    JSONSchema::options()
-        .with_draft(jsonschema::Draft::Draft7)
-        .compile(&value)
-        .ok()
-}
+mod test_support;
+use test_support::load_schema;
 
 /// Render validation errors as a readable string for assertion output.
 fn format_errors(schema: &JSONSchema, instance: &Value) -> String {
