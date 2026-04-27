@@ -1,0 +1,402 @@
+schema_version = "1"
+
+notes = """
+NeuroGrim trust-budget v1 (E-B2-4 first-customer baseline, 2026-04-27).
+
+NeuroGrim is the canonical reference implementation of the LSP Brains spec:
+a Rust workspace at `neurogrim/` (6 member crates + ~36 direct workspace
+deps) plus operator scripts under `scripts/`. The trust surface is dominated
+by the cargo ecosystem; no Python or Node lockfile lives at the Brain root.
+
+Trust-chain provenance is captured prose-side in `D:/Brains/audit/TOOL-TRUST-NOTES.md`
+(the running trust narrative). This TOML is the structured machine-checkable
+extract of that prose, per spec §16.8. Per Q3+Q4: descriptive-only at v1,
+advisory weight 0.0 — drift findings inform; they do not gate.
+
+Seeded entries (`seeded = true`) cover known operator-acknowledged noise:
+hand-rolled FQDN strings that the static service scanner picks up from
+doc strings, integration-test fixtures, or `.example` / `.internal` /
+`.localhost` examples. They are advisory-only and do NOT represent live
+network surface.
+"""
+
+# ----------------------------------------------------------------------------
+# Direct cargo dependencies — extracted from `[workspace.dependencies]` and
+# per-crate manifests under `neurogrim/crates/*/Cargo.toml`. Per Q1, scope
+# is direct only; the 369-package transitive closure is deferred to v2 per
+# BACKLOG B-23. Trust-chain entries for SCA-adjacent crates (cargo-lock,
+# toml, semver, sha2, reqwest, tar, flate2, yarn-lock-parser) are
+# documented in TOOL-TRUST-NOTES.md §E-SC-2 / §E-SC-4 / §E-SC-5.
+# ----------------------------------------------------------------------------
+
+[[declared_crates]]
+name = "anyhow"
+ecosystem = "cargo"
+notes = "dtolnay; standard Rust error-handling crate; widely used."
+
+[[declared_crates]]
+name = "async-trait"
+ecosystem = "cargo"
+notes = "dtolnay; async-trait macro; core async ecosystem dep."
+
+[[declared_crates]]
+name = "axum"
+ecosystem = "cargo"
+notes = "tokio-rs; HTTP server framework for the A2A server crate."
+
+[[declared_crates]]
+name = "base32"
+ecosystem = "cargo"
+notes = "Used for opaque-identifier encoding in a2a peer protocol."
+
+[[declared_crates]]
+name = "cargo-lock"
+ecosystem = "cargo"
+notes = "RustSec-maintained Cargo.lock parser (E-SC-2). Pinned to '11' — see audit/TOOL-TRUST-NOTES.md §E-SC-2."
+
+[[declared_crates]]
+name = "chrono"
+ecosystem = "cargo"
+notes = "Time + date crate; serde-feature enabled for CMDB timestamp serialization."
+
+[[declared_crates]]
+name = "clap"
+ecosystem = "cargo"
+notes = "CLI argument-parsing for the neurogrim-cli binary; clap-rs/clap."
+
+[[declared_crates]]
+name = "colored"
+ecosystem = "cargo"
+notes = "Terminal output colorization (CLI hat-printing)."
+
+[[declared_crates]]
+name = "filetime"
+ecosystem = "cargo"
+notes = "Filesystem mtime manipulation for cache invalidation."
+
+[[declared_crates]]
+name = "flate2"
+ecosystem = "cargo"
+notes = "alexcrichton; gunzip for registry tarballs (E-SC-5 vigilance, opt-in via NEUROGRIM_VIGILANCE_REPRO=1). RustSec-tracked."
+
+[[declared_crates]]
+name = "futures"
+ecosystem = "cargo"
+notes = "rust-lang/futures-rs; async primitives."
+
+[[declared_crates]]
+name = "jsonschema"
+ecosystem = "cargo"
+notes = "Schema validation for hat-contract + trust-budget + culture-manifest + CMDB envelopes (E-B2-3 C5 promoted to regular dep)."
+
+[[declared_crates]]
+name = "proptest"
+ecosystem = "cargo"
+notes = "Property-based testing crate; used in core scoring tests."
+
+[[declared_crates]]
+name = "rand"
+ecosystem = "cargo"
+notes = "rust-random/rand; PRNG for synthetic fixture generation in tests."
+
+[[declared_crates]]
+name = "reqwest"
+ecosystem = "cargo"
+notes = "seanmonstar; HTTPS client for OSV.dev + registry metadata APIs (E-SC-2 / E-SC-5). rustls + native-roots TLS posture."
+
+[[declared_crates]]
+name = "rmcp"
+ecosystem = "cargo"
+notes = "Official Rust MCP SDK; used for the seven BrainServer MCP tools. Pinned 0.8."
+
+[[declared_crates]]
+name = "rusqlite"
+ecosystem = "cargo"
+notes = "SQLite bindings for A2A peer state persistence."
+
+[[declared_crates]]
+name = "schemars"
+ecosystem = "cargo"
+notes = "JSON schema derivation for MCP tool parameter types."
+
+[[declared_crates]]
+name = "semver"
+ecosystem = "cargo"
+notes = "RustLang team; SemVer parser for advisory-db version-range matching (E-SC-2 rustsec.rs)."
+
+[[declared_crates]]
+name = "serde"
+ecosystem = "cargo"
+notes = "dtolnay; universal Rust serialization framework; foundational dep."
+
+[[declared_crates]]
+name = "serde_json"
+ecosystem = "cargo"
+notes = "dtolnay; JSON support for serde; used for CMDB + MCP payloads."
+
+[[declared_crates]]
+name = "serde_yaml"
+ecosystem = "cargo"
+notes = "dtolnay (deprecated upstream); pnpm-lock.yaml parsing in supply-chain-sca. Replacement candidate is BACKLOG-tracked."
+
+[[declared_crates]]
+name = "sha2"
+ecosystem = "cargo"
+notes = "RustCrypto; SHA-256 for cache keys + content-hash signals."
+
+[[declared_crates]]
+name = "subtle"
+ecosystem = "cargo"
+notes = "dalek-cryptography; constant-time crypto primitives for A2A token comparison."
+
+[[declared_crates]]
+name = "tar"
+ecosystem = "cargo"
+notes = "alexcrichton; safe tarball extraction (E-SC-5 vigilance, opt-in via NEUROGRIM_VIGILANCE_EXFIL=1). RustSec-tracked. Used with set_preserve_permissions(false) + path-traversal guards."
+
+[[declared_crates]]
+name = "tempfile"
+ecosystem = "cargo"
+notes = "stebalien; ephemeral working dirs for safe-extraction tests."
+
+[[declared_crates]]
+name = "thiserror"
+ecosystem = "cargo"
+notes = "dtolnay; derive macro for crate-internal error types."
+
+[[declared_crates]]
+name = "tiktoken-rs"
+ecosystem = "cargo"
+notes = "Token-counting for the L1 brain-context-budget benchmark."
+
+[[declared_crates]]
+name = "tokio"
+ecosystem = "cargo"
+notes = "tokio-rs; async runtime, full-feature flag enabled."
+
+[[declared_crates]]
+name = "toml"
+ecosystem = "cargo"
+notes = "serde-rs/toml; trust-budget.toml + RustSec advisory-db TOML frontmatter parsing (E-SC-2)."
+
+[[declared_crates]]
+name = "tower"
+ecosystem = "cargo"
+notes = "tokio-rs; service abstraction used by axum middleware."
+
+[[declared_crates]]
+name = "tracing"
+ecosystem = "cargo"
+notes = "tokio-rs; structured logging foundation."
+
+[[declared_crates]]
+name = "tracing-subscriber"
+ecosystem = "cargo"
+notes = "tokio-rs; tracing event consumer; env-filter feature enabled."
+
+[[declared_crates]]
+name = "url"
+ecosystem = "cargo"
+notes = "servo/rust-url; URL parsing/validation; serde feature enabled."
+
+[[declared_crates]]
+name = "uuid"
+ecosystem = "cargo"
+notes = "uuid-rs; v4 + v7 IDs for ledger entries + A2A invocation IDs."
+
+[[declared_crates]]
+name = "yarn-lock-parser"
+ecosystem = "cargo"
+notes = "Smallest-attested crate in the SCA chain (~170k DL, 0.10.x, nom-based). Read-only parser; no I/O. Hand-rolled fallback documented in TOOL-TRUST-NOTES.md §E-SC-4. Pinned compatible-semver."
+
+# ----------------------------------------------------------------------------
+# Shell-out commands — extracted from a static scan of `scripts/*.sh`. Per
+# Y-2, v1 is static-only; runtime-observed Bash invocations are deferred to
+# B-23. All shell-outs below are POSIX builtins or industry-standard tooling
+# documented in TOOL-TRUST-NOTES.md §"Current trust chain".
+# ----------------------------------------------------------------------------
+
+[[declared_shell_outs]]
+command_name = "cargo-audit"
+script_paths = ["scripts/prepublish-check.sh"]
+notes = "RustSec-maintained advisory cross-check; OPTIONAL secondary signal in prepublish (TOOL-TRUST-NOTES.md line 33)."
+
+[[declared_shell_outs]]
+command_name = "cat"
+notes = "POSIX builtin; file output. Operator-trusted."
+
+[[declared_shell_outs]]
+command_name = "curl"
+notes = "Git-for-Windows mingw64 (Windows) or system; HTTPS via Schannel/OpenSSL. Operator-trusted host-level (TOOL-TRUST-NOTES.md Q1)."
+
+[[declared_shell_outs]]
+command_name = "docker"
+script_paths = ["scripts/verify-compose.sh", "scripts/verify-external-brain.sh"]
+notes = "Container CLI for compose + external-brain integration tests; operator-trusted host-level."
+
+[[declared_shell_outs]]
+command_name = "grep"
+notes = "POSIX builtin; pattern matching."
+
+[[declared_shell_outs]]
+command_name = "head"
+notes = "POSIX builtin; line-count limiter."
+
+[[declared_shell_outs]]
+command_name = "jq"
+notes = "stedolan/jq; JSON tooling. Optional on operator machine; helper only — Python stdlib substitutes (TOOL-TRUST-NOTES.md §2026-04-24)."
+
+[[declared_shell_outs]]
+command_name = "mkdir"
+notes = "POSIX builtin; directory creation."
+
+[[declared_shell_outs]]
+command_name = "mv"
+notes = "POSIX builtin; file move/rename."
+
+[[declared_shell_outs]]
+command_name = "rm"
+notes = "POSIX builtin; file removal."
+
+# ----------------------------------------------------------------------------
+# External services — FQDNs the workspace's source code references. Per Y-3,
+# operator declares the EXPECTED set; sensor cross-references actual call
+# sites. Real services are pinned with `trust_posture` from the closed-set
+# enum {api_only, official_registry, operator_audited, vendor_attested}.
+# Doc-string examples (alpha.example, peer.example, vault.example.com, etc.)
+# are seeded as advisory-only — the scanner picks them up from docs/tests.
+# ----------------------------------------------------------------------------
+
+[[declared_external_services]]
+fqdn = "api.osv.dev"
+purpose = "OSV vulnerability database batch query endpoint (E-SC-2 supply-chain-sca primary advisory source)."
+trust_posture = "api_only"
+notes = "Google-operated; HTTPS; public data; no credentials. TOOL-TRUST-NOTES.md §E-SC-2."
+
+[[declared_external_services]]
+fqdn = "osv.dev"
+purpose = "OSV.dev parent FQDN; used in hat-contract supply-chain-auditor.network_targets.allowed."
+trust_posture = "api_only"
+notes = "Same posture as api.osv.dev. Declared distinctly so the per-hat composition check (§16.8) finds the allow-list match."
+
+[[declared_external_services]]
+fqdn = "crates.io"
+purpose = "crates.io public JSON metadata API for Layer 2 vigilance (E-SC-5 publish_history + maintainer_delta)."
+trust_posture = "official_registry"
+notes = "HTTPS-only; rate-limited 250ms inter-request; 7-day file cache. TOOL-TRUST-NOTES.md §E-SC-5."
+
+[[declared_external_services]]
+fqdn = "pypi.org"
+purpose = "PyPI public JSON metadata API for Layer 2 vigilance (publish_history + sigstore + sdist URL)."
+trust_posture = "official_registry"
+notes = "HTTPS-only; same posture as crates.io. TOOL-TRUST-NOTES.md §E-SC-5."
+
+[[declared_external_services]]
+fqdn = "registry.npmjs.org"
+purpose = "npm registry CouchDB-style API for Layer 2 vigilance (publish_history + maintainers + attestation)."
+trust_posture = "official_registry"
+notes = "HTTPS-only; same posture as crates.io / pypi.org. TOOL-TRUST-NOTES.md §E-SC-5."
+
+[[declared_external_services]]
+fqdn = "registry.yarnpkg.com"
+purpose = "Yarn registry mirror; referenced from yarn.lock fixtures parsed by yarn-lock-parser (E-SC-4)."
+trust_posture = "official_registry"
+notes = "Mirror of npm registry; appears in fixture lockfiles, not invoked at runtime by the sensor."
+
+[[declared_external_services]]
+fqdn = "github.com"
+purpose = "Repository URLs in package metadata; used by Layer 2 vigilance for repo-presence cross-checks."
+trust_posture = "api_only"
+notes = "Read-only metadata fetch only; no clone or write operations from the sensor."
+
+[[declared_external_services]]
+fqdn = "rustsec.org"
+purpose = "RustSec advisory metadata URLs in CMDB outputs (link-back to advisory pages)."
+trust_posture = "api_only"
+notes = "Display-only; the actual advisory data comes from the vendored rustsec/advisory-db submodule."
+
+[[declared_external_services]]
+fqdn = "hugovk.github.io"
+purpose = "Source for the typosquat refresh-list (scripts/refresh-typosquat-list.sh fetches popular-package data quarterly)."
+trust_posture = "api_only"
+notes = "Public read-only; popularity signal, not security data; stale list = false negatives, never false positives. TOOL-TRUST-NOTES.md §E-SC-5."
+
+# Seeded entries: known scanner-noise from doc strings, test fixtures, and
+# .example/.internal/.localhost examples in source comments.
+
+[[declared_external_services]]
+fqdn = "alpha.example"
+purpose = "Doc-string example FQDN (RFC 2606 .example reserved); not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from doc strings / examples in source code. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "alpha.internal"
+purpose = "Doc-string example FQDN (.internal reserved namespace); not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from doc strings / test examples. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "example.com"
+purpose = "Doc-string example FQDN (RFC 2606 reserved); not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from doc strings / examples. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "internal.example.com"
+purpose = "Doc-string example FQDN (RFC 2606 reserved); not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from doc strings / examples. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "myorg.atlassian.net"
+purpose = "Doc-string example FQDN illustrating a Jira-style endpoint; not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from doc strings / human-comms or secret-refs examples. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "peer.example"
+purpose = "Doc-string example FQDN for A2A peer documentation; not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from a2a/peer-brain docs. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "target-build.example.com"
+purpose = "Doc-string example FQDN for binary-reproducibility sensor docs; not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from E-SC-5 vigilance documentation. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "vault.example.com"
+purpose = "Doc-string example FQDN for secret-refs documentation; not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from secret-refs SDK / skill docs. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "vault.internal"
+purpose = "Doc-string example FQDN for secret-refs documentation; not a live service."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from secret-refs SDK / skill docs. Advisory-only; not a real surface."
+
+[[declared_external_services]]
+fqdn = "does-not-exist.localhost"
+purpose = "Test-fixture FQDN; appears in integration test for unreachable-host degradation paths."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from a2a integration tests. Advisory-only; not a real network surface."
+
+[[declared_external_services]]
+fqdn = "neurogrim-local.localhost"
+purpose = "Test-fixture FQDN; appears in dual-brain / external-brain integration tests."
+trust_posture = "api_only"
+seeded = true
+notes = "Scanner picks this up from external-brain integration tests. Advisory-only; not a real network surface."

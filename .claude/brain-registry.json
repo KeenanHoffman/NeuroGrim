@@ -23,7 +23,8 @@
       "supply-chain-sca": 0.0,
       "supply-chain-vigilance": 0.0,
       "supply-chain-review": 0.0,
-      "domain-calibration": 0.0
+      "domain-calibration": 0.0,
+      "trust-budget": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -181,6 +182,13 @@
           "domain-calibration:open_pending_total": { "field": "open_pending_total", "type": "number" },
           "domain-calibration:triaged_total":      { "field": "triaged_total",      "type": "number" },
           "domain-calibration:has_ever_fired":     { "field": "has_ever_fired",     "type": "bool"   }
+        }
+      },
+      "trust-budget": {
+        "_doc": "E-B2-4 (2026-04-27): Brains-2.0 trust budget primitive per LSP-Brains v2.10 §16.8. Reads trust-budget.toml at repo root (Q5 lock — committed, NOT under .claude/) and validates against trust-budget-v1.schema.json. Cross-references declared_crates / declared_shell_outs / declared_external_services against the actual surface (cargo lockfile direct deps per Q1 lock; bash function-aware shell-out scan per C3-fix; FQDN scan of *.rs/*.sh/*.py source). Emits two-sided drift findings per Q8: trust_budget:undeclared:* and trust_budget:overdeclared:*. Closed-set vocabulary per Q1: ecosystem ∈ {cargo, pypi, npm, system}; trust_posture ∈ {api_only, official_registry, operator_audited, vendor_attested}. Composes with §5.4.1 hat-contracts: reads forbidden_tools[] + network_targets.allowed[] from each persona-hat. Default weight 0.0 (advisory) at v1; hard gates deferred to v2 per BACKLOG B-23 (calibration-gated promotion mirrors §16.4 advisory-before-strict). Refresh: `neurogrim sensory trust-budget --project-root <brain> > .claude/trust-budget-cmdb.json`.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/trust-budget-cmdb.json"
         }
       }
     },

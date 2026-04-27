@@ -1,0 +1,292 @@
+{
+  "findings": [],
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-27T22:04:48.281365900+00:00",
+    "updated_by": "trust-budget"
+  },
+  "score": 100,
+  "trust_budget_breakdown": {
+    "actual": {
+      "crate_count": 36,
+      "crates": [
+        "anyhow",
+        "async-trait",
+        "axum",
+        "base32",
+        "cargo-lock",
+        "chrono",
+        "clap",
+        "colored",
+        "filetime",
+        "flate2",
+        "futures",
+        "jsonschema",
+        "proptest",
+        "rand",
+        "reqwest",
+        "rmcp",
+        "rusqlite",
+        "schemars",
+        "semver",
+        "serde",
+        "serde_json",
+        "serde_yaml",
+        "sha2",
+        "subtle",
+        "tar",
+        "tempfile",
+        "thiserror",
+        "tiktoken-rs",
+        "tokio",
+        "toml",
+        "tower",
+        "tracing",
+        "tracing-subscriber",
+        "url",
+        "uuid",
+        "yarn-lock-parser"
+      ],
+      "service_count": 20,
+      "services": [
+        "alpha.example",
+        "alpha.internal",
+        "api.osv.dev",
+        "crates.io",
+        "does-not-exist.localhost",
+        "example.com",
+        "github.com",
+        "hugovk.github.io",
+        "internal.example.com",
+        "myorg.atlassian.net",
+        "neurogrim-local.localhost",
+        "osv.dev",
+        "peer.example",
+        "pypi.org",
+        "registry.npmjs.org",
+        "registry.yarnpkg.com",
+        "rustsec.org",
+        "target-build.example.com",
+        "vault.example.com",
+        "vault.internal"
+      ],
+      "shell_out_count": 10,
+      "shell_outs": [
+        "cargo-audit",
+        "cat",
+        "curl",
+        "docker",
+        "grep",
+        "head",
+        "jq",
+        "mkdir",
+        "mv",
+        "rm"
+      ]
+    },
+    "declaration_path": "\\\\?\\D:\\Brains\\NeuroGrim\\trust-budget.toml",
+    "declaration_present": true,
+    "declared": {
+      "crate_count": 36,
+      "crates": {
+        "cargo": [
+          {
+            "name": "anyhow",
+            "seeded": false
+          },
+          {
+            "name": "async-trait",
+            "seeded": false
+          },
+          {
+            "name": "axum",
+            "seeded": false
+          },
+          {
+            "name": "base32",
+            "seeded": false
+          },
+          {
+            "name": "cargo-lock",
+            "seeded": false
+          },
+          {
+            "name": "chrono",
+            "seeded": false
+          },
+          {
+            "name": "clap",
+            "seeded": false
+          },
+          {
+            "name": "colored",
+            "seeded": false
+          },
+          {
+            "name": "filetime",
+            "seeded": false
+          },
+          {
+            "name": "flate2",
+            "seeded": false
+          },
+          {
+            "name": "futures",
+            "seeded": false
+          },
+          {
+            "name": "jsonschema",
+            "seeded": false
+          },
+          {
+            "name": "proptest",
+            "seeded": false
+          },
+          {
+            "name": "rand",
+            "seeded": false
+          },
+          {
+            "name": "reqwest",
+            "seeded": false
+          },
+          {
+            "name": "rmcp",
+            "seeded": false
+          },
+          {
+            "name": "rusqlite",
+            "seeded": false
+          },
+          {
+            "name": "schemars",
+            "seeded": false
+          },
+          {
+            "name": "semver",
+            "seeded": false
+          },
+          {
+            "name": "serde",
+            "seeded": false
+          },
+          {
+            "name": "serde_json",
+            "seeded": false
+          },
+          {
+            "name": "serde_yaml",
+            "seeded": false
+          },
+          {
+            "name": "sha2",
+            "seeded": false
+          },
+          {
+            "name": "subtle",
+            "seeded": false
+          },
+          {
+            "name": "tar",
+            "seeded": false
+          },
+          {
+            "name": "tempfile",
+            "seeded": false
+          },
+          {
+            "name": "thiserror",
+            "seeded": false
+          },
+          {
+            "name": "tiktoken-rs",
+            "seeded": false
+          },
+          {
+            "name": "tokio",
+            "seeded": false
+          },
+          {
+            "name": "toml",
+            "seeded": false
+          },
+          {
+            "name": "tower",
+            "seeded": false
+          },
+          {
+            "name": "tracing",
+            "seeded": false
+          },
+          {
+            "name": "tracing-subscriber",
+            "seeded": false
+          },
+          {
+            "name": "url",
+            "seeded": false
+          },
+          {
+            "name": "uuid",
+            "seeded": false
+          },
+          {
+            "name": "yarn-lock-parser",
+            "seeded": false
+          }
+        ]
+      },
+      "service_count": 20,
+      "services": [
+        "alpha.example",
+        "alpha.internal",
+        "api.osv.dev",
+        "crates.io",
+        "does-not-exist.localhost",
+        "example.com",
+        "github.com",
+        "hugovk.github.io",
+        "internal.example.com",
+        "myorg.atlassian.net",
+        "neurogrim-local.localhost",
+        "osv.dev",
+        "peer.example",
+        "pypi.org",
+        "registry.npmjs.org",
+        "registry.yarnpkg.com",
+        "rustsec.org",
+        "target-build.example.com",
+        "vault.example.com",
+        "vault.internal"
+      ],
+      "shell_out_count": 10,
+      "shell_outs": [
+        "cargo-audit",
+        "cat",
+        "curl",
+        "docker",
+        "grep",
+        "head",
+        "jq",
+        "mkdir",
+        "mv",
+        "rm"
+      ]
+    },
+    "vocabulary": {
+      "ecosystem": [
+        "cargo",
+        "pypi",
+        "npm",
+        "system"
+      ],
+      "trust_posture": [
+        "api_only",
+        "official_registry",
+        "operator_audited",
+        "vendor_attested"
+      ]
+    }
+  },
+  "updated_at": "2026-04-27T22:04:48.281365900+00:00"
+}
