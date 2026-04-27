@@ -90,6 +90,36 @@ class TestValidateCmdbEnvelope:
         )
         validate_cmdb_envelope(env)  # Should not raise
 
+    # E-B2-1 C2/C3: optional `confidence` field at envelope root.
+    # Mirrors NeuroGrim's schema_conformance.rs tests, in-lockstep with
+    # the canonical schema at LSP-Brains/schemas/cmdb-envelope-v1.schema.json.
+    def test_envelope_with_confidence_passes(self):
+        """Envelope WITH explicit confidence in [0,100] validates."""
+        env = make_valid_envelope(confidence=82)
+        validate_cmdb_envelope(env)  # Should not raise
+
+    def test_envelope_with_confidence_zero_passes(self):
+        """Envelope confidence=0 is honored (sensor explicitly recorded zero)."""
+        env = make_valid_envelope(confidence=0)
+        validate_cmdb_envelope(env)
+
+    def test_envelope_with_confidence_100_passes(self):
+        """Envelope confidence=100 (max) validates."""
+        env = make_valid_envelope(confidence=100)
+        validate_cmdb_envelope(env)
+
+    def test_confidence_above_100_fails(self):
+        """Defensive: confidence > 100 fails schema validation."""
+        env = make_valid_envelope(confidence=150)
+        with pytest.raises(ValidationError, match="validation failed"):
+            validate_cmdb_envelope(env)
+
+    def test_confidence_below_0_fails(self):
+        """Defensive: confidence < 0 fails schema validation."""
+        env = make_valid_envelope(confidence=-10)
+        with pytest.raises(ValidationError, match="validation failed"):
+            validate_cmdb_envelope(env)
+
 
 class TestCmdbSchemaJson:
     def test_returns_valid_json(self):

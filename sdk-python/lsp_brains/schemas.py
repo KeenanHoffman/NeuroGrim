@@ -87,6 +87,20 @@ CMDB_ENVELOPE_V1: dict[str, Any] = {
                 "cmdb-envelope-v1 schema shape (name, status, points, detail)."
             ),
         },
+        "confidence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": (
+                "Optional sensor-supplied confidence in [0,100]. When absent, "
+                "the Brain computes confidence by age-decay from "
+                "meta.updated_at (spec §4.4 exponential-decay model). When "
+                "present, the envelope value takes precedence — sensors with "
+                "their own freshness signal (e.g., cache-age, registry-fetch "
+                "staleness) MAY emit this directly. Added in spec v2.7 "
+                "(Brains-2.0 E-B2-1)."
+            ),
+        },
     },
 }
 
