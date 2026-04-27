@@ -1,0 +1,5 @@
+notes = "Test fixture: missing required schema_version field."
+
+[[declared_crates]]
+name = "tokio"
+ecosystem = "cargo"

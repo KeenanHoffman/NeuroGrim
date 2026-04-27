@@ -166,6 +166,55 @@ pub fn read_hat_contract_fixture(name: &str) -> String {
         .unwrap_or_else(|e| panic!("read fixture {}: {e}", path.display()))
 }
 
+/// Locate `trust-budget-v1.schema.json` via the same repo-layout
+/// candidates as the other helpers. Returns `None` when the schema
+/// isn't reachable (standalone checkout).
+///
+/// Added in E-B2-4 C1+C2 alongside the new per-Brain trust-budget
+/// schema. Mirrors the cross-repo `include_str!` ordering risk
+/// (E4-9): test skips with `eprintln` when the LSP-Brains submodule
+/// pointer hasn't been bumped yet.
+pub fn locate_trust_budget_schema() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join("../../../../LSP-Brains/schemas/trust-budget-v1.schema.json"),
+        manifest_dir.join("../../../LSP-Brains/schemas/trust-budget-v1.schema.json"),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Load + compile the trust-budget v1 schema, if reachable.
+pub fn load_trust_budget_schema() -> Option<JSONSchema> {
+    let path = locate_trust_budget_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft7)
+        .compile(&value)
+        .ok()
+}
+
+/// Read the raw JSON of `trust-budget-v1.schema.json` (uncompiled).
+/// Used by closed-set discipline pinning tests that need to inspect
+/// `definitions.Ecosystem.enum` and `definitions.TrustPosture.enum`
+/// directly rather than validate against them.
+pub fn read_trust_budget_schema_value() -> Option<Value> {
+    let path = locate_trust_budget_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+/// Locate a trust-budget fixture file by name. Fixtures live at
+/// `<crate>/tests/fixtures/<name>` and are crate-local. Always
+/// reachable; panics if not found (the four E-B2-4 C2 fixtures
+/// are committed as part of the same chunk that ships this helper).
+pub fn locate_trust_budget_fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
 /// Locate `brain-registry-v2.schema.json` via the same repo-layout
 /// candidates as the other helpers. Returns `None` when the schema
 /// isn't reachable (standalone checkout).

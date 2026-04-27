@@ -1,0 +1,21 @@
+schema_version = "1"
+notes = "Test fixture: valid trust budget for all three surface types."
+
+[[declared_crates]]
+name = "serde"
+ecosystem = "cargo"
+notes = "Universal Rust serialization."
+
+[[declared_crates]]
+name = "jsonschema"
+ecosystem = "cargo"
+seeded = true
+
+[[declared_shell_outs]]
+command_name = "cargo"
+script_paths = ["scripts/build.sh"]
+
+[[declared_external_services]]
+fqdn = "osv.dev"
+purpose = "OSV vulnerability database queries."
+trust_posture = "api_only"
