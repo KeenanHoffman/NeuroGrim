@@ -24,7 +24,8 @@
       "supply-chain-vigilance": 0.0,
       "supply-chain-review": 0.0,
       "domain-calibration": 0.0,
-      "trust-budget": 0.0
+      "trust-budget": 0.0,
+      "operator-calibration": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -189,6 +190,13 @@
         "scoring_source": {
           "type": "cmdb",
           "path": ".claude/trust-budget-cmdb.json"
+        }
+      },
+      "operator-calibration": {
+        "_doc": "E-B2-6 (2026-04-27): Brains-2.0 operator-calibration primitive per LSP-Brains v2.11 §17.12. Sibling family of domain-calibration (§17). Reads .claude/brain/invocation-ledger.jsonl and recognizes BOTH SkillEntry rows (PostToolUse hook writer per Axis 4 v1) AND DispositionEntry rows (`neurogrim disposition record` CLI writer). Closed-set 4-entry disposition vocabulary per Q1: accepted, rejected, modified, superseded. Score = (accepted_count / dispositioned_count) × 100 when dispositioned_count >= N_MIN=20; null below threshold (Q9 sample-size disclosure MUST). Aggregation-only export per Q5 + E6-1 BR-5 mitigation — no per-invocation rows in CMDB. Recursion guard per Q6: operator_calibration:* finding kinds rejected by disposition CLI as invocation_id targets. Privacy contract reaffirmed: NO free-text justification (additionalProperties:false on DispositionEntry enforces structurally). Default weight 0.0 (advisory) at v1; v2 hard gates deferred per BACKLOG B-23 with §15.5 evidence-bundle review. Refresh: `neurogrim sensory operator-calibration --project-root <brain> > .claude/operator-calibration-cmdb.json`.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/operator-calibration-cmdb.json"
         }
       }
     },

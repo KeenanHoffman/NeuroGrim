@@ -1,0 +1,23 @@
+{
+  "findings": [],
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-27T23:11:46.567705800+00:00",
+    "updated_by": "operator-calibration"
+  },
+  "operator_calibration_breakdown": {
+    "accepted_count": 0,
+    "dispositioned_count": 0,
+    "has_ever_dispositioned": false,
+    "ledger_path": null,
+    "ledger_present": false,
+    "low_confidence": true,
+    "modified_count": 0,
+    "n_min": 20,
+    "rejected_count": 0,
+    "superseded_count": 0,
+    "total_invocations": 0
+  },
+  "score": 100,
+  "updated_at": "2026-04-27T23:11:46.567705800+00:00"
+}
