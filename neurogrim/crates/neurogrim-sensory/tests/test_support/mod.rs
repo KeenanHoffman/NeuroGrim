@@ -132,3 +132,29 @@ pub fn load_brain_registry_schema() -> Option<JSONSchema> {
         .compile(&value)
         .ok()
 }
+
+/// Locate a calibration-ledger fixture file by name. Fixtures live at
+/// `<crate>/tests/fixtures/<name>` and are crate-local (unlike schemas,
+/// which live in the sibling LSP-Brains repo). Always reachable.
+///
+/// Added in E-B2-2 C8 alongside the three pre-canned ledger fixtures
+/// (pending-only, pending+triaged, malformed).
+pub fn locate_calibration_fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
+/// Read all lines of a calibration-ledger fixture as raw strings.
+/// Caller decides how to interpret them (parse vs skip on malformed).
+pub fn read_calibration_fixture_lines(name: &str) -> Vec<String> {
+    let path = locate_calibration_fixture(name);
+    let content = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("read fixture {}: {e}", path.display()));
+    content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|s| s.to_string())
+        .collect()
+}

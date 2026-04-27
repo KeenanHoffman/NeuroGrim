@@ -339,3 +339,99 @@ fn pending_and_triaged_link_via_supersedes_ts() {
     assert!(schema.is_valid(&pending), "pending fixture must validate");
     assert!(schema.is_valid(&triaged), "triaged fixture must validate");
 }
+
+// ─── E-B2-2 C8 — On-disk fixture conformance ──────────────────────────
+//
+// The synthetic tests above build entries inline via `pending_entry()`
+// + `triaged_entry()`. The tests below validate the THREE canonical
+// on-disk fixtures shipped at `tests/fixtures/`. Together they pin
+// drift between fixtures and schema: if a fixture is edited but the
+// schema isn't (or vice versa), one of these tests fires.
+
+use test_support::read_calibration_fixture_lines;
+
+#[test]
+fn fixture_pending_only_validates() {
+    // Fixture state (a) per Layer-2 plan: one open pending entry
+    // awaiting triage. The "operator just got notified" snapshot.
+    let Some(schema) = load_calibration_ledger_schema() else {
+        eprintln!("skip: domain-calibration-ledger-v1 schema not reachable (standalone checkout)");
+        return;
+    };
+    let lines = read_calibration_fixture_lines("calibration-ledger-pending-only.jsonl");
+    assert_eq!(lines.len(), 1, "pending-only fixture must have exactly 1 entry");
+    let entry: Value = serde_json::from_str(&lines[0]).expect("fixture line is valid JSON");
+    assert!(
+        schema.is_valid(&entry),
+        "pending-only fixture must validate; errors:\n{}",
+        format_errors(&schema, &entry)
+    );
+    assert_eq!(entry["entry_kind"], "pending");
+    assert_eq!(entry["domain_family"], "domain-calibration");
+}
+
+#[test]
+fn fixture_pending_triaged_validates() {
+    // Fixture state (b): one pending + one triaged that supersedes it.
+    // Both entries must validate; the triaged's supersedes_ts must
+    // reference the pending's ts (cross-entry invariant).
+    let Some(schema) = load_calibration_ledger_schema() else {
+        eprintln!("skip: domain-calibration-ledger-v1 schema not reachable (standalone checkout)");
+        return;
+    };
+    let lines = read_calibration_fixture_lines("calibration-ledger-pending-triaged.jsonl");
+    assert_eq!(lines.len(), 2, "pending+triaged fixture must have 2 entries");
+    let pending: Value = serde_json::from_str(&lines[0]).expect("pending line valid JSON");
+    let triaged: Value = serde_json::from_str(&lines[1]).expect("triaged line valid JSON");
+
+    assert!(
+        schema.is_valid(&pending),
+        "pending entry must validate; errors:\n{}",
+        format_errors(&schema, &pending)
+    );
+    assert!(
+        schema.is_valid(&triaged),
+        "triaged entry must validate; errors:\n{}",
+        format_errors(&schema, &triaged)
+    );
+
+    assert_eq!(pending["entry_kind"], "pending");
+    assert_eq!(triaged["entry_kind"], "triaged");
+    let pending_ts = pending["ts"].as_f64().expect("pending.ts");
+    let supersedes_ts = triaged["supersedes_ts"].as_f64().expect("triaged.supersedes_ts");
+    assert_eq!(
+        pending_ts, supersedes_ts,
+        "fixture invariant: triaged.supersedes_ts must equal the pending's ts"
+    );
+    // Decision must be one of the four-class enum.
+    assert_eq!(triaged["triage_decision"], "no-action");
+}
+
+#[test]
+fn fixture_malformed_has_one_valid_one_corrupted() {
+    // Fixture state (c): one well-formed pending + one corrupted line.
+    // Schema can't be applied to the corrupted line (it doesn't parse
+    // as JSON). The reader-level §17.2 invariant — malformed lines
+    // skipped, not propagated — is exercised by the C4 sensor test
+    // below; this test pins the fixture's structural shape.
+    let Some(schema) = load_calibration_ledger_schema() else {
+        eprintln!("skip: domain-calibration-ledger-v1 schema not reachable (standalone checkout)");
+        return;
+    };
+    let lines = read_calibration_fixture_lines("calibration-ledger-malformed.jsonl");
+    assert_eq!(lines.len(), 2, "malformed fixture must have 2 lines");
+
+    let valid: Value = serde_json::from_str(&lines[0]).expect("first line valid JSON");
+    assert!(
+        schema.is_valid(&valid),
+        "first line must validate; errors:\n{}",
+        format_errors(&schema, &valid)
+    );
+
+    let corrupt_parse_result = serde_json::from_str::<Value>(&lines[1]);
+    assert!(
+        corrupt_parse_result.is_err(),
+        "second line must fail JSON parse (fixture invariant); got Ok({:?})",
+        corrupt_parse_result.ok()
+    );
+}

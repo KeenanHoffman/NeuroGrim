@@ -1,0 +1,2 @@
+{"entry_kind":"pending","ts":1745000000.0,"schema_version":"1","domain":"test-health","domain_family":"domain-calibration","trigger_signal_kind":"out-of-expected-range:below:70","actual_score":30}
+this is not json at all {

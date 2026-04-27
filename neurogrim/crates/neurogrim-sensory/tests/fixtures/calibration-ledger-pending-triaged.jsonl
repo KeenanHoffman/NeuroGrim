@@ -1,0 +1,2 @@
+{"entry_kind":"pending","ts":1745000000.0,"schema_version":"1","domain":"test-health","domain_family":"domain-calibration","trigger_signal_kind":"out-of-expected-range:below:70","actual_score":30,"expected_score_lower":70,"expected_score_upper":100}
+{"entry_kind":"triaged","ts":1745003600.0,"schema_version":"1","domain":"test-health","domain_family":"domain-calibration","supersedes_ts":1745000000.0,"triage_decision":"no-action","human_operator":"bringup","human_notes":"Score drop was a deliberate test-suite restructure; expected_range needs adjustment to [50, 100]."}

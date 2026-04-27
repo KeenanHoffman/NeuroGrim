@@ -1,0 +1,1 @@
+{"entry_kind":"pending","ts":1745000000.0,"schema_version":"1","domain":"test-health","domain_family":"domain-calibration","trigger_signal_kind":"out-of-expected-range:below:70","actual_score":30,"expected_score_lower":70,"expected_score_upper":100,"context_notes":"Score dropped after the v2.4 test-suite restructure"}

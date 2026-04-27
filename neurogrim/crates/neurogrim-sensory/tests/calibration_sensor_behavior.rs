@@ -277,3 +277,86 @@ async fn malformed_lines_silently_skipped() {
     // Valid entry is counted; malformed line is silently dropped.
     assert_eq!(cmdb["open_pending_total"], 1);
 }
+
+// ─── E-B2-2 C8 — On-disk fixture sensor behavior ──────────────────────
+//
+// The synthetic tests above use `now_secs()`-anchored timestamps so
+// confidence math is deterministic relative to "now". The fixtures are
+// fixed-anchor (`1745000000.0`, ~2025-04) — older than any real "now"
+// the test will run at, so confidence values are arbitrary. These
+// fixture tests therefore only assert STRUCTURAL invariants
+// (open_pending count, triaged count, has_ever_fired). Confidence is
+// covered by the synthetic suite.
+
+mod test_support;
+use test_support::locate_calibration_fixture;
+
+/// Stage a fixture file into a tempdir's
+/// `<root>/.claude/brain/<domain>-calibration-ledger.jsonl`. Returns
+/// the tempdir for the test to consume.
+fn stage_fixture(fixture_name: &str, target_domain: &str) -> TempDir {
+    let dir = make_project_root();
+    let src = locate_calibration_fixture(fixture_name);
+    let dst = dir
+        .path()
+        .join(".claude")
+        .join("brain")
+        .join(format!("{target_domain}-calibration-ledger.jsonl"));
+    std::fs::copy(&src, &dst).unwrap_or_else(|e| {
+        panic!(
+            "stage fixture {} -> {}: {e}",
+            src.display(),
+            dst.display()
+        )
+    });
+    dir
+}
+
+#[tokio::test]
+async fn fixture_pending_only_yields_open_count_1() {
+    // Fixture (a): one open pending entry.
+    let dir = stage_fixture("calibration-ledger-pending-only.jsonl", "test-health");
+    let cmdb = analyze_domain_calibration(dir.path().to_str().unwrap()).await;
+    assert_eq!(cmdb["open_pending_total"], 1);
+    assert_eq!(cmdb["triaged_total"], 0);
+    assert_eq!(cmdb["has_ever_fired"], true);
+    let scanned = cmdb["domains_scanned"].as_array().expect("array");
+    assert_eq!(scanned.len(), 1);
+    assert_eq!(scanned[0], "test-health");
+    let domains_open = cmdb["domains_with_open_pending"].as_array().unwrap();
+    assert_eq!(domains_open.len(), 1);
+    assert_eq!(domains_open[0], "test-health");
+}
+
+#[tokio::test]
+async fn fixture_pending_triaged_clears_open_count() {
+    // Fixture (b): pending + triaged supersede pair → 0 open, 1 triaged.
+    let dir = stage_fixture("calibration-ledger-pending-triaged.jsonl", "test-health");
+    let cmdb = analyze_domain_calibration(dir.path().to_str().unwrap()).await;
+    assert_eq!(
+        cmdb["open_pending_total"], 0,
+        "triaged entry should supersede the pending"
+    );
+    assert_eq!(cmdb["triaged_total"], 1);
+    assert_eq!(cmdb["has_ever_fired"], true);
+    let domains_open = cmdb["domains_with_open_pending"].as_array().unwrap();
+    assert!(
+        domains_open.is_empty(),
+        "no open pending after triage; got {:?}",
+        domains_open
+    );
+}
+
+#[tokio::test]
+async fn fixture_malformed_line_silently_skipped() {
+    // Fixture (c): one valid pending + one corrupted line. §17.2
+    // invariant — sensor MUST NOT crash; malformed line silently
+    // skipped; valid entry counted.
+    let dir = stage_fixture("calibration-ledger-malformed.jsonl", "test-health");
+    let cmdb = analyze_domain_calibration(dir.path().to_str().unwrap()).await;
+    assert_eq!(
+        cmdb["open_pending_total"], 1,
+        "valid entry counted; malformed line skipped"
+    );
+    assert_eq!(cmdb["has_ever_fired"], true);
+}
