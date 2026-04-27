@@ -117,6 +117,98 @@ fn build_cmdb_multiple_findings_with_extras_validates() {
 }
 
 #[test]
+fn cmdb_envelope_with_optional_confidence_validates() {
+    // E-B2-1 Component 2: cmdb-envelope-v1 schema permits an optional
+    // root-level `confidence` field in [0, 100]. When present, the
+    // aggregator prefers it over age-decay (per resolve_confidence in
+    // neurogrim-core/src/scoring.rs); when absent, falls back to
+    // exponential_decay of meta.updated_at. Schema must accept both shapes.
+    let Some(schema) = load_schema() else {
+        eprintln!("skip: cmdb-envelope-v1 schema not reachable (standalone checkout)");
+        return;
+    };
+
+    // Shape A: envelope WITH explicit confidence.
+    let with_conf = json!({
+        "meta": {
+            "schema_version": "1",
+            "updated_at": "2026-04-27T12:00:00Z",
+            "updated_by": "test-tool"
+        },
+        "score": 75,
+        "updated_at": "2026-04-27T12:00:00Z",
+        "confidence": 82,
+        "findings": []
+    });
+    assert!(
+        schema.is_valid(&with_conf),
+        "envelope-with-confidence failed schema: {}",
+        format_errors(&schema, &with_conf)
+    );
+
+    // Shape B: envelope WITHOUT confidence (legacy / pre-v2.7).
+    let without_conf = json!({
+        "meta": {
+            "schema_version": "1",
+            "updated_at": "2026-04-27T12:00:00Z",
+            "updated_by": "test-tool"
+        },
+        "score": 75,
+        "updated_at": "2026-04-27T12:00:00Z",
+        "findings": []
+    });
+    assert!(
+        schema.is_valid(&without_conf),
+        "envelope-without-confidence (legacy) failed schema: {}",
+        format_errors(&schema, &without_conf)
+    );
+}
+
+#[test]
+fn cmdb_envelope_confidence_out_of_range_rejected() {
+    // Defensive: confidence values outside [0, 100] should fail
+    // validation. The aggregator also clamps at runtime via
+    // Confidence::new (defense-in-depth), but the schema is the
+    // protocol-layer guard.
+    let Some(schema) = load_schema() else {
+        eprintln!("skip: cmdb-envelope-v1 schema not reachable (standalone checkout)");
+        return;
+    };
+
+    let above_max = json!({
+        "meta": {
+            "schema_version": "1",
+            "updated_at": "2026-04-27T12:00:00Z",
+            "updated_by": "test-tool"
+        },
+        "score": 75,
+        "updated_at": "2026-04-27T12:00:00Z",
+        "confidence": 150,
+        "findings": []
+    });
+    assert!(
+        !schema.is_valid(&above_max),
+        "expected validation failure for confidence > 100"
+    );
+
+    let negative = json!({
+        "meta": {
+            "schema_version": "1",
+            "updated_at": "2026-04-27T12:00:00Z",
+            "updated_by": "test-tool"
+        },
+        "score": 75,
+        "updated_at": "2026-04-27T12:00:00Z",
+        "confidence": -10,
+        "findings": []
+    });
+    assert!(
+        !schema.is_valid(&negative),
+        "expected validation failure for confidence < 0"
+    );
+}
+
+#[test]
 fn finding_fields_match_schema_shape() {
     // Sanity: every field the schema names for a finding item is present on
     // the Finding struct. If the schema renames or adds a required finding
