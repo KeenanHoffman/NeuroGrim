@@ -1479,6 +1479,176 @@ deps. We may end up never needing this entry.
 
 ---
 
+### B-23: Brains-2.0 v2 enhancements — CANDIDATE (B2-deferred)
+
+**Why it's here.** The Brains-2.0 scaffolding
+(`audit/BRAINS-2-0-CHARTER.md`) shipped v1 primitives with natural
+v2 enhancements deliberately deferred to keep v1 scoped + the
+trust-budget posture conservative:
+
+- **E-B2-3 v2 — runtime hat-contract enforcement.** v1 is static
+  (file-audit) only. v2 adds runtime checks via session-trace
+  analysis (capability-hygiene observes hat-tagged invocations vs
+  declared anti-capabilities).
+- **E-B2-4 v2 — trust-budget hard gates.** v1 is soft (advisory)
+  findings. v2 promotes select budget violations to hard gates IF
+  calibration data justifies.
+- **E-B2-7 v3 — cross-Brain reputation decay.** Federated patterns
+  v1 has bidirectional opt-in but no reputation. v2/v3 adds
+  reputation decay on flood-prone peers + signal weighting by peer
+  reliability.
+- **E-B2-6 v2 — real-time disposition calibration.** v1 captures
+  disposition via explicit operator action. v2 infers disposition
+  from session traces (operator immediately invoked another skill,
+  edited a file, etc.).
+
+**Plan when:**
+1. v1 of each primitive has shipped + dogfood-stable on the
+   four-Brain ecosystem.
+2. Calibration data shows the v1 advisory-only posture is producing
+   actionable signal that operators currently dismiss for lack of
+   teeth.
+3. NOT BEFORE: E-B2-8 spec promotion to v3.0.
+
+**Dependencies.** Brains-2.0 campaign complete (E-B2-0..E-B2-8).
+
+**Adversarial note.** v2 enhancements are deliberately deferred,
+not forgotten. The supply-chain campaign's R-1 (false-positive
+fatigue) applies double here: hard gates without calibration data
+causes operator burnout. v2 must wait for v1 to demonstrate signal
+quality.
+
+---
+
+### B-24: Adjacent observability sensors — CANDIDATE (B2-adjacent)
+
+**Why it's here.** Two sensor ideas surfaced during Brains-2.0
+visionary discussion (2026-04-26) adjacent to the seven-direction
+scope but outside the nine epics:
+
+- **Negative-space / expected-absence sensor.** Reports what should
+  be in the codebase that isn't. "If you have X, you should have Y;
+  you have X without Y → flag." Example: project has `cargo audit`
+  triggered but no `pip-audit` for a Python-mixed project.
+- **Spec-prose ↔ test-fixture traceability sensor.** Each normative
+  MUST in spec prose should have a corresponding test fixture in
+  `conformance/`. Sensor checks: every spec MUST has at least one
+  fixture; every fixture references a spec section.
+
+**Plan when:**
+1. AND: a concrete operator demand surfaces ("I want to know what
+   I'm missing").
+2. AND: Brains-2.0 is dogfood-stable (no new sensors before v3.0
+   publishes).
+
+**Dependencies.** None blocking; would build on capability-hygiene
++ spec-impl-alignment patterns.
+
+**Adversarial note.** Negative-space is an unbounded class — the
+variants of "what should be there" can grow without limit. v1 would
+need to scope tightly: e.g., "every Python project with a
+Dockerfile should also have a pyproject.toml with declared deps."
+Specific, measurable, advisory.
+
+---
+
+### B-25: Brain identity primitives — CANDIDATE (B2-deferred)
+
+**Why it's here.** Brains-2.0 visionary discussion surfaced two
+adjacent ideas the plan-critic pass deliberately tabled as
+premature:
+
+- **Cryptographic Brain naming.** Brains today are identified by
+  their `.claude/` directory + registry. Two Brains claiming the
+  same identity have no way to disambiguate. Wait for genuine
+  multi-org topology before paying the complexity cost.
+- **Multi-operator governance.** Currently a small set of operators
+  per Brain. As scale grows: how do we handle multi-operator
+  Brains? Multi-org Brains? Cultural-substrate values apply to
+  outputs but who's accountable when an operator violates them?
+
+**Plan when:**
+1. AND: Brains start being deployed in genuinely multi-org
+   topologies (not the current four-Brain ecosystem owned by one
+   operator).
+2. AND: A real identity-collision incident has occurred OR a
+   governance dispute has surfaced.
+
+**Dependencies.** Brains-2.0 v3.0 publish (gives the four-Brain
+ecosystem to a wider audience first).
+
+**Adversarial note.** "Solving a problem we don't have yet" is the
+failure mode. The four-Brain ecosystem is owned by one operator
+with cultural-substrate + air-gapped-by-default doing real work.
+Identity primitives without an actual incident is over-engineering.
+
+---
+
+### B-26: Active blocking / auto-rollback policies — CANDIDATE (B2-deferred)
+
+**Why it's here.** Brains-2.0 visionary discussion surfaced
+active-blocking policies as a possible future direction. The locked
+decision: **advisory-only is doing real work; preserve.**
+
+What it would add:
+- A new `blocking-policies.toml` per Brain declaring which signal
+  severities + confidence levels auto-block (refuse to proceed) vs
+  auto-rollback (revert to previous good state).
+- New CMDB extras field for "blocked" vs "rolled-back" states.
+- Spec section for normative blocking semantics.
+
+**Plan when:**
+1. AND: Multiple operators have independently proposed
+   blocking-policy work.
+2. AND: At least one published incident showed advisory-only was
+   insufficient (operator dismissed signal, attack succeeded).
+
+**Dependencies.** Brains-2.0 v3.0 publish + operator-calibration
+ledger demonstrates operator dismissal patterns.
+
+**Adversarial note.** The supply-chain campaign's R-1
+(false-positive fatigue) applies. Active blocking that fires on a
+false positive is more disruptive than advisory + dismissed. The
+"advisory by default" stance is a feature, not an oversight.
+Re-evaluate only with concrete incident evidence.
+
+---
+
+### B-27: ML-based sensor models — CANDIDATE (B2-deferred)
+
+**Why it's here.** Brains-2.0 visionary discussion considered
+embedding ML models in sensors (vs the current heuristic +
+LLM-as-judge approach). The locked decision: **heuristic +
+LLM-as-judge is sufficient; opacity violates "sensors need sensors"
+(principle #18).**
+
+What it would add:
+- ML models inside specific sensors (e.g., a typosquat detector
+  trained on registry data + adversarial patterns).
+- Model versioning + reproducibility infrastructure.
+- Training-data audit trails.
+
+**Plan when:**
+1. AND: A specific sensor has demonstrably hit the ceiling of
+   heuristic + LLM-as-judge approaches (e.g., typosquat detection
+   where Levenshtein-≤1 misses confusable Unicode that a model
+   could catch).
+2. AND: The model can be made auditable + reproducible (open
+   weights or open training set).
+3. NOT BEFORE: Brains-2.0 is dogfood-stable.
+
+**Dependencies.** Brains-2.0 v3.0 publish + at least one sensor
+with measurable ceiling-hit + clear model story (not opaque
+proprietary).
+
+**Adversarial note.** Principle #18 ("sensors need sensors") implies
+sensors must themselves be observable. A black-box ML model in a
+sensor breaks that — the model is making decisions whose rationale
+can't be inspected. v1 of any sensor should remain heuristic +
+LLM-as-judge until explicitly justified otherwise.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).
