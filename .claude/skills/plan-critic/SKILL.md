@@ -58,6 +58,8 @@ these, run it:
 write the plan? If yes, the plan is complex enough to benefit from adversarial
 review.
 
+**For pre-release / epic-close-out contexts**: see METHODOLOGY-EVOLUTION §16 for the multi-round assessment cadence (strict bar → surgical bar → diminishing-returns + Phase 1.5 escape hatch). §16 is RECOMMENDED post-execution; this skill remains the single-pass plan-time critic.
+
 ---
 
 ## Step 0 — Complexity Threshold (Summary)
@@ -212,3 +214,4 @@ artifact it validates.
   review.
 - `weigh-time-risk.md` — risk/time tradeoff before deploy decisions.
 - `preflight.md` — 8-item readiness checklist before any `apply`.
+- `LSP-Brains/spec/METHODOLOGY-EVOLUTION.md` §16 — multi-round pre-release assessment cadence (RECOMMENDED for pre-release / epic-close-out contexts; complements this skill's single-pass protocol).
