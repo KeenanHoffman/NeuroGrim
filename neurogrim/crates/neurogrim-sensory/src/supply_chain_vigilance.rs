@@ -283,18 +283,30 @@ pub async fn analyze_supply_chain_vigilance(project_root: &str) -> Value {
     ));
 
     // Group B — cryptographic verification.
+    // signature_gap is sync (registry-metadata only); leave it
+    // sequential. binary_reproducibility + exfil_indicator (Group C)
+    // are I/O-bound async; run them concurrently for measurable
+    // wall-clock improvement on cold-cache scans.
+    //
+    // 2026-04-26 PRE-RELEASE Round 2 R2-3 fix (D2-D3): the two
+    // async sensors operate on disjoint cache subpaths
+    // (`<cache_dir>/repro/` vs `<cache_dir>/exfil/`) so concurrent
+    // execution introduces no write conflicts. tokio::join! awaits
+    // both and returns when both complete; the underlying reqwest
+    // connection pool bounds per-host concurrency.
     all_findings.extend(signature_gap::scan(
         &packages,
         &metadata_result,
         &state_dir,
     ));
-    all_findings.extend(
-        binary_reproducibility::scan(&packages, &metadata_result, &cache_dir, cache_behavior).await,
+    let (binary_repro_findings, exfil_findings) = tokio::join!(
+        binary_reproducibility::scan(&packages, &metadata_result, &cache_dir, cache_behavior),
+        exfil_indicator::scan(&packages, &cache_dir, cache_behavior),
     );
+    all_findings.extend(binary_repro_findings);
 
     // Group C — source-content scanning.
-    all_findings
-        .extend(exfil_indicator::scan(&packages, &cache_dir, cache_behavior).await);
+    all_findings.extend(exfil_findings);
 
     // Persist updated per-package state for next run's deltas.
     state::persist_after_scan(&packages, &metadata_result, &state_dir);
