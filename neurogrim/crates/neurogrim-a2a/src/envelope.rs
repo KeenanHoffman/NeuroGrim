@@ -91,6 +91,33 @@ pub enum MessageType {
     SupplyChainSignal,
 }
 
+impl MessageType {
+    /// Wire-format name for this message type, matching the `serde(rename = ...)`
+    /// attribute on each variant.
+    ///
+    /// 2026-04-26 PRE-RELEASE Round 2 R2-1 fix (D2-D2): consolidated from
+    /// previously-duplicated 12-arm matches in
+    /// `neurogrim-cli/src/commands/a2a_discover.rs` and
+    /// `neurogrim-cli/src/commands/a2a_invoke.rs`. Drift-prevention: a new
+    /// `MessageType` variant now requires updating exactly ONE place
+    /// (this match) instead of three (this + the two CLI helpers).
+    pub fn wire_name(&self) -> &'static str {
+        match self {
+            MessageType::ScoreUpdated => "score.updated",
+            MessageType::GateChanged => "gate.changed",
+            MessageType::EcosystemScored => "ecosystem.scored",
+            MessageType::IncidentDetected => "incident.detected",
+            MessageType::IncidentResolved => "incident.resolved",
+            MessageType::SnapshotRequested => "snapshot.requested",
+            MessageType::SnapshotDelivered => "snapshot.delivered",
+            MessageType::ProposalCreated => "proposal.created",
+            MessageType::ProposalResolved => "proposal.resolved",
+            MessageType::ConfigChanged => "config.changed",
+            MessageType::SupplyChainSignal => "supply-chain-signal",
+        }
+    }
+}
+
 impl A2aEnvelope {
     /// Build a new envelope with a fresh UUID v4 as `message_id`. Sets the schema
     /// version and current UTC timestamp automatically.

@@ -134,15 +134,11 @@ impl ServerHandler for SupplyChainReviewServer {
 /// async I/O later, the dispatch surface won't need to change.
 pub async fn analyze_supply_chain_review(project_root: &str) -> Value {
     let root = Path::new(project_root);
-    // Fall back to parent if .claude/ isn't at project_root (mirrors
-    // supply_chain_sca's workspace-subdir handling).
-    let claude_root = if root.join(".claude").is_dir() {
-        root.to_path_buf()
-    } else if root.parent().map(|p| p.join(".claude").is_dir()).unwrap_or(false) {
-        root.parent().unwrap().to_path_buf()
-    } else {
-        root.to_path_buf()
-    };
+    // 2026-04-26 PRE-RELEASE Round 2 R2-1 fix (D2-D1): consolidated to the
+    // shared `resolve_claude_root` helper. Cluster 1 (Round 1) collapsed two
+    // of three sites; this completes the third. All four call sites in this
+    // module now share the same resolution rule.
+    let claude_root = resolve_claude_root(root);
 
     let tickets_dir = ticket::default_tickets_dir(&claude_root);
     let ledger_path = ledger::default_ledger_path(&claude_root);

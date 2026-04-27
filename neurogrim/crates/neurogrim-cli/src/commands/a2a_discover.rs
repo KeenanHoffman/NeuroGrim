@@ -52,12 +52,12 @@ pub async fn run(peer_url: String) -> Result<()> {
     );
     println!("  accepts:");
     for mt in &card.capabilities.accepts {
-        println!("    - {}", wire_name(mt));
+        println!("    - {}", mt.wire_name());
     }
     if !card.capabilities.emits.is_empty() {
         println!("  emits:");
         for mt in &card.capabilities.emits {
-            println!("    - {}", wire_name(mt));
+            println!("    - {}", mt.wire_name());
         }
     } else {
         println!("  emits:             (none)");
@@ -77,20 +77,8 @@ pub async fn run(peer_url: String) -> Result<()> {
     Ok(())
 }
 
-/// Keep the wire-format rendering local — duplicating the three-line helper
-/// from `a2a_invoke` is cheaper than a public module dependency for one fn.
-fn wire_name(mt: &MessageType) -> &'static str {
-    match mt {
-        MessageType::ScoreUpdated => "score.updated",
-        MessageType::GateChanged => "gate.changed",
-        MessageType::EcosystemScored => "ecosystem.scored",
-        MessageType::IncidentDetected => "incident.detected",
-        MessageType::IncidentResolved => "incident.resolved",
-        MessageType::SnapshotRequested => "snapshot.requested",
-        MessageType::SnapshotDelivered => "snapshot.delivered",
-        MessageType::ProposalCreated => "proposal.created",
-        MessageType::ProposalResolved => "proposal.resolved",
-        MessageType::ConfigChanged => "config.changed",
-        MessageType::SupplyChainSignal => "supply-chain-signal",
-    }
-}
+// 2026-04-26 PRE-RELEASE Round 2 R2-1 fix (D2-D2): the local
+// `wire_name` helper was extracted to `MessageType::wire_name()` in
+// `neurogrim-a2a/src/envelope.rs`. Both this command and the
+// sibling `a2a_invoke` now consume the canonical method, eliminating
+// drift risk when MessageType variants are added.

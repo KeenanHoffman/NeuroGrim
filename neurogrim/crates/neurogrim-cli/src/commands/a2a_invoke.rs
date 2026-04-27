@@ -88,7 +88,7 @@ pub async fn run(
         card.capabilities
             .accepts
             .iter()
-            .map(message_type_wire_name)
+            .map(MessageType::wire_name)
             .collect::<Vec<_>>()
             .join(", ")
     );
@@ -98,7 +98,7 @@ pub async fn run(
             card.capabilities
                 .emits
                 .iter()
-                .map(message_type_wire_name)
+                .map(MessageType::wire_name)
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -111,11 +111,11 @@ pub async fn run(
         anyhow::bail!(
             "peer {:?} does not accept {} (accepts: {:?})",
             card.id,
-            message_type_wire_name(&mt),
+            mt.wire_name(),
             card.capabilities
                 .accepts
                 .iter()
-                .map(message_type_wire_name)
+                .map(MessageType::wire_name)
                 .collect::<Vec<_>>()
         );
     }
@@ -133,24 +133,12 @@ pub async fn run(
     Ok(())
 }
 
-/// Convert a MessageType back to its wire-format string. We have it via
-/// serde but going through to_string would pull in an extra allocation —
-/// a static match is simpler and honest.
-fn message_type_wire_name(mt: &MessageType) -> String {
-    match mt {
-        MessageType::ScoreUpdated => "score.updated".into(),
-        MessageType::GateChanged => "gate.changed".into(),
-        MessageType::EcosystemScored => "ecosystem.scored".into(),
-        MessageType::IncidentDetected => "incident.detected".into(),
-        MessageType::IncidentResolved => "incident.resolved".into(),
-        MessageType::SnapshotRequested => "snapshot.requested".into(),
-        MessageType::SnapshotDelivered => "snapshot.delivered".into(),
-        MessageType::ProposalCreated => "proposal.created".into(),
-        MessageType::ProposalResolved => "proposal.resolved".into(),
-        MessageType::ConfigChanged => "config.changed".into(),
-        MessageType::SupplyChainSignal => "supply-chain-signal".into(),
-    }
-}
+// 2026-04-26 PRE-RELEASE Round 2 R2-1 fix (D2-D2): the local
+// `message_type_wire_name` helper was extracted to
+// `MessageType::wire_name()` in `neurogrim-a2a/src/envelope.rs`.
+// Both this command and the sibling `a2a_discover` now consume the
+// canonical method, eliminating drift risk when MessageType
+// variants are added (see SupplyChainSignal addition E-SC-7).
 
 #[cfg(test)]
 mod tests {
@@ -215,8 +203,8 @@ mod tests {
             MessageType::ConfigChanged,
         ];
         for mt in all {
-            let wire = message_type_wire_name(&mt);
-            let back = parse_message_type(&wire).unwrap();
+            let wire = mt.wire_name();
+            let back = parse_message_type(wire).unwrap();
             assert_eq!(back, mt, "wire name {wire} must roundtrip");
         }
     }
