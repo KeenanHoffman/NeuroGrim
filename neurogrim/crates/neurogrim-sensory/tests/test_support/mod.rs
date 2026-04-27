@@ -106,3 +106,29 @@ pub fn load_calibration_ledger_schema() -> Option<JSONSchema> {
         .compile(&value)
         .ok()
 }
+
+/// Locate `brain-registry-v2.schema.json` via the same repo-layout
+/// candidates as the other helpers. Returns `None` when the schema
+/// isn't reachable (standalone checkout).
+///
+/// Added in E-B2-2 C5 alongside the new optional `calibration_trigger`
+/// discriminated-union field + `enable_calibration_writes` config gate.
+pub fn locate_brain_registry_schema() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join("../../../../LSP-Brains/schemas/brain-registry-v2.schema.json"),
+        manifest_dir.join("../../../LSP-Brains/schemas/brain-registry-v2.schema.json"),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Load + compile the brain-registry v2 schema, if reachable.
+pub fn load_brain_registry_schema() -> Option<JSONSchema> {
+    let path = locate_brain_registry_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft7)
+        .compile(&value)
+        .ok()
+}
