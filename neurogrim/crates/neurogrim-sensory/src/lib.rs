@@ -13,6 +13,7 @@ pub mod docker_topology;
 pub mod domain_calibration;
 pub mod git_health;
 pub mod human_comms;
+pub mod operator_calibration;
 pub mod secret_refs;
 pub mod security_standards;
 pub mod skill_coherence;
