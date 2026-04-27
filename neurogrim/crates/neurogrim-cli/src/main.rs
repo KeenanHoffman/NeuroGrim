@@ -128,6 +128,22 @@ enum Commands {
     #[command(name = "sca-calibrate")]
     ScaCalibrate(commands::sca_calibrate::ScaCalibrateArgs),
 
+    /// Per-domain calibration ledger triage CLI (LSP-Brains v2.8 §17, E-B2-2).
+    /// Three actions: `list` (inspect open + triaged entries), `triage`
+    /// (record a 4-class decision against an open pending entry), `manual`
+    /// (operator-initiated pending entry — the default writer for domains
+    /// configured with `calibration_trigger: Manual`).
+    ///
+    /// All write paths require operator identity via `--operator <handle>`
+    /// or `$NEUROGRIM_OPERATOR` (§17.6). All write paths validate the
+    /// `--domain` arg against `brain-registry.json`'s `domain_weights`
+    /// (§17.2 — registry is the authoritative domain enum).
+    #[command(name = "domain-calibration")]
+    DomainCalibration {
+        #[command(subcommand)]
+        subcommand: commands::domain_calibration::DomainCalibrationCmd,
+    },
+
     /// Serve this Brain as an A2A peer (spec §13). Publishes an Agent Card
     /// and accepts peer invocations (snapshot.requested, score.updated ack).
     #[command(name = "a2a-serve", visible_alias = "beacon")]
@@ -242,6 +258,9 @@ async fn main() -> Result<()> {
         } => commands::awareness::run(&project_root, subcommand).await,
         Commands::ScaReview { subcommand } => commands::sca_review::run(subcommand).await,
         Commands::ScaCalibrate(args) => commands::sca_calibrate::run(args).await,
+        Commands::DomainCalibration { subcommand } => {
+            commands::domain_calibration::run(subcommand).await
+        }
         Commands::A2aServe {
             port,
             bind,
