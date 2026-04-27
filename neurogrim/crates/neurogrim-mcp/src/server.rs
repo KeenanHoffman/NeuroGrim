@@ -59,11 +59,19 @@ impl BrainServer {
                                     cmdb.get(uf).and_then(|v| v.as_str()),
                                 ) {
                                     if let Ok(ts) = ts_str.parse::<DateTime<Utc>>() {
+                                        // Optional envelope-supplied confidence
+                                        // (E-B2-1, spec §3.8). When present,
+                                        // takes precedence over age-decay.
+                                        let confidence = cmdb
+                                            .get("confidence")
+                                            .and_then(|v| v.as_u64())
+                                            .map(|n| n.min(100) as u8);
                                         data.insert(
                                             domain_key.clone(),
                                             CmdbData {
                                                 score: score.min(100) as u8,
                                                 updated_at: ts,
+                                                confidence,
                                             },
                                         );
                                     }

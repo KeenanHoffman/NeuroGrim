@@ -184,11 +184,21 @@ async fn load_cmdb_data(
                                     cmdb.get(uf).and_then(|v| v.as_str()),
                                 ) {
                                     if let Ok(ts) = ts_str.parse::<DateTime<Utc>>() {
+                                        // Optional envelope-supplied confidence
+                                        // (E-B2-1, spec §3.8). When present,
+                                        // takes precedence over age-decay; when
+                                        // absent, aggregator falls back to
+                                        // exponential_decay(updated_at, ...).
+                                        let confidence = cmdb
+                                            .get("confidence")
+                                            .and_then(|v| v.as_u64())
+                                            .map(|n| n.min(100) as u8);
                                         data.insert(
                                             dk.clone(),
                                             CmdbData {
                                                 score: score.min(100) as u8,
                                                 updated_at: ts,
+                                                confidence,
                                             },
                                         );
                                     }
@@ -271,9 +281,14 @@ async fn load_a2a_domain(
                 .scored_at
                 .parse::<DateTime<Utc>>()
                 .unwrap_or_else(|_| Utc::now());
+            // E-B2-1 reader-fallback: AgentOutput does not yet carry
+            // unified_confidence (lands in C6). Until then, A2A peer
+            // freshness is solely from updated_at decay. After C6 this
+            // becomes Some(agent_output.unified_confidence).
             Some(CmdbData {
                 score: agent_output.score,
                 updated_at: ts,
+                confidence: None,
             })
         }
         Err(e) => {

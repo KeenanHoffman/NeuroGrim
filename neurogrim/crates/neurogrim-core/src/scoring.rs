@@ -86,11 +86,31 @@ pub fn apply_floor_constraints(
     }
 }
 
+/// Resolve confidence for a domain: prefer envelope-supplied confidence
+/// (when the sensor recorded an explicit value in the CMDB) over age-decay
+/// computation from `updated_at`. Part of E-B2-1's reader-fallback design
+/// (spec §3.8 + §6.X) — when a sensor knows its own freshness signal
+/// independent of clock-skew, the aggregator trusts it. When absent, the
+/// aggregator falls back to the existing exponential-decay model.
+///
+/// Out-of-range envelope values (>100) are clamped via `Confidence::new`.
+pub fn resolve_confidence(
+    envelope_confidence: Option<u8>,
+    updated_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+    config: &ConfidenceConfig,
+) -> Confidence {
+    match envelope_confidence {
+        Some(c) => Confidence::new(c as f64),
+        None => exponential_decay(updated_at, now, config),
+    }
+}
+
 /// Build a complete scorecard from registry configuration and CMDB data.
 ///
 /// This is the main orchestration function that combines:
 /// 1. Domain score retrieval from CMDB data
-/// 2. Confidence decay computation
+/// 2. Confidence resolution (envelope-supplied OR age-decay fallback)
 /// 3. Effective score calculation
 /// 4. Unified score with floor constraints
 pub fn build_scorecard(
@@ -113,8 +133,12 @@ pub fn build_scorecard(
     for (domain_key, weight_value) in &registry.config.domain_weights {
         let weight = Weight::new(*weight_value);
 
-        let (raw, updated_at) = match cmdb_data.get(domain_key) {
-            Some(cmdb) => (Score::new(cmdb.score as i64), Some(cmdb.updated_at)),
+        let (raw, updated_at, envelope_confidence) = match cmdb_data.get(domain_key) {
+            Some(cmdb) => (
+                Score::new(cmdb.score as i64),
+                Some(cmdb.updated_at),
+                cmdb.confidence,
+            ),
             None => {
                 // No CMDB data — use no_file_score from definition, or 0
                 let no_file_score = registry
@@ -124,11 +148,12 @@ pub fn build_scorecard(
                     .and_then(|def| def.scoring_source.as_ref())
                     .map(|src| src.no_file_score.unwrap_or(0))
                     .unwrap_or(0);
-                (Score::new(no_file_score as i64), None)
+                (Score::new(no_file_score as i64), None, None)
             }
         };
 
-        let confidence = exponential_decay(updated_at, now, &confidence_config);
+        let confidence =
+            resolve_confidence(envelope_confidence, updated_at, now, &confidence_config);
         let eff = effective_score(
             raw,
             confidence,
@@ -163,10 +188,15 @@ pub fn build_scorecard(
 }
 
 /// Parsed CMDB data for scoring input.
+///
+/// `confidence` is `Some(n)` when the CMDB envelope carries an explicit
+/// `confidence` field (sensor-supplied per spec §3.8); `None` when the
+/// envelope omits it (aggregator falls back to age-decay of `updated_at`).
 #[derive(Debug, Clone)]
 pub struct CmdbData {
     pub score: u8,
     pub updated_at: DateTime<Utc>,
+    pub confidence: Option<u8>,
 }
 
 #[cfg(test)]
@@ -313,5 +343,65 @@ mod tests {
         assert_eq!(Score::new(150).value(), 100);
         assert_eq!(Score::new(-10).value(), 0);
         assert_eq!(Score::new(50).value(), 50);
+    }
+
+    fn test_confidence_config() -> ConfidenceConfig {
+        ConfidenceConfig {
+            fresh_days: 1.0,
+            stale_days: 3.0,
+            very_stale_days: 7.0,
+        }
+    }
+
+    #[test]
+    fn resolve_confidence_prefers_envelope_when_some() {
+        // Envelope says 50; updated_at is fresh (would yield ~100 from decay).
+        // resolve_confidence MUST honor the envelope.
+        let now = Utc::now();
+        let fresh = now;
+        let result = resolve_confidence(Some(50), Some(fresh), now, &test_confidence_config());
+        assert_eq!(result.value(), 50);
+    }
+
+    #[test]
+    fn resolve_confidence_envelope_zero_is_honored() {
+        // Sensor explicitly recorded zero confidence — must NOT be treated
+        // as "absent" and fall back to age-decay.
+        let now = Utc::now();
+        let fresh = now;
+        let result = resolve_confidence(Some(0), Some(fresh), now, &test_confidence_config());
+        assert_eq!(result.value(), 0);
+    }
+
+    #[test]
+    fn resolve_confidence_falls_back_to_decay_when_none() {
+        // No envelope confidence; fresh updated_at; decay yields ~100.
+        let now = Utc::now();
+        let fresh = now;
+        let result = resolve_confidence(None, Some(fresh), now, &test_confidence_config());
+        // Fresh timestamp + None envelope → exponential_decay returns ~100.
+        assert!(
+            result.value() >= 99,
+            "expected fresh decay ~100, got {}",
+            result.value()
+        );
+    }
+
+    #[test]
+    fn resolve_confidence_falls_back_when_no_updated_at_either() {
+        // No envelope; no updated_at; exponential_decay returns 0
+        // (distinguishes "missing" from "stale").
+        let now = Utc::now();
+        let result = resolve_confidence(None, None, now, &test_confidence_config());
+        assert_eq!(result.value(), 0);
+    }
+
+    #[test]
+    fn resolve_confidence_envelope_clamps_above_100() {
+        // Defensive: even if a buggy sensor wrote 200, Confidence::new
+        // clamps to 100. Schema validation should also catch this.
+        let now = Utc::now();
+        let result = resolve_confidence(Some(200), Some(now), now, &test_confidence_config());
+        assert_eq!(result.value(), 100);
     }
 }
