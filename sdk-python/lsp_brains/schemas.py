@@ -1,7 +1,24 @@
 """
-JSON schema validation for CMDB envelopes and agent output.
+JSON schema validation for CMDB envelopes.
 
 Schemas are embedded directly so the package works without filesystem lookups.
+
+Scope note (Brains-2.0 E-B2-1 C8):
+    This SDK is **sensor-only** by design — it ships the CMDB envelope
+    schema for tools that produce health observations. AgentOutput
+    (the Brain-engine's interface contract per spec §6) is **not**
+    shipped here, by deliberate scope choice:
+
+    - AgentOutput is computed by a Brain engine (e.g., NeuroGrim) that
+      aggregates many sensors' CMDB envelopes — sensors don't produce
+      it, they consume the consequences of it.
+    - The SDK's job is "make it easy to write a sensor"; AgentOutput
+      validation is the Brain-engine's job.
+
+    If a Python implementation of a Brain engine ever ships, that
+    repo can mirror `agent-output-v1.schema.json` from LSP-Brains/
+    schemas/ at that point. Until then, the absence of AGENT_OUTPUT_V1
+    here is intentional, not an oversight.
 """
 
 from __future__ import annotations
