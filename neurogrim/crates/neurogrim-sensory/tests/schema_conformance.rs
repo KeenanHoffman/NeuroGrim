@@ -40,7 +40,7 @@ fn build_cmdb_empty_findings_validates() {
         eprintln!("skip: cmdb-envelope-v1 schema not reachable (standalone checkout)");
         return;
     };
-    let cmdb = build_cmdb("test-tool", 85, vec![], None);
+    let cmdb = build_cmdb("test-tool", 85, vec![], None, None);
     assert!(
         schema.is_valid(&cmdb),
         "empty-findings envelope failed schema: {}",
@@ -63,6 +63,7 @@ fn build_cmdb_single_finding_validates() {
             points: 10,
             detail: Some("README.md exists".to_string()),
         }],
+        None,
         None,
     );
     assert!(
@@ -108,6 +109,7 @@ fn build_cmdb_multiple_findings_with_extras_validates() {
             ("test_count", json!(42)),
             ("ratio", json!(0.73)),
         ]),
+        None,
     );
     assert!(
         schema.is_valid(&cmdb),
@@ -227,6 +229,7 @@ fn finding_fields_match_schema_shape() {
             points: 1,
             detail: Some("d".to_string()),
         }],
+        None,
         None,
     );
     let f = &cmdb["findings"][0];

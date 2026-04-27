@@ -149,7 +149,7 @@ pub async fn analyze_agent_behavior(project_root: &str) -> anyhow::Result<Value>
                 scenarios_dir.display()
             )),
         });
-        return Ok(build_cmdb("cast-agent-behavior", 0, findings, None));
+        return Ok(build_cmdb("cast-agent-behavior", 0, findings, None, None));
     }
 
     // Is the directory empty? Harness would no-op; we say so explicitly.
@@ -174,7 +174,7 @@ pub async fn analyze_agent_behavior(project_root: &str) -> anyhow::Result<Value>
                 scenarios_dir.display()
             )),
         });
-        return Ok(build_cmdb("cast-agent-behavior", 0, findings, None));
+        return Ok(build_cmdb("cast-agent-behavior", 0, findings, None, None));
     }
 
     // --- pre-flight 2: proxy env ---------------------------------------
@@ -192,7 +192,7 @@ pub async fn analyze_agent_behavior(project_root: &str) -> anyhow::Result<Value>
                     .into(),
             ),
         });
-        return Ok(build_cmdb("cast-agent-behavior", 0, findings, None));
+        return Ok(build_cmdb("cast-agent-behavior", 0, findings, None, None));
     }
 
     // --- ensure ledger + result dirs exist ------------------------------
@@ -236,7 +236,7 @@ pub async fn analyze_agent_behavior(project_root: &str) -> anyhow::Result<Value>
                     ABV_RUN_TIMEOUT.as_secs()
                 )),
             });
-            return Ok(build_cmdb("cast-agent-behavior", 0, findings, None));
+            return Ok(build_cmdb("cast-agent-behavior", 0, findings, None, None));
         }
         Ok(Err(e)) => {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -249,7 +249,7 @@ pub async fn analyze_agent_behavior(project_root: &str) -> anyhow::Result<Value>
                             .into(),
                     ),
                 });
-                return Ok(build_cmdb("cast-agent-behavior", 0, findings, None));
+                return Ok(build_cmdb("cast-agent-behavior", 0, findings, None, None));
             }
             anyhow::bail!("abv-run spawn failed: {e}");
         }
@@ -266,7 +266,7 @@ pub async fn analyze_agent_behavior(project_root: &str) -> anyhow::Result<Value>
             points: -100,
             detail: Some(format!("abv-run exited {}: {}", out.status, detail)),
         });
-        return Ok(build_cmdb("cast-agent-behavior", 0, findings, None));
+        return Ok(build_cmdb("cast-agent-behavior", 0, findings, None, None));
     }
 
     // --- success: parse + pass through ---------------------------------

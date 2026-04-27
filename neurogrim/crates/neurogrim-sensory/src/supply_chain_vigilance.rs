@@ -201,7 +201,7 @@ pub async fn analyze_supply_chain_vigilance(project_root: &str) -> Value {
             ("sensor_status", json!("lockfile_unreadable")),
             ("ecosystems_scanned", json!(Vec::<String>::new())),
         ];
-        return crate::cmdb::build_cmdb("supply-chain-vigilance", 0, findings, Some(extras));
+        return crate::cmdb::build_cmdb("supply-chain-vigilance", 0, findings, Some(extras), None);
     }
 
     // Parse + dedupe across all detected lockfiles.
@@ -246,7 +246,7 @@ pub async fn analyze_supply_chain_vigilance(project_root: &str) -> Value {
             ("total_packages_scanned", json!(0)),
             ("sensor_status", json!("lockfile_unreadable")),
         ];
-        return crate::cmdb::build_cmdb("supply-chain-vigilance", 0, findings, Some(extras));
+        return crate::cmdb::build_cmdb("supply-chain-vigilance", 0, findings, Some(extras), None);
     }
 
     // Cache + state directories.

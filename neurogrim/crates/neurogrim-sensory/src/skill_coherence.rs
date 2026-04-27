@@ -205,7 +205,7 @@ pub async fn analyze_skill_coherence(project_root: &str) -> Value {
         ("drift_details", json!(drift_details)),
     ];
 
-    build_cmdb("skill-coherence", score, findings, Some(extras))
+    build_cmdb("skill-coherence", score, findings, Some(extras), None)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

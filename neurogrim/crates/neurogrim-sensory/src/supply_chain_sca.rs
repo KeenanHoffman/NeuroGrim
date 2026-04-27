@@ -244,7 +244,7 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
             ("sensor_status", json!("lockfile_unreadable")),
             ("ecosystems_scanned", json!(Vec::<String>::new())),
         ];
-        return crate::cmdb::build_cmdb("supply-chain-sca", 0, findings, Some(extras));
+        return crate::cmdb::build_cmdb("supply-chain-sca", 0, findings, Some(extras), None);
     }
 
     // Parse every detected lockfile + dedupe across them. Returns a
@@ -295,7 +295,7 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
             ("total_packages_scanned", json!(0)),
             ("sensor_status", json!("lockfile_unreadable")),
         ];
-        return crate::cmdb::build_cmdb("supply-chain-sca", 0, findings, Some(extras));
+        return crate::cmdb::build_cmdb("supply-chain-sca", 0, findings, Some(extras), None);
     }
 
     // Step 5 wires the OSV client (batch query + 24h file cache).
@@ -433,5 +433,5 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
                128+ unit tests + 17 integration tests all green."),
     ));
 
-    crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras))
+    crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras), None)
 }

@@ -200,7 +200,7 @@ pub async fn analyze_docker_topology(project_root: &str) -> anyhow::Result<Value
                 points: -100,
                 detail: Some("`docker` CLI not found on PATH".into()),
             });
-            return Ok(build_cmdb("check-docker-topology", 0, findings, None));
+            return Ok(build_cmdb("check-docker-topology", 0, findings, None, None));
         }
         Err(DockerProbeError::DaemonUnreachable(detail)) => {
             findings.push(Finding {
@@ -209,7 +209,7 @@ pub async fn analyze_docker_topology(project_root: &str) -> anyhow::Result<Value
                 points: -100,
                 detail: Some(detail),
             });
-            return Ok(build_cmdb("check-docker-topology", 0, findings, None));
+            return Ok(build_cmdb("check-docker-topology", 0, findings, None, None));
         }
     };
     findings.push(Finding {
@@ -232,7 +232,7 @@ pub async fn analyze_docker_topology(project_root: &str) -> anyhow::Result<Value
                     "no docker-compose.yml / compose.yml under {project_root}"
                 )),
             });
-            return Ok(build_cmdb("check-docker-topology", 0, findings, None));
+            return Ok(build_cmdb("check-docker-topology", 0, findings, None, None));
         }
     };
     let compose_name = compose_file
@@ -414,6 +414,7 @@ pub async fn analyze_docker_topology(project_root: &str) -> anyhow::Result<Value
         score.clamp(0, 100) as u8,
         findings,
         Some(extras),
+        None,
     ))
 }
 

@@ -89,7 +89,7 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
             extras.push(("correlations_fired", Value::from(0u8)));
             extras.push(("highest_severity", Value::String("none".into())));
             extras.push(("correlation_details", json!([])));
-            return build_cmdb("check-coherence", 0, findings, Some(extras));
+            return build_cmdb("check-coherence", 0, findings, Some(extras), None);
         }
     };
 
@@ -104,7 +104,7 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
             extras.push(("correlations_fired", Value::from(0u8)));
             extras.push(("highest_severity", Value::String("none".into())));
             extras.push(("correlation_details", json!([])));
-            return build_cmdb("check-coherence", 0, findings, Some(extras));
+            return build_cmdb("check-coherence", 0, findings, Some(extras), None);
         }
     };
 
@@ -276,5 +276,6 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
         score.clamp(0, 100) as u8,
         findings,
         Some(extras),
+        None,
     )
 }

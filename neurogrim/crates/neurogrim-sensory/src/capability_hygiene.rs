@@ -305,7 +305,7 @@ pub async fn analyze_capability_hygiene(project_root: &str) -> Value {
         ("skill_details", json!(skills.details)),
     ];
 
-    build_cmdb("capability-hygiene", score, all_findings, Some(extras))
+    build_cmdb("capability-hygiene", score, all_findings, Some(extras), None)
 }
 
 // ── Scorer: skills ────────────────────────────────────────────────────────────

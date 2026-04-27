@@ -68,7 +68,7 @@ pub async fn analyze_git_health(project_root: &str) -> anyhow::Result<Value> {
             points: -100,
             detail: Some("Not a git repository".into()),
         });
-        return Ok(build_cmdb("check-git-health", 0, findings, None));
+        return Ok(build_cmdb("check-git-health", 0, findings, None, None));
     }
 
     let dirty = git_dirty_count(project_root).await.unwrap_or(0);
@@ -116,6 +116,7 @@ pub async fn analyze_git_health(project_root: &str) -> anyhow::Result<Value> {
         score.clamp(0, 100) as u8,
         findings,
         Some(extras),
+        None,
     ))
 }
 

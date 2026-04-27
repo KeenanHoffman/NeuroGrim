@@ -234,6 +234,7 @@ pub fn build_cmdb_envelope(
         score_value as u8,
         cmdb_findings,
         Some(extras),
+        None,
     )
 }
 

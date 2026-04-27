@@ -250,6 +250,7 @@ pub async fn analyze_human_comms(project_root: &str) -> Value {
         score.clamp(0, 100) as u8,
         findings,
         Some(extras),
+        None,
     )
 }
 

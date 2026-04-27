@@ -138,7 +138,7 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
             extras.push(("env_vars_detected", Value::from(0u32)));
             extras.push(("secret_catalog", json!([])));
             extras.push(("undocumented_secrets", json!([])));
-            return build_cmdb("check-secret-refs", 0, findings, Some(extras));
+            return build_cmdb("check-secret-refs", 0, findings, Some(extras), None);
         }
     };
 
@@ -159,7 +159,7 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
             extras.push(("env_vars_detected", Value::from(0u32)));
             extras.push(("secret_catalog", json!([])));
             extras.push(("undocumented_secrets", json!([])));
-            return build_cmdb("check-secret-refs", 0, findings, Some(extras));
+            return build_cmdb("check-secret-refs", 0, findings, Some(extras), None);
         }
     };
 
@@ -385,5 +385,6 @@ pub async fn analyze_secret_refs(project_root: &str) -> Value {
         score.clamp(0, 100) as u8,
         findings,
         Some(extras),
+        None,
     )
 }
