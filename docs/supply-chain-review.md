@@ -96,6 +96,72 @@ Operator action when prepublish-check.sh fails with rc=2 from
 the bypass-check helper: same as above, but publish is blocked
 until the ledger is repaired.
 
+## Signal-kind reference
+
+Tickets and ledger entries carry a `signal_kind` string in
+their `triggering_signals[].signal_kind` field. The string
+follows a `<family>:<kind>` convention so operators reading the
+ledger can tell at a glance whether a finding came from the
+operator (manual) or a sensor (vigilance, agent-review). The
+prefix is also used by `prepublish-check.sh`'s strict-with-
+bypass gate to match findings against resolved ledger entries
+(see `scripts/_supply-chain-bypass-check.py`).
+
+### Family: `vigilance:` — auto-created from Layer 2 findings
+
+Layer 2 vigilance writes one ticket per `(ecosystem, package,
+finding_kind)` per scan. The `signal_kind` is derived as
+`vigilance:` + the kind's wire-format string. Eight substantive
+kinds + one informational:
+
+| `signal_kind` | Detector | Operator-readable summary |
+|---|---|---|
+| `vigilance:typosquat-proximity` | `typosquat` | Package name is 1 edit-distance from a top-1000 popular package on the same registry |
+| `vigilance:publish-cadence-acceleration` | `publish_cadence` | Inter-release gap < 0.1× the historical median (10× publish speed-up) |
+| `vigilance:publish-cadence-post-dormancy` | `publish_cadence` | First release within 30 days after a ≥ 365-day gap |
+| `vigilance:maintainer-delta` | `maintainer_delta` | New maintainer added within the configured window (default 30 days) |
+| `vigilance:transitive-surface-delta` | `transitive_surface` | Dep-count delta ≥ 10 absolute or +50% relative between the installed version and the immediate predecessor |
+| `vigilance:signature-gap` | `signature_gap` | Attestation status drop — prior versions had sigstore / trustpub / GPG, current does not |
+| `vigilance:binary-reproducibility-mismatch` | `binary_reproducibility` | Registry tarball hash does not match the source-tag hash |
+| `vigilance:exfil-indicator` | `exfil_indicator` | Static-analysis heuristics fired (long base64, eval/exec/subprocess additions, etc.) |
+| `vigilance:sensor-degradation` | (any sub-sensor) | **Informational only.** Sensor-internal infrastructure issue (registry unreachable, HTTP client build failed, etc.). Skipped by the strict-with-bypass gate; never blocks publish. |
+
+### Family: `manual:` — operator-initiated tickets
+
+Operators creating tickets via `neurogrim sca-review create
+--signal '<value>'` use the `manual:` prefix by convention. The
+suffix is operator-defined; suggested patterns:
+
+| `signal_kind` | Use case |
+|---|---|
+| `manual:operator-spotted` | Operator noticed something during routine review |
+| `manual:incident-<id>` | Tied to a specific incident or advisory id (e.g., `manual:incident-litellm-1827`) |
+| `manual:audit-finding-<id>` | Tied to an external audit's finding-id |
+| `manual:remediation-tracking` | Pin tracking for an upstream remediation in progress |
+
+The suffix is free-form; the only hard rule is the `manual:`
+prefix so the ledger query path (and the strict-bypass gate)
+can distinguish operator-created from auto-created tickets.
+
+### Family: `agent-review:` — Layer 3 agent findings (v2 candidate)
+
+v1 ships Layer 3 as framework-only — the agent-review step is
+operator-driven, not LLM-invoked. When the LLM-as-judge agent-
+review path lands (v2 candidate per spec §16.4), it will emit
+`agent-review:<finding-kind>` signal kinds in its findings. v1
+operators do not produce these.
+
+### Where these strings live
+
+- `triggering_signals[].signal_kind` on every `review-pending`
+  and `review-triaged` ledger entry.
+- `triggering_signals[].signal_kind` on every ticket file under
+  `.claude/brain/supply-chain-tickets/<id>.json`.
+- The `<kind>:<eco>:<pkg>` finding-name format inside the
+  vigilance CMDB's `findings[]` array — `kind` here is the
+  bare wire name (no `vigilance:` prefix) since the CMDB is
+  per-sensor.
+
 ## Lifecycle
 
 ### 1. Ticket creation

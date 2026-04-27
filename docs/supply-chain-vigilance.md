@@ -147,6 +147,17 @@ Score floor at 0; never negative. Severity-weighted scoring is
 an E-SC-8 calibration candidate (see METHODOLOGY-EVOLUTION §15
 "Deferred").
 
+The bare kind names above (`typosquat-proximity`, `publish-
+cadence-acceleration`, etc.) appear in CMDB findings'
+`name` field as `<kind>:<ecosystem>:<package>`. When Layer 3
+auto-creates a ticket from one of these findings, the ticket's
+`signal_kind` carries the `vigilance:` prefix —
+e.g., `vigilance:typosquat-proximity`. The canonical
+signal_kind reference (across all three families: `vigilance:`,
+`manual:`, future `agent-review:`) lives in
+[`docs/supply-chain-review.md`](supply-chain-review.md) §
+Signal-kind reference.
+
 ## Calibration targets (per spec §16.3 + §15.5)
 
 All seven sub-sensors share the same Layer 2 calibration
