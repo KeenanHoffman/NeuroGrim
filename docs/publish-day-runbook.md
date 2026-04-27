@@ -360,17 +360,64 @@ Cross-reference: `audit/ROLLBACK-PLAYBOOK.md` § E-SC-2/3/4
 (Layer 1 procedures), § E-SC-5 (Layer 2), § E-SC-6 (Layer 3),
 § E-SC-8 (calibration regression), § Universal playbook.
 
+### A2A `supply-chain-signal` failure handling (advisory-only)
+
+(E-SC-10 + Round-2 R2-5, 2026-04-26.) When a Brain emits a
+`supply-chain-signal` to peer Brains around publish time
+(spec §16.6), the signal-flow is **advisory + best-effort**.
+A2A signal failures DO NOT block publish — the local L1 / L2 /
+L3 gates above are the authoritative publish-blockers.
+
+**Failure modes to expect + the operator response for each:**
+
+| Failure mode | Symptom | Response |
+|---|---|---|
+| **Peer unreachable** (network / down) | `TaskClient::invoke` returns `A2aError::Transport(...)` or `AgentCardUnreachable` | Signal drops silently. Peer-side `received-signals.jsonl` is unchanged. **No publish-block.** Resend manually after the peer recovers (operators typically do this via a dedicated `neurogrim a2a-invoke ...` re-issue). |
+| **Bidirectional opt-in fails** | Sender's pre-flight `bidirectional_opt_in_satisfied(&local, &peer)` returns false | Sender does NOT emit. Verify BOTH peers' Agent Cards declare `supply-chain-signal` (sender in `emits[]`, peer in `accepts[]`). Re-run the discovery + retry. **No publish-block.** |
+| **Peer ack-then-error** (peer's `default_handle_received` returns error) | Sender's `invoke` returns `A2aError::PeerError { status, body }` | Local emit succeeded over the wire; peer's append-to-log failed. Inspect peer's logs (operator-side); usually disk-full or schema-validation failure on the inbound payload. Local Brain's gates remain authoritative. **No publish-block.** |
+| **Schema-validation rejection** at peer | Peer returns 400 with validation error in body | Sender's payload didn't match `a2a-supply-chain-signal-v1.schema.json`. This is a sender-side bug, not a publish blocker; defer to a follow-up commit. **No publish-block.** |
+
+**Why advisory-only.** A2A signals are cross-Brain aggregation
+input (spec §16.6: "Receivers MUST treat signals as advisory
+input"). The local Brain's L1+L2+L3 gates already saw the
+underlying findings before the signal was emitted; if a peer
+is offline or rejecting, the local Brain's published version
+is still based on its own complete picture. Signal-flow
+failures are operator-action items for follow-up, not gate
+flips.
+
+**Operator action when signal-flow consistently fails:**
+
+1. Run `neurogrim a2a-discover --peer-url <url>` against each
+   declared peer; verify Agent Cards parse + advertise
+   `supply-chain-signal`.
+2. Inspect the local sender's outbox log (if any; v1 has no
+   built-in outbox — failures are tracing-warn-logged only).
+3. Inspect the peer's `received-signals.jsonl` for the most
+   recent entry to confirm the connection was previously
+   working.
+4. File a separate commit / ticket; do NOT roll back the
+   publish gate on signal-flow alone.
+
+Cross-reference: `crates/neurogrim-a2a/src/supply_chain_signal.rs`
+(impl), `crates/neurogrim-cli/tests/a2a_cli.rs`
+(`supply_chain_signal_e2e_over_loopback` regression test).
+Spec normative behavior: LSP-Brains v2.6 §16.6.
+
 ### v2 candidates (deferred work, post-publish)
 
 These are documented as candidate work for v2 of the supply-
 chain stack:
 
-- **Cross-Brain A2A `supply-chain-signal` wire-up** — specced
-  in LSP-Brains v2.6 §16.6 with bidirectional opt-in consent.
-  Wire-up of sender + receiver in `neurogrim-a2a` is a future
-  enhancement that lets peer Brains share supply-chain findings
-  for cross-aggregation (e.g., "two independent peers flagged
-  this package"). Not a publish-gate dependency.
+- **Cross-Brain A2A `supply-chain-signal` aggregation** — the
+  payload shape, opt-in helpers, and default receive handler
+  shipped in E-SC-10; the E2E loopback test landed in Round-2
+  R2-5 (commit `4226265`). What remains for v2: a default
+  AGGREGATOR that consumes a Brain's `received-signals.jsonl`
+  + computes per-`(advisory_id, package)` `cross_brain_count`
+  for the "two independent peers flagged this package" use
+  case (spec §16.6). v1 ships the transport; the aggregation
+  rollup is the v2 candidate. Not a publish-gate dependency.
 - **L1 fixture-library OSV pre-caching** — calibration v1
   ships clean (no advisory matching against pre-cached OSV
   responses); v2 candidate adds a per-fixture `.osv-cache/`
