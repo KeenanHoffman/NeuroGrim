@@ -107,6 +107,65 @@ pub fn load_calibration_ledger_schema() -> Option<JSONSchema> {
         .ok()
 }
 
+/// Locate `hat-contract-v1.schema.json` via the same repo-layout
+/// candidates as the other helpers. Returns `None` when the schema
+/// isn't reachable (standalone checkout).
+///
+/// Added in E-B2-3 C1 alongside the new persona-hat contract schema.
+/// Persona-hat (Hat-model B per spec §5.4.1, Q5 = 5c) — distinct from
+/// the registry-hat schema (Hat-model A; embedded in
+/// `brain-registry-v2.schema.json:413-433`).
+pub fn locate_hat_contract_schema() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join("../../../../LSP-Brains/schemas/hat-contract-v1.schema.json"),
+        manifest_dir.join("../../../LSP-Brains/schemas/hat-contract-v1.schema.json"),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Load + compile the hat-contract v1 schema, if reachable.
+pub fn load_hat_contract_schema() -> Option<JSONSchema> {
+    let path = locate_hat_contract_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft7)
+        .compile(&value)
+        .ok()
+}
+
+/// Read the raw JSON of `hat-contract-v1.schema.json` (uncompiled).
+/// Used by closed-set discipline pinning tests that need to inspect
+/// the schema's `definitions.ToolName.enum` directly rather than
+/// validate against it.
+pub fn read_hat_contract_schema_value() -> Option<Value> {
+    let path = locate_hat_contract_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+/// Locate a hat-contract fixture file by name. Fixtures live at
+/// `<crate>/tests/fixtures/<name>` and are crate-local (unlike schemas,
+/// which live in the sibling LSP-Brains repo). Always reachable.
+///
+/// Added in E-B2-3 C3 alongside the three pre-canned hat-contract
+/// fixtures (valid, invalid-vocabulary, missing-frontmatter).
+pub fn locate_hat_contract_fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
+/// Read a hat-contract fixture file as a single string. Caller decides
+/// how to interpret it (split frontmatter, etc.).
+pub fn read_hat_contract_fixture(name: &str) -> String {
+    let path = locate_hat_contract_fixture(name);
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("read fixture {}: {e}", path.display()))
+}
+
 /// Locate `brain-registry-v2.schema.json` via the same repo-layout
 /// candidates as the other helpers. Returns `None` when the schema
 /// isn't reachable (standalone checkout).
