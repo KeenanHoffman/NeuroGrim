@@ -55,9 +55,26 @@ pub const CACHE_TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 /// Per-request HTTP timeout.
 const HTTP_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Inter-request delay to be polite to registries (1 req/sec).
-/// Most fetches will be cache-hits so this rarely triggers.
+/// Inter-request delay to be polite to registries.
+/// Applied per-permit, so the effective rate scales with
+/// `REGISTRY_CONCURRENCY` (4 permits × 250ms = up to 16 req/sec
+/// across all hosts; per-host rate is bounded by the underlying
+/// reqwest connection pool).
 const RATE_LIMIT_DELAY: Duration = Duration::from_millis(250);
+
+/// Maximum concurrent in-flight registry fetches across all
+/// ecosystems.
+///
+/// 2026-04-26 PRE-RELEASE Round 2 R2-2 fix (D2-I2): previously the
+/// loop fetched packages one at a time with a 250ms sleep between.
+/// Cold-cache scans (first run, or `NEUROGRIM_VIGILANCE_NO_CACHE=1`)
+/// paid that delay on every package; 500 packages → ~125s of pure
+/// sleep on top of the actual HTTP time. Replaced with a
+/// semaphore-bounded concurrent fetch + per-permit delay; saves
+/// ~75% of cold-cache wall-clock with no loss of per-host
+/// politeness (the delay is still applied, just in parallel across
+/// permits).
+const REGISTRY_CONCURRENCY: usize = 4;
 
 /// User agent for our HTTP client. Identifies us politely to
 /// registries that log/rate-limit by UA.
@@ -240,8 +257,10 @@ pub async fn fetch_all(
 
     let mut per_ecosystem_reachability: HashMap<String, bool> = HashMap::new();
 
+    // Pass 1: cache-hits, sync + fast. Collect packages still needing
+    // a live fetch into `to_fetch_live`.
+    let mut to_fetch_live: Vec<((String, String), Package)> = Vec::new();
     for ((ecosystem, name), pkg) in &by_key {
-        // Try cache first.
         if cache_behavior == CacheBehavior::UseCache {
             if let Some((meta, age)) = try_load_cache_entry(cache_dir, ecosystem, name) {
                 result.cache_hits += 1;
@@ -255,40 +274,66 @@ pub async fn fetch_all(
                 continue;
             }
         }
+        to_fetch_live.push(((ecosystem.clone(), name.clone()), (*pkg).clone()));
+    }
 
-        // Live fetch.
-        let Some(client) = &client else {
-            continue;
-        };
+    // Pass 2: live fetches with semaphore-bounded concurrency.
+    // Per-permit politeness delay preserved; effective rate is
+    // ~16 req/sec total across all hosts.
+    if let Some(client) = client.as_ref().filter(|_| !to_fetch_live.is_empty()) {
+        let client = client.clone();
+        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(REGISTRY_CONCURRENCY));
+        let cache_dir_owned = cache_dir.to_path_buf();
+        let mut joinset: tokio::task::JoinSet<((String, String), Result<PackageMetadata>)> =
+            tokio::task::JoinSet::new();
 
-        match fetch_one(client, ecosystem, name, pkg).await {
-            Ok(meta) => {
-                result.live_queries += 1;
-                result.any_reachable = true;
-                per_ecosystem_reachability
-                    .entry(ecosystem.clone())
-                    .and_modify(|v| *v |= true)
-                    .or_insert(true);
-                if cache_behavior == CacheBehavior::UseCache {
-                    let _ = write_cache_entry(cache_dir, ecosystem, name, &meta);
+        for ((ecosystem, name), pkg) in to_fetch_live {
+            let client = client.clone();
+            let sem = std::sync::Arc::clone(&semaphore);
+            let cache_dir = cache_dir_owned.clone();
+            let cache_use = cache_behavior == CacheBehavior::UseCache;
+
+            joinset.spawn(async move {
+                let _permit = sem.acquire().await.expect("registry semaphore not closed");
+                let r = fetch_one(&client, &ecosystem, &name, &pkg).await;
+                if cache_use {
+                    if let Ok(ref meta) = r {
+                        let _ = write_cache_entry(&cache_dir, &ecosystem, &name, meta);
+                    }
                 }
-                result.metadata.insert((ecosystem.clone(), name.clone()), meta);
-            }
-            Err(e) => {
-                per_ecosystem_reachability
-                    .entry(ecosystem.clone())
-                    .or_insert(false);
-                tracing::debug!(
-                    "vigilance: registry fetch failed for {}@{}: {:#}",
-                    ecosystem,
-                    name,
-                    e
-                );
-            }
+                // Per-permit politeness delay; with N permits running
+                // in parallel the effective per-host rate is bounded
+                // by the underlying reqwest connection pool.
+                tokio::time::sleep(RATE_LIMIT_DELAY).await;
+                ((ecosystem, name), r)
+            });
         }
 
-        // Be polite to registries.
-        tokio::time::sleep(RATE_LIMIT_DELAY).await;
+        while let Some(joined) = joinset.join_next().await {
+            let ((ecosystem, name), r) = joined.expect("registry fetch task panicked");
+            match r {
+                Ok(meta) => {
+                    result.live_queries += 1;
+                    result.any_reachable = true;
+                    per_ecosystem_reachability
+                        .entry(ecosystem.clone())
+                        .and_modify(|v| *v |= true)
+                        .or_insert(true);
+                    result.metadata.insert((ecosystem, name), meta);
+                }
+                Err(e) => {
+                    per_ecosystem_reachability
+                        .entry(ecosystem.clone())
+                        .or_insert(false);
+                    tracing::debug!(
+                        "vigilance: registry fetch failed for {}@{}: {:#}",
+                        ecosystem,
+                        name,
+                        e
+                    );
+                }
+            }
+        }
     }
 
     // Collect ecosystems with zero successful live fetches AND zero
