@@ -215,6 +215,59 @@ pub fn locate_trust_budget_fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// Locate `invocation-ledger-v1.schema.json` via the same repo-layout
+/// candidates as the other helpers. Returns `None` when the schema
+/// isn't reachable (standalone checkout).
+///
+/// Added in E-B2-6 C1+C2 alongside the new invocation-ledger schema
+/// (the first-ever schema for the `.claude/brain/invocation-ledger.jsonl`
+/// ledger; previously the format was defined only by
+/// `record-skill-invocation.sh:56-58`'s fixed printf line + the prose
+/// at `docs/invocation-ledger.md:26-39`). Mirrors the cross-repo
+/// `include_str!` ordering risk: test skips with `eprintln` when the
+/// LSP-Brains submodule pointer hasn't been bumped yet.
+pub fn locate_invocation_ledger_schema() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join("../../../../LSP-Brains/schemas/invocation-ledger-v1.schema.json"),
+        manifest_dir.join("../../../LSP-Brains/schemas/invocation-ledger-v1.schema.json"),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Load + compile the invocation-ledger v1 schema, if reachable.
+pub fn load_invocation_ledger_schema() -> Option<JSONSchema> {
+    let path = locate_invocation_ledger_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft7)
+        .compile(&value)
+        .ok()
+}
+
+/// Read the raw JSON of `invocation-ledger-v1.schema.json` (uncompiled).
+/// Used by the closed-set discipline pinning test that inspects
+/// `definitions.Disposition.enum` directly rather than validating
+/// against it.
+pub fn read_invocation_ledger_schema_value() -> Option<Value> {
+    let path = locate_invocation_ledger_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+/// Locate an invocation-ledger fixture file by name. Fixtures live at
+/// `<crate>/tests/fixtures/<name>` and are crate-local (unlike schemas,
+/// which live in the sibling LSP-Brains repo). Always reachable;
+/// panics if not found (the six E-B2-6 C2 fixtures are committed as
+/// part of the same chunk that ships this helper).
+pub fn locate_invocation_ledger_fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
 /// Locate `brain-registry-v2.schema.json` via the same repo-layout
 /// candidates as the other helpers. Returns `None` when the schema
 /// isn't reachable (standalone checkout).

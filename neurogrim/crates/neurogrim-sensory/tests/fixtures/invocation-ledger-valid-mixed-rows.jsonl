@@ -1,0 +1,2 @@
+{"schema_version":"1","ts":"2026-04-27T20:00:00.000Z","type":"skill","name":"plan-critic","session_id":"sess-abc","invocation_id":"inv-003"}
+{"schema_version":"1","ts":"2026-04-27T20:05:00.000Z","entry_kind":"disposition","invocation_id":"inv-003","disposition_kind":"modified","human_operator":"alice"}
