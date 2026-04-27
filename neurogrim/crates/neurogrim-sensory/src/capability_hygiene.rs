@@ -29,6 +29,13 @@
 //!     <20 chars=5; both present+length OK=10; both missing=0.
 //!   - **personas** (`config.human_personas.*.description`): same
 //!     thresholds as hats.
+//!   - **hat_contracts** (`.claude/skills/hats/*.md`, E-B2-3 C5/C6):
+//!     persona-hat contract validation against `hat-contract-v1.schema.json`
+//!     (Hat-model B per spec §5.4.1). Advisory-only — findings carry
+//!     `points: 0` (Q3); contributes to `total_capabilities` +
+//!     `overall_compliant_count` rollups (C6) but NOT to the hygiene
+//!     score numerator/denominator (`earned`/`possible` remain 0 for the
+//!     type).
 //!
 //! Aggregate score = round(100 * sum_earned / sum_possible), clamped 0-100.
 //! No capabilities present → score 100.
@@ -79,6 +86,40 @@ const HAT_MIN_CHARS: usize = 20;
 
 /// Hat/persona: maximum description length (chars).
 const HAT_MAX_CHARS: usize = 300;
+
+// ── E-B2-3 C5 (2026-04-27): persona-hat contract vocabulary ─────────────────
+//
+// Closed-set tool-name vocabulary for `forbidden_tools` / `allowed_tools` in
+// persona-hat contracts (spec §5.4.1, Q1 = closed-set v1). MUST mirror the
+// schema's `definitions.ToolName.enum` in
+// `LSP-Brains/schemas/hat-contract-v1.schema.json`. Drift between this const
+// and the schema is caught by the `hat_contract_schema_conformance` test
+// (which pins the schema's vocabulary independently). Adding new vocabulary
+// requires both a schema bump and a const bump — same additivity discipline
+// as `culture-manifest-v1.values`.
+//
+// Used by `score_hat_contracts` to recognize unknown vocabulary terms cleanly
+// when walking jsonschema validation errors, so a vocabulary violation
+// surfaces as `hat_contract:vocabulary:<hat>:<term>` rather than collapsing
+// into the generic `hat_contract:declaration:<hat>` malformed bucket.
+const HAT_CONTRACT_TOOL_VOCABULARY: &[&str] = &[
+    "Bash",
+    "Write",
+    "Edit",
+    "WebFetch",
+    "WebSearch",
+    "network_egress",
+    "mcp:*",
+    "package_install",
+];
+
+/// Embedded persona-hat contract schema. Path is relative to this source
+/// file (`src/capability_hygiene.rs`); the build fails at compile time if
+/// the schema is missing. Five hops: src → crate → crates → neurogrim →
+/// NeuroGrim → ecosystem root.
+const HAT_CONTRACT_SCHEMA_JSON: &str = include_str!(
+    "../../../../../LSP-Brains/schemas/hat-contract-v1.schema.json"
+);
 
 /// Correlation: minimum description length (chars).
 const CORRELATION_MIN_DESC_CHARS: usize = 60;
@@ -224,6 +265,17 @@ pub async fn analyze_capability_hygiene(project_root: &str) -> Value {
     let hats = score_hats(&root);
     let correlations = score_correlations(&root);
     let personas = score_personas(&root);
+    // E-B2-3 C5: persona-hat contracts (Hat-model B per spec §5.4.1) —
+    // distinct axis from registry-hats (`score_hats` above). Findings flow
+    // through to CMDB extras + breakdown JSON.
+    //
+    // E-B2-3 C6 (2026-04-27): hat_contracts now contributes to
+    // `total_capabilities` + `overall_compliant_count`. `earned`/`possible`
+    // remain 0 for every per-hat result (hat_contracts is advisory per Q3:
+    // findings carry `points: 0` and the type does NOT influence the score
+    // numerator/denominator — only the "how many capabilities exist /
+    // validate cleanly" denominators).
+    let hat_contracts = score_hat_contracts(&root);
 
     let total_earned: usize = skills.earned
         + subagents.earned
@@ -242,13 +294,15 @@ pub async fn analyze_capability_hygiene(project_root: &str) -> Value {
         + tools.total
         + hats.total
         + correlations.total
-        + personas.total;
+        + personas.total
+        + hat_contracts.total;
     let overall_compliant: usize = skills.compliant
         + subagents.compliant
         + tools.compliant
         + hats.compliant
         + correlations.compliant
-        + personas.compliant;
+        + personas.compliant
+        + hat_contracts.compliant;
 
     let score: u8 = if total_possible == 0 {
         100
@@ -264,6 +318,9 @@ pub async fn analyze_capability_hygiene(project_root: &str) -> Value {
     all_findings.extend(hats.findings.iter().cloned());
     all_findings.extend(correlations.findings.iter().cloned());
     all_findings.extend(personas.findings.iter().cloned());
+    // E-B2-3 C5: hat-contract findings (advisory, points: 0 each — they
+    // surface in CMDB extras but never deduct hygiene score, per Q3).
+    all_findings.extend(hat_contracts.findings.iter().cloned());
 
     // If aggregate compliant == total and we have at least one capability,
     // add a green "all-capabilities-compliant" finding.
@@ -273,7 +330,7 @@ pub async fn analyze_capability_hygiene(project_root: &str) -> Value {
             status: "ok".to_string(),
             points: 0,
             detail: Some(format!(
-                "All {total_capabilities} capabilities across 6 types meet their authoring standards."
+                "All {total_capabilities} capabilities across 7 types meet their authoring standards."
             )),
         });
     }
@@ -283,12 +340,21 @@ pub async fn analyze_capability_hygiene(project_root: &str) -> Value {
     let skills_status = |s: &str| skills.status_counts.get(s).copied().unwrap_or(0);
 
     let breakdown = json!({
-        "skills":       skills.to_breakdown(),
-        "subagents":    subagents.to_breakdown(),
-        "tools":        tools.to_breakdown(),
-        "hats":         hats.to_breakdown(),
-        "correlations": correlations.to_breakdown(),
-        "personas":     personas.to_breakdown(),
+        "skills":         skills.to_breakdown(),
+        "subagents":      subagents.to_breakdown(),
+        "tools":          tools.to_breakdown(),
+        "hats":           hats.to_breakdown(),
+        "correlations":   correlations.to_breakdown(),
+        "personas":       personas.to_breakdown(),
+        // E-B2-3 C5/C6: persona-hat contracts. C6 (2026-04-27) folded
+        // hat_contracts.total + hat_contracts.compliant into the top-level
+        // `total_capabilities` / `overall_compliant_count` rollups so the
+        // hat-contract axis influences the "how many capabilities exist /
+        // validate cleanly" denominators. The `earned`/`possible` axis
+        // remains untouched — hat_contracts is advisory per Q3 (findings
+        // carry `points: 0`; the type does NOT influence the hygiene
+        // score numerator/denominator).
+        "hat_contracts":  hat_contracts.to_breakdown(),
     });
 
     let extras: Vec<(&str, Value)> = vec![
@@ -754,6 +820,386 @@ fn score_hats(root: &Path) -> TypeResult {
     }
 
     result
+}
+
+// ── Scorer: hat contracts (persona-hat .md frontmatter) ─────────────────────
+//
+// E-B2-3 C5 (2026-04-27). Static-only validator (per Q9) that scans
+// `<root>/.claude/skills/hats/*.md` (skipping `SKILL.md` — that's the
+// catalog index, not a per-hat contract) and validates each file's YAML
+// frontmatter against `hat-contract-v1.schema.json`. Persona-hat = Hat-
+// model B in the §5.4.1 glossary; distinct from registry-hats (Hat-model
+// A) scored above by `score_hats`.
+//
+// All findings emit `points: 0` (advisory per Q3). v1 ships two finding
+// kinds (per Q3): `hat_contract:declaration:<hat>` (no frontmatter / other
+// schema-level malformedness) and `hat_contract:vocabulary:<hat>:<term>`
+// (frontmatter declares an unknown closed-set term). The third Q3 finding
+// kind, `hat_contract:violation:<hat>:<observed_tool>`, is deferred to v2
+// per BACKLOG B-23 (runtime enforcement requires invocation-ledger
+// extension that v1 doesn't ship).
+//
+// Recursion-guard (Q6 hard rule): this function MUST be pure file-read +
+// JSON-Schema-validate. It does NOT shell out, does NOT invoke any tool,
+// does NOT use `std::process::Command`. The validator is plain code, not
+// a hat. A unit test in `tests/hat_contract_sensor_behavior.rs` pins this
+// invariant by reading the source file and asserting the absence of
+// shell-execution references inside this function's span.
+
+/// Validate persona-hat contracts under `<root>/.claude/skills/hats/`.
+fn score_hat_contracts(root: &Path) -> TypeResult {
+    let mut result = TypeResult::new("hat_contracts");
+    let dir = root.join(".claude").join("skills").join("hats");
+    if !dir.is_dir() {
+        // No hats catalog on this Brain — clean zero state, no findings.
+        return result;
+    }
+
+    // Compile the embedded schema once per call. The schema text is
+    // embedded at compile time via `include_str!`; if the file isn't
+    // reachable at compile time, the build fails. This is intentional:
+    // v1 NeuroGrim ships with the bundled LSP-Brains submodule and we
+    // don't want a silent fallback for a missing schema.
+    let compiled_schema: Option<jsonschema::JSONSchema> =
+        compile_hat_contract_schema_inline();
+
+    for hat_md in collect_hat_contract_files(&dir) {
+        let HatContractFile { hat_name, body } = hat_md;
+
+        // Step 1: extract frontmatter. Missing fences ⇒ neutral
+        // declaration finding (per Q4: permissive default + advisory).
+        let yaml_text = match extract_hat_frontmatter(&body) {
+            HatFrontmatter::Found(yaml) => yaml,
+            HatFrontmatter::Missing | HatFrontmatter::Unterminated => {
+                let detail_msg = format!(
+                    "`{hat_name}.md` has no parseable YAML frontmatter. \
+                     Per Q4, the hat is treated as `forbidden_tools: []` + \
+                     `allowed_tools: [\"*\"]` (permissive default) but is \
+                     surfaced as an advisory to encourage authoring."
+                );
+                let detail = json!({
+                    "hat": hat_name,
+                    "kind": "declaration",
+                    "reason": "no_frontmatter",
+                    "points": 0,
+                });
+                let finding = Finding {
+                    name: format!("hat_contract:declaration:{hat_name}"),
+                    status: "neutral".to_string(),
+                    points: 0,
+                    detail: Some(detail_msg),
+                };
+                // `total` increments; `compliant` does NOT (no schema
+                // validation passed); `earned`/`possible` both 0 — the
+                // type does not contribute to the aggregate score
+                // (advisory-only per Q3).
+                result.total += 1;
+                *result.status_counts.entry("declaration").or_insert(0) += 1;
+                result.details.push(detail);
+                result.findings.push(finding);
+                continue;
+            }
+        };
+
+        // Step 2: parse YAML into a JSON value (jsonschema validates
+        // serde_json::Value — YAML is a strict superset for our schema).
+        let instance: Value = match parse_yaml_as_json(&yaml_text) {
+            Some(v) => v,
+            None => {
+                let detail_msg = format!(
+                    "`{hat_name}.md` frontmatter fences present but body \
+                     failed YAML parse. Treating as malformed declaration."
+                );
+                let detail = json!({
+                    "hat": hat_name,
+                    "kind": "declaration",
+                    "reason": "yaml_parse_error",
+                    "points": 0,
+                });
+                let finding = Finding {
+                    name: format!("hat_contract:declaration:{hat_name}"),
+                    status: "error".to_string(),
+                    points: 0,
+                    detail: Some(detail_msg),
+                };
+                result.total += 1;
+                *result.status_counts.entry("declaration").or_insert(0) += 1;
+                result.details.push(detail);
+                result.findings.push(finding);
+                continue;
+            }
+        };
+
+        // Step 3: validate against the embedded schema. If the schema
+        // itself failed to compile (cosmic-ray-grade build issue), skip
+        // validation and surface a neutral declaration finding so the
+        // operator notices.
+        let Some(schema) = compiled_schema.as_ref() else {
+            let detail = json!({
+                "hat": hat_name,
+                "kind": "declaration",
+                "reason": "schema_unavailable",
+                "points": 0,
+            });
+            let finding = Finding {
+                name: format!("hat_contract:declaration:{hat_name}"),
+                status: "neutral".to_string(),
+                points: 0,
+                detail: Some(
+                    "hat-contract schema failed to compile at runtime; \
+                     skipping validation for this hat."
+                        .to_string(),
+                ),
+            };
+            result.total += 1;
+            *result.status_counts.entry("declaration").or_insert(0) += 1;
+            result.details.push(detail);
+            result.findings.push(finding);
+            continue;
+        };
+
+        let validation = schema.validate(&instance);
+        match validation {
+            Ok(()) => {
+                // Well-formed contract. Compliant; emit no finding.
+                let detail = json!({
+                    "hat": hat_name,
+                    "kind": "compliant",
+                    "points": 0,
+                });
+                result.total += 1;
+                result.compliant += 1;
+                *result.status_counts.entry("compliant").or_insert(0) += 1;
+                result.details.push(detail);
+            }
+            Err(errors) => {
+                // Walk validation errors. Vocabulary errors get specific
+                // findings; everything else collapses into one generic
+                // declaration-malformed finding (per Q3).
+                let mut emitted_vocabulary = false;
+                let mut emitted_declaration = false;
+                let mut declaration_reason: Option<String> = None;
+
+                for err in errors {
+                    let path_str = err.instance_path.to_string();
+                    let is_vocab_path = path_str.contains("/forbidden_tools/")
+                        || path_str.contains("/allowed_tools/");
+                    let is_enum_kind = matches!(
+                        err.kind,
+                        jsonschema::error::ValidationErrorKind::Enum { .. }
+                    );
+
+                    if is_vocab_path && is_enum_kind {
+                        // Pull the offending term out of the instance
+                        // value at the failed path. For `Enum { ... }`
+                        // on an array item, `err.instance` is the
+                        // string value that failed the enum check.
+                        let offending_term = err
+                            .instance
+                            .as_str()
+                            .map(str::to_string)
+                            .unwrap_or_else(|| err.instance.to_string());
+                        let finding = Finding {
+                            name: format!(
+                                "hat_contract:vocabulary:{hat_name}:{offending_term}"
+                            ),
+                            status: "error".to_string(),
+                            points: 0,
+                            detail: Some(format!(
+                                "`{hat_name}.md` declares `{offending_term}` \
+                                 in {path_str} — not in the closed-set \
+                                 vocabulary (Q1). Allowed terms: {:?}.",
+                                HAT_CONTRACT_TOOL_VOCABULARY
+                            )),
+                        };
+                        let detail = json!({
+                            "hat": hat_name,
+                            "kind": "vocabulary",
+                            "term": offending_term,
+                            "path": path_str,
+                            "points": 0,
+                        });
+                        *result.status_counts.entry("vocabulary").or_insert(0) += 1;
+                        result.details.push(detail);
+                        result.findings.push(finding);
+                        emitted_vocabulary = true;
+                    } else if !emitted_declaration {
+                        // First non-vocabulary error becomes the single
+                        // declaration finding for this hat. Subsequent
+                        // errors are surfaced via the detail text but
+                        // not as additional findings (per Q3 — only
+                        // declaration + vocabulary kinds in v1).
+                        declaration_reason = Some(format!(
+                            "schema validation failed at {path_str}: {err}"
+                        ));
+                        emitted_declaration = true;
+                    }
+                }
+
+                // Emit the declaration finding if we recorded a non-
+                // vocabulary failure.
+                if emitted_declaration {
+                    let reason = declaration_reason.unwrap_or_else(|| {
+                        "schema validation failed (no diagnostic captured)"
+                            .to_string()
+                    });
+                    let detail = json!({
+                        "hat": hat_name,
+                        "kind": "declaration",
+                        "reason": "malformed",
+                        "points": 0,
+                    });
+                    let finding = Finding {
+                        name: format!("hat_contract:declaration:{hat_name}"),
+                        status: "error".to_string(),
+                        points: 0,
+                        detail: Some(reason),
+                    };
+                    *result.status_counts.entry("declaration").or_insert(0) += 1;
+                    result.details.push(detail);
+                    result.findings.push(finding);
+                }
+
+                // total counts the hat regardless of finding kind.
+                result.total += 1;
+                // Not compliant — schema failed; suppress error if a
+                // vocabulary finding was the only kind emitted (still
+                // not compliant in the strict sense).
+                let _ = emitted_vocabulary;
+            }
+        }
+    }
+
+    result
+}
+
+// E-B2-3 C5 helper types + functions for `score_hat_contracts`.
+
+#[derive(Debug)]
+struct HatContractFile {
+    /// Hat identifier — filename stem (e.g., `supply-chain-auditor` for
+    /// `supply-chain-auditor.md`). Used in finding names.
+    hat_name: String,
+    /// Raw file body (frontmatter + prose).
+    body: String,
+}
+
+#[derive(Debug)]
+enum HatFrontmatter {
+    /// Frontmatter delimiters present + body returned. The caller YAML-
+    /// parses + schema-validates.
+    Found(String),
+    /// No leading `---` fence. Treated as a neutral "no contract" state
+    /// per Q4 (NOT a schema-validation failure).
+    Missing,
+    /// Leading `---` fence present but no closing `---` before EOF.
+    /// Surfaced as a malformed declaration finding (similar to Missing
+    /// at the finding-name level — they're both "no validatable contract
+    /// present" — but the detail text differs).
+    Unterminated,
+}
+
+/// Walk `<dir>/*.md`, returning per-hat contract files. `SKILL.md` is
+/// excluded — that's the 287-line catalog index (Hat-model B prose),
+/// NOT a per-hat contract. The 287-line catalog has prose like "MUST NOT
+/// execute code" embedded in markdown that would otherwise be picked up
+/// as malformed frontmatter; the SKILL.md exclusion is structurally
+/// load-bearing for E-B2-3 v1.
+///
+/// Also skips `README*` and dotfiles (mirrors `collect_md_files` for
+/// consistency).
+fn collect_hat_contract_files(dir: &Path) -> Vec<HatContractFile> {
+    let mut out = Vec::new();
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return out,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        if path.extension().and_then(|s| s.to_str()) != Some("md") {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        // SKILL.md is the catalog index, not a per-hat contract — skip
+        // it so the validator doesn't churn on its prose.
+        if name == "SKILL.md" {
+            continue;
+        }
+        if name.starts_with("README") || name.starts_with('.') {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if let Ok(body) = std::fs::read_to_string(&path) {
+            out.push(HatContractFile {
+                hat_name: stem.to_string(),
+                body,
+            });
+        }
+    }
+    out.sort_by(|a, b| a.hat_name.cmp(&b.hat_name));
+    out
+}
+
+/// Extract YAML frontmatter delimited by `---` lines at the start of a
+/// markdown file. Mirrors the test-side `extract_frontmatter` shape
+/// (Found / Missing / Unterminated) used by
+/// `tests/hat_contract_schema_conformance.rs`. Production-side mirror
+/// rather than a shared helper because: (a) test-helpers live under
+/// `tests/test_support/mod.rs` and are not visible to production code
+/// without a deliberate refactor (would expose internals beyond v1's
+/// scope); (b) the production extractor is small enough that the
+/// duplication cost is lower than the refactor cost. If a third
+/// consumer arrives, factor into a shared internal module then.
+///
+/// Tolerates both `\n` and `\r\n` line endings — mirrors the test
+/// helper's CRLF-on-Windows accommodation.
+fn extract_hat_frontmatter(markdown: &str) -> HatFrontmatter {
+    let mut lines = markdown.split_inclusive('\n');
+    let first = match lines.next() {
+        Some(l) => l.trim_end(),
+        None => return HatFrontmatter::Missing,
+    };
+    if first != "---" {
+        return HatFrontmatter::Missing;
+    }
+    let mut yaml = String::new();
+    for line in lines {
+        if line.trim_end() == "---" {
+            return HatFrontmatter::Found(yaml);
+        }
+        yaml.push_str(line);
+    }
+    HatFrontmatter::Unterminated
+}
+
+/// Parse a YAML string into a `serde_json::Value` so it can feed the
+/// jsonschema validator (which is JSON-typed). Returns `None` on YAML
+/// parse error; the caller emits a `declaration` finding in that case.
+fn parse_yaml_as_json(yaml: &str) -> Option<Value> {
+    let yaml_value: serde_yaml::Value = serde_yaml::from_str(yaml).ok()?;
+    serde_json::to_value(yaml_value).ok()
+}
+
+/// Parse + compile the embedded `hat-contract-v1.schema.json` into a
+/// `JSONSchema`. Returns `None` only on the (cosmic-ray-grade) case where
+/// the embedded schema text is malformed JSON or fails to compile —
+/// neither of which can happen if the LSP-Brains schema file is well-
+/// formed at NeuroGrim build time. Returning `Option` rather than
+/// panicking keeps the validator a no-op in degraded build environments
+/// rather than crashing the entire `analyze_capability_hygiene` call.
+fn compile_hat_contract_schema_inline() -> Option<jsonschema::JSONSchema> {
+    let parsed: Value = serde_json::from_str(HAT_CONTRACT_SCHEMA_JSON).ok()?;
+    jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft7)
+        .compile(&parsed)
+        .ok()
 }
 
 // ── Scorer: correlations ──────────────────────────────────────────────────────

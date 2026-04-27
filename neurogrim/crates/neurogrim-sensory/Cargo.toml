@@ -46,12 +46,16 @@ sha2 = "0.10"
 tar = { workspace = true }
 flate2 = { workspace = true }
 
-[dev-dependencies]
-# §3.8 Testing Discipline — validate CMDB envelope output against the
-# canonical cmdb-envelope-v1 JSON Schema at integration-test time.
-# Full JSON Schema (draft-07) validator; same contract the Python SDK
-# test enforces.
+# E-B2-3 C5 — `capability_hygiene::score_hat_contracts` validates persona-hat
+# YAML frontmatter against `hat-contract-v1.schema.json` (the schema is the
+# authoritative source for the Q1 closed-set vocabulary). Promoted from
+# dev-dependencies to a regular dependency so the production validator can
+# share the same JSON-Schema (draft-07) machinery the integration tests use.
+# Single dependency; no new transitive surface beyond what already shipped
+# in dev-deps.
 jsonschema = "0.17"
+
+[dev-dependencies]
 # Tier-A sensor behavioral fixtures — each analyze_* runs against a
 # programmatically populated TempDir; tempfile handles cleanup.
 tempfile = "3"
