@@ -55,6 +55,9 @@ async fn cli_client_path_discovers_and_invokes_local_server() {
             "brain_id": "cli-test-brain",
             "scored_at": "2026-04-17T00:00:00Z",
             "score": 0,
+            // E-B2-1 C10 pre-emptive fixture update — placeholder peer
+            // mirrors `score: 0` with `unified_confidence: 0`.
+            "unified_confidence": 0,
             "domains": {},
             "dirty_gates": [],
             "stale_artifacts": [],

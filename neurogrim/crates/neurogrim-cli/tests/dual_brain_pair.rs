@@ -298,6 +298,11 @@ fn minimal_parent_output(score: u8) -> AgentOutput {
         "schema_version": "1",
         "scored_at": Utc::now().to_rfc3339(),
         "score": score,
+        // E-B2-1 C10 pre-emptive fixture update: unified_confidence
+        // becomes a peer of `score` once C6 lands. Pre-included here
+        // so deserialization keeps working at every commit. Fresh
+        // fixture → 100 (full confidence).
+        "unified_confidence": 100,
         "domains": {},
         "dirty_gates": [],
         "stale_artifacts": [],

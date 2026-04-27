@@ -33,6 +33,10 @@ fn canned_agent_output_json(scored_at: DateTime<Utc>) -> Value {
         "schema_version": "1",
         "scored_at": scored_at.to_rfc3339(),
         "score": 72,
+        // E-B2-1 C10 pre-emptive fixture update — unified_confidence
+        // becomes a peer of `score` in C6. Weighted-mean over the
+        // single domain (confidence=90 × weight=1.0) = 90.
+        "unified_confidence": 90,
         "domains": {
             "health": {
                 "score": 72,
@@ -228,6 +232,8 @@ async fn score_ecosystem_identical_across_transports() {
         "schema_version": "1",
         "scored_at": Utc::now().to_rfc3339(),
         "score": 100,
+        // E-B2-1 C10 pre-emptive fixture update — see lib.rs::_fixture_agent_output_json.
+        "unified_confidence": 100,
         "domains": {},
         "dirty_gates": [],
         "stale_artifacts": [],
@@ -389,6 +395,8 @@ async fn two_children_mixed_transports_hand_computed_aggregate() {
         "schema_version": "1",
         "scored_at": Utc::now().to_rfc3339(),
         "score": 100,
+        // E-B2-1 C10 pre-emptive fixture update — see lib.rs::_fixture_agent_output_json.
+        "unified_confidence": 100,
         "domains": {},
         "dirty_gates": [],
         "stale_artifacts": [],
@@ -579,6 +587,8 @@ async fn invoke_a2a_rejects_peer_interface_version_mismatch() {
         "schema_version": "1",
         "scored_at": Utc::now().to_rfc3339(),
         "score": 100,
+        // E-B2-1 C10 pre-emptive fixture update — see lib.rs::_fixture_agent_output_json.
+        "unified_confidence": 100,
         "domains": {},
         "dirty_gates": [],
         "stale_artifacts": [],

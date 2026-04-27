@@ -415,6 +415,11 @@ pub fn _fixture_agent_output_json(score: u8, scored_at_rfc3339: &str) -> Value {
         "schema_version": "1",
         "scored_at": scored_at_rfc3339,
         "score": score,
+        // E-B2-1 C10 pre-emptive fixture update: AgentOutput will
+        // grow a `unified_confidence` field in C6. Pre-included here
+        // so all downstream tests using this fixture stay green at
+        // every commit. Fresh test fixture → 100 (full confidence).
+        "unified_confidence": 100,
         "domains": {},
         "dirty_gates": [],
         "stale_artifacts": [],
