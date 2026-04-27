@@ -22,7 +22,8 @@
       "capability-hygiene": 0.0,
       "supply-chain-sca": 0.0,
       "supply-chain-vigilance": 0.0,
-      "supply-chain-review": 0.0
+      "supply-chain-review": 0.0,
+      "domain-calibration": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -168,6 +169,18 @@
           "supply-chain-review:tickets_resolved_total": { "field": "tickets_resolved_total", "type": "number" },
           "supply-chain-review:tickets_total":          { "field": "tickets_total",          "type": "number" },
           "supply-chain-review:ledger_entries_total":   { "field": "ledger_entries_total",   "type": "number" }
+        }
+      },
+      "domain-calibration": {
+        "_doc": "E-B2-2 (2026-04-27): Brains-2.0 per-domain calibration meta-observer per LSP-Brains v2.8 §17.9. Reads all .claude/brain/*-calibration-ledger*.jsonl files and reports per-domain calibration health. Score model v1: 100 - 10 × open_pending_total, floor 0. Default weight 0.0 (advisory) — promotion past advisory requires §15.5-equivalent calibration evidence. Tuple-aware (has_ever_fired, last_triage_age) confidence per §17.9: distinguishes 'no signal yet' (high confidence) from 'recently triaged' (high confidence) from 'pending unanswered' (low confidence). Bootstrap-loop guard: this sensor's OWN calibration trigger MUST be hard-coded Manual (recursion guard enforced in build_scorecard, E-B2-2 C7). Refresh: `neurogrim sensory domain-calibration --project-root neurogrim > .claude/domain-calibration-cmdb.json`. Calibration ledgers: .claude/brain/<domain>-calibration-ledger.jsonl.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/domain-calibration-cmdb.json"
+        },
+        "exported_variables": {
+          "domain-calibration:open_pending_total": { "field": "open_pending_total", "type": "number" },
+          "domain-calibration:triaged_total":      { "field": "triaged_total",      "type": "number" },
+          "domain-calibration:has_ever_fired":     { "field": "has_ever_fired",     "type": "bool"   }
         }
       }
     },
