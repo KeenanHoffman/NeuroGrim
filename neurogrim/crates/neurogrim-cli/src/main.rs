@@ -81,7 +81,7 @@ enum Commands {
     /// Run a built-in sensory tool directly (produces CMDB JSON)
     #[command(visible_alias = "cast")]
     Sensory {
-        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, trust-budget
+        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget
         name: String,
         /// Project root path
         #[arg(long, default_value = ".")]
@@ -143,6 +143,21 @@ enum Commands {
         #[command(subcommand)]
         subcommand: commands::domain_calibration::DomainCalibrationCmd,
     },
+
+    /// Operator-disposition CLI for the invocation ledger (LSP-Brains v2.11
+    /// §17.12, E-B2-6). Single sub-command at v1: `record` appends a
+    /// `DispositionEntry` row to
+    /// `<project_root>/.claude/brain/invocation-ledger.jsonl` recording the
+    /// operator's judgment of a prior skill invocation.
+    ///
+    /// `--kind` is validated at parse time against the closed-set 4-entry
+    /// vocabulary (`accepted | rejected | modified | superseded`, Q1 lock).
+    /// `--operator` falls back to `$NEUROGRIM_OPERATOR` (§17.6); both unset
+    /// → error. NO `--note` flag at v1 (Q5 privacy lock — spec §17.12.3).
+    /// Invocation IDs starting with `operator_calibration:` are rejected
+    /// (Q6 recursion-guard MUST — spec §17.12.5).
+    #[command(name = "disposition")]
+    Disposition(commands::disposition::Args),
 
     /// Serve this Brain as an A2A peer (spec §13). Publishes an Agent Card
     /// and accepts peer invocations (snapshot.requested, score.updated ack).
@@ -261,6 +276,7 @@ async fn main() -> Result<()> {
         Commands::DomainCalibration { subcommand } => {
             commands::domain_calibration::run(subcommand).await
         }
+        Commands::Disposition(args) => commands::disposition::run(args).await,
         Commands::A2aServe {
             port,
             bind,
@@ -314,8 +330,9 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
         "supply-chain-vigilance" => neurogrim_sensory::supply_chain_vigilance::analyze_supply_chain_vigilance(project_root).await,
         "supply-chain-review" => neurogrim_sensory::supply_chain_review::analyze_supply_chain_review(project_root).await,
         "domain-calibration" => neurogrim_sensory::domain_calibration::analyze_domain_calibration(project_root).await,
+        "operator-calibration" => neurogrim_sensory::operator_calibration::analyze_operator_calibration(project_root).await,
         "trust-budget" => neurogrim_sensory::trust_budget::analyze_trust_budget(project_root).await,
-        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, trust-budget", name),
+        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget", name),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())

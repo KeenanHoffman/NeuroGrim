@@ -5,6 +5,7 @@ pub mod a2a_token;
 pub mod agent;
 pub mod awareness;
 pub mod context;
+pub mod disposition;
 pub mod domain_calibration;
 pub mod health;
 pub mod init;
