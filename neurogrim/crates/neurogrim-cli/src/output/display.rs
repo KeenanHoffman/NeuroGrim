@@ -4,9 +4,17 @@ use colored::*;
 use neurogrim_core::agent_output::AgentOutput;
 use neurogrim_core::types::{ScoreLabel, TrajectoryClassification};
 
-/// Display the single-line score output.
-pub fn display_score(output: &AgentOutput, plain: bool) {
-    let score = output.score;
+/// Format the top-line score string with optional unified-confidence
+/// annotation. Extracted for testability (the `plain=true` path is
+/// deterministic; the colored path embeds ANSI escape sequences).
+///
+/// E-B2-1 C9 — adds the `(confidence: N%)` suffix when
+/// `unified_confidence < 100`. Suppresses when 100 to avoid the
+/// redundant "everything is fresh" annotation. Color bands match
+/// the score's own `ScoreLabel(75, 50)` thresholds — green ≥75,
+/// yellow 50–74, red <50 — so confidence reads at the same glance
+/// as score itself.
+pub(crate) fn format_score_top_line(score: u8, unified_confidence: u8, plain: bool) -> String {
     let label = ScoreLabel::from_score(score, 75, 50);
     let score_str = format!("{}/100", score);
 
@@ -20,7 +28,34 @@ pub fn display_score(output: &AgentOutput, plain: bool) {
         }
     };
 
-    println!("NeuroGrim Score: {}", colored_score);
+    // E-B2-1 C9 unified_confidence annotation. Aggregate freshness
+    // signal: receivers SHOULD use this for peer-trust decisions
+    // (a peer at score=85 / confidence=20 is a low-quality signal).
+    let conf_note = if unified_confidence < 100 {
+        let conf_str = format!(" (confidence: {}%)", unified_confidence);
+        if plain {
+            conf_str
+        } else {
+            let conf_label = ScoreLabel::from_score(unified_confidence, 75, 50);
+            match conf_label {
+                ScoreLabel::Green => conf_str.green().to_string(),
+                ScoreLabel::Yellow => conf_str.yellow().to_string(),
+                ScoreLabel::Red => conf_str.red().to_string(),
+            }
+        }
+    } else {
+        String::new()
+    };
+
+    format!("NeuroGrim Score: {}{}", colored_score, conf_note)
+}
+
+/// Display the single-line score output.
+pub fn display_score(output: &AgentOutput, plain: bool) {
+    println!(
+        "{}",
+        format_score_top_line(output.score, output.unified_confidence, plain)
+    );
     if !plain {
         println!("  {}", "✦ a book of spells for AI agents".dimmed().italic());
     }
@@ -218,5 +253,47 @@ fn classification_display(c: &TrajectoryClassification) -> String {
         TrajectoryClassification::Stable => "stable =".to_string(),
         TrajectoryClassification::Volatile => "volatile ~".to_string(),
         TrajectoryClassification::NoData => "no-data".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // E-B2-1 C9 tests for format_score_top_line. We test only the
+    // `plain=true` path because the colored path embeds ANSI escape
+    // sequences whose presence depends on tty detection by the
+    // `colored` crate — brittle to assert in unit tests.
+
+    #[test]
+    fn format_top_line_omits_confidence_when_full() {
+        // unified_confidence == 100 → confidence annotation suppressed
+        // to avoid noise. This is the steady-state for fresh data.
+        let line = format_score_top_line(85, 100, true);
+        assert_eq!(line, "NeuroGrim Score: 85/100");
+    }
+
+    #[test]
+    fn format_top_line_includes_confidence_below_full() {
+        // unified_confidence < 100 → annotation surfaces.
+        let line = format_score_top_line(85, 75, true);
+        assert_eq!(line, "NeuroGrim Score: 85/100 (confidence: 75%)");
+    }
+
+    #[test]
+    fn format_top_line_shows_zero_confidence_explicitly() {
+        // unified_confidence == 0 means "peer at v2.6 (no signal)" or
+        // "all-advisory Brain". Operator MUST see this — never suppress
+        // 0 the way we suppress 100.
+        let line = format_score_top_line(75, 0, true);
+        assert_eq!(line, "NeuroGrim Score: 75/100 (confidence: 0%)");
+    }
+
+    #[test]
+    fn format_top_line_low_score_with_high_confidence() {
+        // Honest red flag: low score, but the Brain is confident in it.
+        // Operator should not dismiss this as "stale data".
+        let line = format_score_top_line(20, 95, true);
+        assert_eq!(line, "NeuroGrim Score: 20/100 (confidence: 95%)");
     }
 }
