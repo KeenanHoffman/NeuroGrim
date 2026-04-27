@@ -56,6 +56,38 @@ pub fn exponential_decay(
     Confidence::new(clamped)
 }
 
+/// Compute envelope-supplied confidence from a sensor's cache age in
+/// seconds, anchored to a TTL in days (E-B2-1 C12).
+///
+/// Sensors that maintain their own cached data — supply-chain-sca's OSV
+/// cache (24h TTL), supply-chain-vigilance's registry-metadata cache
+/// (7d TTL) — MAY use this helper to translate their freshest-cache-
+/// entry age into an envelope-supplied `confidence` value to embed in
+/// the CMDB envelope's optional `confidence` field (spec §3.1, v2.7+).
+///
+/// The curve matches `exponential_decay`'s shape: age=0 → 100;
+/// age=`ttl_days` → 25; asymptotic to 1 beyond. The TTL's role here is
+/// the "very_stale_days" anchor — within the TTL window, confidence
+/// drops gracefully from 100 to 25, signaling cache-driven staleness
+/// to operators while we still use the cached value internally.
+///
+/// Returns `None` when `cache_age_seconds` is `None` — meaning no cache
+/// reads occurred (all-live or no-queries case). The Brain's aggregator
+/// then falls back to age-decay of `meta.updated_at` (which will be
+/// ~now → confidence ~100 — accurate semantics: "this run did fresh
+/// work").
+pub fn confidence_from_cache_age(cache_age_seconds: Option<u64>, ttl_days: f64) -> Option<u8> {
+    let age_seconds = cache_age_seconds?;
+    let age_days = age_seconds as f64 / 86400.0;
+    // Defensive: clamp ttl_days to a positive minimum so a buggy caller
+    // with ttl_days=0 doesn't divide-by-zero. Operationally a TTL of 0
+    // is meaningless (cache would always miss), but we don't crash.
+    let ttl_safe = ttl_days.max(0.001);
+    let lambda = (4.0_f64).ln() / ttl_safe;
+    let conf = 100.0 * (-lambda * age_days).exp();
+    Some(conf.round().clamp(1.0, 100.0) as u8)
+}
+
 /// Compute freshness multiplier for ecosystem aggregation (spec Section 4.8).
 ///
 /// Step function:
@@ -176,6 +208,79 @@ mod tests {
             "Expected ~91, got {}",
             conf.value()
         );
+    }
+
+    // E-B2-1 C12: confidence_from_cache_age tests.
+    // The curve mirrors exponential_decay but parameterizes "very_stale"
+    // as ttl_days. age=0 → 100; age=ttl_days → 25; age>>ttl_days → 1.
+
+    #[test]
+    fn cache_age_none_returns_none() {
+        // No cache hits → no signal → aggregator's age-decay handles.
+        assert_eq!(confidence_from_cache_age(None, 1.0), None);
+    }
+
+    #[test]
+    fn cache_age_zero_returns_100() {
+        // Cache just refreshed → full confidence.
+        assert_eq!(confidence_from_cache_age(Some(0), 1.0), Some(100));
+        assert_eq!(confidence_from_cache_age(Some(0), 7.0), Some(100));
+    }
+
+    #[test]
+    fn cache_age_at_ttl_returns_25() {
+        // Cache at TTL boundary → 25 (matches exponential_decay's
+        // very_stale_days anchor).
+        let one_day_secs = 86400u64;
+        assert_eq!(
+            confidence_from_cache_age(Some(one_day_secs), 1.0),
+            Some(25)
+        );
+
+        let seven_days_secs = 7 * 86400u64;
+        assert_eq!(
+            confidence_from_cache_age(Some(seven_days_secs), 7.0),
+            Some(25)
+        );
+    }
+
+    #[test]
+    fn cache_age_beyond_ttl_drops_low() {
+        // Past TTL (cache would normally be evicted): asymptotic to 1.
+        let two_days_secs = 2 * 86400u64;
+        let conf = confidence_from_cache_age(Some(two_days_secs), 1.0).unwrap();
+        // e^(-ln(4)*2) = 1/16 ≈ 6
+        assert!(conf <= 10, "expected ≤10 at 2×TTL, got {conf}");
+    }
+
+    #[test]
+    fn cache_age_very_old_clamps_to_one() {
+        // 30 days at TTL=1 day: confidence = 100 * 4^-30 ≈ 9e-17. Clamped to 1.
+        let thirty_days_secs = 30 * 86400u64;
+        assert_eq!(
+            confidence_from_cache_age(Some(thirty_days_secs), 1.0),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn cache_age_within_ttl_decays_smoothly() {
+        // Half-TTL → ~50 (e^(-ln(4)*0.5) = e^(-ln(2)) = 0.5).
+        let half_day_secs = 86400u64 / 2;
+        let conf = confidence_from_cache_age(Some(half_day_secs), 1.0).unwrap();
+        assert!(
+            (conf as i16 - 50).abs() <= 1,
+            "expected ~50 at 0.5×TTL, got {conf}"
+        );
+    }
+
+    #[test]
+    fn cache_age_zero_ttl_does_not_panic() {
+        // Defensive: a buggy caller passing ttl_days=0 must not crash.
+        // Result is implementation-defined; we just need it to not panic.
+        let _ = confidence_from_cache_age(Some(86400), 0.0);
+        let _ = confidence_from_cache_age(Some(0), 0.0);
+        let _ = confidence_from_cache_age(Some(0), -1.0);
     }
 
     #[test]

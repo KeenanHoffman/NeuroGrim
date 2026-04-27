@@ -229,12 +229,24 @@ pub fn build_cmdb_envelope(
         ),
     ];
 
+    // E-B2-1 C12: opt-in envelope-supplied confidence. Registry
+    // metadata cache has a 7-day TTL; cache-age within that window
+    // signals graceful staleness to operators. Map
+    // oldest_cache_age_seconds → exponential decay with ttl_days=7.0
+    // (matches the registry cache lifetime). When None (all-live
+    // or no-queries), helper returns None and the aggregator falls
+    // back to age-decay of meta.updated_at.
+    let confidence = neurogrim_core::confidence::confidence_from_cache_age(
+        metadata_result.oldest_cache_age_seconds,
+        7.0,
+    );
+
     crate::cmdb::build_cmdb(
         "supply-chain-vigilance",
         score_value as u8,
         cmdb_findings,
         Some(extras),
-        None,
+        confidence,
     )
 }
 

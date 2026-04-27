@@ -433,5 +433,16 @@ pub async fn analyze_supply_chain_sca(project_root: &str) -> Value {
                128+ unit tests + 17 integration tests all green."),
     ));
 
-    crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras), None)
+    // E-B2-1 C12: opt-in envelope-supplied confidence. The OSV cache
+    // has a 24h TTL; cache-age beyond fresh signals "we're using older
+    // CVE data". Map oldest_cache_age_seconds → exponential decay with
+    // ttl_days=1.0 (matches OSV cache lifetime). When oldest_cache_age
+    // is None (all-live or no-queries), helper returns None and the
+    // aggregator falls back to age-decay of meta.updated_at.
+    let confidence = neurogrim_core::confidence::confidence_from_cache_age(
+        osv_result.oldest_cache_age_seconds,
+        1.0,
+    );
+
+    crate::cmdb::build_cmdb("supply-chain-sca", score, findings, Some(extras), confidence)
 }
