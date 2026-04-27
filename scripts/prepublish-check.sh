@@ -100,9 +100,16 @@ check_license_files() {
 check_adoption_surface() {
   echo
   blue "== Adoption surface =="
+  # Note: release-notes file uses the short-version convention
+  # (e.g., v3.0-rc.1.md, not 3.0.0-rc.1.md) per CHANGELOG +
+  # BEFORE-PUBLIC-RELEASE + publish-day-runbook cross-references.
+  # Pre-PRE-RELEASE-2026-04-26 the script derived this path from
+  # EXPECTED_VERSION which produced the wrong format and silently
+  # failed the gate. Hardcoded to match the actual filename
+  # convention; bump alongside EXPECTED_VERSION for releases.
   local files=(
     "$REPO_ROOT/docs/getting-started.md"
-    "$REPO_ROOT/docs/release-notes/${EXPECTED_VERSION}.md"
+    "$REPO_ROOT/docs/release-notes/v3.0-rc.1.md"
     "$REPO_ROOT/examples/hello-brain/README.md"
     "$REPO_ROOT/examples/hello-brain/brain-registry.json"
     "$REPO_ROOT/examples/hello-brain/src/main.py"
