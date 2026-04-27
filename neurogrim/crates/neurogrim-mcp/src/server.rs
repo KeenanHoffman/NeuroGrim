@@ -7,6 +7,7 @@ use neurogrim_core::correlation::{
     IncidentLedgerEntry,
 };
 use neurogrim_core::registry::{BrainRegistry, ExportedVariable};
+use neurogrim_core::calibration_ledger::auto_trigger_calibration_writes;
 use neurogrim_core::scoring::{build_scorecard, CmdbData};
 use neurogrim_core::trajectory::compute_trajectory;
 use neurogrim_core::types::ScoreSnapshot;
@@ -114,6 +115,17 @@ impl BrainServer {
         }
 
         let scorecard = build_scorecard(&self.registry, &cmdb_data, now);
+
+        // E-B2-2 C7 — auto-trigger plumbing for per-domain calibration
+        // ledger (§17.3). Default-off; per-domain opt-in;
+        // domain-calibration recursion guard hard-coded (§17.9). Errors
+        // logged + skipped to preserve scoring liveness.
+        let _ = auto_trigger_calibration_writes(
+            &self.registry,
+            &scorecard,
+            &HashMap::new(),
+            &self.project_root,
+        );
 
         // Domain variables
         let mut raw_cmdbs: HashMap<String, serde_json::Value> = HashMap::new();

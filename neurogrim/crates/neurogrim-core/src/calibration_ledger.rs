@@ -494,6 +494,208 @@ pub fn now_ts() -> f64 {
     now.timestamp() as f64 + (now.timestamp_subsec_nanos() as f64) / 1e9
 }
 
+// ─── Auto-trigger plumbing (E-B2-2 C7, §17.3 hot-path integration) ────
+
+/// The well-known domain key whose ledger MUST never receive
+/// auto-fired entries (§17.9 recursion guard). Hard-coded per spec
+/// to close the bootstrap-loop class of failure: a sensor that
+/// scores its own ledger MUST NOT also write to it on score time.
+pub const RECURSION_GUARDED_DOMAIN: &str = "domain-calibration";
+
+/// Inspect a freshly-built scorecard and append `pending` entries
+/// for every domain whose `calibration_trigger` fires (§17.3).
+/// Called from `build_scorecard`'s consumers (CLI + MCP) immediately
+/// after scoring completes.
+///
+/// **Default-off invariant.** If
+/// `registry.config.enable_calibration_writes == false` (the spec
+/// §17.3 default), this function does nothing and returns an empty
+/// Vec. NO ledger I/O happens.
+///
+/// **Per-domain opt-in.** Even when the flag is on, a domain's
+/// auto-trigger only fires when its `calibration_trigger` is
+/// `OutOfExpectedRange` or `SignalClassFired`. `Manual` (the safe
+/// default) and `TrajectorySwing` (deferred to v2) skip silently.
+///
+/// **Recursion guard (§17.9).** The `domain-calibration` domain
+/// key is hard-coded to never auto-fire — a sensor that scores its
+/// own ledger MUST NOT also write to it on score time.
+///
+/// **Dedup.** When a domain already has at least one open pending
+/// entry, the auto-trigger skips even if the trigger condition
+/// matches. Prevents pile-up storms when a noisy domain's score
+/// drifts below threshold for many consecutive runs while the
+/// operator is inattentive. Operator can clear via the CLI's
+/// `triage` action.
+///
+/// **Failure isolation.** Per-domain write errors are logged via
+/// `tracing::warn!` and skipped. The function never propagates a
+/// write error — auto-trigger MUST NOT crash scoring.
+///
+/// **Output.** Returns the entries that were successfully appended
+/// (for diagnostics). The caller MAY log/print these; v1 callers
+/// in `context.rs` and `server.rs` discard the result.
+///
+/// **`findings_by_domain`.** Map from domain key → list of CMDB
+/// finding names emitted by the sensor on this run. Used for the
+/// `SignalClassFired` trigger variant. v1 production callers
+/// (CLI + MCP) pass an empty map; per-domain integration is a
+/// follow-on. The synthetic test suite passes a non-empty map to
+/// exercise the SignalClassFired path.
+pub fn auto_trigger_calibration_writes(
+    registry: &BrainRegistry,
+    scorecard: &crate::types::Scorecard,
+    findings_by_domain: &std::collections::HashMap<String, Vec<String>>,
+    project_root: &Path,
+) -> Vec<PendingEntry> {
+    if !registry.config.enable_calibration_writes {
+        return Vec::new();
+    }
+
+    let mut written = Vec::new();
+    for (domain, ds) in &scorecard.domains {
+        // §17.9 recursion guard — hard-coded skip.
+        if domain == RECURSION_GUARDED_DOMAIN {
+            continue;
+        }
+
+        let definition = match registry.config.domain_definitions.get(domain) {
+            Some(d) => d,
+            None => continue,
+        };
+        let trigger = match &definition.calibration_trigger {
+            Some(t) => t,
+            None => continue,
+        };
+
+        let pending_opt = match trigger {
+            CalibrationTrigger::Manual | CalibrationTrigger::TrajectorySwing { .. } => None,
+            CalibrationTrigger::OutOfExpectedRange { min, max } => {
+                build_out_of_range_pending(domain, ds, *min, *max)
+            }
+            CalibrationTrigger::SignalClassFired { signal_kinds } => {
+                build_signal_class_pending(domain, ds, signal_kinds, findings_by_domain)
+            }
+        };
+
+        let pending = match pending_opt {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let path = default_ledger_path(project_root, domain);
+
+        // Dedup: skip if domain already has ANY open pending. Reading
+        // is cheap; this prevents pile-up storms during operator
+        // inattention while preserving "first signal still visible."
+        match read_all(&path) {
+            Ok(existing) => {
+                let folded = fold(&existing);
+                if !folded.open_pending.is_empty() {
+                    tracing::debug!(
+                        "calibration auto-trigger: skipping {domain} — \
+                         {} open pending entries already present",
+                        folded.open_pending.len()
+                    );
+                    continue;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "calibration auto-trigger: read failed for {domain} ({:#}); \
+                     skipping (read error MUST NOT crash scoring)",
+                    e
+                );
+                continue;
+            }
+        }
+
+        match append(&path, &LedgerEntry::Pending(pending.clone())) {
+            Ok(()) => {
+                tracing::info!(
+                    "calibration auto-trigger: appended pending for {domain} \
+                     (trigger={}, score={})",
+                    pending.trigger_signal_kind,
+                    pending.actual_score
+                );
+                written.push(pending);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "calibration auto-trigger: append failed for {domain} ({:#}); \
+                     skipping (write error MUST NOT crash scoring)",
+                    e
+                );
+            }
+        }
+    }
+    written
+}
+
+/// Build a pending entry for `OutOfExpectedRange` if the domain's
+/// effective_score is outside `[min, max]`. Returns `None` when the
+/// score is in range.
+fn build_out_of_range_pending(
+    domain: &str,
+    ds: &crate::types::DomainScore,
+    min: u8,
+    max: u8,
+) -> Option<PendingEntry> {
+    let raw_score = ds.effective_score.value();
+    // effective_score is in [0, 100] post-clamp by Score::new; cast
+    // is safe.
+    let score: u8 = raw_score.clamp(0, 100) as u8;
+    if score >= min && score <= max {
+        return None;
+    }
+    let trigger_kind = if score < min {
+        format!("out-of-expected-range:below:{min}")
+    } else {
+        format!("out-of-expected-range:above:{max}")
+    };
+    Some(PendingEntry {
+        ts: now_ts(),
+        schema_version: "1".to_string(),
+        domain: domain.to_string(),
+        domain_family: DomainFamily::DomainCalibration,
+        trigger_signal_kind: trigger_kind,
+        actual_score: score,
+        expected_score_lower: Some(min),
+        expected_score_upper: Some(max),
+        context_notes: None,
+        context_artifacts: vec![],
+    })
+}
+
+/// Build a pending entry for `SignalClassFired` if any of the
+/// domain's findings matches one of the configured `signal_kinds`.
+/// Returns `None` when no match is found OR no findings were
+/// supplied for this domain.
+fn build_signal_class_pending(
+    domain: &str,
+    ds: &crate::types::DomainScore,
+    signal_kinds: &[String],
+    findings_by_domain: &std::collections::HashMap<String, Vec<String>>,
+) -> Option<PendingEntry> {
+    let findings = findings_by_domain.get(domain)?;
+    let matched = findings.iter().find(|f| signal_kinds.iter().any(|k| k == *f))?;
+
+    let raw_score = ds.effective_score.value();
+    let score: u8 = raw_score.clamp(0, 100) as u8;
+    Some(PendingEntry {
+        ts: now_ts(),
+        schema_version: "1".to_string(),
+        domain: domain.to_string(),
+        domain_family: DomainFamily::DomainCalibration,
+        trigger_signal_kind: format!("signal-class-fired:{matched}"),
+        actual_score: score,
+        expected_score_lower: None,
+        expected_score_upper: None,
+        context_notes: None,
+        context_artifacts: vec![],
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -852,5 +1054,456 @@ mod tests {
             msg.contains("test-health"),
             "error message should list known domains for the operator; got: {msg}"
         );
+    }
+
+    // ─── auto_trigger_calibration_writes (E-B2-2 C7) ──────────────
+
+    use crate::types::{Confidence, DomainScore, Score, Scorecard, Weight};
+
+    /// Build a registry value with domain weights + per-domain
+    /// calibration_trigger config. Each (domain, weight, trigger)
+    /// tuple becomes a domain definition in the resulting registry.
+    fn make_registry_with_triggers(
+        enable_writes: bool,
+        domains: &[(&str, f64, Option<CalibrationTrigger>)],
+    ) -> BrainRegistry {
+        let mut weights = serde_json::Map::new();
+        let mut defs = serde_json::Map::new();
+        for (d, w, trigger) in domains {
+            weights.insert(d.to_string(), serde_json::Value::from(*w));
+            let mut def = serde_json::Map::new();
+            def.insert(
+                "scoring_source".to_string(),
+                serde_json::json!({ "type": "cmdb", "path": format!(".claude/{}-cmdb.json", d) }),
+            );
+            if let Some(t) = trigger {
+                def.insert(
+                    "calibration_trigger".to_string(),
+                    serde_json::to_value(t).unwrap(),
+                );
+            }
+            defs.insert(d.to_string(), serde_json::Value::Object(def));
+        }
+        let json = serde_json::json!({
+            "meta": {
+                "schema_version": "2",
+                "description": "C7 auto-trigger test fixture",
+                "updated_by": "test"
+            },
+            "config": {
+                "enable_calibration_writes": enable_writes,
+                "domain_weights": serde_json::Value::Object(weights),
+                "domain_definitions": serde_json::Value::Object(defs)
+            }
+        });
+        serde_json::from_value(json).unwrap()
+    }
+
+    /// Construct a synthetic Scorecard. Each (domain, score) tuple
+    /// gets a DomainScore with the specified effective_score.
+    fn make_scorecard(domains: &[(&str, i64)]) -> Scorecard {
+        let mut map = std::collections::HashMap::new();
+        for (d, score) in domains {
+            map.insert(
+                d.to_string(),
+                DomainScore {
+                    domain: d.to_string(),
+                    raw_score: Score::new(*score),
+                    confidence: Confidence::new(100.0),
+                    effective_score: Score::new(*score),
+                    weight: Weight::new(0.0), // advisory; doesn't matter for trigger logic
+                    trajectory: None,
+                },
+            );
+        }
+        Scorecard {
+            unified_score: Score::new(50),
+            domains: map,
+            scored_at: Utc::now(),
+            floor_applied: None,
+        }
+    }
+
+    #[test]
+    fn auto_trigger_no_op_when_global_flag_disabled() {
+        // Default-off invariant: when enable_calibration_writes = false,
+        // NO ledger I/O happens regardless of per-domain triggers.
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            false, // <-- flag off
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::OutOfExpectedRange { min: 70, max: 100 }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 30)]); // out of range
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert!(written.is_empty(), "no entries with flag off");
+        // Verify no ledger file was created either.
+        let path = default_ledger_path(dir.path(), "test-health");
+        assert!(!path.exists(), "no ledger file should be created");
+    }
+
+    #[test]
+    fn auto_trigger_fires_on_score_below_min() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::OutOfExpectedRange { min: 70, max: 100 }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 50)]); // below min
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert_eq!(written.len(), 1);
+        let p = &written[0];
+        assert_eq!(p.domain, "test-health");
+        assert_eq!(p.actual_score, 50);
+        assert!(p.trigger_signal_kind.starts_with("out-of-expected-range:below"));
+        assert_eq!(p.expected_score_lower, Some(70));
+        assert_eq!(p.expected_score_upper, Some(100));
+
+        // Verify the entry made it to disk.
+        let path = default_ledger_path(dir.path(), "test-health");
+        let entries = read_all(&path).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].kind(), "pending");
+    }
+
+    #[test]
+    fn auto_trigger_fires_on_score_above_max() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::OutOfExpectedRange { min: 0, max: 80 }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 95)]); // above max
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert_eq!(written.len(), 1);
+        assert!(written[0].trigger_signal_kind.starts_with("out-of-expected-range:above"));
+    }
+
+    #[test]
+    fn auto_trigger_in_range_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::OutOfExpectedRange { min: 0, max: 100 }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 50)]); // in range
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert!(written.is_empty(), "in-range scores must not fire");
+    }
+
+    #[test]
+    fn auto_trigger_manual_trigger_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[("test-health", 0.0, Some(CalibrationTrigger::Manual))],
+        );
+        // Score way outside any sensible range — Manual still skips.
+        let scorecard = make_scorecard(&[("test-health", 0)]);
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert!(written.is_empty(), "Manual trigger never auto-fires");
+    }
+
+    #[test]
+    fn auto_trigger_no_trigger_configured_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[("test-health", 0.0, None)], // no trigger configured
+        );
+        let scorecard = make_scorecard(&[("test-health", 0)]);
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert!(
+            written.is_empty(),
+            "absent calibration_trigger must skip silently (no implicit default)"
+        );
+    }
+
+    #[test]
+    fn auto_trigger_trajectory_swing_v1_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::TrajectorySwing {
+                    window_days: 14,
+                    magnitude: 30,
+                }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 0)]);
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert!(
+            written.is_empty(),
+            "TrajectorySwing is reserved for v2 — must no-op in v1"
+        );
+    }
+
+    #[test]
+    fn auto_trigger_recursion_guard_skips_self() {
+        // §17.9 recursion guard: domain-calibration's OWN trigger
+        // is HARD-CODED Manual at the auto-trigger layer, regardless
+        // of what the registry says. This is THE bootstrap-loop
+        // closure.
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "domain-calibration", // <-- the guarded key
+                0.0,
+                // Even with a deliberately-broad OutOfExpectedRange that
+                // would normally fire on score=50, the recursion guard
+                // MUST prevent any write.
+                Some(CalibrationTrigger::OutOfExpectedRange { min: 70, max: 100 }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("domain-calibration", 50)]);
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert!(
+            written.is_empty(),
+            "domain-calibration MUST never auto-fire entries against itself (§17.9)"
+        );
+        // Verify NO ledger file was created.
+        let path = default_ledger_path(dir.path(), "domain-calibration");
+        assert!(!path.exists(), "recursion guard must prevent any I/O");
+    }
+
+    #[test]
+    fn auto_trigger_signal_class_fired_with_matching_finding() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::SignalClassFired {
+                    signal_kinds: vec!["pattern:typosquat".to_string()],
+                }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 80)]);
+        let mut findings = std::collections::HashMap::new();
+        findings.insert(
+            "test-health".to_string(),
+            vec!["pattern:typosquat".to_string()],
+        );
+        let written =
+            auto_trigger_calibration_writes(&registry, &scorecard, &findings, dir.path());
+        assert_eq!(written.len(), 1);
+        assert_eq!(
+            written[0].trigger_signal_kind,
+            "signal-class-fired:pattern:typosquat"
+        );
+    }
+
+    #[test]
+    fn auto_trigger_signal_class_fired_no_match_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::SignalClassFired {
+                    signal_kinds: vec!["pattern:typosquat".to_string()],
+                }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 80)]);
+        let mut findings = std::collections::HashMap::new();
+        findings.insert(
+            "test-health".to_string(),
+            vec!["pattern:other-thing".to_string()], // doesn't match
+        );
+        let written =
+            auto_trigger_calibration_writes(&registry, &scorecard, &findings, dir.path());
+        assert!(written.is_empty());
+    }
+
+    #[test]
+    fn auto_trigger_signal_class_fired_no_findings_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::SignalClassFired {
+                    signal_kinds: vec!["pattern:typosquat".to_string()],
+                }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 80)]);
+        // Empty findings map (the v1 production path).
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert!(written.is_empty());
+    }
+
+    #[test]
+    fn auto_trigger_dedups_when_open_pending_exists() {
+        // Pre-seed the ledger with one open pending entry. A second
+        // out-of-range score on the same domain MUST skip — pile-up
+        // prevention.
+        let dir = tempfile::tempdir().unwrap();
+        let path = default_ledger_path(dir.path(), "test-health");
+        let pre_existing = make_pending(now_ts() - 3600.0, "test-health");
+        append(&path, &LedgerEntry::Pending(pre_existing.clone())).unwrap();
+
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::OutOfExpectedRange { min: 70, max: 100 }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 30)]); // would fire
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert!(
+            written.is_empty(),
+            "dedup: domain has open pending → second auto-fire must skip"
+        );
+        // Verify ledger still has just the original entry.
+        let entries = read_all(&path).unwrap();
+        assert_eq!(entries.len(), 1);
+    }
+
+    #[test]
+    fn auto_trigger_fires_after_pending_triaged() {
+        // Pre-seed: one pending + one triaged that supersedes it.
+        // dedup MUST recognize there are 0 OPEN pending → next
+        // out-of-range fire is allowed.
+        let dir = tempfile::tempdir().unwrap();
+        let path = default_ledger_path(dir.path(), "test-health");
+        let pending = make_pending(now_ts() - 7200.0, "test-health");
+        let triaged = make_triaged(now_ts() - 3600.0, pending.ts, "test-health");
+        append(&path, &LedgerEntry::Pending(pending.clone())).unwrap();
+        append(&path, &LedgerEntry::Triaged(triaged)).unwrap();
+
+        let registry = make_registry_with_triggers(
+            true,
+            &[(
+                "test-health",
+                0.0,
+                Some(CalibrationTrigger::OutOfExpectedRange { min: 70, max: 100 }),
+            )],
+        );
+        let scorecard = make_scorecard(&[("test-health", 50)]); // out of range
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert_eq!(
+            written.len(),
+            1,
+            "after triage clears the backlog, next signal CAN fire"
+        );
+    }
+
+    #[test]
+    fn auto_trigger_multi_domain_independence() {
+        // Three domains: one OutOfExpectedRange (fires), one Manual
+        // (no-op), one with no trigger (no-op). Ledgers are
+        // per-domain; each is independent.
+        let dir = tempfile::tempdir().unwrap();
+        let registry = make_registry_with_triggers(
+            true,
+            &[
+                (
+                    "test-health",
+                    0.0,
+                    Some(CalibrationTrigger::OutOfExpectedRange { min: 70, max: 100 }),
+                ),
+                ("code-quality", 0.0, Some(CalibrationTrigger::Manual)),
+                ("coherence", 0.0, None),
+            ],
+        );
+        let scorecard = make_scorecard(&[
+            ("test-health", 30),
+            ("code-quality", 30),
+            ("coherence", 30),
+        ]);
+        let written = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &std::collections::HashMap::new(),
+            dir.path(),
+        );
+        assert_eq!(written.len(), 1);
+        assert_eq!(written[0].domain, "test-health");
+
+        // Verify per-domain ledger files.
+        assert!(default_ledger_path(dir.path(), "test-health").exists());
+        assert!(!default_ledger_path(dir.path(), "code-quality").exists());
+        assert!(!default_ledger_path(dir.path(), "coherence").exists());
     }
 }

@@ -9,6 +9,7 @@ use neurogrim_core::correlation::{
 use neurogrim_core::governance::build_domain_recommendations;
 use neurogrim_core::learning::{compute_all_effectiveness, ProposalLedgerEntry};
 use neurogrim_core::registry::{BrainRegistry, ExportedVariable};
+use neurogrim_core::calibration_ledger::auto_trigger_calibration_writes;
 use neurogrim_core::scoring::{build_scorecard, CmdbData};
 use neurogrim_core::trajectory::compute_trajectory;
 use neurogrim_core::types::ScoreSnapshot;
@@ -50,6 +51,20 @@ impl BrainContext {
         let now = Utc::now();
         let cmdb_data = load_cmdb_data(&registry, &project_root).await;
         let scorecard = build_scorecard(&registry, &cmdb_data, now);
+
+        // E-B2-2 C7 — auto-trigger plumbing for the per-domain calibration
+        // ledger (§17.3). Default-off via `enable_calibration_writes`;
+        // per-domain opt-in via `calibration_trigger`. Recursion guard
+        // (§17.9) hard-coded for the `domain-calibration` domain itself.
+        // Errors are logged + skipped — auto-trigger MUST NOT crash scoring.
+        // v1 passes empty findings map; SignalClassFired auto-fire from
+        // production paths is per-domain follow-on work.
+        let _ = auto_trigger_calibration_writes(
+            &registry,
+            &scorecard,
+            &HashMap::new(),
+            &project_root,
+        );
 
         // Load history and ledgers
         let history = load_json_file::<Vec<ScoreSnapshot>>(
