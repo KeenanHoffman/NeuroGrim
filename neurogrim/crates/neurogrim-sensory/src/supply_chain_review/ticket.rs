@@ -152,6 +152,92 @@ pub fn read_one(path: &Path) -> Result<ReviewTicket> {
     Ok(t)
 }
 
+/// Load only the OPEN tickets in the tickets directory.
+///
+/// 2026-04-26 PRE-RELEASE Round 3 R3-4 fix (D3-I1): when callers
+/// (like `cli_list --open-only`) need only the open tickets, a
+/// fast-path that skips the full serde parse on resolved tickets
+/// avoids unnecessary JSON-tree work.
+///
+/// Mechanism: `ReviewTicket.resolved_at` is serialized with
+/// `#[serde(skip_serializing_if = "Option::is_none")]`, so the
+/// literal string `"resolved_at"` appears in the JSON file ONLY
+/// when the ticket has been resolved. We string-search the raw
+/// bytes first; if absent, the ticket is definitely open and we
+/// parse + push. If present, we still need a full parse (to
+/// capture the rest of the ticket data) but at least we know
+/// before parsing that it's resolved-vs-open.
+///
+/// On a directory of N tickets where M are resolved, this skips
+/// up to M serde_json parses entirely — small per-ticket but
+/// adds up on archives with hundreds of resolved tickets.
+///
+/// Returns empty Vec if the directory doesn't exist (first-run
+/// posture, same as `read_all`).
+pub fn read_open_only(tickets_dir: &Path) -> Result<Vec<ReviewTicket>> {
+    if !tickets_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for entry_result in fs::read_dir(tickets_dir).context("ticket: read_dir")? {
+        let entry = match entry_result {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!("ticket: read_dir entry error: {:#}", e);
+                continue;
+            }
+        };
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+
+        let raw = match fs::read_to_string(&path) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(
+                    "ticket: read failed for {} ({:#})",
+                    path.display(),
+                    e
+                );
+                continue;
+            }
+        };
+
+        // Fast-path: if the literal `"resolved_at"` string is
+        // absent, the ticket is open (per the
+        // skip_serializing_if attribute on ReviewTicket.resolved_at).
+        // Skip the parse entirely if the file is clearly resolved.
+        if raw.contains("\"resolved_at\"") {
+            // Resolved ticket — skip without parsing the full
+            // structure. (We still need to parse if we want the
+            // ticket data, but for read_open_only we intentionally
+            // discard resolved ones.)
+            continue;
+        }
+
+        match serde_json::from_str::<ReviewTicket>(&raw) {
+            Ok(t) => {
+                // Defensive double-check: if a future change
+                // serializes resolved_at differently, the parse
+                // result will still expose it. Cheap to verify.
+                if t.is_open() {
+                    out.push(t);
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "ticket: parse failed for {} ({:#})",
+                    path.display(),
+                    e
+                );
+            }
+        }
+    }
+    out.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(out)
+}
+
 /// Write a ticket to disk. Atomic via temp-then-rename.
 pub fn write_one(tickets_dir: &Path, ticket: &ReviewTicket) -> Result<()> {
     fs::create_dir_all(tickets_dir).context("ticket: mkdir")?;
@@ -263,6 +349,55 @@ mod tests {
         let loaded = read_all(dir.path()).unwrap();
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].id, "t-2026-04-26-0001");
+    }
+
+    #[test]
+    fn read_open_only_skips_resolved_tickets() {
+        // 2026-04-26 PRE-RELEASE Round 3 R3-4 (D3-I1) regression:
+        // read_open_only must return ONLY tickets without a
+        // resolved_at field. Mix of open + resolved + read_all
+        // sanity: read_all returns both, read_open_only returns
+        // only the open one.
+        let dir = tempfile::tempdir().unwrap();
+
+        let open_t = open_ticket("t-r3-open-1", "vigilance:typosquat-proximity");
+        write_one(dir.path(), &open_t).unwrap();
+
+        let mut resolved_t = open_ticket("t-r3-resolved-1", "vigilance:exfil-indicator");
+        resolved_t.resolved_at = Some(Utc::now());
+        resolved_t.resolution = Some("accept".to_string());
+        resolved_t.resolved_by = Some("alice".to_string());
+        resolved_t.resolution_notes = Some("FP, package is well-known".to_string());
+        write_one(dir.path(), &resolved_t).unwrap();
+
+        let all = read_all(dir.path()).unwrap();
+        assert_eq!(all.len(), 2, "read_all returns both");
+
+        let open_only = read_open_only(dir.path()).unwrap();
+        assert_eq!(open_only.len(), 1, "read_open_only returns only the open");
+        assert_eq!(open_only[0].id, "t-r3-open-1");
+    }
+
+    #[test]
+    fn read_open_only_returns_empty_when_dir_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let nonexistent = dir.path().join("never-created");
+        let result = read_open_only(&nonexistent).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn read_open_only_handles_all_resolved() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut t = open_ticket("t-r3-only-resolved", "vigilance:typosquat-proximity");
+        t.resolved_at = Some(Utc::now());
+        t.resolution = Some("reject".to_string());
+        t.resolved_by = Some("bob".to_string());
+        t.resolution_notes = Some("removed".to_string());
+        write_one(dir.path(), &t).unwrap();
+
+        let open_only = read_open_only(dir.path()).unwrap();
+        assert!(open_only.is_empty(), "no open tickets to return");
     }
 
     #[test]

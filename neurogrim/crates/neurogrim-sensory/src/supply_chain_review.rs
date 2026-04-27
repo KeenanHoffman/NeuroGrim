@@ -381,6 +381,13 @@ pub fn cli_create(
 }
 
 /// `neurogrim sca-review list` — print tickets to a writer.
+///
+/// 2026-04-26 PRE-RELEASE Round 3 R3-4 fix (D3-I1): when
+/// `only_open=true`, use the fast-path `ticket::read_open_only`
+/// which skips serde_json parsing on resolved tickets via a
+/// raw-string check for `"resolved_at"`. On directories with
+/// many resolved tickets, this avoids unnecessary JSON-tree
+/// allocations.
 pub fn cli_list(
     project_root: &Path,
     only_open: bool,
@@ -388,12 +395,12 @@ pub fn cli_list(
 ) -> Result<usize, anyhow::Error> {
     let claude_root = resolve_claude_root(project_root);
     let tickets_dir = ticket::default_tickets_dir(&claude_root);
-    let tickets = ticket::read_all(&tickets_dir)?;
-    let filtered: Vec<&ticket::ReviewTicket> = if only_open {
-        tickets.iter().filter(|t| t.is_open()).collect()
+    let tickets = if only_open {
+        ticket::read_open_only(&tickets_dir)?
     } else {
-        tickets.iter().collect()
+        ticket::read_all(&tickets_dir)?
     };
+    let filtered: Vec<&ticket::ReviewTicket> = tickets.iter().collect();
     if filtered.is_empty() {
         writeln!(out, "(no {} tickets)", if only_open { "open" } else { "" }.trim())?;
         return Ok(0);
