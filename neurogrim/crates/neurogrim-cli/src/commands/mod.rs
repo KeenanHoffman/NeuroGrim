@@ -8,6 +8,7 @@ pub mod context;
 pub mod disposition;
 pub mod doctor;
 pub mod domain_calibration;
+pub mod explain;
 pub mod federated_pattern;
 pub mod federation;
 pub mod health;

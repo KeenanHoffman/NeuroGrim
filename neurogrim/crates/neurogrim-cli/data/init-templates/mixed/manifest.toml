@@ -39,6 +39,8 @@ suggested_abstract = [
 "deploy-readiness" = 0.30
 
 [skills]
+# v3.2: `neurogrim-onboarding` is the four-command orientation router for
+# agents entering the project for the first time.
 copy = [
     "hats",
     "imagination-mode",
@@ -46,6 +48,7 @@ copy = [
     "rubber-duck",
     "human-comms",
     "write-skill",
+    "neurogrim-onboarding",
 ]
 
 [safety_invariants]

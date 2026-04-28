@@ -30,8 +30,9 @@ abstract_examples = [
 ]
 
 [skills]
-# 6 general-purpose skills bundled with neurogrim that are useful for any
-# project (abstract or otherwise).
+# 7 general-purpose skills bundled with neurogrim that are useful for any
+# project (abstract or otherwise). v3.2 added `neurogrim-onboarding` —
+# the four-command orientation router for agents on first entry.
 copy = [
     "hats",
     "imagination-mode",
@@ -39,6 +40,7 @@ copy = [
     "rubber-duck",
     "human-comms",
     "write-skill",
+    "neurogrim-onboarding",
 ]
 
 [safety_invariants]

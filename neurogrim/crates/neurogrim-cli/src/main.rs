@@ -122,6 +122,15 @@ enum Commands {
         plain: bool,
     },
 
+    /// Print bundled methodology primer for the named topic (v3.2 B).
+    ///
+    /// Eight self-contained topic files ship inside the binary
+    /// (methodology, domain, sensor, hat, scoring, federation, cli,
+    /// culture). Run `neurogrim explain` (no topic) to list topics
+    /// with one-line summaries. Each topic stands alone — read in any
+    /// order. Source of truth: `crates/neurogrim-cli/data/explain/`.
+    Explain(commands::explain::Args),
+
     /// Start the Brain as an MCP server
     #[command(visible_alias = "summon")]
     Serve {
@@ -364,6 +373,7 @@ async fn main() -> Result<()> {
         Commands::Narrate { registry, hat } => commands::narrate::run(&registry, hat).await,
         Commands::Validate { registry } => commands::validate::run(&registry).await,
         Commands::Doctor { registry, plain } => commands::doctor::run(&registry, plain).await,
+        Commands::Explain(args) => commands::explain::run(args).await,
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
         Commands::Init {

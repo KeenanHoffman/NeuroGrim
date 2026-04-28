@@ -44,6 +44,7 @@ suggested_advisory = [
 
 [skills]
 # Same general-purpose set as abstract-project + the code-relevant skills.
+# v3.2: `neurogrim-onboarding` is the four-command orientation router.
 copy = [
     "hats",
     "imagination-mode",
@@ -51,6 +52,7 @@ copy = [
     "rubber-duck",
     "human-comms",
     "write-skill",
+    "neurogrim-onboarding",
 ]
 
 [safety_invariants]

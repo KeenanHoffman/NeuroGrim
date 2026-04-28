@@ -78,6 +78,8 @@ const NORTH_STAR_SKILL: &str = include_str!("../../data/init-skills/north-star/S
 const RUBBER_DUCK_SKILL: &str = include_str!("../../data/init-skills/rubber-duck/SKILL.md");
 const HUMAN_COMMS_SKILL: &str = include_str!("../../data/init-skills/human-comms/SKILL.md");
 const WRITE_SKILL_SKILL: &str = include_str!("../../data/init-skills/write-skill/SKILL.md");
+const NEUROGRIM_ONBOARDING_SKILL: &str =
+    include_str!("../../data/init-skills/neurogrim-onboarding/SKILL.md");
 
 /// Bundled file: relative path within `.claude/skills/<skill-name>/` and
 /// its content. Used by `materialize_skills` to write out all files for
@@ -116,6 +118,9 @@ fn bundled_skill_files(name: &str) -> Option<&'static [BundledSkillFile]> {
     static WRITE_SKILL: &[BundledSkillFile] = &[
         BundledSkillFile { relative_path: "SKILL.md", content: WRITE_SKILL_SKILL },
     ];
+    static NEUROGRIM_ONBOARDING: &[BundledSkillFile] = &[
+        BundledSkillFile { relative_path: "SKILL.md", content: NEUROGRIM_ONBOARDING_SKILL },
+    ];
     match name {
         "hats" => Some(HATS),
         "imagination-mode" => Some(IMAGINATION_MODE),
@@ -123,6 +128,7 @@ fn bundled_skill_files(name: &str) -> Option<&'static [BundledSkillFile]> {
         "rubber-duck" => Some(RUBBER_DUCK),
         "human-comms" => Some(HUMAN_COMMS),
         "write-skill" => Some(WRITE_SKILL),
+        "neurogrim-onboarding" => Some(NEUROGRIM_ONBOARDING),
         _ => None,
     }
 }
@@ -257,7 +263,7 @@ pub async fn scaffold_full(cfg: &ScaffoldConfig) -> Result<()> {
                 anyhow!(
                     "skill '{skill}' is not in the bundled set. \
                      Bundled skills: hats, imagination-mode, north-star, \
-                     rubber-duck, human-comms, write-skill."
+                     rubber-duck, human-comms, write-skill, neurogrim-onboarding."
                 )
             })?;
             let skill_dir = skills_dir.join(skill);
@@ -548,7 +554,7 @@ mod tests {
 
     #[test]
     fn all_bundled_skills_resolve() {
-        for name in ["hats", "imagination-mode", "north-star", "rubber-duck", "human-comms", "write-skill"] {
+        for name in ["hats", "imagination-mode", "north-star", "rubber-duck", "human-comms", "write-skill", "neurogrim-onboarding"] {
             let files = bundled_skill_files(name)
                 .unwrap_or_else(|| panic!("bundled_skill_files({name}) returned None"));
             assert!(!files.is_empty(), "skill '{name}' has no bundled files");

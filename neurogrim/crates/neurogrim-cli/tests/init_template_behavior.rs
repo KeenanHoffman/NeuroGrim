@@ -71,6 +71,7 @@ fn abstract_project_init_produces_valid_brain() {
         ".claude/skills/rubber-duck/SKILL.md",
         ".claude/skills/human-comms/SKILL.md",
         ".claude/skills/write-skill/SKILL.md",
+        ".claude/skills/neurogrim-onboarding/SKILL.md",
         ".claude/settings.local.json",
         "scripts/record-skill-invocation.sh",
         "CLAUDE.md",
