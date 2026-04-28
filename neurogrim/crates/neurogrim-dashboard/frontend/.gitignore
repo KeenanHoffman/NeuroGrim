@@ -2,4 +2,11 @@ node_modules/
 .vite/
 *.log
 *.tsbuildinfo
+
+# tsc -b emits .d.ts + .js next to each .ts file (vite.config.ts → vite.config.{js,d.ts}).
+# Those are intermediate build artifacts; they don't ship in dist/ and they're regenerated
+# on every `npm run build`.
+vite.config.js
+vite.config.d.ts
+
 # NOTE: dist/ is intentionally NOT gitignored — it's the published artifact.

@@ -78,6 +78,12 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 dist/
+# v3.4 — neurogrim-dashboard's frontend bundle MUST ship with the
+# published crate (rust-embed reads it at compile time; users
+# `cargo install` should not require Node.js). Negation overrides
+# the generic `dist/` ignore above.
+!neurogrim/crates/neurogrim-dashboard/frontend/dist/
+!neurogrim/crates/neurogrim-dashboard/frontend/dist/**
 .venv/
 venv/
 
