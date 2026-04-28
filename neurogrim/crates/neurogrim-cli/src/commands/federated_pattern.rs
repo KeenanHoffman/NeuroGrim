@@ -341,20 +341,19 @@ async fn cmd_emit(
         let peer_origin_hash = anonymized_origin(&peer_brain_id, &today);
         let ts = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
 
-        // Build the synthetic v1 baseline payload. All values are
+        // Build the v3.1 vigilance-driven payload. All values are
         // closed-set or bounded-numeric per the privacy contract; no
         // operator prose is reachable from any --flag in this CLI.
-        // V2 candidate: populate from actual local correlation findings
-        // (BACKLOG B-23). At v1, emission demonstrates the wire format
-        // and exercises the audit trail.
+        // The `feature_vector` is populated from the local
+        // supply-chain-vigilance CMDB findings (count + highest
+        // severity); when no CMDB or no findings exist the function
+        // returns the safe baseline (count=0, Info, window=7) so
+        // emission still proceeds for operators who haven't run the
+        // vigilance sensor yet. v3.1 E-V31-E.
         let payload = FederatedPatternPayload {
             schema_version: "1".to_string(),
             pattern_kind: PatternKind::VigilancePattern,
-            feature_vector: FeatureVector {
-                numeric_count: 1,
-                severity_class: SeverityClass::Info,
-                observation_window_days: 7,
-            },
+            feature_vector: read_vigilance_features(project_root),
             anonymized_origin: local_origin_hash.clone(),
             origin_set: vec![local_origin_hash.clone()],
             peer_brain_id: peer_origin_hash.clone(),
@@ -694,6 +693,100 @@ fn append_jsonl_line(path: &Path, line: &str) -> Result<()> {
     Ok(())
 }
 
+/// Read the local supply-chain-vigilance CMDB and aggregate its
+/// findings into a `FeatureVector` for federated transmission (v3.1
+/// E-V31-E real-payload migration; replaces the v1 synthetic
+/// baseline with operator-meaningful signal).
+///
+/// Mapping (closed-set, privacy-safe):
+///
+/// - `numeric_count` — count of findings in the CMDB.
+/// - `severity_class` — highest severity observed across findings,
+///   mapping CMDB `status` → `SeverityClass`:
+///     `"info"` → `Info`, `"warning"` → `Medium`, `"critical"` →
+///     `Critical`. Other statuses default to `Info`.
+/// - `observation_window_days` — fixed at 7 (matches the vigilance
+///   sensor's window). Configurable via spec §16.6.1 amendment if
+///   evidence accrues that other windows surface meaningful signal.
+///
+/// Returns the safe-baseline vector (`count=0, Info, window=7`)
+/// when the CMDB:
+/// - is missing (file not found),
+/// - is malformed (parse error),
+/// - has no findings,
+/// - has no `findings` array at all.
+///
+/// This preserves emission behavior for operators who haven't yet
+/// run the vigilance sensor — federation still works in
+/// "demonstration mode" with a baseline payload, just like v1.
+///
+/// Privacy-safe: aggregates only. No per-finding details, no
+/// package names, no semver, no operator-authored strings cross
+/// the wire. The closed-set numeric/enum schema (`FeatureVector`)
+/// is the structural enforcement.
+fn read_vigilance_features(project_root: &str) -> FeatureVector {
+    let cmdb_path = Path::new(project_root)
+        .join(".claude")
+        .join("supply-chain-vigilance-cmdb.json");
+
+    let baseline = FeatureVector {
+        numeric_count: 0,
+        severity_class: SeverityClass::Info,
+        observation_window_days: 7,
+    };
+
+    let Ok(text) = fs::read_to_string(&cmdb_path) else {
+        return baseline;
+    };
+    let Ok(data) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return baseline;
+    };
+    let Some(findings) = data.get("findings").and_then(|v| v.as_array()) else {
+        return baseline;
+    };
+    if findings.is_empty() {
+        return baseline;
+    }
+
+    let count = findings.len() as u32;
+    let max_severity = findings
+        .iter()
+        .filter_map(|f| f.get("status").and_then(|v| v.as_str()))
+        .map(severity_from_status)
+        .max_by_key(|s| severity_rank(*s))
+        .unwrap_or(SeverityClass::Info);
+
+    FeatureVector {
+        numeric_count: count,
+        severity_class: max_severity,
+        observation_window_days: 7,
+    }
+}
+
+/// Map a CMDB finding `status` string to a closed-set severity.
+/// Unrecognized statuses default to `Info` — fail-safe (over-report
+/// would leak; under-report is observability noise but not a
+/// privacy concern).
+fn severity_from_status(status: &str) -> SeverityClass {
+    match status {
+        "critical" => SeverityClass::Critical,
+        "warning" => SeverityClass::Medium,
+        _ => SeverityClass::Info,
+    }
+}
+
+/// Total ordering on `SeverityClass` for max-by-key. Mirrors the
+/// schema's enum ordering Info < Low < Medium < High < Critical.
+fn severity_rank(s: SeverityClass) -> u8 {
+    match s {
+        SeverityClass::Info => 0,
+        SeverityClass::Low => 1,
+        SeverityClass::Medium => 2,
+        SeverityClass::High => 3,
+        SeverityClass::Critical => 4,
+    }
+}
+
 /// Q15 anonymized-origin hash — `sha256(brain_id || "|" || YYYY-MM-DD)`
 /// returned as a 64-character lowercase hex string. Daily-nonce
 /// rotation prevents cross-day identity correlation; same-day self-loop
@@ -930,6 +1023,93 @@ mod tests {
             empty, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "FIPS 180-4 empty-string test vector mismatch"
         );
+    }
+
+    #[test]
+    fn read_vigilance_features_returns_baseline_when_cmdb_missing() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let fv = read_vigilance_features(tmp.path().to_str().unwrap());
+        assert_eq!(fv.numeric_count, 0);
+        assert_eq!(fv.severity_class, SeverityClass::Info);
+        assert_eq!(fv.observation_window_days, 7);
+    }
+
+    #[test]
+    fn read_vigilance_features_returns_baseline_when_findings_empty() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        std::fs::write(
+            tmp.path().join(".claude/supply-chain-vigilance-cmdb.json"),
+            r#"{"score": 100, "findings": []}"#,
+        )
+        .unwrap();
+        let fv = read_vigilance_features(tmp.path().to_str().unwrap());
+        assert_eq!(fv.numeric_count, 0);
+        assert_eq!(fv.severity_class, SeverityClass::Info);
+    }
+
+    #[test]
+    fn read_vigilance_features_aggregates_findings() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        // Mix of statuses: warning + warning + info → 3 findings,
+        // highest severity = Medium (warning).
+        std::fs::write(
+            tmp.path().join(".claude/supply-chain-vigilance-cmdb.json"),
+            r#"{"findings":[
+                {"name":"a","status":"warning","points":10},
+                {"name":"b","status":"warning","points":5},
+                {"name":"c","status":"info","points":0}
+            ]}"#,
+        )
+        .unwrap();
+        let fv = read_vigilance_features(tmp.path().to_str().unwrap());
+        assert_eq!(fv.numeric_count, 3);
+        assert_eq!(fv.severity_class, SeverityClass::Medium);
+        assert_eq!(fv.observation_window_days, 7);
+    }
+
+    #[test]
+    fn read_vigilance_features_picks_highest_severity() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        // info + warning + critical → Critical wins.
+        std::fs::write(
+            tmp.path().join(".claude/supply-chain-vigilance-cmdb.json"),
+            r#"{"findings":[
+                {"name":"a","status":"info"},
+                {"name":"b","status":"warning"},
+                {"name":"c","status":"critical"}
+            ]}"#,
+        )
+        .unwrap();
+        let fv = read_vigilance_features(tmp.path().to_str().unwrap());
+        assert_eq!(fv.numeric_count, 3);
+        assert_eq!(fv.severity_class, SeverityClass::Critical);
+    }
+
+    #[test]
+    fn read_vigilance_features_returns_baseline_when_malformed() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        std::fs::write(
+            tmp.path().join(".claude/supply-chain-vigilance-cmdb.json"),
+            r#"not valid json {{"#,
+        )
+        .unwrap();
+        let fv = read_vigilance_features(tmp.path().to_str().unwrap());
+        assert_eq!(fv.numeric_count, 0);
+        assert_eq!(fv.severity_class, SeverityClass::Info);
+    }
+
+    #[test]
+    fn severity_from_status_maps_known_statuses() {
+        assert_eq!(severity_from_status("info"), SeverityClass::Info);
+        assert_eq!(severity_from_status("warning"), SeverityClass::Medium);
+        assert_eq!(severity_from_status("critical"), SeverityClass::Critical);
+        // Unknown defaults to Info — fail-safe under privacy contract.
+        assert_eq!(severity_from_status("unknown"), SeverityClass::Info);
+        assert_eq!(severity_from_status(""), SeverityClass::Info);
     }
 
     #[test]
