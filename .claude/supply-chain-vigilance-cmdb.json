@@ -1,20 +1,112 @@
 {
-  "ecosystems_scanned": [],
+  "_impl_status": "E-SC-5 (Layer 2 vigilance): all 7 sub-sensors active. typosquat + publish-cadence + maintainer-delta + transitive-surface + signature-gap + binary-reproducibility + exfil-indicator. Registry-metadata 7-day file cache. NO external scanner binaries. Default weight 0.0 (advisory) per spec §16.3.",
+  "ecosystems_scanned": [
+    "crates.io"
+  ],
   "findings": [
     {
-      "detail": "no supported lockfile found at project_root (looked for: Cargo.lock, uv.lock, requirements*.txt, package-lock.json, yarn.lock, pnpm-lock.yaml). Run a lockfile generator and re-run.",
-      "name": "lockfile_read_failed",
-      "points": 0,
-      "status": "error"
+      "detail": "typosquat-proximity [adler2@2.0.1, crates.io] (candidate_typosquat_target=\"adler\", levenshtein_distance=1) — name is one edit from popular package 'adler' (ecosystem: crates.io)",
+      "name": "typosquat-proximity:crates.io:adler2",
+      "points": 25,
+      "status": "warning"
+    },
+    {
+      "detail": "typosquat-proximity [bit-vec@0.6.3, crates.io] (candidate_typosquat_target=\"bitvec\", levenshtein_distance=1) — name is one edit from popular package 'bitvec' (ecosystem: crates.io)",
+      "name": "typosquat-proximity:crates.io:bit-vec",
+      "points": 25,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-acceleration [fastrand@2.4.1, crates.io] (acceleration_ratio_threshold=0.1, gap_leading_to_scanned_days=2, median_historical_gap_days=32, recent_window_days=30) — scanned version 2.4.1 published 16x faster than historical median (32d → 2d gap)",
+      "name": "publish-cadence-acceleration:crates.io:fastrand",
+      "points": 15,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-post-dormancy [fastrand@2.4.1, crates.io] (dormancy_days=482, dormancy_threshold_days=365, post_dormancy_version=\"2.4.0\", recent_window_days=30) — release after 482-day dormancy",
+      "name": "publish-cadence-post-dormancy:crates.io:fastrand",
+      "points": 15,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-post-dormancy [fraction@0.13.1, crates.io] (dormancy_days=709, dormancy_threshold_days=365, post_dormancy_version=\"0.15.4\", recent_window_days=30) — release after 709-day dormancy",
+      "name": "publish-cadence-post-dormancy:crates.io:fraction",
+      "points": 15,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-acceleration [hyper-rustls@0.27.9, crates.io] (acceleration_ratio_threshold=0.1, gap_leading_to_scanned_days=2, median_historical_gap_days=32, recent_window_days=30) — scanned version 0.27.9 published 16x faster than historical median (32d → 2d gap)",
+      "name": "publish-cadence-acceleration:crates.io:hyper-rustls",
+      "points": 15,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-post-dormancy [pkg-config@0.3.33, crates.io] (dormancy_days=404, dormancy_threshold_days=365, post_dormancy_version=\"0.3.33\", recent_window_days=30) — release after 404-day dormancy",
+      "name": "publish-cadence-post-dormancy:crates.io:pkg-config",
+      "points": 15,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-acceleration [toml_parser@1.1.2+spec-1.1.0, crates.io] (acceleration_ratio_threshold=0.1, gap_leading_to_scanned_days=1, median_historical_gap_days=14, recent_window_days=30) — scanned version 1.1.2+spec-1.1.0 published 14x faster than historical median (14d → 1d gap)",
+      "name": "publish-cadence-acceleration:crates.io:toml_parser",
+      "points": 15,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-post-dormancy [zerofrom@0.1.7, crates.io] (dormancy_days=398, dormancy_threshold_days=365, post_dormancy_version=\"0.1.7\", recent_window_days=30) — release after 398-day dormancy",
+      "name": "publish-cadence-post-dormancy:crates.io:zerofrom",
+      "points": 15,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-post-dormancy [zerofrom-derive@0.1.7, crates.io] (dormancy_days=398, dormancy_threshold_days=365, post_dormancy_version=\"0.1.7\", recent_window_days=30) — release after 398-day dormancy",
+      "name": "publish-cadence-post-dormancy:crates.io:zerofrom-derive",
+      "points": 15,
+      "status": "warning"
+    },
+    {
+      "detail": "signature-gap [iana-time-zone@0.1.65, crates.io] (current_status=\"none\", max_prior_status=\"trustpub\", max_prior_version=\"0.1.64\") — attestation dropped: prior version 0.1.64 had trustpub, current (0.1.65) has none",
+      "name": "signature-gap:crates.io:iana-time-zone",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "signature-gap [pin-project-lite@0.2.17, crates.io] (current_status=\"none\", max_prior_status=\"trustpub\", max_prior_version=\"0.2.16\") — attestation dropped: prior version 0.2.16 had trustpub, current (0.2.17) has none",
+      "name": "signature-gap:crates.io:pin-project-lite",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "signature-gap [rand@0.9.3, crates.io] (current_status=\"none\", max_prior_status=\"trustpub\", max_prior_version=\"0.10.0\") — attestation dropped: prior version 0.10.0 had trustpub, current (0.9.3) has none",
+      "name": "signature-gap:crates.io:rand",
+      "points": 10,
+      "status": "warning"
     }
   ],
+  "findings_by_kind": {
+    "publish-cadence-acceleration": 3,
+    "publish-cadence-post-dormancy": 5,
+    "signature-gap": 3,
+    "typosquat-proximity": 2
+  },
+  "findings_total": 13,
+  "lockfile_parse_errors": [],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T05:57:19.894151900+00:00",
+    "updated_at": "2026-04-28T06:09:15.012439300+00:00",
     "updated_by": "supply-chain-vigilance"
   },
+  "packages_by_ecosystem": {
+    "crates.io": 363
+  },
+  "registry_cache_bypassed": false,
+  "registry_cache_hits": 0,
+  "registry_client_error": null,
+  "registry_live_queries": 319,
+  "registry_oldest_cache_age_seconds": null,
+  "registry_unreachable_ecosystems": [],
   "score": 0,
-  "sensor_status": "lockfile_unreadable",
-  "total_packages_scanned": 0,
-  "updated_at": "2026-04-28T05:57:19.894151900+00:00"
+  "total_packages_scanned": 363,
+  "updated_at": "2026-04-28T06:09:15.012439300+00:00",
+  "vigilance_reachable": true
 }

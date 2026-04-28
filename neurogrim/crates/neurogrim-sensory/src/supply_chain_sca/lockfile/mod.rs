@@ -40,7 +40,10 @@ use super::Package;
 /// for the dispatch hub to route to the right parser.
 ///
 /// Variants:
-/// - `Cargo` — Rust (E-SC-2; SHIPPED).
+/// - `Cargo` — Rust (E-SC-2; SHIPPED). v3.1: carries the workspace
+///   directory containing `Cargo.lock` because Rust workspaces
+///   sometimes live in a subdir (NeuroGrim's `neurogrim/` convention)
+///   rather than at the repo root.
 /// - `UvLock` — Python via Astral's uv (E-SC-3; SHIPPED).
 /// - `RequirementsTxt` — Python pip-style pinned (E-SC-3; SHIPPED;
 ///   carries the file's full path because the conventional name
@@ -50,8 +53,11 @@ use super::Package;
 /// - `PnpmLock` — pnpm v6 + v9 (E-SC-4; SHIPPED).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DetectedLockfile {
-    /// `<project_root>/Cargo.lock` (E-SC-2).
-    Cargo,
+    /// Rust workspace containing `Cargo.lock`. The path is the
+    /// directory containing `Cargo.lock`, which may be `<project_root>`
+    /// (standard layout) or `<project_root>/neurogrim` (NeuroGrim
+    /// workspace-in-subdir layout). v3.1+.
+    Cargo(PathBuf),
     /// `<project_root>/uv.lock` — Astral uv resolved lockfile (E-SC-3).
     UvLock,
     /// A `requirements*.txt` file with PEP-440 `==` pins (E-SC-3).
@@ -83,9 +89,22 @@ pub enum DetectedLockfile {
 /// so over-coverage doesn't double-count.
 pub fn detect(project_root: &Path) -> Vec<DetectedLockfile> {
     let mut out = Vec::new();
-    if project_root.join("Cargo.lock").is_file() {
-        out.push(DetectedLockfile::Cargo);
+
+    // Cargo.lock: probe project_root first, then `<project_root>/neurogrim`
+    // (NeuroGrim workspace-in-subdir layout). Same dual-probe pattern
+    // `rust_health.rs` uses for Cargo.toml. First hit wins; we don't
+    // expect both to coexist in practice.
+    let cargo_candidates = [
+        project_root.to_path_buf(),
+        project_root.join("neurogrim"),
+    ];
+    for candidate in cargo_candidates {
+        if candidate.join("Cargo.lock").is_file() {
+            out.push(DetectedLockfile::Cargo(candidate));
+            break;
+        }
     }
+
     if project_root.join("uv.lock").is_file() {
         out.push(DetectedLockfile::UvLock);
     }
@@ -119,7 +138,9 @@ pub fn detect(project_root: &Path) -> Vec<DetectedLockfile> {
 /// ecosystem-appropriate parser.
 pub fn parse_detected(detected: &DetectedLockfile, project_root: &Path) -> Result<Vec<Package>> {
     match detected {
-        DetectedLockfile::Cargo => cargo::parse(project_root),
+        // For Cargo, use the carried workspace directory rather than
+        // project_root — handles the NeuroGrim workspace-in-subdir case.
+        DetectedLockfile::Cargo(workspace) => cargo::parse(workspace),
         DetectedLockfile::UvLock => python::parse_uv_lock(project_root),
         DetectedLockfile::RequirementsTxt(path) => python::parse_requirements_txt(path),
         DetectedLockfile::PackageLockJson => npm::parse_package_lock(project_root),
@@ -155,17 +176,66 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         write_minimal_cargo_lock(tmp.path());
         let detected = detect(tmp.path());
-        assert_eq!(detected, vec![DetectedLockfile::Cargo]);
+        assert_eq!(detected, vec![DetectedLockfile::Cargo(tmp.path().to_path_buf())]);
+    }
+
+    #[test]
+    fn detect_finds_cargo_lock_in_neurogrim_subdir() {
+        // NeuroGrim convention: workspace lives in `neurogrim/` subdir,
+        // not at the repo root. detect() should still find the lockfile
+        // and report the subdir as the carried workspace path.
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().join("neurogrim");
+        std::fs::create_dir_all(&workspace).unwrap();
+        write_minimal_cargo_lock(&workspace);
+        let detected = detect(tmp.path());
+        assert_eq!(detected, vec![DetectedLockfile::Cargo(workspace)]);
+    }
+
+    #[test]
+    fn detect_prefers_root_cargo_lock_over_subdir() {
+        // If both root/Cargo.lock and root/neurogrim/Cargo.lock exist,
+        // root takes precedence (standard Rust layout wins; the subdir
+        // probe is a fallback for workspace-in-subdir layouts).
+        let tmp = TempDir::new().unwrap();
+        write_minimal_cargo_lock(tmp.path());
+        let subdir = tmp.path().join("neurogrim");
+        std::fs::create_dir_all(&subdir).unwrap();
+        write_minimal_cargo_lock(&subdir);
+        let detected = detect(tmp.path());
+        assert_eq!(detected, vec![DetectedLockfile::Cargo(tmp.path().to_path_buf())]);
     }
 
     #[test]
     fn parse_detected_routes_cargo_to_cargo_parser() {
         let tmp = TempDir::new().unwrap();
         write_minimal_cargo_lock(tmp.path());
-        let pkgs = parse_detected(&DetectedLockfile::Cargo, tmp.path()).unwrap();
+        let pkgs = parse_detected(
+            &DetectedLockfile::Cargo(tmp.path().to_path_buf()),
+            tmp.path(),
+        )
+        .unwrap();
         assert_eq!(pkgs.len(), 1);
         assert_eq!(pkgs[0].name, "x");
         assert_eq!(pkgs[0].ecosystem, "crates.io");
+    }
+
+    #[test]
+    fn parse_detected_uses_carried_workspace_for_cargo() {
+        // The carried workspace path on the Cargo variant is what
+        // cargo::parse uses, NOT the project_root parameter. This
+        // verifies the workspace-in-subdir case routes correctly.
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().join("neurogrim");
+        std::fs::create_dir_all(&workspace).unwrap();
+        write_minimal_cargo_lock(&workspace);
+        let pkgs = parse_detected(
+            &DetectedLockfile::Cargo(workspace.clone()),
+            tmp.path(),
+        )
+        .unwrap();
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "x");
     }
 
     #[test]
@@ -241,7 +311,7 @@ mod tests {
         .unwrap();
         std::fs::write(tmp.path().join("requirements.txt"), "x==1.0.0\n").unwrap();
         let detected = detect(tmp.path());
-        assert!(detected.iter().any(|d| matches!(d, DetectedLockfile::Cargo)));
+        assert!(detected.iter().any(|d| matches!(d, DetectedLockfile::Cargo(_))));
         assert!(detected.iter().any(|d| matches!(d, DetectedLockfile::UvLock)));
         assert!(
             detected
