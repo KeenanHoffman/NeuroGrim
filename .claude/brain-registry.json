@@ -25,7 +25,8 @@
       "supply-chain-review": 0.0,
       "domain-calibration": 0.0,
       "trust-budget": 0.0,
-      "operator-calibration": 0.0
+      "operator-calibration": 0.0,
+      "federated-patterns": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -197,6 +198,13 @@
         "scoring_source": {
           "type": "cmdb",
           "path": ".claude/operator-calibration-cmdb.json"
+        }
+      },
+      "federated-patterns": {
+        "_doc": "E-B2-7 (2026-04-27): Brains-2.0 federated-patterns aggregator per LSP-Brains v2.12 §16.6.1. First cross-Brain primitive in the campaign. Reads .claude/brain/pattern-aggregation-ledger.jsonl recording both received and emitted federated-pattern A2A messages (oneOf row-kind discrimination). Closed-set finding kinds per Q17: federated_patterns:no_active_peers, federated_patterns:peer_inactive_30d, federated_patterns:high_drop_rate, federated_patterns:low_confidence. Score = 100 always (federation is INFORMATION, not health). Aggregation-only export per Q10 — no per-row payload data in CMDB. Recursion guard per Q9: federated_patterns:* finding kinds NOT valid as emit pattern_kind targets. Bidirectional opt-in via Agent Card capabilities (§16.6 precedent reuse). Two-layer rate limit per BR-6 (sender semaphore + receiver sliding window). v1 closed-set pattern_kind vocabulary: vigilance-pattern (single value); v2 candidates per BACKLOG B-23. Default weight 0.0 (advisory) at v1; no automated promotion (Q13). Refresh: `neurogrim sensory federated-patterns --project-root <brain> > .claude/federated-patterns-cmdb.json`.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/federated-patterns-cmdb.json"
         }
       }
     },

@@ -1,0 +1,36 @@
+{
+  "federated_patterns_breakdown": {
+    "active_peer_count": 0,
+    "declared_peer_count": 1,
+    "dropped_by_reason": {},
+    "ledger_path": null,
+    "ledger_present": false,
+    "low_confidence": true,
+    "pattern_kind_breakdown": [],
+    "peer_breakdown": [],
+    "total_dropped_count": 0,
+    "total_emitted_count": 0,
+    "total_received_count": 0
+  },
+  "findings": [
+    {
+      "detail": "No federated-pattern activity in the last 7 days (received_in_window=0, emitted_in_window=0). Federation is observability — empty windows are common during incubation. Per Q10 + Q17 lock, this is advisory only.",
+      "name": "federated_patterns:low_confidence",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "Declared peer `python-starter` has no federation activity in the last 30 days (last_seen=None, last_emit=None). Possible peer drift, network partition, or deactivation. Federation is observability-only — this is advisory.",
+      "name": "federated_patterns:peer_inactive_30d:python-start",
+      "points": 0,
+      "status": "neutral"
+    }
+  ],
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-28T00:39:13.580410+00:00",
+    "updated_by": "federated-patterns"
+  },
+  "score": 100,
+  "updated_at": "2026-04-28T00:39:13.580410+00:00"
+}
