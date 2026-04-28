@@ -268,6 +268,97 @@ pub fn locate_invocation_ledger_fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// Locate `a2a-federated-pattern-v1.schema.json` via the same repo-layout
+/// candidates as the other helpers. Returns `None` when the schema
+/// isn't reachable (standalone checkout).
+///
+/// Added in E-B2-7 C1+C3 alongside the new federated-pattern A2A schema
+/// (the FIRST cross-Brain primitive in the Brains-2.0 campaign — locks
+/// the privacy-by-construction wire format for v2.12 §16.6 federated
+/// patterns). Mirrors the cross-repo `include_str!` ordering risk: test
+/// skips with `eprintln` when the LSP-Brains submodule pointer hasn't
+/// been bumped yet.
+pub fn locate_a2a_federated_pattern_schema() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join("../../../../LSP-Brains/schemas/a2a-federated-pattern-v1.schema.json"),
+        manifest_dir.join("../../../LSP-Brains/schemas/a2a-federated-pattern-v1.schema.json"),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Load + compile the a2a-federated-pattern v1 schema, if reachable.
+pub fn load_a2a_federated_pattern_schema() -> Option<JSONSchema> {
+    let path = locate_a2a_federated_pattern_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft7)
+        .compile(&value)
+        .ok()
+}
+
+/// Read the raw JSON of `a2a-federated-pattern-v1.schema.json` (uncompiled).
+/// Used by the closed-set discipline pinning test that inspects
+/// `definitions.PatternKind.enum` directly rather than validating
+/// against it.
+pub fn read_a2a_federated_pattern_schema_value() -> Option<Value> {
+    let path = locate_a2a_federated_pattern_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+/// Locate `pattern-aggregation-ledger-v1.schema.json` via the same
+/// repo-layout candidates as the other helpers. Returns `None` when the
+/// schema isn't reachable (standalone checkout).
+///
+/// Added in E-B2-7 C2+C3 alongside the new pattern-aggregation-ledger
+/// schema (the FIRST Brains-2.0 ledger that captures BOTH inbound and
+/// outbound rows — `oneOf` discrimination by `entry_kind ∈ {received,
+/// emitted}`).
+pub fn locate_pattern_aggregation_ledger_schema() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join("../../../../LSP-Brains/schemas/pattern-aggregation-ledger-v1.schema.json"),
+        manifest_dir.join("../../../LSP-Brains/schemas/pattern-aggregation-ledger-v1.schema.json"),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Load + compile the pattern-aggregation-ledger v1 schema, if reachable.
+pub fn load_pattern_aggregation_ledger_schema() -> Option<JSONSchema> {
+    let path = locate_pattern_aggregation_ledger_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft7)
+        .compile(&value)
+        .ok()
+}
+
+/// Read the raw JSON of `pattern-aggregation-ledger-v1.schema.json`
+/// (uncompiled). Used by the closed-set discipline pinning test that
+/// inspects `definitions.DroppedReason.enum` directly rather than
+/// validating against it.
+pub fn read_pattern_aggregation_ledger_schema_value() -> Option<Value> {
+    let path = locate_pattern_aggregation_ledger_schema()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+/// Locate a federated-pattern fixture file by name (covers BOTH
+/// `a2a-federated-pattern-*.json` payload fixtures AND
+/// `pattern-aggregation-ledger-*.jsonl` ledger fixtures). Fixtures
+/// live at `<crate>/tests/fixtures/<name>` and are crate-local. Always
+/// reachable; panics if not found (the nine E-B2-7 C3 fixtures are
+/// committed as part of the same chunk that ships this helper).
+pub fn locate_federated_pattern_fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
 /// Locate `brain-registry-v2.schema.json` via the same repo-layout
 /// candidates as the other helpers. Returns `None` when the schema
 /// isn't reachable (standalone checkout).

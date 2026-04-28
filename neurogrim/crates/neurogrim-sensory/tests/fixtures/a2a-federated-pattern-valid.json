@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "pattern_kind": "vigilance-pattern",
+  "feature_vector": {
+    "numeric_count": 3,
+    "severity_class": "high",
+    "observation_window_days": 7
+  },
+  "anonymized_origin": "sha256-opaque-hash-aaaa",
+  "origin_set": ["sha256-opaque-hash-aaaa"],
+  "peer_brain_id": "sha256-opaque-hash-bbbb",
+  "discovered_at": "2026-04-27T20:00:00.000Z"
+}
