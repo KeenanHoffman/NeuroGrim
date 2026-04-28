@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "3.0.0-rc.1"
+version = "3.0.0"
 edition = "2021"
 authors = ["Keenan Hoffman"]
 license = "MIT"
@@ -99,8 +99,8 @@ flate2 = "1"
 # Both `path` and `version` are required for `cargo publish` to resolve
 # intra-workspace deps from crates.io. Keep versions in lock-step with
 # `workspace.package.version` above.
-neurogrim-core = { path = "crates/neurogrim-core", version = "3.0.0-rc.1" }
-neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "3.0.0-rc.1" }
-neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "3.0.0-rc.1" }
-neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "3.0.0-rc.1" }
-neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "3.0.0-rc.1" }
+neurogrim-core = { path = "crates/neurogrim-core", version = "3.0.0" }
+neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "3.0.0" }
+neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "3.0.0" }
+neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "3.0.0" }
+neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "3.0.0" }

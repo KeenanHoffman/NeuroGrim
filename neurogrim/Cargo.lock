@@ -1330,7 +1330,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-a2a"
-version = "3.0.0-rc.1"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1359,7 +1359,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-cli"
-version = "3.0.0-rc.1"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1386,7 +1386,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-core"
-version = "3.0.0-rc.1"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-ecosystem"
-version = "3.0.0-rc.1"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1420,7 +1420,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-mcp"
-version = "3.0.0-rc.1"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1436,7 +1436,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-sensory"
-version = "3.0.0-rc.1"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "cargo-lock",
