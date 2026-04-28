@@ -1,4 +1,4 @@
-use super::context::{append_proposal_ledger, append_score_history, BrainContext};
+use neurogrim_mcp::context::{append_proposal_ledger, append_score_history, BrainContext};
 use crate::output::display;
 use anyhow::Result;
 

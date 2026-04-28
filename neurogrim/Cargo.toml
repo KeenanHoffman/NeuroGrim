@@ -6,7 +6,9 @@ members = [
     "crates/neurogrim-mcp",
     "crates/neurogrim-a2a",
     "crates/neurogrim-ecosystem",
+    "crates/neurogrim-dashboard",
     "crates/neurogrim-cli",
+    "xtask",
 ]
 
 [workspace.package]
@@ -58,6 +60,20 @@ tiktoken-rs = "0.6"
 # URL parsing / validation (shared across a2a + ecosystem)
 url = { version = "2", features = ["serde"] }
 
+# v3.4 dashboard (neurogrim-dashboard crate):
+# - `axum` for HTTP server (already used in a2a + cli dev-deps; promoting to runtime)
+# - `tower-http` for static-file serving + middleware
+# - `rust-embed` for compile-time embedding of frontend/dist/ assets
+# - `ts-rs` for generating TypeScript types from Rust structs
+# - `notify` for filesystem watching (CMDB/registry → SSE updates)
+# - `webbrowser` for cross-platform browser launch with fallback
+axum = { version = "0.7", features = ["macros"] }
+tower-http = { version = "0.5", features = ["fs", "trace"] }
+rust-embed = { version = "8", features = ["interpolate-folder-path"] }
+ts-rs = { version = "10", features = ["chrono-impl", "no-serde-warnings"] }
+notify = "6"
+webbrowser = "1"
+
 # Supply-chain SCA (E-SC-2):
 # - `cargo-lock` (note: hyphen on crates.io; imported as `cargo_lock` in
 #   Rust) is RustSec-maintained; parses Cargo.lock V1..V4 natively with a
@@ -104,3 +120,4 @@ neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "3.3.0" }
 neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "3.3.0" }
 neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "3.3.0" }
 neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "3.3.0" }
+neurogrim-dashboard = { path = "crates/neurogrim-dashboard", version = "3.3.0" }

@@ -26,8 +26,13 @@ tracing = { workspace = true }
 # MCP `orient` tool). Color is a presentation concern, but the
 # renderer is shared across CLI and MCP so the dep lives here.
 colored = { workspace = true }
+# v3.4 Phase 0.1 — needed by the relocated `BrainContext::load`
+# (was in neurogrim-cli). The dashboard server (neurogrim-dashboard)
+# and the CLI both call into context here, so the dep moves to mcp.
+url = { workspace = true }
 neurogrim-core = { workspace = true }
 neurogrim-sensory = { workspace = true }
+neurogrim-ecosystem = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

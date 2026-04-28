@@ -5,7 +5,7 @@
 //! renderer. The MCP `orient` tool uses the same renderer — single
 //! source of truth.
 
-use crate::commands::context::BrainContext;
+use neurogrim_mcp::context::BrainContext;
 
 /// Render the prose orientation and write it to stdout. `plain=true`
 /// suppresses ANSI color escapes (required when stdout is piped).

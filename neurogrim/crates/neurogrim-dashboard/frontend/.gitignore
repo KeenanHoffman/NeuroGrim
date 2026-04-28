@@ -1,0 +1,5 @@
+node_modules/
+.vite/
+*.log
+*.tsbuildinfo
+# NOTE: dist/ is intentionally NOT gitignored — it's the published artifact.

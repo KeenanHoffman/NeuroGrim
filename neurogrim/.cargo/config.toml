@@ -1,0 +1,9 @@
+# Workspace cargo aliases. Lets `cargo xtask <subcommand>` invoke the
+# xtask binary directly without `cargo run -p xtask --`.
+#
+# v3.4 — `cargo xtask sca-check` runs the consolidated SCA gate
+# (cargo audit + npm audit). Wire into CI as the merge-blocking
+# supply-chain check.
+
+[alias]
+xtask = "run --quiet --package xtask --"

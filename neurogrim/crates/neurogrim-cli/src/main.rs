@@ -138,6 +138,35 @@ enum Commands {
     /// order. Source of truth: `crates/neurogrim-cli/data/explain/`.
     Explain(commands::explain::Args),
 
+    /// Launch the v3.4 dashboard server (HTTP + embedded React UI).
+    ///
+    /// Opens an interactive browser-based view of this Brain — score
+    /// gauge, domain table, trajectory charts, federation graph,
+    /// skills index. Read-only by default; mutation endpoints (sensor
+    /// refresh, registry edits) are gated behind `--allow-mutations`
+    /// (v3.5+; not available in v3.4).
+    ///
+    /// The dashboard binds to 127.0.0.1 only by default. The URL is
+    /// always printed to stderr; pass `--no-browser` to skip the
+    /// auto-launch.
+    Ui {
+        /// Path to the registry to inspect.
+        #[arg(short, long, default_value = ".claude/brain-registry.json")]
+        registry: String,
+        /// Port to bind on. Default 8420 (one slot below the federation
+        /// range starting at 8421).
+        #[arg(long, default_value_t = 8420)]
+        port: u16,
+        /// Bind address. Default 127.0.0.1 (loopback only). Setting this
+        /// to 0.0.0.0 exposes the dashboard on the network — only do this
+        /// when you have separate network-layer access controls.
+        #[arg(long, default_value = "127.0.0.1")]
+        bind: String,
+        /// Don't auto-open the browser; print the URL and wait.
+        #[arg(long)]
+        no_browser: bool,
+    },
+
     /// Start the Brain as an MCP server
     #[command(visible_alias = "summon")]
     Serve {
@@ -400,6 +429,12 @@ async fn main() -> Result<()> {
         Commands::Validate { registry } => commands::validate::run(&registry).await,
         Commands::Doctor { registry, plain } => commands::doctor::run(&registry, plain).await,
         Commands::Explain(args) => commands::explain::run(args).await,
+        Commands::Ui {
+            registry,
+            port,
+            bind,
+            no_browser,
+        } => commands::ui::run(registry, port, bind, no_browser).await,
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
         Commands::Init {

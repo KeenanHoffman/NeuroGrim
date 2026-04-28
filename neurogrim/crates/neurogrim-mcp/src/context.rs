@@ -1,4 +1,12 @@
-//! Shared context for all CLI commands — loads registry, CMDB data, runs scoring pipeline.
+//! Shared brain context — loads registry, CMDB data, runs the full
+//! scoring pipeline. Used by both the CLI commands and the v3.4
+//! dashboard server (neurogrim-dashboard).
+//!
+//! v3.4 Phase 0.1: relocated from `neurogrim-cli` (bin-only crate) to
+//! `neurogrim-mcp` so the dashboard server can call into it. Same
+//! pattern as v3.2.1's prose / doctor / domain moves — the cli
+//! crate is bin-only, so anything that needs to be reused from
+//! another crate has to live in a library crate.
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};

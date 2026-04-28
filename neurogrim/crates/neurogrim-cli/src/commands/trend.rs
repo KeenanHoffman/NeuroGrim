@@ -1,4 +1,4 @@
-use super::context::BrainContext;
+use neurogrim_mcp::context::BrainContext;
 use crate::output::display;
 use anyhow::Result;
 

@@ -82,6 +82,11 @@ const WRITE_SKILL_SKILL: &str = include_str!("../../data/init-skills/write-skill
 const NEUROGRIM_ONBOARDING_SKILL: &str =
     include_str!("../../data/init-skills/neurogrim-onboarding/SKILL.md");
 const CLI_MODE_SKILL: &str = include_str!("../../data/init-skills/cli-mode/SKILL.md");
+// v3.4 dependency-discipline — pre-install discipline for npm/cargo/pip/etc.
+// Triggers on `npm install`, `cargo add`, `pip install`, etc. Closes the
+// "agent installs deps without auditing" failure mode.
+const DEPENDENCY_DISCIPLINE_SKILL: &str =
+    include_str!("../../data/init-skills/dependency-discipline/SKILL.md");
 
 /// Bundled file: relative path within `.claude/skills/<skill-name>/` and
 /// its content. Used by `materialize_skills` to write out all files for
@@ -126,6 +131,9 @@ fn bundled_skill_files(name: &str) -> Option<&'static [BundledSkillFile]> {
     static CLI_MODE: &[BundledSkillFile] = &[
         BundledSkillFile { relative_path: "SKILL.md", content: CLI_MODE_SKILL },
     ];
+    static DEPENDENCY_DISCIPLINE: &[BundledSkillFile] = &[
+        BundledSkillFile { relative_path: "SKILL.md", content: DEPENDENCY_DISCIPLINE_SKILL },
+    ];
     match name {
         "hats" => Some(HATS),
         "imagination-mode" => Some(IMAGINATION_MODE),
@@ -135,6 +143,7 @@ fn bundled_skill_files(name: &str) -> Option<&'static [BundledSkillFile]> {
         "write-skill" => Some(WRITE_SKILL),
         "neurogrim-onboarding" => Some(NEUROGRIM_ONBOARDING),
         "cli-mode" => Some(CLI_MODE),
+        "dependency-discipline" => Some(DEPENDENCY_DISCIPLINE),
         _ => None,
     }
 }
@@ -270,7 +279,7 @@ pub async fn scaffold_full(cfg: &ScaffoldConfig) -> Result<()> {
                     "skill '{skill}' is not in the bundled set. \
                      Bundled skills: hats, imagination-mode, north-star, \
                      rubber-duck, human-comms, write-skill, neurogrim-onboarding, \
-                     cli-mode."
+                     cli-mode, dependency-discipline."
                 )
             })?;
             let skill_dir = skills_dir.join(skill);
@@ -558,7 +567,7 @@ mod tests {
 
     #[test]
     fn all_bundled_skills_resolve() {
-        for name in ["hats", "imagination-mode", "north-star", "rubber-duck", "human-comms", "write-skill", "neurogrim-onboarding", "cli-mode"] {
+        for name in ["hats", "imagination-mode", "north-star", "rubber-duck", "human-comms", "write-skill", "neurogrim-onboarding", "cli-mode", "dependency-discipline"] {
             let files = bundled_skill_files(name)
                 .unwrap_or_else(|| panic!("bundled_skill_files({name}) returned None"));
             assert!(!files.is_empty(), "skill '{name}' has no bundled files");

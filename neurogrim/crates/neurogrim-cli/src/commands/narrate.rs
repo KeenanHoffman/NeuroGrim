@@ -13,7 +13,7 @@
 //! emphasizes blast radius, etc. The data is the same; the
 //! framing differs.
 
-use super::context::BrainContext;
+use neurogrim_mcp::context::BrainContext;
 use crate::output::narration::{render, NarrationTemplate, SUPPORTED_HATS};
 use anyhow::{anyhow, Result};
 

@@ -54,6 +54,7 @@ copy = [
     "write-skill",
     "neurogrim-onboarding",
     "cli-mode",
+    "dependency-discipline",
 ]
 
 [safety_invariants]

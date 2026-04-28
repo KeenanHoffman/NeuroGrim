@@ -25,7 +25,7 @@
 //! swallowed), critical-but-kind (log lines name the `message_id` and the
 //! scored domain count so debugging is possible without reading stdout bytes).
 
-use super::context::BrainContext;
+use neurogrim_mcp::context::BrainContext;
 use anyhow::{Context, Result};
 use neurogrim_a2a::agent_card::{
     AuthScheme, Authentication, Capabilities, Transport as TransportCard, TransportProtocol,
