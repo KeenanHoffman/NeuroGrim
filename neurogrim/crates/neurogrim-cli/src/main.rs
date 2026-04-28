@@ -81,7 +81,7 @@ enum Commands {
     /// Run a built-in sensory tool directly (produces CMDB JSON)
     #[command(visible_alias = "cast")]
     Sensory {
-        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget, federated-patterns
+        /// Tool name: git-health, rust-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget, federated-patterns
         name: String,
         /// Project root path
         #[arg(long, default_value = ".")]
@@ -332,6 +332,7 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
     eprintln!("✦ Casting {name}…");
     let result = match name {
         "git-health" => neurogrim_sensory::git_health::analyze_git_health(project_root).await?,
+        "rust-health" => neurogrim_sensory::rust_health::analyze_rust_health(project_root).await,
         "code-quality" => neurogrim_sensory::code_quality::analyze_code_quality(project_root).await,
         "test-health" => neurogrim_sensory::test_results::analyze_test_health(project_root).await,
         "deploy-readiness" => neurogrim_sensory::deploy_readiness::analyze_deploy_readiness(project_root).await,
@@ -350,7 +351,7 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
         "operator-calibration" => neurogrim_sensory::operator_calibration::analyze_operator_calibration(project_root).await,
         "trust-budget" => neurogrim_sensory::trust_budget::analyze_trust_budget(project_root).await,
         "federated-patterns" => neurogrim_sensory::federated_patterns::analyze_federated_patterns(project_root).await,
-        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget", name),
+        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, rust-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget, federated-patterns", name),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
