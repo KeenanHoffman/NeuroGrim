@@ -1,0 +1,69 @@
+# {{ project_name }} — Agent Guide
+
+This repo is **a Brain in its own right** — onboarded as an LSP Brains
+adopter using the `mixed` template. It maintains a self-aware project
+model spanning both code surfaces (sensory tools score code health) and
+abstract surfaces (operator-declared domains for non-code goals).
+
+**Self-contained:** the only external dependency is the `neurogrim` CLI
+([KeenanHoffman/NeuroGrim](https://github.com/KeenanHoffman/NeuroGrim)).
+
+## The Brain at `.claude/`
+
+{{ domain_count }} domains across two surfaces:
+
+{{ domain_list }}
+
+The three weighted **code-side** domains (`code-quality`, `test-health`,
+`deploy-readiness`) sum to 1.0 and contribute to the unified score.
+**Abstract-side** domains ship advisory weight 0.0 with stub CMDBs at
+score 50 (honest "unknown") until operators author sensors.
+
+## Skills
+
+{{ skills_count }} skills under `.claude/skills/`:
+
+{{ skills_list }}
+
+Add project-specific skills via `neurogrim skill new <name>` — useful
+both for code-side workflows and abstract-side methodology guides.
+
+## Running the Brain
+
+```bash
+neurogrim score --registry .claude/brain-registry.json
+neurogrim narrate --hat visionary --registry .claude/brain-registry.json
+
+# Run code-side sensory tools:
+neurogrim sensory test-health --project-root . > .claude/test-health-cmdb.json
+neurogrim sensory code-quality --project-root . > .claude/code-quality-cmdb.json
+neurogrim sensory deploy-readiness --project-root . > .claude/deploy-readiness-cmdb.json
+```
+
+## Cultural substrate
+
+`.claude/culture.yaml` is byte-identical to the canonical LSP Brains
+federation copy. Five invariants — `positivity`, `integrity`, `honesty`,
+`critical_but_kind`, `respect` — applied as a floor.
+
+## The PostToolUse hook
+
+`.claude/settings.local.json` (gitignored) wires the PostToolUse hook
+recording every Skill invocation to `.claude/brain/invocation-ledger.jsonl`.
+
+## What agents working here should know
+
+1. **Two surfaces, one Brain.** Code domains roll up to scoring; abstract
+   domains observe state until operators promote them.
+2. **Promote abstract domains via spec §15.5 discipline.** Calibration
+   audit + ledger entry; not casual.
+3. **Cultural substrate applies after hats and human-comms.**
+
+## References
+
+- LSP Brains methodology:
+  [LSP-Brains/INTRO.md](https://github.com/KeenanHoffman/LSP-Brains/blob/main/INTRO.md)
+- LSP Brains spec:
+  [LSP-Brains/spec/LSP-BRAINS-SPEC.md](https://github.com/KeenanHoffman/LSP-Brains/blob/main/spec/LSP-BRAINS-SPEC.md)
+- NeuroGrim CLI:
+  [github.com/KeenanHoffman/NeuroGrim](https://github.com/KeenanHoffman/NeuroGrim)

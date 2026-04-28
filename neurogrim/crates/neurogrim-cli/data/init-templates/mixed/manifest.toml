@@ -1,0 +1,65 @@
+# Mixed-project template — for projects with BOTH code and abstract
+# surfaces. e.g., a research project with code + writeups, an SDK with
+# documentation as a first-class artifact, or a methodology project
+# that ships both a spec and a reference implementation.
+#
+# Combines the weighted code-project domains (code-quality, test-health,
+# deploy-readiness) with abstract-domain advisory stubs operators can
+# customize.
+
+[meta]
+template_name = "mixed"
+schema_version = "1"
+description = "Project with both code and abstract surfaces — weighted code domains + abstract advisory stubs"
+
+[domains]
+# Default weighted domains (code side, sum to 1.0).
+default = [
+    "code-quality",
+    "test-health",
+    "deploy-readiness",
+]
+
+# Default advisory (always present in mixed projects).
+advisory_defaults = [
+    "git-health",
+    "human-comms",
+    "secret-refs",
+]
+
+# Suggested abstract domain candidates (ops add via --domains).
+suggested_abstract = [
+    "<your-abstract-domain-1>",
+    "<your-abstract-domain-2>",
+]
+
+[domain_weights]
+"code-quality" = 0.35
+"test-health" = 0.35
+"deploy-readiness" = 0.30
+
+[skills]
+copy = [
+    "hats",
+    "imagination-mode",
+    "north-star",
+    "rubber-duck",
+    "human-comms",
+    "write-skill",
+]
+
+[safety_invariants]
+defaults = [
+    { rule = "agents-must-not-deploy-without-approval", minimum_level = "approve", description = "Deployment-class actions require explicit operator approval." },
+    { rule = "agents-must-not-publish-public-content-without-approval", minimum_level = "approve", description = "Public-facing content (releases, blog posts, public docs) requires explicit operator approval." },
+]
+
+[scoring]
+model = "multiplier"
+floor_confidence_threshold = 30
+floor_score_ceiling = 30
+
+[confidence_thresholds]
+cmdb_fresh_days = 1.0
+cmdb_stale_days = 7.0
+cmdb_very_stale_days = 30.0

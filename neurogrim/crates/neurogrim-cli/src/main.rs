@@ -109,6 +109,15 @@ enum Commands {
     },
 
     /// Initialize a new brain-registry.json by scanning the project
+    ///
+    /// v3.1.1+: When `--template <name>` is passed, additionally scaffolds
+    /// the full Brain integration (culture.yaml, stub CMDBs, bundled
+    /// skills, PostToolUse hook, CLAUDE.md, .gitignore extension).
+    /// Without `--template`, behaves as before — registry generation only.
+    ///
+    /// Templates: `abstract-project` (no primary code; e.g., job-hunt),
+    /// `code-project` (software project; default detection), `mixed`
+    /// (both surfaces).
     #[command(visible_alias = "conjure")]
     Init {
         /// Project root to scan
@@ -120,6 +129,21 @@ enum Commands {
         /// Skip confirmation prompt
         #[arg(long)]
         yes: bool,
+        /// Template to use for full scaffolding. Triggers Brain
+        /// integration scaffolding beyond the registry. Supported:
+        /// abstract-project, code-project, mixed. When omitted, only
+        /// the registry is generated (legacy behavior).
+        #[arg(long, value_parser = ["abstract-project", "code-project", "mixed"])]
+        template: Option<String>,
+        /// Project name override. Defaults to the directory name.
+        /// Used in CLAUDE.md template substitution and registry meta.
+        #[arg(long)]
+        name: Option<String>,
+        /// Comma-separated additional domain names to declare with
+        /// stub CMDBs (advisory weight 0.0 each). Layered on top of
+        /// the template's default domain set.
+        #[arg(long)]
+        domains: Option<String>,
     },
 
     /// Manage local machine-specific awareness (tool paths, OS quirks, known patterns)
@@ -303,7 +327,10 @@ async fn main() -> Result<()> {
             project_root,
             output,
             yes,
-        } => commands::init::run(&project_root, &output, yes).await,
+            template,
+            name,
+            domains,
+        } => commands::init::run(&project_root, &output, yes, template, name, domains).await,
         Commands::Awareness {
             project_root,
             subcommand,

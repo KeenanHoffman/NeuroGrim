@@ -1,0 +1,77 @@
+# {{ project_name }} — Agent Guide
+
+This repo is **a Brain in its own right** — onboarded as an LSP Brains
+adopter using the `code-project` template. It maintains a self-aware
+project model through declared domains, sensory tools, and cross-domain
+correlation.
+
+**Self-contained:** the only external dependency is the `neurogrim` CLI
+binary
+([KeenanHoffman/NeuroGrim](https://github.com/KeenanHoffman/NeuroGrim)).
+
+## The Brain at `.claude/`
+
+{{ domain_count }} domains:
+
+{{ domain_list }}
+
+The three weighted domains (`code-quality`, `test-health`,
+`deploy-readiness`) sum to 1.0 and contribute to the unified score.
+Advisory domains (weight 0.0) provide signal without affecting the score
+until the operator promotes them via the spec §15.5 promotion-path
+discipline.
+
+## Skills
+
+{{ skills_count }} skills under `.claude/skills/`:
+
+{{ skills_list }}
+
+Add project-specific skills via `neurogrim skill new <name>`.
+
+## Running the Brain
+
+```bash
+# From this directory:
+neurogrim score --registry .claude/brain-registry.json
+neurogrim health --registry .claude/brain-registry.json
+neurogrim narrate --hat visionary --registry .claude/brain-registry.json
+neurogrim validate --registry .claude/brain-registry.json
+
+# Run the bundled sensory tools (CMDBs auto-update):
+neurogrim sensory test-health --project-root . > .claude/test-health-cmdb.json
+neurogrim sensory code-quality --project-root . > .claude/code-quality-cmdb.json
+neurogrim sensory deploy-readiness --project-root . > .claude/deploy-readiness-cmdb.json
+```
+
+## Cultural substrate
+
+`.claude/culture.yaml` is byte-identical to the canonical LSP Brains
+federation copy. Five values as invariants — `positivity`, `integrity`,
+`honesty`, `critical_but_kind`, `respect`. They can only tighten, never
+loosen.
+
+## The PostToolUse hook
+
+`.claude/settings.local.json` (gitignored) wires a PostToolUse hook that
+records every Skill invocation to `.claude/brain/invocation-ledger.jsonl`.
+Substrate for the `operator-calibration` primitive (spec §17.12).
+
+## What agents working here should know
+
+1. **The three weighted domains gate scoring.** Effective scores roll up
+   into the unified score; per-domain trends drive trajectory analysis.
+2. **Advisory domains are observability-only at v1.** They surface
+   signal without gating. Promotion to weighted requires the spec §15.5
+   discipline (calibration audit + ledger entry).
+3. **The cultural substrate applies after hats and human-comms.**
+4. **Author project-specific skills via `neurogrim skill new <name>`.**
+
+## References
+
+- LSP Brains methodology:
+  [LSP-Brains/INTRO.md](https://github.com/KeenanHoffman/LSP-Brains/blob/main/INTRO.md)
+- LSP Brains spec:
+  [LSP-Brains/spec/LSP-BRAINS-SPEC.md](https://github.com/KeenanHoffman/LSP-Brains/blob/main/spec/LSP-BRAINS-SPEC.md)
+- NeuroGrim CLI:
+  [github.com/KeenanHoffman/NeuroGrim](https://github.com/KeenanHoffman/NeuroGrim)

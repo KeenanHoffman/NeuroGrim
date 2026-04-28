@@ -516,9 +516,10 @@ pub fn generate_registry(candidates: &[DomainCandidate], project_name: &str) -> 
             "incident_patterns": [],
             "human_personas": default_human_personas(),
             "hats": {},
-            "sensory_servers": {
-                "_doc": "Add external MCP sensory servers here. Example: { \"command\": \"python\", \"args\": [\"-m\", \"my_tool\"], \"transport\": \"stdio\" }. See https://github.com/KeenanHoffman/LSP-Brains"
-            }
+            // Empty by default. To register an MCP sensory server, add an
+            // entry like: "my-tool": { "command": "python", "args": ["-m", "my_tool"], "transport": "stdio" }
+            // See spec §3.7 + Appendix F for the SensoryServerConfig schema.
+            "sensory_servers": {}
         }
     })
 }
@@ -527,7 +528,14 @@ pub fn generate_registry(candidates: &[DomainCandidate], project_name: &str) -> 
 // CLI run function
 // ---------------------------------------------------------------------------
 
-pub async fn run(project_root: &str, output: &str, yes: bool) -> Result<()> {
+pub async fn run(
+    project_root: &str,
+    output: &str,
+    yes: bool,
+    template: Option<String>,
+    name_override: Option<String>,
+    domains_arg: Option<String>,
+) -> Result<()> {
     eprintln!("✦ Conjuring registry…");
     let root = PathBuf::from(project_root);
     if !root.is_dir() {
@@ -546,12 +554,14 @@ pub async fn run(project_root: &str, output: &str, yes: bool) -> Result<()> {
         );
     }
 
-    // Derive project name from the last component of the root path
-    let project_name = root
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("my-project")
-        .to_string();
+    // Derive project name: explicit --name override takes precedence,
+    // otherwise the last component of the root path.
+    let project_name = name_override.unwrap_or_else(|| {
+        root.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("my-project")
+            .to_string()
+    });
 
     // Scan
     println!("Scanning: {}", root.display());
@@ -665,15 +675,66 @@ pub async fn run(project_root: &str, output: &str, yes: bool) -> Result<()> {
 
     println!("Written: {}", output);
     println!();
+
+    // v3.1.1: when --template is passed, run the full scaffolding pass +
+    // overwrite the legacy registry with a template-aware one.
+    // Without --template, retain the legacy behavior (registry only).
+    if let Some(template_name) = template {
+        eprintln!();
+        eprintln!("✦ Scaffolding from template '{template_name}'…");
+
+        // Build the final domain set: manifest defaults + --domains additions.
+        let manifest = super::init_scaffold::load_template(&template_name)?;
+        let mut final_domains: Vec<String> = manifest.domains.default.clone();
+        for d in &manifest.domains.advisory_defaults {
+            if !final_domains.contains(d) {
+                final_domains.push(d.clone());
+            }
+        }
+        if let Some(extra) = domains_arg {
+            for d in extra.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                let owned = d.to_string();
+                if !final_domains.contains(&owned) {
+                    final_domains.push(owned);
+                }
+            }
+        }
+
+        // Replace the legacy registry (which hardcodes code-quality /
+        // test-health / deploy-readiness weighted) with a template-aware
+        // one that declares the actual domain set as advisory.
+        let template_registry = super::init_scaffold::template_registry_json(
+            &project_name,
+            &template_name,
+            &final_domains,
+        )?;
+        tokio::fs::write(&output_path, &template_registry).await?;
+        eprintln!("Wrote: {} (template-aware)", output);
+
+        let cfg = super::init_scaffold::ScaffoldConfig {
+            project_root: root.clone(),
+            project_name: project_name.clone(),
+            template_name: template_name.clone(),
+            domains: final_domains,
+            skills: manifest.skills.copy.clone(),
+            include_culture: true,
+            include_skills: true,
+            include_hooks: true,
+        };
+        super::init_scaffold::scaffold_full(&cfg).await?;
+        println!();
+        println!("Template scaffold complete.");
+    }
+
+    println!();
     println!("Next steps:");
     println!("  neurogrim validate     # verify configuration");
-    println!("  neurogrim sensory test-health && neurogrim sensory code-quality && neurogrim sensory deploy-readiness");
     println!("  neurogrim score        # get your first score");
     println!("  neurogrim health       # full dashboard");
+    println!("  neurogrim narrate --hat visionary  # hat-calibrated narration");
     println!();
     println!("Local awareness:");
     println!("  neurogrim awareness    # view machine-specific facts agents have recorded");
-    println!("  neurogrim awareness add --key tool_paths.cargo --value /path/to/cargo --category tool_paths");
 
     Ok(())
 }

@@ -1,0 +1,12 @@
+# LSP Brains runtime artifacts (added by neurogrim init)
+# Ledgers and operator-local state — never commit. Mirrors the gitignore
+# convention used across the LSP Brains federation.
+.claude/brain/incident-ledger.json
+.claude/brain/event-log.jsonl
+.claude/brain/score-history.json
+.claude/brain/proposal-ledger.json
+.claude/brain/invocation-ledger.jsonl
+.claude/brain/local-awareness.json
+
+# Claude Code session state — operator-local hook config.
+.claude/settings.local.json

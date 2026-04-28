@@ -1,0 +1,70 @@
+# Code-project template — for software projects with detected stack
+# (Rust, Python, Node, Java, Go, etc.). Pre-configures the universal
+# weighted domains (code-quality, test-health, deploy-readiness) plus
+# advisory stubs for stack-specific domains detected during init scan.
+#
+# Mirrors the legacy `neurogrim init` behavior, fleshed out with full
+# scaffolding (culture, skills, hooks, CLAUDE.md).
+
+[meta]
+template_name = "code-project"
+schema_version = "1"
+description = "Software project with detected code stack — universal weighted domains pre-configured"
+
+[domains]
+# Default weighted domains for code projects. These get non-zero weights
+# in the generated registry (sum = 1.0).
+default = [
+    "code-quality",
+    "test-health",
+    "deploy-readiness",
+]
+
+# Advisory domains commonly relevant to code projects.
+advisory_defaults = [
+    "git-health",
+    "human-comms",
+    "secret-refs",
+]
+
+# Operators may add detected stack-specific domains via --domains
+# (e.g., rust-health, security-standards, supply-chain-sca).
+suggested_advisory = [
+    "rust-health",
+    "security-standards",
+    "supply-chain-sca",
+    "supply-chain-vigilance",
+]
+
+[domain_weights]
+# Default weights for code-project (sum to 1.0).
+"code-quality" = 0.35
+"test-health" = 0.35
+"deploy-readiness" = 0.30
+
+[skills]
+# Same general-purpose set as abstract-project + the code-relevant skills.
+copy = [
+    "hats",
+    "imagination-mode",
+    "north-star",
+    "rubber-duck",
+    "human-comms",
+    "write-skill",
+]
+
+[safety_invariants]
+defaults = [
+    { rule = "agents-must-not-deploy-without-approval", minimum_level = "approve", description = "Generic safety rail for code projects: deployment-class actions require explicit operator approval." },
+    { rule = "agents-must-not-bypass-tests", minimum_level = "approve", description = "CI bypass / test-disable actions require explicit operator approval." },
+]
+
+[scoring]
+model = "multiplier"
+floor_confidence_threshold = 30
+floor_score_ceiling = 30
+
+[confidence_thresholds]
+cmdb_fresh_days = 1.0
+cmdb_stale_days = 7.0
+cmdb_very_stale_days = 30.0

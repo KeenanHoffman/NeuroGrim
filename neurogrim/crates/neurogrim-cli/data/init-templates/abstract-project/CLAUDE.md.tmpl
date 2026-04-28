@@ -1,0 +1,84 @@
+# {{ project_name }} — Agent Guide
+
+This repo is **a Brain in its own right** — onboarded as an LSP Brains
+adopter using the `abstract-project` template. It maintains a self-aware
+project model through declared domains and (eventually) sensory tools.
+
+**Self-contained:** when you open this repo in Claude Code without the LSP
+Brains ecosystem adjacent, the Brain integration still works. The only
+external dependency is the `neurogrim` CLI binary
+([KeenanHoffman/NeuroGrim](https://github.com/KeenanHoffman/NeuroGrim)).
+
+## The Brain at `.claude/`
+
+{{ domain_count }} advisory domains (all weight 0.0 in v1; sensors deferred —
+CMDBs at score 50 are honest "unknown" per spec principle #2):
+
+{{ domain_list }}
+
+The abstract domains demonstrate **LSP Brains generalization beyond code
+projects** — proof that the methodology applies to abstract / conceptual
+goals, not just software.
+
+## Skills
+
+{{ skills_count }} skills under `.claude/skills/`:
+
+{{ skills_list }}
+
+Add project-specific skills via `neurogrim skill new <name>` — scaffolds a
+SKILL.md skeleton you fill in following the `write-skill` standard.
+
+## Running the Brain
+
+```bash
+# From this directory:
+neurogrim score --registry .claude/brain-registry.json
+neurogrim health --registry .claude/brain-registry.json
+neurogrim narrate --hat visionary --registry .claude/brain-registry.json
+neurogrim validate --registry .claude/brain-registry.json
+```
+
+All CMDBs ship as honest stubs at score 50; the unified score reflects the
+all-stub state. As sensors are authored (and CMDBs start carrying real
+signal), the score becomes meaningful.
+
+## Cultural substrate
+
+`.claude/culture.yaml` is byte-identical to the canonical LSP Brains
+federation copy. Five values applied as invariants — `positivity`,
+`integrity`, `honesty`, `critical_but_kind`, `respect`. They can only
+tighten, never loosen. When working in this repo, agents honor these
+invariants in every output.
+
+## The PostToolUse hook
+
+`.claude/settings.local.json` (gitignored) wires a PostToolUse hook that
+records every Skill invocation to `.claude/brain/invocation-ledger.jsonl`.
+This is the substrate for the `operator-calibration` primitive (LSP Brains
+spec §17.12) — capturing operator dispositions on agent skill invocations.
+
+The hook script lives at `scripts/record-skill-invocation.sh` (committed,
+self-contained — uses `CLAUDE_PROJECT_DIR` env, no external deps).
+
+## What agents working here should know
+
+1. **Abstract domains are first-class.** They observe project state through
+   the same sensory protocol as code-project domains. Treat them with the
+   same rigor.
+2. **CMDBs at score 50 are honest unknown.** Don't "fix" them by inflating
+   scores; sensors will produce real signal when authored.
+3. **The cultural substrate applies after hats and human-comms.** Per
+   spec §14.4, culture is a floor that can only tighten.
+4. **Author project-specific skills via `neurogrim skill new <name>`.**
+   The bundled skills cover general-purpose workflows; project-specific
+   methodology belongs in operator-authored skills.
+
+## References
+
+- LSP Brains methodology overview:
+  [LSP-Brains/INTRO.md](https://github.com/KeenanHoffman/LSP-Brains/blob/main/INTRO.md)
+- LSP Brains spec (normative):
+  [LSP-Brains/spec/LSP-BRAINS-SPEC.md](https://github.com/KeenanHoffman/LSP-Brains/blob/main/spec/LSP-BRAINS-SPEC.md)
+- NeuroGrim (Rust reference implementation; the CLI):
+  [github.com/KeenanHoffman/NeuroGrim](https://github.com/KeenanHoffman/NeuroGrim)
