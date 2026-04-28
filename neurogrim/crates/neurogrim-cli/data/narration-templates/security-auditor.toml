@@ -1,0 +1,17 @@
+# Security-auditor narration template (v3.1 E-V31-C C2).
+#
+# Per the per-hat communication contract: "Binding count + highest
+# risk. '4 unreviewed, 1 existential.'" Reframed for AgentOutput:
+# paranoid framing — assume each correlation is real, minimize
+# surface area first.
+
+[meta]
+hat = "security-auditor"
+schema_version = "1"
+
+[content]
+lines = [
+    "Posture: Brain at {{ score }}/100, trajectory {{ trajectory }}.",
+    "Highest risk: {{ top_domain.name }} at {{ top_domain.score }}/100; {{ correlations_fired }} correlation(s) firing — paranoid read: assume each is real until disproved.",
+    "Action: minimize surface area in {{ top_domain.name }} first; loose permissions tighten cheaper than loose code refactors.",
+]

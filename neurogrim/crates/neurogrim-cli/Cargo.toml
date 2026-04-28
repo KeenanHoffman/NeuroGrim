@@ -35,6 +35,9 @@ neurogrim-a2a = { workspace = true }
 neurogrim-ecosystem = { workspace = true }
 url = { workspace = true }
 uuid = { version = "1", features = ["v4", "serde"] }
+# v3.1 E-V31-C C1: TOML loader for hat-narration templates. Templates
+# bundled at compile time via include_str!; toml crate parses at runtime.
+toml = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,0 +1,19 @@
+# Adversary-hat narration template (v3.1 E-V31-C C2).
+#
+# The adversary hat narrates Brain output as risk-and-concern surface.
+# Per the per-hat communication contract in `.claude/skills/hats/SKILL.md`:
+# "Risk count + severity. '3 blocking, 1 concern.' Link to plan file."
+# Reframed for AgentOutput input: highlight the risk concentration,
+# call out correlations as compound-risk signals, recommend
+# verification before action.
+
+[meta]
+hat = "adversary"
+schema_version = "1"
+
+[content]
+lines = [
+    "Risk surface: Brain at {{ score }}/100, trajectory {{ trajectory }}.",
+    "Concentrated leverage: {{ top_domain.name }} at {{ top_domain.score }}/100, with {{ correlations_fired }} correlation(s) firing — compound risk signals.",
+    "Action: investigate {{ top_domain.name }} drift before any merge — score below threshold means assumptions need verification.",
+]

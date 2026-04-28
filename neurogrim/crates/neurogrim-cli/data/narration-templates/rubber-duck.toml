@@ -1,0 +1,18 @@
+# Rubber-duck narration template (v3.1 E-V31-C C2).
+#
+# Per the per-hat communication contract: "Concept explained +
+# verification question. 'Does this match your mental model?'"
+# Reframed for AgentOutput: explain what the score + correlations
+# mean in plain language, then ask the operator to verify their
+# mental model.
+
+[meta]
+hat = "rubber-duck"
+schema_version = "1"
+
+[content]
+lines = [
+    "Reading the Brain: {{ score }}/100 overall, trajectory {{ trajectory }}.",
+    "The {{ top_domain.name }} domain sits at {{ top_domain.score }}/100, and {{ correlations_fired }} cross-domain correlation(s) are firing — patterns visible only when you look across multiple signals.",
+    "Does this match your mental model of what should be the highest-leverage thing to look at?",
+]

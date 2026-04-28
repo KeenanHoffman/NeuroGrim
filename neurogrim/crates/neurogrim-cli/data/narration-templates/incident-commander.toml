@@ -1,0 +1,16 @@
+# Incident-commander narration template (v3.1 E-V31-C C2).
+#
+# Per the per-hat communication contract: "Blast radius + action taken.
+# '2/4 services down, rolled back chat.'" Reframed for AgentOutput:
+# call blast-radius first, recommend stabilization before diagnosis.
+
+[meta]
+hat = "incident-commander"
+schema_version = "1"
+
+[content]
+lines = [
+    "Status: Brain at {{ score }}/100, trajectory {{ trajectory }}.",
+    "Blast radius: {{ top_domain.name }} ({{ top_domain.score }}/100) is the most-affected surface; {{ correlations_fired }} correlation(s) fired.",
+    "Stabilize: contain {{ top_domain.name }} drift before diagnosing — root cause comes after the surface stops bleeding.",
+]

@@ -1,0 +1,17 @@
+# Architect-hat narration template (v3.1 E-V31-C C2).
+#
+# The architect hat narrates Brain output as decision surface.
+# Per the per-hat communication contract: "Decision points only.
+# '2 approaches, tradeoff is X vs Y.'" Reframed for AgentOutput:
+# name the largest-leverage decision and the tradeoff explicitly.
+
+[meta]
+hat = "architect"
+schema_version = "1"
+
+[content]
+lines = [
+    "System state: {{ score }}/100, trajectory {{ trajectory }}.",
+    "Decision surface: {{ top_domain.name }} at {{ top_domain.score }}/100 is the largest open dimension; {{ correlations_fired }} correlation(s) firing.",
+    "Tradeoff: prioritize {{ top_domain.name }} now (cleaner reasoning, narrower scope) vs. defer (other surfaces may shift the leverage point).",
+]

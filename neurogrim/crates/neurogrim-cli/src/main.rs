@@ -64,6 +64,26 @@ enum Commands {
         plain: bool,
     },
 
+    /// Narrate the Brain's state through a hat's lens (templated, no LLM)
+    ///
+    /// Produces 3-5 lines of hat-calibrated prose summarizing the
+    /// Brain's score + trajectory + top concern + correlation count.
+    /// Each declared hat (adversary, architect, incident-commander,
+    /// rubber-duck, security-auditor, supply-chain-auditor,
+    /// visionary) carries its own template; the per-hat communication
+    /// contract in `.claude/skills/hats/SKILL.md` documents each
+    /// hat's distillation style. Templates are deterministic data
+    /// files (no LLM); v3.1 charter §3 locked decision 1.
+    Narrate {
+        #[arg(short, long, default_value = ".claude/brain-registry.json")]
+        registry: String,
+        /// Hat to narrate through. Required. Supported: adversary,
+        /// architect, incident-commander, rubber-duck, security-auditor,
+        /// supply-chain-auditor, visionary.
+        #[arg(long)]
+        hat: String,
+    },
+
     /// Validate the brain-registry.json configuration
     #[command(visible_alias = "seal")]
     Validate {
@@ -275,6 +295,7 @@ async fn main() -> Result<()> {
             human_persona,
         } => commands::health::run(&registry, hat, human_persona, plain).await,
         Commands::Trend { registry, plain } => commands::trend::run(&registry, plain).await,
+        Commands::Narrate { registry, hat } => commands::narrate::run(&registry, hat).await,
         Commands::Validate { registry } => commands::validate::run(&registry).await,
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,

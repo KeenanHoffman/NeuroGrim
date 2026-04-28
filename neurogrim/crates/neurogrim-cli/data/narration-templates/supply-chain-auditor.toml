@@ -1,0 +1,17 @@
+# Supply-chain-auditor narration template (v3.1 E-V31-C C2).
+#
+# Per the per-hat communication contract: "Open ticket count + highest-
+# confidence finding. '3 open, 1 with attestation drop.'" Reframed for
+# AgentOutput: provenance posture as the framing, recommend pin-to-
+# last-good as the conservative remediation while triage continues.
+
+[meta]
+hat = "supply-chain-auditor"
+schema_version = "1"
+
+[content]
+lines = [
+    "Provenance posture: Brain at {{ score }}/100, trajectory {{ trajectory }}.",
+    "Active concern: {{ top_domain.name }} ({{ top_domain.score }}/100); {{ correlations_fired }} correlation(s) firing — package patterns deviating from prior baseline.",
+    "Recommendation: pin-to-last-good on {{ top_domain.name }} surfaces while triage decides remove vs. accept.",
+]
