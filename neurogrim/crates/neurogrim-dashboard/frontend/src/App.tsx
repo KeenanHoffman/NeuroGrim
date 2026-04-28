@@ -1,15 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-
-interface HealthResponse {
-  ok: boolean;
-  registry_path: string;
-  version: string;
-}
+import type { HealthResponse } from "@bindings/HealthResponse";
 
 async function fetchHealth(): Promise<HealthResponse> {
   const res = await fetch("/api/health");
   if (!res.ok) throw new Error(`/api/health returned ${res.status}`);
-  return res.json();
+  return (await res.json()) as HealthResponse;
 }
 
 /**

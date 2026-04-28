@@ -13,9 +13,9 @@ use axum::{
     Router,
 };
 use rust_embed::RustEmbed;
-use serde::Serialize;
 
 use crate::state::AppState;
+use crate::types::HealthResponse;
 
 /// Frontend bundle embedded at compile time. Built by `npm run build`
 /// in `frontend/`. Empty during Phase 0 setup until the frontend has
@@ -32,21 +32,11 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-#[derive(Serialize)]
-struct HealthResponse {
-    ok: bool,
-    registry_path: String,
-    /// Echoes the dashboard's own version so the frontend can detect
-    /// server/client version skew (a frontend bundled at v3.4.0
-    /// connecting to a v3.5 server will know to warn the operator).
-    version: &'static str,
-}
-
 async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         ok: true,
         registry_path: state.registry_path.to_string(),
-        version: env!("CARGO_PKG_VERSION"),
+        version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }
 

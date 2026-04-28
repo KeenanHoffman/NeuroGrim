@@ -29,6 +29,7 @@
 
 pub mod routes;
 pub mod state;
+pub mod types;
 
 pub use routes::router;
 pub use state::AppState;
