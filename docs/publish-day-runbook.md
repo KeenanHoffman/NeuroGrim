@@ -1,4 +1,4 @@
-# Publish-Day Runbook — NeuroGrim `3.0.0-rc.1`
+# Publish-Day Runbook — NeuroGrim `3.0.0`
 
 The exact sequence of commands the operator runs on publish day.
 Follow this top-to-bottom. Do not skip steps. Do not run from
@@ -133,10 +133,10 @@ Must exit 0. If any gate fails, stop. Fix it. Re-run. Do not
 override.
 
 The script:
-- Verifies workspace version = `3.0.0-rc.1`.
-- Confirms `CHANGELOG.md` has a `[3.0.0-rc.1]` entry.
+- Verifies workspace version = `3.0.0`.
+- Confirms `CHANGELOG.md` has a `[3.0.0]` entry.
 - Confirms `LICENSE` + `docs/getting-started.md` +
-  `docs/release-notes/v3.0-rc.1.md` + `examples/hello-brain/*` +
+  `docs/release-notes/v3.0.0.md` + `examples/hello-brain/*` +
   whitepaper exist.
 - Runs `cargo check --workspace`.
 - Runs `cargo test --workspace --all-targets`.
@@ -149,8 +149,8 @@ The script:
 ## Step 2 — Tag the release
 
 ```bash
-git tag v3.0.0-rc.1 -m "NeuroGrim 3.0.0-rc.1 — first public release candidate"
-git push origin v3.0.0-rc.1
+git tag v3.0.0 -m "NeuroGrim 3.0.0 — first public stable release"
+git push origin v3.0.0
 ```
 
 Tag after the pre-publish check and before publishing, so if
@@ -206,14 +206,14 @@ opens.
 
 ```bash
 # Install the CLI from crates.io into a clean location
-cargo install neurogrim-cli --version 3.0.0-rc.1 --root /tmp/neurogrim-install
+cargo install neurogrim-cli --version 3.0.0 --root /tmp/neurogrim-install
 
 # Confirm it runs
 /tmp/neurogrim-install/bin/neurogrim --version
-# Expected: neurogrim 3.0.0-rc.1
+# Expected: neurogrim 3.0.0
 
 # Confirm the docs.rs build kicks off
-# Visit: https://docs.rs/neurogrim-cli/3.0.0-rc.1
+# Visit: https://docs.rs/neurogrim-cli/3.0.0
 # (may take 5-10 min after publish)
 ```
 
@@ -226,14 +226,14 @@ investigate before announcing.
 
 ```bash
 # Create the release from the release-notes file
-gh release create v3.0.0-rc.1 \
-  --title "NeuroGrim 3.0.0-rc.1" \
-  --notes-file docs/release-notes/v3.0-rc.1.md \
-  --prerelease
+gh release create v3.0.0 \
+  --title "NeuroGrim 3.0.0" \
+  --notes-file docs/release-notes/v3.0.0.md
 ```
 
-Use `--prerelease` because this is an RC. Switch to final release
-when `3.0.0` ships.
+This is the first public stable release; do NOT pass
+`--prerelease`. Future RC tags (e.g., `v3.1.0-rc.1`) would re-add
+that flag.
 
 ---
 
@@ -261,9 +261,9 @@ Twitter/X, LinkedIn, Reddit r/rust, Hacker News, etc.). The
 release notes are the canonical source; link them rather than
 re-summarize.
 
-Honest framing: this is an **RC** with **open gates documented**.
-Don't oversell. The v3.0-rc.1 release notes already model the
-tone.
+Honest framing: this is the **first public stable release** with
+**every gate intentionally closed**. Don't oversell. The v3.0.0
+release notes already model the tone.
 
 ---
 
@@ -272,23 +272,23 @@ tone.
 ### One cargo publish fails mid-chain
 
 - **`neurogrim-core` fails:** stop. Nothing has been published
-  irreversibly. Fix the issue, bump the patch (3.0.0-rc.2), re-tag,
+  irreversibly. Fix the issue, bump the patch (3.0.1), re-tag,
   restart.
 - **A dependent fails after `neurogrim-core` published:** the
   published `neurogrim-core` is permanent. Options:
   1. Yank `neurogrim-core` (does NOT free the name; later
      versions of the same crate can still publish). Fix and
-     re-publish as `3.0.0-rc.2`.
-  2. Fix the dependent and publish the rest. Leaves `-rc.1` as a
+     re-publish as `3.0.1`.
+  2. Fix the dependent and publish the rest. Leaves `3.0.0` as a
      partial release.
 
 Prefer option 1 for correctness. Yank instructions:
-`cargo yank --version 3.0.0-rc.1 neurogrim-core`.
+`cargo yank --version 3.0.0 neurogrim-core`.
 
 ### All crates published but verification fails
 
 Cargo crates are immutable once published. Fix locally, bump to
-`3.0.0-rc.2`, publish again. Do NOT try to re-publish the same
+`3.0.1`, publish again. Do NOT try to re-publish the same
 version.
 
 ### Discovery: name was claimed in the hours between snapshot and publish
@@ -325,8 +325,8 @@ pushed but BEFORE `cargo publish` runs:
 3. **Force-delete the tag** locally + remotely. Yes, force —
    the alternative is publishing compromised code:
    ```bash
-   git tag -d v3.0.0-rc.1
-   git push origin :refs/tags/v3.0.0-rc.1
+   git tag -d v3.0.0
+   git push origin :refs/tags/v3.0.0
    ```
    This is destructive but necessary. Future operators reading
    the git history will see the deletion + the documented
@@ -342,7 +342,7 @@ pushed but BEFORE `cargo publish` runs:
 5. **Re-run `prepublish-check.sh`** until clean.
 6. **Re-tag:**
    - If state materially changed (rebased, dep bumped, new
-     commits): bump to `3.0.0-rc.2`, update CHANGELOG, re-tag.
+     commits): bump to `3.0.1`, update CHANGELOG, re-tag.
      Semver discipline.
    - If state did NOT change (you're confident the gate flapped
      transiently): re-tag the same version. Document in the
@@ -436,11 +436,12 @@ chain stack:
 
 ## Post-publish checklist
 
-- [ ] Tag visible on GitHub at `v3.0.0-rc.1`.
-- [ ] All six crates visible on crates.io at `3.0.0-rc.1`.
+- [ ] Tag visible on GitHub at `v3.0.0`.
+- [ ] All six crates visible on crates.io at `3.0.0`.
 - [ ] docs.rs builds green for at least `neurogrim-cli` +
       `neurogrim-core`.
-- [ ] GitHub Release created with `--prerelease` flag.
+- [ ] GitHub Release created (no `--prerelease` flag — this is
+      the first public stable release).
 - [ ] `BEFORE-PUBLIC-RELEASE.md` gate 3 checkboxes flipped to `[x]`
       with "published 2026-MM-DD at commit <sha>" inline notes.
 - [ ] This runbook annotated with "executed YYYY-MM-DD; notes:
@@ -466,8 +467,7 @@ then.
 - `audit/ROLLBACK-PLAYBOOK.md` — supply-chain remediation
   procedures; per-epic populated as findings surface
 - `scripts/prepublish-check.sh` — automated pre-flight
-- `docs/release-notes/v3.0-rc.1.md` — what shipped (and why
-  publication is blocked until the supply-chain gate closes)
+- `docs/release-notes/v3.0.0.md` — what shipped in this release
 - `docs/sdk.md` — canonical Rust SDK; Python SDK framing
 - `CHANGELOG.md` — keep-a-changelog format
 - `roadmap/BACKLOG.md` — B-20 (Python SDK on PyPI; dormant)

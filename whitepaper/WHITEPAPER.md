@@ -919,7 +919,7 @@ This schema is stable across Brain versions within a major version number. Consu
 - `roadmap/VISION.md` — nineteen guiding principles (1–19) and the north star
 - `roadmap/ROADMAP.md` — stage progression and current implementation status
 - `docs/getting-started.md` — ~20-minute path from clone to a working Brain
-- `CHANGELOG.md` — release history (current: `3.0.0-rc.1`)
+- `CHANGELOG.md` — release history (current: `3.0.0`)
 - `.claude/skills/hats/SKILL.md` — hat system (adversary, architect, visionary, rubber-duck, …); pairs with human personas for output shaping
 - `.claude/skills/plan-critic/SKILL.md` — adversarial plan review protocol
 - `.claude/skills/cli-mode/SKILL.md` — bypass MCP; invoke the Brain via Bash subcommands

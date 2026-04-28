@@ -1,15 +1,19 @@
 # Before Public Release — Pre-Publish Readiness Checklist
 
-**Status: 🔴 v3.0-rc.1 blocked on supply-chain security work.**
-The adoption surface is in place (getting-started, examples,
-whitepaper §11, CHANGELOG, LICENSE, README entry-ramps); the
-publication mechanics are prepared (prepublish-check script,
-metadata pass, CI-matrix draft); the publish-day runbook is
-written. **What changed on 2026-04-24:** a new master gate — the
-eleven-epic supply-chain security scaffolding (E-SC-0 through
-E-SC-10) — must close before any `cargo publish` runs. Phase 0
-(self-audit baseline, E-SC-0) has already shipped and is green;
-Layers 1-3 remain.
+**Status: 🟢 v3.0.0 stable — both master gates closed; remaining gates are operator-controlled.**
+Master gate 11 (supply-chain security, E-SC-0..E-SC-10) closed
+2026-04-26. Master gate 12 (Brains-2.0 self-observability,
+E-B2-0..E-B2-8) closed 2026-04-27 with this release. Remaining
+🟡 gates (1 trademark, 4 per-crate README, 6 CONTRIBUTING +
+rustdoc, 8 CI matrix) are operator-controlled and do not block
+the technical readiness of the release; the operator decides
+when to flip them as part of the publish-day runbook. **`cargo
+publish` is now an operator-decision per
+`docs/publish-day-runbook.md`.** The adoption surface is in
+place (getting-started, examples, whitepaper §11, CHANGELOG,
+LICENSE, README entry-ramps); the publication mechanics are
+prepared (prepublish-check script, metadata pass, CI-matrix
+draft); the publish-day runbook is written.
 
 **Posture:** `cargo publish` is *irrevocable* — published crate
 names cannot be reused, yanking a version does not free the name,
@@ -88,9 +92,12 @@ crate is a decision tracked in the publish-day runbook.
 ## 3. Cargo build + dry-run gate 🟡
 
 **Build + test verified (current):**
-- Workspace version bumped to `3.0.0-rc.1` (previously `0.1.0`).
+- Workspace version bumped to `3.0.0` (previously `0.1.0`; the
+  intermediate `3.0.0-rc.1` plan was paused so the supply-chain
+  master gate could ship first, then consolidated into stable
+  `3.0.0`).
 - Intra-workspace dependencies now carry both `path` AND
-  `version = "3.0.0-rc.1"` — required for `cargo publish` to
+  `version = "3.0.0"` — required for `cargo publish` to
   resolve deps from crates.io.
 - `cargo check --workspace` clean; test suite green.
 
@@ -169,7 +176,7 @@ Operator-controlled. `cargo audit` integration is in
 Closed by the Tier 1 / Tier 3 pass (2026-04-23/24):
 
 - [x] **`CHANGELOG.md`** — keep-a-changelog format, entry for
-      `3.0.0-rc.1`.
+      `3.0.0`.
 - [x] **`docs/getting-started.md`** — ~20-minute path from clone to
       working Brain.
 - [x] **`examples/hello-brain/`** — minimal standalone demo
@@ -177,7 +184,7 @@ Closed by the Tier 1 / Tier 3 pass (2026-04-23/24):
       `README.md`).
 - [x] **Whitepaper refresh** — `whitepaper/WHITEPAPER.md` §11
       Evidence Posture added; Appendix C references updated.
-- [x] **Release notes** — `docs/release-notes/v3.0-rc.1.md`.
+- [x] **Release notes** — `docs/release-notes/v3.0.0.md`.
 - [x] **Root `README.md`** — `🚀 Getting started in ~20 minutes`
       entry-ramp above the fold.
 - [x] **LSP-Brains `README.md`** — entry-ramp pointing back at
@@ -305,7 +312,18 @@ Do not run publish commands from memory; follow the runbook.
 | 9. Ecosystem submodule posture | 🟢 |
 | 10. Publish-day runbook | ✓ written (`docs/publish-day-runbook.md`) |
 | **11. Supply-chain security (MASTER GATE)** | 🟢 **E-SC-0..10 GREEN.** All 11 epics in the supply-chain scaffolding (`~/.claude/plans/parallel-hugging-eich.md`) shipped. **Layer 1** (mechanical SCA across Rust + Python + Node ecosystems) + **Layer 2** (deep-signal vigilance, 7 sub-sensors) + **Layer 3** (agent-assisted review framework: hat + decision-ledger + review-tickets + auto-create bridge) + **spec normative** (LSP-Brains v2.6 §16 + METH-EV §15 + 2 new schemas + A2A enum extensions) + **calibration framework** (fixture library + `sca-calibrate` CLI + `--check-promotion-ready` gate) + **container docs** + **publish-gate ratification** (E-SC-10): all 4 Brains declare the three supply-chain domains at advisory weight 0.0; `prepublish-check.sh` extended with strict-with-bypass for L2 + L3 + LiteLLM-equivalent fresh-OSV-rerun; `publish-day-runbook.md` documents the supply-chain rollback window between tag and publish. **`cargo publish` is now operator-decision** — the supply-chain side is closed. v1 calibration: pass-with-sample-size-warning across all three layers; promotion-not-ready (gaps documented). v2 candidates documented in `docs/publish-day-runbook.md`: cross-Brain A2A `supply-chain-signal` wire-up, fixture-library growth toward ≥30/layer, L3 human-agreement data collection, calibration-report schema spec-promotion to LSP-Brains v2.7. |
-| **12. Brains-2.0 self-observability (MASTER GATE — v3.0 publish only)** | 🔵 **Planned — see E-B2-8.** Nine epics in the Brains-2.0 scaffolding (`~/.claude/plans/parallel-hugging-eich.md`, since 2026-04-26) ship the self-observability primitives: confidence as first-class envelope field (E-B2-1), self-coherence domain (E-B2-2), hat-as-formal-contract (E-B2-3), trust budget primitive (E-B2-4), METH-EV §16 multi-round assessment cadence (E-B2-5), operator-calibration domain (E-B2-6), and federated patterns A2A v2.7 (E-B2-7). Master gate 12 flips 🟢 when all 4 Brains dogfood green per E-B2-8 and spec at v3.0 normative. Charter: `audit/BRAINS-2-0-CHARTER.md`. **Gate 12 applies to v3.0 final** (progressive spec sequencing v2.7 → v2.8 → v2.9 → v3.0); v3.0-rc.1 publish path remains gated on gate 11 (supply-chain) per existing publish-day-runbook. |
+| **12. Brains-2.0 self-observability (MASTER GATE — v3.0 publish only)** | 🟢 **E-B2-0..E-B2-8 GREEN (2026-04-27).** Nine epics in the Brains-2.0 scaffolding shipped: charter (E-B2-0), confidence as first-class envelope §3.8 (E-B2-1), self-coherence + domain-calibration ledgers §17 (E-B2-2), hat-as-formal-contract §5.4.1 (E-B2-3), trust-budget primitive §16.8 (E-B2-4), METH-EV §16 multi-round assessment (E-B2-5), operator-calibration §17.12 (E-B2-6), federated patterns A2A §16.6.1 (E-B2-7), and the dogfooding + spec v3.0 stability-marker close (E-B2-8). Spec promoted v2.12 → v3.0 (stability marker; no section-content changes — all 5 normative sections were already at MUST/SHOULD/MAY in v2.7-v2.10). All 4 Brains dogfood green: each declares the 4 new Brains-2.0 advisory domains (`domain-calibration`, `trust-budget`, `operator-calibration`, `federated-patterns`) at weight 0.0; CMDBs present + parseable; cross-Brain federated-pattern integration test compiles + passes; hat-contract migration applied to LSP-Brains (2 hats) + python-starter (2 hats) extending NeuroGrim + ecosystem (8 hats each). `prepublish-check.sh` extended with strict gate-12 checks (CMDB-presence + advisory-weight invariant + cross-Brain-integration-test). v1 calibration: structural surface in place; the ≥30-day self-coherence + ≥50 operator-calibration record windows reframed by Charter Amendment 2026-04-27 as post-publish observation feeding a v3.1 calibration-report gate (mirrors gate-11 supply-chain "pass-with-sample-size-warning" precedent). Per-Brain dogfood-green checklist: see below. Charter: `audit/BRAINS-2-0-CHARTER.md`. Retrospective: `audit/BRAINS-2-0-RETROSPECTIVE-2026-04-27.md`. Rollback: `docs/v3-rollback.md`. |
+
+### Gate 12 — Per-Brain dogfood-green checklist
+
+| Brain | 4 Brains-2.0 CMDBs present | Advisory weight 0.0 | Schema-valid | Hat-contract conformance |
+|---|---|---|---|---|
+| Ecosystem (`D:\Brains\.claude\`) | ✓ | ✓ | ✓ | ✓ (8 hats) |
+| NeuroGrim (`D:\Brains\NeuroGrim\.claude\`) | ✓ | ✓ | ✓ | ✓ (8 hats) |
+| LSP-Brains (`D:\Brains\LSP-Brains\.claude\`) | ✓ | ✓ | ✓ | ✓ (2 hats: spec-editor, rubber-duck) |
+| python-starter (`D:\Brains\NeuroGrim\NeuroGrim-python-starter\.claude\`) | ✓ | ✓ | ✓ | ✓ (2 hats: adopter, rubber-duck) |
+
+The 4 Brains-2.0 CMDBs are: `domain-calibration-cmdb.json`, `trust-budget-cmdb.json`, `operator-calibration-cmdb.json`, `federated-patterns-cmdb.json`. The 3 supply-chain CMDBs (`supply-chain-sca`, `supply-chain-vigilance`, `supply-chain-review`) are gate-11's domain. The `rubber-duck.md` hat is byte-identical (md5 `6d1fb223ce6ac0d85d6b4d8b41c899d4`) across all 4 Brains, preserving the cross-repo invariant. Confidence-as-first-class (§3.8), hat-contract (§5.4.1), and METH-EV §16 are envelope/spec/methodology deliverables — no separate CMDB. `prepublish-check.sh`'s 3 new gate-12 functions enforce this checklist mechanically.
 
 **Legend:** 🟢 closed · 🟡 partial / operator-action-pending · 🔴 open / blocking · 🔵 planned (active campaign in flight) · ⚪ dormant (no current plan) · ✅ closed via snapshot · ✓ closed via deliverable
 

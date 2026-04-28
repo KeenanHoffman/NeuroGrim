@@ -4,57 +4,22 @@ All notable changes to NeuroGrim + the LSP Brains specification live
 here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.0] - 2026-04-27
 
-### Changed — v3.0-rc.1 publish gated on supply-chain work (2026-04-24)
-
-Following a 2026-04-23 PyPI supply-chain incident (a second-order
-scanner-chain compromise: a trojanized security-scanner binary
-captured CI credentials, which were used to publish trojanized
-releases of an otherwise-legitimate package), we adopted a stricter
-publish posture:
-
-- **No `cargo publish` until a full three-layer supply-chain
-  awareness feature ships** and is running self-green against
-  NeuroGrim's own dependency graph. Scope: native-Rust SCA (no
-  external scanner-tool shell-outs), deep-signal vigilance,
-  agent-assisted human review with a normative decision ledger.
-- **Tag `v3.0.0-rc.1` is not created** until the supply-chain
-  gate closes. The artifacts labeled `3.0.0-rc.1` below remain the
-  target content for that release; they are not withdrawn.
-- **Python SDK becomes dogfood-only**, not a shipped artifact.
-  `neurogrim-core` + `neurogrim-sensory` are the canonical Rust
-  SDK for downstream extension. See [`docs/sdk.md`](docs/sdk.md).
-  BACKLOG B-20 (PyPI publish) is re-framed from "deferred pending
-  incident" to "no current plan to publish."
-- **Phase 0 self-audit baseline captured** (epic E-SC-0). Full
-  transitive dependency graph (261 Rust + 32 Python packages)
-  queried against OSV.dev; one active advisory remediated
-  (`rustls-webpki` 0.103.12 → 0.103.13, RUSTSEC-2026-0104); one
-  unmaintained-notice accepted with escalation trigger
-  (`paste` 1.0.15 via rmcp; transitive; proc-macro-only). Full
-  audit artifacts committed at `D:/Brains/audit/` in the ecosystem
-  repo.
-
-Why this is captured in the CHANGELOG rather than a release note:
-no release has shipped. When v3.0-rc.1 ultimately tags, its
-release-notes section will subsume this block as the "why
-publishing was delayed" context.
-
-Full scaffolding of the supply-chain work (11 epics, ~8-12 weeks):
-`audit/ROLLBACK-PLAYBOOK.md` and the ecosystem's plan at
-`~/.claude/plans/parallel-hugging-eich.md`.
-
-## [3.0.0-rc.1] — intended; NOT YET TAGGED
-
-*Originally scoped for 2026-04-23; retained here as the target
-content for the tag once the supply-chain gate closes. See
-`[Unreleased]` above for the current posture.*
+*Stable consolidated release. Closes the supply-chain campaign
+(E-SC-0..E-SC-10) + the Brains-2.0 self-observability campaign
+(E-B2-0..E-B2-8). Both master gates 11 + 12 in `BEFORE-PUBLIC-
+RELEASE.md` are 🟢; remaining 🟡 gates are operator-controlled.
+`cargo publish` is operator-decision per
+`docs/publish-day-runbook.md`.*
 
 The version jump from `0.1.0` (workspace `Cargo.toml` default) to
-`3.0.0-rc.1` reflects methodology maturity across stages S1–S10
-rather than a tagged-release history (no prior version was ever
-published to crates.io or PyPI).
+`3.0.0` reflects methodology maturity across stages S1–S10 + the
+two post-S10 master-gate campaigns (supply-chain + self-observability).
+The intermediate `3.0.0-rc.1` plan was paused 2026-04-24 to ship
+the supply-chain master gate first; that plan's content is folded
+into this stable release alongside the Brains-2.0 work that
+followed.
 
 ### Added — Core implementation
 - **Rust workspace** (`neurogrim/crates/*`): `neurogrim-core` (pure
@@ -135,31 +100,106 @@ published to crates.io or PyPI).
 - Ecosystem + NeuroGrim + LSP-Brains `LICENSE` files (MIT).
 - Release notes + publish-day runbook + prepublish-check script.
 
-### Known open gates
+### Added — Supply-chain master gate (E-SC-0..E-SC-10, 2026-04-26)
+
+- **Three-layer SCA awareness** across Rust + Python + Node ecosystems:
+  Layer 1 mechanical SCA (native-Rust, no scanner-binary shell-outs);
+  Layer 2 deep-signal vigilance (7 sub-sensors: typosquat,
+  publish-cadence, maintainer-delta, transitive-surface, signature-gap,
+  binary-reproducibility, exfil-indicator); Layer 3 agent-assisted
+  human review framework (decision ledger + review tickets +
+  auto-create bridge + `supply-chain-auditor` hat).
+- **Spec normative**: LSP-Brains v2.6 §16 + METH-EV §15 + 2 new schemas
+  (decision-ledger-v1, review-ticket-v1) + A2A enum extensions for
+  `supply-chain-signal`.
+- **Calibration framework**: fixture library + `sca-calibrate` CLI +
+  `--check-promotion-ready` gate. v1 calibration:
+  pass-with-sample-size-warning across all three layers;
+  promotion-not-ready (gaps documented).
+- **`prepublish-check.sh`** extended with strict-with-bypass for L2 +
+  L3 + LiteLLM-equivalent fresh-OSV-rerun.
+- **`publish-day-runbook.md`** documents the supply-chain rollback
+  window between tag and publish.
+- **Master gate 11** in `BEFORE-PUBLIC-RELEASE.md` 🟢.
+
+### Added — Brains-2.0 self-observability master gate (E-B2-0..E-B2-8, 2026-04-27)
+
+- **E-B2-1 Confidence as first-class envelope field** (spec §3.8) —
+  numeric integer 0–100 at protocol; categorical (low/medium/high) at
+  UI only.
+- **E-B2-2 Self-coherence + domain-calibration ledgers** (spec §17) —
+  one ledger per domain family at
+  `.claude/brain/<domain>-calibration-ledger.jsonl`.
+- **E-B2-3 Hat-as-formal-contract** (spec §5.4.1) — closed-set
+  vocabulary + new `hat-contract-v1.schema.json` + per-hat
+  frontmatter migration. Static (file audit) at v1; runtime checks
+  deferred to v2 (BACKLOG B-23).
+- **E-B2-4 Trust-budget primitive** (spec §16.8) — per-Brain
+  `trust-budget.toml` declares allowed crates / shell-outs / external
+  services. Soft (advisory) at v1; hard gates deferred to v2.
+- **E-B2-5 METH-EV §16 multi-round assessment cadence** (METH-EV §16) —
+  strict bar → surgical bar → diminishing-returns + Phase 1.5 escape
+  hatch. RECOMMENDED for pre-release / epic-close-out contexts.
+- **E-B2-6 Operator-calibration domain** (spec §17.12) — extends
+  invocation-ledger schema with additive `disposition` field
+  (accept/reject/modify; no transcript content). Aggregation-only
+  export.
+- **E-B2-7 Federated patterns A2A** (spec §16.6.1) — new
+  `federated-pattern` A2A message type + `pattern-aggregation-ledger.jsonl`.
+  Bidirectional opt-in posture; closed-set numeric-only feature
+  vector; recursion guard at wire + source level; per-peer rate
+  limit; aggregation-only export.
+- **E-B2-8 Dogfooding + spec v3.0 stability marker** — all 4 Brains
+  declare the 4 new advisory domains at weight 0.0; CMDBs present +
+  schema-valid; cross-Brain federated-pattern integration test
+  compiles + passes; hat-contract migration applied to LSP-Brains
+  (2 hats: spec-editor, rubber-duck) + python-starter (2 hats:
+  adopter, rubber-duck) extending NeuroGrim + ecosystem (8 hats each);
+  `prepublish-check.sh` extended with strict gate-12 checks
+  (CMDB-presence + advisory-weight invariant + cross-Brain integration).
+- **Spec promoted v2.6 → v3.0** progressively (v2.7→v2.12 → v3.0
+  stability marker). v3.0 = additive over v2.x; deprecation track
+  deferred to v4.0 (no symbols deprecated, removed, or withdrawn).
+- **Charter Amendment 2026-04-27** reframes the ≥30-day self-coherence
+  + ≥50 operator-calibration record metrics from "before v3.0" to
+  post-publish observation feeding a v3.1 calibration-report gate
+  (mirrors gate-11 supply-chain "pass-with-sample-size-warning"
+  precedent). See `audit/BRAINS-2-0-CHARTER.md` Charter Amendment +
+  `audit/BRAINS-2-0-RETROSPECTIVE-2026-04-27.md`.
+- **Master gate 12** in `BEFORE-PUBLIC-RELEASE.md` 🟢.
+
+### Changed
+- **Workspace version** `0.1.0` (default) → `3.0.0` final (intra-workspace
+  dep pins also bumped from `3.0.0-rc.1` to `3.0.0`).
+- **Spec header** v2.12 → v3.0 (stability marker; `Status: Active` →
+  `Status: Stable v3.0`).
+- **Top-level pre-release status** in `BEFORE-PUBLIC-RELEASE.md` 🔴 → 🟢
+  (both master gates closed; remaining 🟡 gates are operator-controlled).
+
+### Calibration window
+- v3.0 ships the structural surface for the seven Brains-2.0 primitives
+  without 30-day self-coherence + 50 operator-calibration records (per
+  Charter Amendment 2026-04-27). The post-publish observation window
+  feeds a v3.1 calibration-report gate. v3.0.x bug-fix releases may
+  flow during the window without re-opening the master gate; v3.1.0
+  ships when the calibration-report gate closes.
+
+### Known open gates (operator-controlled)
 See `BEFORE-PUBLIC-RELEASE.md` for the full status; short form:
-- 🟡 Legal / trademark formal clearance (operator-led).
-- 🟡 Cargo dry-run on final metadata.
-- 🟡 Metadata completeness pass.
-- 🔴 **Supply-chain security (SCA Layers 1+2+3 shipped + self-
-  green against own deps).** **This is now the master gate for
-  v3.0-rc.1 publish** per the 2026-04-24 scaffolding. Scope:
-  three-layer (mechanical / vigilance / agent-assisted review)
-  across Rust + Python + Node, with a normative decision ledger
-  and a `supply-chain-auditor` hat. See the scaffolding plan and
-  `audit/ROLLBACK-PLAYBOOK.md`. Phase 0 (self-audit baseline) has
-  shipped; Layers 1-3 are E-SC-2 through E-SC-6.
-- 🟡 Documentation (this release closes most of this gate).
+- 🟡 Legal / trademark formal clearance.
+- 🟡 Per-crate README + `cargo package --list` inspection.
+- 🟡 CONTRIBUTING + per-crate rustdoc.
+- 🟡 CI matrix enablement.
 - ⚪ **PyPI publish — no current plan.** The Python SDK is
   dogfood-only per the 2026-04-24 Python SDK reframe. BACKLOG B-20
   tracks the dormant roadmap item; source install via `pip install
   -e sdk-python/` is the supported path for adopters who need
   Python. See [`docs/sdk.md`](docs/sdk.md) for the canonical Rust
   SDK story.
-- 🟡 CI matrix enablement.
 
-### Known deferred to post-RC
+### Known deferred to post-publish
 - **S5-TP-3** (team outside LaaS adopts the framework): re-framed as
-  a post-publication milestone rather than a release blocker. v3.0-rc
+  a post-publication milestone rather than a release blocker. v3.0.0
   ships the adoption surface; adopter-found is a separate track.
 - **S10-DP-4** (agent-behavior weight flip 0.0 → 0.05): operator-
   gated on calibration + red-mode audit. Mechanism complete; flip
@@ -180,7 +220,7 @@ See `BEFORE-PUBLIC-RELEASE.md` for the full status; short form:
 
 ## Release-note links
 
-- Full release notes for this version: `docs/release-notes/v3.0-rc.1.md`.
+- Full release notes for this version: `docs/release-notes/v3.0.0.md`.
 - Publish-day runbook: `docs/publish-day-runbook.md`.
 - Pre-publish status tracker: `BEFORE-PUBLIC-RELEASE.md`.
 - Spec changelog (per-version normative diff): `D:/Brains/LSP-Brains/spec/LSP-BRAINS-SPEC.md` § Changelog.

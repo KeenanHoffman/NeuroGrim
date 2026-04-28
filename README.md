@@ -11,7 +11,7 @@ trajectory intelligence, and gated governance. Sensory tools are small spells ca
 against the project; the Brain keeps a grimoire of their readings and tells you what
 has changed.
 
-**Current version:** `3.0.0-rc.1` — first public release candidate.
+**Current version:** `3.0.0` — first public stable release (closes the supply-chain + Brains-2.0 self-observability master-gate campaigns).
 See [CHANGELOG.md](CHANGELOG.md) for what shipped + what's open.
 
 ## 🚀 Getting started in ~20 minutes

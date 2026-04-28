@@ -26,7 +26,7 @@ set -euo pipefail
 # ---------------------------------------------------------------
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKSPACE="$REPO_ROOT/neurogrim"
-EXPECTED_VERSION="3.0.0-rc.1"
+EXPECTED_VERSION="3.0.0"
 CHECK_PYTHON=0  # PyPI publish deferred — see header comment.
 
 # Crates in dependency order (for future `cargo publish` scripting).
@@ -100,16 +100,16 @@ check_license_files() {
 check_adoption_surface() {
   echo
   blue "== Adoption surface =="
-  # Note: release-notes file uses the short-version convention
-  # (e.g., v3.0-rc.1.md, not 3.0.0-rc.1.md) per CHANGELOG +
+  # Note: release-notes file uses the v<MAJOR.MINOR.PATCH>.md
+  # convention (v3.0.0.md, not 3.0.0.md) per CHANGELOG +
   # BEFORE-PUBLIC-RELEASE + publish-day-runbook cross-references.
-  # Pre-PRE-RELEASE-2026-04-26 the script derived this path from
-  # EXPECTED_VERSION which produced the wrong format and silently
-  # failed the gate. Hardcoded to match the actual filename
-  # convention; bump alongside EXPECTED_VERSION for releases.
+  # The previous rc.1 short-version convention (v3.0-rc.1.md) was
+  # retired with E-B2-8's drop of the rc.1 suffix. Hardcoded to
+  # match the actual filename convention; bump alongside
+  # EXPECTED_VERSION for releases.
   local files=(
     "$REPO_ROOT/docs/getting-started.md"
-    "$REPO_ROOT/docs/release-notes/v3.0-rc.1.md"
+    "$REPO_ROOT/docs/release-notes/v3.0.0.md"
     "$REPO_ROOT/examples/hello-brain/README.md"
     "$REPO_ROOT/examples/hello-brain/brain-registry.json"
     "$REPO_ROOT/examples/hello-brain/src/main.py"
@@ -394,6 +394,178 @@ print(d.get('tickets_open', -1))
   fi
 }
 
+check_brains_2_0_cmdb_presence() {
+  # E-B2-8 (2026-04-27): gate 12 strict CMDB-presence check.
+  #
+  # Brains-2.0 introduced four new advisory domains across all four
+  # Brains (ecosystem + NeuroGrim + LSP-Brains + python-starter):
+  #   * domain-calibration   (E-B2-2)
+  #   * trust-budget         (E-B2-4)
+  #   * operator-calibration (E-B2-6)
+  #   * federated-patterns   (E-B2-7)
+  #
+  # Each Brain MUST have a parseable CMDB for each of these four
+  # domains before publish (4 Brains x 4 CMDBs = 16 files). The
+  # three supply-chain CMDBs are gate 11's domain — not double-
+  # counted here.
+  #
+  # Confidence-as-envelope (E-B2-1), hat-contract (E-B2-3), and
+  # METH-EV §16 (E-B2-5) are envelope/spec deliverables and do not
+  # have separate CMDBs.
+  echo
+  blue "== Brains-2.0 CMDB presence (gate 12, E-B2-8 strict) =="
+
+  local brains=(
+    "ecosystem:$REPO_ROOT/../.claude"
+    "neurogrim:$REPO_ROOT/.claude"
+    "lsp-brains:$REPO_ROOT/../LSP-Brains/.claude"
+    "python-starter:$REPO_ROOT/NeuroGrim-python-starter/.claude"
+  )
+  local cmdbs=(
+    domain-calibration-cmdb.json
+    trust-budget-cmdb.json
+    operator-calibration-cmdb.json
+    federated-patterns-cmdb.json
+  )
+
+  local entry brain_name brain_dir cmdb_name cmdb_path parse_rc
+  for entry in "${brains[@]}"; do
+    brain_name="${entry%%:*}"
+    brain_dir="${entry#*:}"
+    for cmdb_name in "${cmdbs[@]}"; do
+      cmdb_path="$brain_dir/$cmdb_name"
+      if [[ ! -f "$cmdb_path" ]]; then
+        fail "Brains-2.0 CMDB missing for $brain_name: $cmdb_path. \
+Bootstrap the corresponding sensory tool for that Brain (see \
+docs/publish-day-runbook.md § Brains-2.0 CMDBs) and re-run \
+prepublish-check.sh."
+      fi
+      if py -3 -c "
+import json
+json.load(open(r'$cmdb_path'))
+" >/dev/null 2>&1; then
+        parse_rc=0
+      elif python3 -c "
+import json
+json.load(open(r'$cmdb_path'))
+" >/dev/null 2>&1; then
+        parse_rc=0
+      else
+        parse_rc=1
+      fi
+      if [[ "$parse_rc" -ne 0 ]]; then
+        fail "Brains-2.0 CMDB unparseable for $brain_name: $cmdb_path. \
+Inspect the file; regenerate via the corresponding sensory tool."
+      fi
+    done
+  done
+  pass "Brains-2.0 CMDBs present + parseable across 4 Brains (16 CMDBs total)"
+}
+
+check_brains_2_0_advisory_weights() {
+  # E-B2-8 (2026-04-27): gate 12 advisory-weight invariant.
+  #
+  # All four Brains-2.0 domains are advisory (weight 0.0) per the
+  # locked decision in the layer-2 plan. If any Brain's
+  # brain-registry.json declares one of these domains with a
+  # non-zero weight, it has been escalated to gating without spec
+  # amendment — fail-closed before publish.
+  #
+  # Domains that are NOT declared in a given Brain are skipped
+  # (a Brain may legitimately not adopt every Brains-2.0 domain).
+  echo
+  blue "== Brains-2.0 advisory-weight invariant (gate 12, E-B2-8) =="
+
+  local registries=(
+    "ecosystem:$REPO_ROOT/../.claude/brain-registry.json"
+    "neurogrim:$REPO_ROOT/.claude/brain-registry.json"
+    "lsp-brains:$REPO_ROOT/../LSP-Brains/.claude/brain-registry.json"
+    "python-starter:$REPO_ROOT/NeuroGrim-python-starter/.claude/brain-registry.json"
+  )
+
+  local entry brain_name registry_path violations rc
+  for entry in "${registries[@]}"; do
+    brain_name="${entry%%:*}"
+    registry_path="${entry#*:}"
+    if [[ ! -f "$registry_path" ]]; then
+      fail "Brain registry missing for $brain_name: $registry_path"
+    fi
+    if violations="$(py -3 -c "
+import json, sys
+d = json.load(open(r'$registry_path'))
+weights = d.get('config', {}).get('domain_weights', {}) or {}
+b2_domains = ('domain-calibration', 'trust-budget', 'operator-calibration', 'federated-patterns')
+bad = []
+for name in b2_domains:
+    if name in weights:
+        w = weights[name]
+        if w != 0.0 and w != 0:
+            bad.append('%s=%s' % (name, w))
+if bad:
+    print(';'.join(bad))
+    sys.exit(1)
+" 2>&1)"; then
+      rc=0
+    else
+      rc=$?
+      if violations="$(python3 -c "
+import json, sys
+d = json.load(open(r'$registry_path'))
+weights = d.get('config', {}).get('domain_weights', {}) or {}
+b2_domains = ('domain-calibration', 'trust-budget', 'operator-calibration', 'federated-patterns')
+bad = []
+for name in b2_domains:
+    if name in weights:
+        w = weights[name]
+        if w != 0.0 and w != 0:
+            bad.append('%s=%s' % (name, w))
+if bad:
+    print(';'.join(bad))
+    sys.exit(1)
+" 2>&1)"; then
+        rc=0
+      else
+        rc=$?
+      fi
+    fi
+    if [[ "$rc" -ne 0 ]]; then
+      red "  [FAIL] $brain_name: non-zero weight on Brains-2.0 advisory domain(s): $violations"
+      info "Brains-2.0 domains MUST be advisory (weight 0.0) until a"
+      info "spec amendment escalates them. Either revert the weight in"
+      info "$registry_path, or land the spec amendment first."
+      fail "Brains-2.0 advisory-weight invariant violated in $brain_name registry"
+    fi
+  done
+  pass "All declared Brains-2.0 domains at advisory weight 0.0"
+}
+
+check_brains_2_0_cross_brain_integration() {
+  # E-B2-8 (2026-04-27): gate 12 cross-Brain integration compile.
+  #
+  # The federated-pattern loopback E2E test (BR-6 cross-Brain
+  # mandate) MUST compile cleanly before publish. We use --no-run
+  # for a fast compile-check; W5's full workspace test run
+  # exercises it for real.
+  echo
+  blue "== Brains-2.0 cross-Brain integration test (gate 12, E-B2-8) =="
+
+  local cargo_output rc
+  if cargo_output="$(cd "$WORKSPACE" && cargo test -p neurogrim-a2a --test federated_pattern_loopback_e2e --no-run 2>&1)"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  if [[ "$rc" -eq 0 ]]; then
+    pass "Cross-Brain federated-pattern integration test compiles cleanly"
+  else
+    red "  [FAIL] federated_pattern_loopback_e2e failed to compile (rc=$rc)"
+    echo "$cargo_output" | tail -20 | sed 's/^/    /'
+    info "Inspect the cargo output above; the test lives at"
+    info "  neurogrim/crates/neurogrim-a2a/tests/federated_pattern_loopback_e2e.rs"
+    fail "Cross-Brain integration test failed to compile"
+  fi
+}
+
 # ---------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------
@@ -412,6 +584,9 @@ main() {
   check_supply_chain_sca
   check_supply_chain_vigilance_strict_with_bypass
   check_supply_chain_review_strict
+  check_brains_2_0_cmdb_presence
+  check_brains_2_0_advisory_weights
+  check_brains_2_0_cross_brain_integration
   echo
   green "=== All non-skipped gates passed. ==="
   echo "Next step: review SKIPs above, then follow docs/publish-day-runbook.md."
