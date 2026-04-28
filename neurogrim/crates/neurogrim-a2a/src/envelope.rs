@@ -89,6 +89,26 @@ pub enum MessageType {
     /// `TaskServer::register_handler`.
     #[serde(rename = "supply-chain-signal")]
     SupplyChainSignal,
+    /// Cross-Brain federated-pattern message under bidirectional
+    /// opt-in consent (spec §16.6.1, v2.12). Payload conforms to
+    /// `a2a-federated-pattern-v1.schema.json`.
+    ///
+    /// **Bidirectional opt-in (spec §16.6.1 normative):** mirrors
+    /// the §16.6 supply-chain-signal precedent. Both peers MUST
+    /// declare `federated-pattern` in their Agent Card capabilities
+    /// (sender in `emits[]`, receiver in `accepts[]`) before
+    /// federation flows. The check is implemented in
+    /// [`crate::federated_pattern::bidirectional_opt_in_satisfied`].
+    ///
+    /// **Receiver semantics:** see
+    /// [`crate::federated_pattern::handle_received_federated_pattern`]
+    /// — validates the payload, runs the wire-level recursion guard
+    /// (origin_set self-check), enforces the receiver-side
+    /// rate-limit, and returns a `ReceiveOutcome` that the
+    /// transport handler persists to the
+    /// `pattern-aggregation-ledger.jsonl`.
+    #[serde(rename = "federated-pattern")]
+    FederatedPattern,
 }
 
 impl MessageType {
@@ -114,6 +134,7 @@ impl MessageType {
             MessageType::ProposalResolved => "proposal.resolved",
             MessageType::ConfigChanged => "config.changed",
             MessageType::SupplyChainSignal => "supply-chain-signal",
+            MessageType::FederatedPattern => "federated-pattern",
         }
     }
 }
@@ -173,6 +194,7 @@ mod tests {
             MessageType::ProposalResolved,
             MessageType::ConfigChanged,
             MessageType::SupplyChainSignal,
+            MessageType::FederatedPattern,
         ];
         for mt in types {
             let s = serde_json::to_string(&mt).unwrap();

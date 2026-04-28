@@ -35,6 +35,7 @@ pub mod agent_card;
 pub mod client;
 pub mod envelope;
 pub mod error;
+pub mod federated_pattern;
 pub mod server;
 pub mod supply_chain_signal;
 pub mod token_store;
