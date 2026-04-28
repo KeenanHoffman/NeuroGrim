@@ -32,7 +32,14 @@ enum Commands {
         human_persona: Option<String>,
     },
 
-    /// Produce full agent-mode JSON output
+    /// Produce full agent-mode JSON output, or a prose orientation for agents.
+    ///
+    /// Default output is the canonical AgentOutput JSON envelope (machine-
+    /// readable, used by A2A peers and ecosystem aggregation). With
+    /// `--prose`, render an agent-friendly orientation summary covering
+    /// Brain identity, current state, strongest signals, calls to action,
+    /// available skills/hats, and federation peers — the "what is this
+    /// Brain and what can I do here" answer for AI agents on entry.
     #[command(visible_alias = "divine")]
     Agent {
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
@@ -41,6 +48,13 @@ enum Commands {
         hat: Option<String>,
         #[arg(long)]
         human_persona: Option<String>,
+        /// Render a prose orientation summary instead of JSON (v3.2 A.1).
+        #[arg(long)]
+        prose: bool,
+        /// Suppress ANSI colors. Honored only with `--prose`; the JSON
+        /// path is plain-text by construction.
+        #[arg(long)]
+        plain: bool,
     },
 
     /// Display human-readable health dashboard
@@ -89,6 +103,23 @@ enum Commands {
     Validate {
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
         registry: String,
+    },
+
+    /// Validate Brain configuration end-to-end without scoring (v3.2 A.2).
+    ///
+    /// Distinct from `validate` (registry-shape only) and `health`/`score`
+    /// (run the scoring pipeline). `doctor` reads the registry plus
+    /// on-disk artifacts (CMDBs, culture.yaml, federation declarations)
+    /// and reports configuration issues an agent should fix before
+    /// relying on this Brain. Exit code 0 = clean, 1 = warnings, 2 =
+    /// errors. Read-only — no ledger writes, no scoring.
+    Doctor {
+        #[arg(short, long, default_value = ".claude/brain-registry.json")]
+        registry: String,
+        /// Suppress ANSI colors. Auto-detected on non-TTY stdout via the
+        /// `colored` crate, but `--plain` makes the choice explicit.
+        #[arg(long)]
+        plain: bool,
     },
 
     /// Start the Brain as an MCP server
@@ -320,7 +351,9 @@ async fn main() -> Result<()> {
             registry,
             hat,
             human_persona,
-        } => commands::agent::run(&registry, hat, human_persona).await,
+            prose,
+            plain,
+        } => commands::agent::run(&registry, hat, human_persona, prose, plain).await,
         Commands::Health {
             registry,
             plain,
@@ -330,6 +363,7 @@ async fn main() -> Result<()> {
         Commands::Trend { registry, plain } => commands::trend::run(&registry, plain).await,
         Commands::Narrate { registry, hat } => commands::narrate::run(&registry, hat).await,
         Commands::Validate { registry } => commands::validate::run(&registry).await,
+        Commands::Doctor { registry, plain } => commands::doctor::run(&registry, plain).await,
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
         Commands::Init {
