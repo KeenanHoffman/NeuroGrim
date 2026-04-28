@@ -81,7 +81,7 @@ enum Commands {
     /// Run a built-in sensory tool directly (produces CMDB JSON)
     #[command(visible_alias = "cast")]
     Sensory {
-        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget
+        /// Tool name: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget, federated-patterns
         name: String,
         /// Project root path
         #[arg(long, default_value = ".")]
@@ -158,6 +158,22 @@ enum Commands {
     /// (Q6 recursion-guard MUST — spec §17.12.5).
     #[command(name = "disposition")]
     Disposition(commands::disposition::Args),
+
+    /// Operator-explicit federated-pattern emission CLI (LSP-Brains v2.12
+    /// §16.6.1, E-B2-7 C7). Single sub-command at v1: `emit` constructs a
+    /// synthetic v1 `FederatedPatternPayload`, writes an
+    /// `entry_kind=emitted` row to
+    /// `<project_root>/.claude/brain/pattern-aggregation-ledger.jsonl`
+    /// BEFORE transmission (Q12 log-before-transmit lock), and calls the
+    /// protocol-layer `emit_federated_pattern` for each declared peer.
+    ///
+    /// `--pattern-kind` is validated at parse time against the closed-set
+    /// v1 single-entry vocabulary `["vigilance-pattern"]` (Q14 lock).
+    /// Pattern-kind values starting with `federated_patterns:` are
+    /// rejected (Q9 recursion-guard MUST — spec §16.6.1). NO free-text
+    /// flags at v1 (Q1+Q5+Q8 privacy lock — spec §16.6.1).
+    #[command(name = "federated-pattern")]
+    FederatedPattern(commands::federated_pattern::Args),
 
     /// Serve this Brain as an A2A peer (spec §13). Publishes an Agent Card
     /// and accepts peer invocations (snapshot.requested, score.updated ack).
@@ -277,6 +293,7 @@ async fn main() -> Result<()> {
             commands::domain_calibration::run(subcommand).await
         }
         Commands::Disposition(args) => commands::disposition::run(args).await,
+        Commands::FederatedPattern(args) => commands::federated_pattern::run(args).await,
         Commands::A2aServe {
             port,
             bind,
@@ -332,6 +349,7 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
         "domain-calibration" => neurogrim_sensory::domain_calibration::analyze_domain_calibration(project_root).await,
         "operator-calibration" => neurogrim_sensory::operator_calibration::analyze_operator_calibration(project_root).await,
         "trust-budget" => neurogrim_sensory::trust_budget::analyze_trust_budget(project_root).await,
+        "federated-patterns" => neurogrim_sensory::federated_patterns::analyze_federated_patterns(project_root).await,
         _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget", name),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);

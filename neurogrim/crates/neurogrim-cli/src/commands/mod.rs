@@ -7,6 +7,7 @@ pub mod awareness;
 pub mod context;
 pub mod disposition;
 pub mod domain_calibration;
+pub mod federated_pattern;
 pub mod health;
 pub mod init;
 pub mod sca_calibrate;
