@@ -6,6 +6,10 @@ NeuroGrim is the reference implementation of the LSP Brains specification: a Rus
 Brain engine that gives AI agents continuous project health awareness through MCP-based sensory
 tools, cross-domain correlation, trajectory intelligence, and gated governance.
 
+LSP Brains itself is **a declared overlay of project-shaped commitments on a
+general-purpose statistical engine** — the LLM provides cognition; the Brain
+provides what to be cognizant of. NeuroGrim is the engine that runs that overlay.
+
 **LSP Brains Specification:** https://github.com/KeenanHoffman/LSP-Brains
 
 ## Repository Structure

@@ -6,6 +6,12 @@
 **Date:** 2026-04-23 (evidence-posture refresh; see §11)
 **Specification:** https://github.com/KeenanHoffman/LSP-Brains
 
+> **Abstract.** LSP Brains is a declared overlay of project-shaped commitments on a
+> general-purpose statistical engine. The LLM provides cognition; the Brain provides
+> what to be cognizant of — a project's portable self-knowledge that any agent can
+> read. This whitepaper describes the methodology, the architecture, and what success
+> looks like in practice.
+
 ---
 
 ## Table of Contents

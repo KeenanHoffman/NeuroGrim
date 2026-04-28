@@ -4,6 +4,10 @@
 
 **A language-agnostic nervous system for AI-assisted software projects.**
 
+LSP Brains is **a declared overlay of project-shaped commitments on a general-purpose
+statistical engine** — the LLM provides cognition; the Brain provides what to be
+cognizant of. NeuroGrim is the Rust engine that runs that overlay.
+
 NeuroGrim implements the [LSP Brains Specification](spec/LSP-BRAINS-SPEC.md) — a
 methodology for giving AI agents continuous, honest awareness of project health through
 MCP-based sensory tools, A2A-based peer coordination, cross-domain correlation,
