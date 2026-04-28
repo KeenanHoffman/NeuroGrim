@@ -48,23 +48,64 @@ below.
 
 ## Quick Start
 
+### Adopt LSP Brains in any project (v3.1.1+)
+
+```bash
+# Build the CLI
+cd neurogrim && cargo build && cd ..
+
+# In your target project (any directory), scaffold the full Brain
+# integration with one command. Pick a template:
+#   abstract-project — non-code projects (e.g., resume + job-hunt)
+#   code-project     — software projects (auto-detected stack)
+#   mixed            — both code and abstract surfaces
+cd /path/to/your/project
+neurogrim init \
+  --template abstract-project \
+  --name my-project \
+  --domains "<domain-1>,<domain-2>" \
+  --yes
+```
+
+This produces, in one shot: a brain-registry.json, .claude/culture.yaml
+(byte-identical federation copy), 8 stub CMDBs (one per declared
+domain), 6 bundled general-purpose skills (hats, imagination-mode,
+north-star, rubber-duck, human-comms, write-skill), the PostToolUse
+hook + script, a CLAUDE.md (project-substituted), and a .gitignore
+extension. ~90% of the manual setup automated.
+
+For project-specific skills (Tier 3 work — methodology guides paired
+with custom domains), scaffold a SKILL.md skeleton:
+
+```bash
+neurogrim skill new my-domain-protocol
+# Then edit .claude/skills/my-domain-protocol/SKILL.md
+```
+
+For ecosystem coordinators bringing siblings into a federation:
+
+```bash
+# Add a sibling Brain as a read-only observed peer:
+neurogrim federation register \
+  --name sibling-project \
+  --path ../sibling-project \
+  --read-only
+```
+
 ### Run the Brain
 
 ```bash
-cd neurogrim
-cargo build
+# Validate the registry:
+neurogrim validate --registry .claude/brain-registry.json
 
-# Run a sensory tool
-./target/debug/neurogrim sensory test-health --project-root ..
+# Quick unified health read:
+neurogrim score --registry .claude/brain-registry.json
 
-# Write its output to CMDB
-./target/debug/neurogrim sensory test-health --project-root .. > ../.claude/test-health-cmdb.json
+# Hat-calibrated narration:
+neurogrim narrate --hat visionary --registry .claude/brain-registry.json
 
-# Get your health score
-./target/debug/neurogrim health --project-root ..
-
-# Validate registry
-./target/debug/neurogrim validate -r ../.claude/brain-registry.json
+# Run a built-in sensory tool (when applicable):
+neurogrim sensory test-health --project-root . > .claude/test-health-cmdb.json
 ```
 
 ### Run Tests

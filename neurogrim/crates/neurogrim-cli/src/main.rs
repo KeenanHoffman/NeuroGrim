@@ -281,6 +281,15 @@ enum Commands {
         peer_url: String,
     },
 
+    /// Skill workflow commands. v3.1.1+: `neurogrim skill new <name>`
+    /// scaffolds a SKILL.md skeleton for a project-specific skill.
+    Skill(commands::skill::Args),
+
+    /// Federation workflow commands. v3.1.1+: `neurogrim federation register`
+    /// adds a child Brain to the local registry (ecosystem-coordinator
+    /// workflow; supports the `--read-only` flag for sibling-project peers).
+    Federation(commands::federation::Args),
+
     /// Manage A2A bearer tokens: issue, list, revoke (spec §13 + bearer).
     ///
     /// Tokens are stored in a sqlite database under the project root; only
@@ -373,6 +382,8 @@ async fn main() -> Result<()> {
         Commands::A2aToken { store, subcommand } => {
             commands::a2a_token::run(store, subcommand).await
         }
+        Commands::Skill(args) => commands::skill::run(args).await,
+        Commands::Federation(args) => commands::federation::run(args).await,
     }
 }
 
