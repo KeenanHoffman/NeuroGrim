@@ -1,0 +1,34 @@
+# Visionary-hat narration template — design reference for v3.1 C0.
+#
+# This file is the planned on-disk form of per-hat narration templates.
+# v3.1 C0 hardcodes the same content in
+# `src/output/narration.rs::NarrationTemplate::visionary()`; v3.1 C1
+# will replace the hardcoded version with a TOML loader that reads
+# this file at runtime. The schema below is the v1 contract.
+#
+# Schema:
+#   [meta]
+#     hat            — hat name (matches keys in hats/SKILL.md catalog)
+#     schema_version — narration-template schema version
+#
+#   [content]
+#     lines[]        — array of template strings rendered in order;
+#                      blank-after-substitution lines are pruned
+#
+# Supported placeholders (v3.1 C0):
+#   {{ score }}                — unified score (0-100)
+#   {{ trajectory }}           — classification verbiage
+#   {{ top_domain.name }}      — lowest-scoring weighted domain
+#   {{ top_domain.score }}     — that domain's effective score
+#   {{ correlations_fired }}   — count of fired correlations
+
+[meta]
+hat = "visionary"
+schema_version = "1"
+
+[content]
+lines = [
+    "Brain at {{ score }}/100, trajectory {{ trajectory }}.",
+    "Leverage: {{ top_domain.name }} ({{ top_domain.score }}/100) is the largest drift surface; {{ correlations_fired }} correlation(s) fired.",
+    "Direction: explore {{ top_domain.name }} first — broader surface narrows after correlation review.",
+]
