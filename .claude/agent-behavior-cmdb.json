@@ -1,11 +1,17 @@
 {
+  "findings": [
+    {
+      "detail": "expected ..\\.claude\\agent-behavior-scenarios; author scenarios per LSP-Brains spec §15.2",
+      "name": "scenarios_dir",
+      "points": -100,
+      "status": "missing"
+    }
+  ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-21T00:00:00Z",
-    "updated_by": "stub",
-    "source": "stub — run `neurogrim cast agent-behavior --project-root . > .claude/agent-behavior-cmdb.json` to populate. Scenario library at this level is currently a stub; the authoritative ecosystem library lives at D:/Brains/.claude/agent-behavior-scenarios/."
+    "updated_at": "2026-04-28T05:57:16.280321100+00:00",
+    "updated_by": "cast-agent-behavior"
   },
   "score": 0,
-  "updated_at": "2026-04-21T00:00:00Z",
-  "findings": []
+  "updated_at": "2026-04-28T05:57:16.280321100+00:00"
 }

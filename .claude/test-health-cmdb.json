@@ -11,9 +11,9 @@
   "has_test_results": false,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-12T07:03:52.091522+00:00",
+    "updated_at": "2026-04-28T05:57:10.143568200+00:00",
     "updated_by": "check-test-health"
   },
-  "score": 30,
-  "updated_at": "2026-04-12T07:03:52.091522+00:00"
+  "score": 45,
+  "updated_at": "2026-04-28T05:57:10.143568200+00:00"
 }

@@ -1,39 +1,20 @@
 {
-  "_impl_status": "E-SC-4 complete: Layer 1 SCA covers Rust + Python + Node (package-lock.json v2/v3 + yarn.lock + pnpm-lock.yaml). 128+ unit tests + 17 integration tests all green.",
-  "accepted_advisory_ids": [
-    "RUSTSEC-2024-0436"
-  ],
-  "advisories_accepted": 1,
-  "advisories_found": 1,
-  "advisories_unaccepted": 0,
-  "ecosystems_scanned": [
-    "crates.io"
-  ],
+  "ecosystems_scanned": [],
   "findings": [
     {
-      "detail": "paste 1.0.15: RustSec-local advisory (unmaintained) — accepted by operator",
-      "name": "RUSTSEC-2024-0436",
+      "detail": "no supported lockfile found at project_root (looked for: Cargo.lock, uv.lock, requirements*.txt). Run a lockfile generator (cargo generate-lockfile / uv pip compile / pip-compile) and re-run.",
+      "name": "lockfile_read_failed",
       "points": 0,
-      "status": "accepted"
+      "status": "error"
     }
   ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-25T20:17:36.025833700+00:00",
+    "updated_at": "2026-04-28T05:57:19.277519400+00:00",
     "updated_by": "supply-chain-sca"
   },
-  "osv_cache_bypassed": true,
-  "osv_cache_hits": 0,
-  "osv_live_queries": 356,
-  "osv_oldest_cache_age_seconds": null,
-  "osv_reachable": true,
-  "packages_by_ecosystem": {
-    "crates.io": 356
-  },
-  "rustsec_local_unique_hits": 0,
-  "rustsec_local_unique_ids": [],
-  "score": 100,
-  "sensor_status": "ok",
-  "total_packages_scanned": 356,
-  "updated_at": "2026-04-25T20:17:36.025833700+00:00"
+  "score": 0,
+  "sensor_status": "lockfile_unreadable",
+  "total_packages_scanned": 0,
+  "updated_at": "2026-04-28T05:57:19.277519400+00:00"
 }

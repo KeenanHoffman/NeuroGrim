@@ -14,6 +14,11 @@
       "id": "LSP-Brains",
       "path": "\\\\?\\D:\\Brains\\LSP-Brains",
       "skill_count": 2
+    },
+    {
+      "id": "NeuroGrim-python-starter",
+      "path": "\\\\?\\D:\\Brains\\NeuroGrim\\NeuroGrim-python-starter",
+      "skill_count": 0
     }
   ],
   "brains_discovered": 3,
@@ -30,10 +35,10 @@
   "in_sync_count": 17,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-22T20:35:39.651039800+00:00",
+    "updated_at": "2026-04-28T05:57:16.955825100+00:00",
     "updated_by": "skill-coherence"
   },
   "score": 100,
   "total_duplicated_basenames": 17,
-  "updated_at": "2026-04-22T20:35:39.651039800+00:00"
+  "updated_at": "2026-04-28T05:57:16.955825100+00:00"
 }

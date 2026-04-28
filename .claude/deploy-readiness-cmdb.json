@@ -1,11 +1,18 @@
 {
-  "findings": [],
-  "has_ci": false,
+  "findings": [
+    {
+      "detail": "GitHub Actions",
+      "name": "ci_config",
+      "points": 30,
+      "status": "found"
+    }
+  ],
+  "has_ci": true,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-12T07:03:52.190346100+00:00",
+    "updated_at": "2026-04-28T05:57:11.510501100+00:00",
     "updated_by": "check-deploy-readiness"
   },
-  "score": 25,
-  "updated_at": "2026-04-12T07:03:52.190346100+00:00"
+  "score": 75,
+  "updated_at": "2026-04-28T05:57:11.510501100+00:00"
 }

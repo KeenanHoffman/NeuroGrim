@@ -7,21 +7,39 @@
   "emoji": "never",
   "findings": [
     {
-      "detail": "All preference categories explicitly defined — agent has a full communication contract.",
-      "name": "communication_contract",
-      "points": 100,
-      "status": "complete"
+      "detail": "No communication preferences set. Add `communication:` block to human-comms.yaml.",
+      "name": "communication_preferences",
+      "points": 0,
+      "status": "undefined"
+    },
+    {
+      "detail": "No format preferences set. Add `format:` block to human-comms.yaml.",
+      "name": "format_preferences",
+      "points": 0,
+      "status": "undefined"
+    },
+    {
+      "detail": "No signal preferences set. Add `signals:` block to human-comms.yaml.",
+      "name": "signal_preferences",
+      "points": 0,
+      "status": "undefined"
+    },
+    {
+      "detail": "No interaction preferences set. Add `interaction:` block to human-comms.yaml.",
+      "name": "interaction_preferences",
+      "points": 0,
+      "status": "undefined"
     }
   ],
   "has_project_overrides": true,
-  "has_user_defaults": true,
-  "include_urls": true,
+  "has_user_defaults": false,
+  "include_urls": false,
   "include_why_context": true,
   "lead_with": "answer",
   "lists_vs_prose": "lists",
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-13T18:30:49.856454300+00:00",
+    "updated_at": "2026-04-28T05:57:15.155288100+00:00",
     "updated_by": "check-human-comms"
   },
   "per_hat": {
@@ -38,9 +56,9 @@
       "verbosity": "full"
     }
   },
-  "preferences_complete": true,
+  "preferences_complete": false,
   "proactive_hat_suggestions": true,
-  "score": 100,
-  "updated_at": "2026-04-13T18:30:49.856454300+00:00",
+  "score": 0,
+  "updated_at": "2026-04-28T05:57:15.155288100+00:00",
   "verbosity": "standard"
 }

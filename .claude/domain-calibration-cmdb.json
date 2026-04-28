@@ -1,0 +1,26 @@
+{
+  "_impl_status": "E-B2-2 C4: domain-calibration meta-observer (§17.9). Tuple-aware (has_ever_fired, last_triage_age) confidence; score = 100 - 10 × open_pending_total, floor 0. Default weight 0.0 (advisory) per §17.9.",
+  "confidence": 100,
+  "domains_scanned": [],
+  "domains_with_open_pending": [],
+  "findings": [
+    {
+      "detail": "No calibration ledgers found under .claude/brain/. Sensor reports score 100 (nothing to triage). Confidence 100 (has_ever_fired=false; no signal yet).",
+      "name": "no_ledgers",
+      "points": 0,
+      "status": "info"
+    }
+  ],
+  "has_ever_fired": false,
+  "last_triage_age_seconds": null,
+  "ledger_dir_missing": false,
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-28T05:57:21.467896800+00:00",
+    "updated_by": "domain-calibration"
+  },
+  "open_pending_total": 0,
+  "score": 100,
+  "triaged_total": 0,
+  "updated_at": "2026-04-28T05:57:21.467896800+00:00"
+}

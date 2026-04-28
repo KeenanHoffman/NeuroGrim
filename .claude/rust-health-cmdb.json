@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "name": "cargo_toml",
+      "points": 20,
+      "status": "found"
+    },
+    {
+      "name": "cargo_lock",
+      "points": 10,
+      "status": "found"
+    },
+    {
+      "detail": "Cargo.toml has rust-version field",
+      "name": "msrv_pin",
+      "points": 15,
+      "status": "found"
+    },
+    {
+      "name": "ci_integration",
+      "points": 10,
+      "status": "found"
+    }
+  ],
+  "has_cargo_deny": false,
+  "has_cargo_lock": true,
+  "has_ci": true,
+  "has_clippy_config": false,
+  "has_lints_table": false,
+  "has_msrv_pin": true,
+  "has_rustfmt_config": false,
+  "is_rust_project": true,
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-04-28T05:57:13.450200300+00:00",
+    "updated_by": "check-rust-health"
+  },
+  "score": 55,
+  "updated_at": "2026-04-28T05:57:13.450200300+00:00",
+  "workspace_path": "neurogrim"
+}

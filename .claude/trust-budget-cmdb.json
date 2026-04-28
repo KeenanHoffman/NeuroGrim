@@ -1,11 +1,24 @@
 {
-  "findings": [],
+  "findings": [
+    {
+      "detail": "`py` is invoked from `scripts/*.sh|ps1` but missing from `trust-budget.toml#declared_shell_outs`. Either declare it or remove the invocation.",
+      "name": "trust_budget:undeclared:shell_out:py",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "`python3` is invoked from `scripts/*.sh|ps1` but missing from `trust-budget.toml#declared_shell_outs`. Either declare it or remove the invocation.",
+      "name": "trust_budget:undeclared:shell_out:python3",
+      "points": 0,
+      "status": "neutral"
+    }
+  ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-27T22:04:48.281365900+00:00",
+    "updated_at": "2026-04-28T05:57:22.537598300+00:00",
     "updated_by": "trust-budget"
   },
-  "score": 100,
+  "score": 96,
   "trust_budget_breakdown": {
     "actual": {
       "crate_count": 36,
@@ -70,7 +83,7 @@
         "vault.example.com",
         "vault.internal"
       ],
-      "shell_out_count": 10,
+      "shell_out_count": 12,
       "shell_outs": [
         "cargo-audit",
         "cat",
@@ -81,6 +94,8 @@
         "jq",
         "mkdir",
         "mv",
+        "py",
+        "python3",
         "rm"
       ]
     },
@@ -288,5 +303,5 @@
       ]
     }
   },
-  "updated_at": "2026-04-27T22:04:48.281365900+00:00"
+  "updated_at": "2026-04-28T05:57:22.537598300+00:00"
 }

@@ -14,7 +14,7 @@
   "ledger_entries_total": 2,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-26T18:38:50.990556100+00:00",
+    "updated_at": "2026-04-28T05:57:20.693435100+00:00",
     "updated_by": "supply-chain-review"
   },
   "score": 100,
@@ -22,5 +22,5 @@
   "tickets_open": 0,
   "tickets_resolved_total": 1,
   "tickets_total": 1,
-  "updated_at": "2026-04-26T18:38:50.990556100+00:00"
+  "updated_at": "2026-04-28T05:57:20.693435100+00:00"
 }

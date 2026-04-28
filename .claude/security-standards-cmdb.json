@@ -68,7 +68,7 @@
       ]
     }
   },
-  "controls_evidenced": 0,
+  "controls_evidenced": 1,
   "findings": [
     {
       "detail": "No SECURITY.md found — create SECURITY.md or .github/SECURITY.md [SOC2: CC2.2, CC9.1]",
@@ -107,10 +107,10 @@
       "status": "missing"
     },
     {
-      "detail": "No CI workflow files found in .github/workflows/ [SOC2: CC8.1]",
+      "detail": "CI/CD workflows present — systematic change deployment process defined [SOC2: CC8.1 | ISO27001: A.8.2 | NIST CSF: PR.PS-04]",
       "name": "ci_workflows",
-      "points": 0,
-      "status": "missing"
+      "points": 5,
+      "status": "found"
     },
     {
       "detail": "No SAST tool found in CI workflows — add CodeQL, Semgrep, or Sonar [SOC2: CC7.1 | ISO27001: A.8.25]",
@@ -126,9 +126,9 @@
   "has_security_policy": false,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-12T08:31:21.495399500+00:00",
+    "updated_at": "2026-04-28T05:57:14.012649500+00:00",
     "updated_by": "check-security-standards"
   },
-  "score": 0,
-  "updated_at": "2026-04-12T08:31:21.495399500+00:00"
+  "score": 5,
+  "updated_at": "2026-04-28T05:57:14.012649500+00:00"
 }

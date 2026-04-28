@@ -29,6 +29,54 @@
       "possible": 30,
       "total": 3
     },
+    "hat_contracts": {
+      "compliant": 8,
+      "details": [
+        {
+          "hat": "adversary",
+          "kind": "compliant",
+          "points": 0
+        },
+        {
+          "hat": "architect",
+          "kind": "compliant",
+          "points": 0
+        },
+        {
+          "hat": "incident-commander",
+          "kind": "compliant",
+          "points": 0
+        },
+        {
+          "hat": "rubber-duck",
+          "kind": "compliant",
+          "points": 0
+        },
+        {
+          "hat": "security-auditor",
+          "kind": "compliant",
+          "points": 0
+        },
+        {
+          "hat": "source-reader",
+          "kind": "compliant",
+          "points": 0
+        },
+        {
+          "hat": "supply-chain-auditor",
+          "kind": "compliant",
+          "points": 0
+        },
+        {
+          "hat": "visionary",
+          "kind": "compliant",
+          "points": 0
+        }
+      ],
+      "earned": 0,
+      "possible": 0,
+      "total": 8
+    },
     "hats": {
       "compliant": 2,
       "details": [
@@ -99,7 +147,7 @@
           "last_invoked": null,
           "path": "a2a/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "a2a",
           "status": "compliant",
           "usage_rarity": "common",
@@ -115,7 +163,7 @@
           "last_invoked": null,
           "path": "cli-mode/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "cli-mode",
           "status": "compliant",
           "usage_rarity": "common",
@@ -131,7 +179,7 @@
           "last_invoked": null,
           "path": "coherence/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "coherence",
           "status": "compliant",
           "usage_rarity": "common",
@@ -147,7 +195,7 @@
           "last_invoked": null,
           "path": "dual-review/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "dual-review",
           "status": "compliant",
           "usage_rarity": "common",
@@ -155,15 +203,15 @@
           "window_days": 90
         },
         {
-          "description_chars": 882,
-          "description_tokens_approx": 220,
+          "description_chars": 946,
+          "description_tokens_approx": 236,
           "format": "plugin",
           "has_when_to_use_signal": true,
           "invocations_in_window": 0,
           "last_invoked": null,
           "path": "hats/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 1,
           "skill_id": "hats",
           "status": "compliant",
           "usage_rarity": "common",
@@ -179,7 +227,7 @@
           "last_invoked": null,
           "path": "human-comms/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "human-comms",
           "status": "compliant",
           "usage_rarity": "common",
@@ -195,7 +243,7 @@
           "last_invoked": null,
           "path": "imagination-mode/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "imagination-mode",
           "status": "compliant",
           "usage_rarity": "common",
@@ -211,7 +259,7 @@
           "last_invoked": null,
           "path": "north-star/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "north-star",
           "status": "compliant",
           "usage_rarity": "common",
@@ -227,7 +275,7 @@
           "last_invoked": null,
           "path": "peer-brain/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "peer-brain",
           "status": "compliant",
           "usage_rarity": "common",
@@ -243,7 +291,7 @@
           "last_invoked": null,
           "path": "pilot-protocol/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "pilot-protocol",
           "status": "compliant",
           "usage_rarity": "common",
@@ -275,7 +323,7 @@
           "last_invoked": null,
           "path": "refine-judge-integrity/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "refine-judge-integrity",
           "status": "compliant",
           "usage_rarity": "common",
@@ -291,7 +339,7 @@
           "last_invoked": null,
           "path": "review-loop/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "review-loop",
           "status": "compliant",
           "usage_rarity": "common",
@@ -307,7 +355,7 @@
           "last_invoked": null,
           "path": "rubber-duck/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "rubber-duck",
           "status": "compliant",
           "usage_rarity": "common",
@@ -323,7 +371,7 @@
           "last_invoked": null,
           "path": "secret-refs/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "secret-refs",
           "status": "compliant",
           "usage_rarity": "common",
@@ -339,7 +387,7 @@
           "last_invoked": null,
           "path": "security-standards/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "security-standards",
           "status": "compliant",
           "usage_rarity": "common",
@@ -355,7 +403,7 @@
           "last_invoked": null,
           "path": "skill-deprecation/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "skill-deprecation",
           "status": "compliant",
           "usage_rarity": "common",
@@ -371,7 +419,7 @@
           "last_invoked": null,
           "path": "subagent-patterns/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "subagent-patterns",
           "status": "compliant",
           "usage_rarity": "common",
@@ -387,7 +435,7 @@
           "last_invoked": null,
           "path": "sync-ecosystem/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "sync-ecosystem",
           "status": "compliant",
           "usage_rarity": "common",
@@ -403,7 +451,7 @@
           "last_invoked": null,
           "path": "write-skill/SKILL.md",
           "points": 10,
-          "skill_age_days": 0,
+          "skill_age_days": 5,
           "skill_id": "write-skill",
           "status": "compliant",
           "usage_rarity": "common",
@@ -430,7 +478,7 @@
       "total": 0
     },
     "tools": {
-      "compliant": 24,
+      "compliant": 25,
       "details": [
         {
           "description_chars": 367,
@@ -475,6 +523,13 @@
           "tool": "check_docker_topology"
         },
         {
+          "description_chars": 803,
+          "points": 7,
+          "source": "neurogrim\\crates\\neurogrim-sensory\\src\\domain_calibration.rs",
+          "status": "too-long",
+          "tool": "check_domain_calibration"
+        },
+        {
           "description_chars": 111,
           "points": 10,
           "source": "neurogrim\\crates\\neurogrim-sensory\\src\\git_health.rs",
@@ -487,6 +542,13 @@
           "source": "neurogrim\\crates\\neurogrim-sensory\\src\\human_comms.rs",
           "status": "compliant",
           "tool": "check_human_comms"
+        },
+        {
+          "description_chars": 164,
+          "points": 10,
+          "source": "neurogrim\\crates\\neurogrim-sensory\\src\\rust_health.rs",
+          "status": "compliant",
+          "tool": "check_rust_health"
         },
         {
           "description_chars": 338,
@@ -508,6 +570,27 @@
           "source": "neurogrim\\crates\\neurogrim-sensory\\src\\skill_coherence.rs",
           "status": "compliant",
           "tool": "check_skill_coherence"
+        },
+        {
+          "description_chars": 710,
+          "points": 7,
+          "source": "neurogrim\\crates\\neurogrim-sensory\\src\\supply_chain_review.rs",
+          "status": "too-long",
+          "tool": "check_supply_chain_review"
+        },
+        {
+          "description_chars": 667,
+          "points": 7,
+          "source": "neurogrim\\crates\\neurogrim-sensory\\src\\supply_chain_sca.rs",
+          "status": "too-long",
+          "tool": "check_supply_chain_sca"
+        },
+        {
+          "description_chars": 1030,
+          "points": 7,
+          "source": "neurogrim\\crates\\neurogrim-sensory\\src\\supply_chain_vigilance.rs",
+          "status": "too-long",
+          "tool": "check_supply_chain_vigilance"
         },
         {
           "description_chars": 92,
@@ -601,29 +684,48 @@
           "tool": "validate_registry"
         }
       ],
-      "earned": 240,
-      "possible": 240,
-      "total": 24
+      "earned": 278,
+      "possible": 290,
+      "too-long": 4,
+      "total": 29
     }
   },
   "compliant_count": 20,
   "findings": [
     {
-      "detail": "All 54 capabilities across 6 types meet their authoring standards.",
-      "name": "all-capabilities-compliant",
-      "points": 0,
-      "status": "ok"
+      "detail": "Tool description is 803 chars (> 500). Verbose for an always-loaded schema; trim or extract narrative to a doc.",
+      "name": "too-long:tool:check_domain_calibration",
+      "points": -3,
+      "status": "too-long"
+    },
+    {
+      "detail": "Tool description is 710 chars (> 500). Verbose for an always-loaded schema; trim or extract narrative to a doc.",
+      "name": "too-long:tool:check_supply_chain_review",
+      "points": -3,
+      "status": "too-long"
+    },
+    {
+      "detail": "Tool description is 667 chars (> 500). Verbose for an always-loaded schema; trim or extract narrative to a doc.",
+      "name": "too-long:tool:check_supply_chain_sca",
+      "points": -3,
+      "status": "too-long"
+    },
+    {
+      "detail": "Tool description is 1030 chars (> 500). Verbose for an always-loaded schema; trim or extract narrative to a doc.",
+      "name": "too-long:tool:check_supply_chain_vigilance",
+      "points": -3,
+      "status": "too-long"
     }
   ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-22T20:35:39.569706300+00:00",
+    "updated_at": "2026-04-28T05:57:18.493820100+00:00",
     "updated_by": "capability-hygiene"
   },
   "missing_when_to_use_count": 0,
   "over_budget_count": 0,
-  "overall_compliant_count": 54,
-  "score": 100,
+  "overall_compliant_count": 63,
+  "score": 98,
   "skill_details": [
     {
       "description_chars": 535,
@@ -634,7 +736,7 @@
       "last_invoked": null,
       "path": "a2a/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "a2a",
       "status": "compliant",
       "usage_rarity": "common",
@@ -650,7 +752,7 @@
       "last_invoked": null,
       "path": "cli-mode/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "cli-mode",
       "status": "compliant",
       "usage_rarity": "common",
@@ -666,7 +768,7 @@
       "last_invoked": null,
       "path": "coherence/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "coherence",
       "status": "compliant",
       "usage_rarity": "common",
@@ -682,7 +784,7 @@
       "last_invoked": null,
       "path": "dual-review/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "dual-review",
       "status": "compliant",
       "usage_rarity": "common",
@@ -690,15 +792,15 @@
       "window_days": 90
     },
     {
-      "description_chars": 882,
-      "description_tokens_approx": 220,
+      "description_chars": 946,
+      "description_tokens_approx": 236,
       "format": "plugin",
       "has_when_to_use_signal": true,
       "invocations_in_window": 0,
       "last_invoked": null,
       "path": "hats/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 1,
       "skill_id": "hats",
       "status": "compliant",
       "usage_rarity": "common",
@@ -714,7 +816,7 @@
       "last_invoked": null,
       "path": "human-comms/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "human-comms",
       "status": "compliant",
       "usage_rarity": "common",
@@ -730,7 +832,7 @@
       "last_invoked": null,
       "path": "imagination-mode/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "imagination-mode",
       "status": "compliant",
       "usage_rarity": "common",
@@ -746,7 +848,7 @@
       "last_invoked": null,
       "path": "north-star/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "north-star",
       "status": "compliant",
       "usage_rarity": "common",
@@ -762,7 +864,7 @@
       "last_invoked": null,
       "path": "peer-brain/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "peer-brain",
       "status": "compliant",
       "usage_rarity": "common",
@@ -778,7 +880,7 @@
       "last_invoked": null,
       "path": "pilot-protocol/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "pilot-protocol",
       "status": "compliant",
       "usage_rarity": "common",
@@ -810,7 +912,7 @@
       "last_invoked": null,
       "path": "refine-judge-integrity/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "refine-judge-integrity",
       "status": "compliant",
       "usage_rarity": "common",
@@ -826,7 +928,7 @@
       "last_invoked": null,
       "path": "review-loop/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "review-loop",
       "status": "compliant",
       "usage_rarity": "common",
@@ -842,7 +944,7 @@
       "last_invoked": null,
       "path": "rubber-duck/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "rubber-duck",
       "status": "compliant",
       "usage_rarity": "common",
@@ -858,7 +960,7 @@
       "last_invoked": null,
       "path": "secret-refs/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "secret-refs",
       "status": "compliant",
       "usage_rarity": "common",
@@ -874,7 +976,7 @@
       "last_invoked": null,
       "path": "security-standards/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "security-standards",
       "status": "compliant",
       "usage_rarity": "common",
@@ -890,7 +992,7 @@
       "last_invoked": null,
       "path": "skill-deprecation/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "skill-deprecation",
       "status": "compliant",
       "usage_rarity": "common",
@@ -906,7 +1008,7 @@
       "last_invoked": null,
       "path": "subagent-patterns/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "subagent-patterns",
       "status": "compliant",
       "usage_rarity": "common",
@@ -922,7 +1024,7 @@
       "last_invoked": null,
       "path": "sync-ecosystem/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "sync-ecosystem",
       "status": "compliant",
       "usage_rarity": "common",
@@ -938,7 +1040,7 @@
       "last_invoked": null,
       "path": "write-skill/SKILL.md",
       "points": 10,
-      "skill_age_days": 0,
+      "skill_age_days": 5,
       "skill_id": "write-skill",
       "status": "compliant",
       "usage_rarity": "common",
@@ -946,8 +1048,8 @@
       "window_days": 90
     }
   ],
-  "total_capabilities": 54,
+  "total_capabilities": 67,
   "total_skills": 20,
   "under_described_count": 0,
-  "updated_at": "2026-04-22T20:35:39.569706300+00:00"
+  "updated_at": "2026-04-28T05:57:18.493820100+00:00"
 }
