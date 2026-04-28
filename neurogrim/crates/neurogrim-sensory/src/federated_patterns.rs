@@ -81,7 +81,7 @@
 use crate::cmdb::{build_cmdb, Finding};
 use chrono::{DateTime, Duration, Utc};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 // ── Embedded schema ─────────────────────────────────────────────────────────
@@ -115,6 +115,16 @@ const FINDING_KINDS: &[&str] = &[
     "federated_patterns:peer_inactive_30d",
     "federated_patterns:high_drop_rate",
     "federated_patterns:low_confidence",
+    // v3.1 E-V31-E E1.2 — emitted when ≥2 distinct anonymized origins
+    // received `vigilance-pattern` findings within the 7-day window
+    // sharing a feature_vector signature (severity_class +
+    // observation_window_days). Multiple peers independently flagging
+    // similar concerns is the operator-actionable signal that
+    // federation-as-intelligence is supposed to surface. The finding's
+    // detail payload is aggregate-only (peer count + severity + window)
+    // — no per-peer hashes, no per-row data. Closed-set additivity per
+    // Q17 lock; spec §16.6.1 amendment ships alongside this finding.
+    "federated_patterns:cross_peer_co_occurrence",
 ];
 
 // ── Locked thresholds ───────────────────────────────────────────────────────
@@ -280,6 +290,23 @@ pub fn analyze_federated_patterns_path(root: &Path) -> Value {
         }
     }
 
+    // v3.1 E-V31-E: federated_patterns:cross_peer_co_occurrence —
+    // when ≥2 distinct anonymized origins emit vigilance-pattern
+    // findings sharing a feature_vector signature (severity_class +
+    // observation_window_days) within the 7-day window. Multiple peers
+    // independently flagging similar concerns is the operator-actionable
+    // signal that federation-as-intelligence is meant to surface.
+    // Aggregate-only export per Q5+E6-1 BR-5 lock — finding detail
+    // carries peer count + severity + window, NEVER per-peer hashes.
+    for detail in detect_cross_peer_co_occurrence(&counts, now, LOW_CONFIDENCE_WINDOW_DAYS) {
+        findings.push(Finding {
+            name: "federated_patterns:cross_peer_co_occurrence".to_string(),
+            status: "neutral".to_string(),
+            points: 0,
+            detail: Some(detail),
+        });
+    }
+
     // Q17: federated_patterns:high_drop_rate — overall (not per-peer at v1).
     // Defense-in-depth divide-by-zero check; the predicate also guards on
     // received_in_window > 0.
@@ -357,6 +384,26 @@ struct PatternKindCounts {
     emitted_count: usize,
 }
 
+/// One feature-vector signature captured from a `ReceivedEntry` row.
+/// Used internally for cross-peer co-occurrence detection — the
+/// `(severity_class, observation_window_days)` pair is the signature
+/// key, and per-row entries are grouped post-scan to detect when ≥2
+/// distinct origins share the same signature.
+///
+/// **Privacy note:** these are TEMPORARY per-row records held only for
+/// in-pass aggregation. They are NEVER written to the CMDB — the
+/// emitted finding carries aggregate counts only (number of distinct
+/// origins, severity class, window). The `aggregation_only_export_*`
+/// privacy pin tests verify per-row data does not cross the CMDB
+/// boundary.
+#[derive(Debug, Clone)]
+struct ReceivedSignature {
+    ts: DateTime<Utc>,
+    from_brain_id: String,
+    severity_class: String,
+    observation_window_days: u64,
+}
+
 /// Aggregate counters extracted from the ledger. The breakdown JSON only
 /// reports aggregate totals + per-peer + per-pattern-kind groupings — never
 /// per-row data (E6-1 BR-5 mitigation).
@@ -390,6 +437,11 @@ struct LedgerCounts {
     received_ts: Vec<(DateTime<Utc>, bool)>, // (ts, was_dropped)
     /// Parsed timestamps of emitted rows in scan order.
     emitted_ts: Vec<DateTime<Utc>>,
+    /// v3.1 E-V31-E: per-row feature-vector signatures from ReceivedEntry
+    /// rows that successfully extracted ts + from_brain_id + severity +
+    /// window. Used post-scan for cross-peer co-occurrence detection.
+    /// In-memory only — NEVER exported to the CMDB.
+    received_signatures: Vec<ReceivedSignature>,
 }
 
 enum LedgerOutcome {
@@ -559,6 +611,31 @@ fn count_received(parsed: &Value, counts: &mut LedgerCounts) {
     if let Some(t) = ts {
         counts.received_ts.push((t, was_dropped));
     }
+
+    // v3.1 E-V31-E: capture the feature-vector signature for post-scan
+    // cross-peer co-occurrence detection. Requires ts + from_brain_id +
+    // severity_class + observation_window_days; rows missing any are
+    // skipped (the per-row signature can't be aggregated without all
+    // four). Privacy-safe: in-memory only, NEVER exported.
+    let from_id = parsed.get("from_brain_id").and_then(|v| v.as_str());
+    let severity = parsed
+        .get("payload")
+        .and_then(|p| p.get("feature_vector"))
+        .and_then(|f| f.get("severity_class"))
+        .and_then(|v| v.as_str());
+    let window = parsed
+        .get("payload")
+        .and_then(|p| p.get("feature_vector"))
+        .and_then(|f| f.get("observation_window_days"))
+        .and_then(|v| v.as_u64());
+    if let (Some(t), Some(fid), Some(sev), Some(w)) = (ts, from_id, severity, window) {
+        counts.received_signatures.push(ReceivedSignature {
+            ts: t,
+            from_brain_id: fid.to_string(),
+            severity_class: sev.to_string(),
+            observation_window_days: w,
+        });
+    }
 }
 
 /// Process an `EmittedEntry` row. Increments `emitted_count`, per-peer
@@ -598,6 +675,58 @@ fn count_emitted(parsed: &Value, counts: &mut LedgerCounts) {
     if let Some(t) = ts {
         counts.emitted_ts.push(t);
     }
+}
+
+/// v3.1 E-V31-E: detect cross-peer co-occurrence in received vigilance
+/// patterns. Groups received signatures within the rolling window by
+/// `(severity_class, observation_window_days)`; when a group has ≥2
+/// distinct `from_brain_id` values, emit one finding-detail string
+/// per group describing the co-occurrence aggregately.
+///
+/// Returns a `Vec<String>` of finding-detail strings (zero-length
+/// when no co-occurrences found). Caller wraps each into a Finding
+/// with name `federated_patterns:cross_peer_co_occurrence`.
+///
+/// **Privacy contract:** the returned strings carry aggregate data
+/// only — count of distinct peers, severity class, observation
+/// window. NO per-peer hashes, NO per-row timestamps, NO finding
+/// names from upstream peers. The `aggregation_only_export_*`
+/// regression tests verify per-row data does not leak via the new
+/// finding's detail field.
+fn detect_cross_peer_co_occurrence(
+    counts: &LedgerCounts,
+    now: DateTime<Utc>,
+    window_days: i64,
+) -> Vec<String> {
+    let cutoff = now - Duration::days(window_days);
+    // Signature key: (severity_class, observation_window_days). Set of
+    // distinct from_brain_id values per signature.
+    let mut sig_to_peers: BTreeMap<(String, u64), BTreeSet<String>> = BTreeMap::new();
+    for sig in &counts.received_signatures {
+        if sig.ts > cutoff {
+            sig_to_peers
+                .entry((
+                    sig.severity_class.clone(),
+                    sig.observation_window_days,
+                ))
+                .or_insert_with(BTreeSet::new)
+                .insert(sig.from_brain_id.clone());
+        }
+    }
+    let mut details = Vec::new();
+    for ((severity, window), peers) in sig_to_peers {
+        if peers.len() >= 2 {
+            details.push(format!(
+                "Cross-peer co-occurrence: {peer_count} distinct anonymized origins emitted \
+                 vigilance-pattern findings with severity_class={severity} and \
+                 observation_window_days={window} within the last {window_days} \
+                 days. Multiple peers independently flagged similar concerns. \
+                 Federation is observability — this is advisory.",
+                peer_count = peers.len(),
+            ));
+        }
+    }
+    details
 }
 
 /// Parse the row's `ts` field as ISO 8601 UTC. Returns `None` on missing /

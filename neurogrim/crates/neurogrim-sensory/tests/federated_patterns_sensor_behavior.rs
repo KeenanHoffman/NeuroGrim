@@ -720,3 +720,190 @@ async fn live_neurogrim_smoke() {
     let bd_present = bd["ledger_present"].as_bool().unwrap_or(false);
     eprintln!("  ledger_present = {bd_present}");
 }
+
+// ── 13. Cross-peer co-occurrence (v3.1 E-V31-E E1.2) ────────────────────────
+
+/// Author a received row carrying a populated feature_vector. Distinct from
+/// `received_row` which produces a payload without feature_vector — the
+/// cross-peer detection requires both `severity_class` and
+/// `observation_window_days` to be present.
+fn received_row_with_feature_vector(
+    ts: &str,
+    from_brain_id: &str,
+    severity_class: &str,
+    observation_window_days: u64,
+    invocation_id: &str,
+) -> String {
+    format!(
+        r#"{{"schema_version":"1","entry_kind":"received","ts":"{ts}","peer_brain_id":"local-brain-hash","from_brain_id":"{from_brain_id}","envelope_message_id":"env-{invocation_id}","payload":{{"pattern_kind":"vigilance-pattern","invocation_id":"{invocation_id}","feature_vector":{{"numeric_count":3,"severity_class":"{severity_class}","observation_window_days":{observation_window_days}}}}}}}"#
+    )
+}
+
+/// POSITIVE case: ≥2 distinct anonymized origins emit vigilance-pattern
+/// findings sharing a feature_vector signature within the 7-day window.
+/// Expectation: a `federated_patterns:cross_peer_co_occurrence` finding
+/// fires; its detail mentions the peer count and severity class
+/// aggregately (no per-peer hashes).
+#[tokio::test]
+async fn cross_peer_co_occurrence_fires_with_two_distinct_peers() {
+    let tmp = make_brain_root();
+    let recent = ts_recent();
+    write_ledger(
+        tmp.path(),
+        &[
+            &received_row_with_feature_vector(&recent, "peer-alpha-hash", "medium", 7, "i1"),
+            &received_row_with_feature_vector(&recent, "peer-beta-hash", "medium", 7, "i2"),
+        ],
+    );
+
+    let result = analyze_federated_patterns(tmp.path().to_str().unwrap()).await;
+    let findings = findings_by_prefix(&result, "federated_patterns:cross_peer_co_occurrence");
+    assert_eq!(
+        findings.len(),
+        1,
+        "expected exactly one cross-peer co-occurrence finding; got {findings:?}"
+    );
+    let detail = findings[0]["detail"].as_str().expect("detail present");
+    assert!(
+        detail.contains("2 distinct anonymized origins"),
+        "detail must reference peer count aggregately; got: {detail}"
+    );
+    assert!(
+        detail.contains("medium"),
+        "detail must reference shared severity_class; got: {detail}"
+    );
+}
+
+/// NEGATIVE case: only one distinct origin emits multiple rows. The finding
+/// MUST NOT fire — co-occurrence requires ≥2 distinct origins.
+#[tokio::test]
+async fn cross_peer_co_occurrence_does_not_fire_with_single_peer() {
+    let tmp = make_brain_root();
+    let recent = ts_recent();
+    write_ledger(
+        tmp.path(),
+        &[
+            &received_row_with_feature_vector(&recent, "peer-alpha-hash", "medium", 7, "i1"),
+            &received_row_with_feature_vector(&recent, "peer-alpha-hash", "medium", 7, "i2"),
+            &received_row_with_feature_vector(&recent, "peer-alpha-hash", "medium", 7, "i3"),
+        ],
+    );
+
+    let result = analyze_federated_patterns(tmp.path().to_str().unwrap()).await;
+    let findings = findings_by_prefix(&result, "federated_patterns:cross_peer_co_occurrence");
+    assert_eq!(
+        findings.len(),
+        0,
+        "single-peer activity must not fire cross-peer; got {findings:?}"
+    );
+}
+
+/// NEGATIVE case: two distinct origins but rows are OUTSIDE the 7-day
+/// window. The finding MUST NOT fire — only recent activity counts.
+#[tokio::test]
+async fn cross_peer_co_occurrence_does_not_fire_outside_window() {
+    let tmp = make_brain_root();
+    let old = ts_forty_five_days_ago();
+    write_ledger(
+        tmp.path(),
+        &[
+            &received_row_with_feature_vector(&old, "peer-alpha-hash", "medium", 7, "i1"),
+            &received_row_with_feature_vector(&old, "peer-beta-hash", "medium", 7, "i2"),
+        ],
+    );
+
+    let result = analyze_federated_patterns(tmp.path().to_str().unwrap()).await;
+    let findings = findings_by_prefix(&result, "federated_patterns:cross_peer_co_occurrence");
+    assert_eq!(
+        findings.len(),
+        0,
+        "old activity must not fire cross-peer (rolling 7-day window); got {findings:?}"
+    );
+}
+
+/// NEGATIVE case: two distinct origins emit findings but with DIFFERENT
+/// feature_vector signatures (different severity classes). The finding
+/// MUST NOT fire — co-occurrence requires shared signature.
+#[tokio::test]
+async fn cross_peer_co_occurrence_groups_by_signature() {
+    let tmp = make_brain_root();
+    let recent = ts_recent();
+    write_ledger(
+        tmp.path(),
+        &[
+            &received_row_with_feature_vector(&recent, "peer-alpha-hash", "medium", 7, "i1"),
+            &received_row_with_feature_vector(&recent, "peer-beta-hash", "critical", 7, "i2"),
+        ],
+    );
+
+    let result = analyze_federated_patterns(tmp.path().to_str().unwrap()).await;
+    let findings = findings_by_prefix(&result, "federated_patterns:cross_peer_co_occurrence");
+    assert_eq!(
+        findings.len(),
+        0,
+        "different severity_class values are different signatures; got {findings:?}"
+    );
+}
+
+/// PRIVACY REGRESSION: the cross-peer finding's detail string MUST NOT
+/// contain raw `from_brain_id` hashes. Only aggregate counts + closed-set
+/// enum names + integer windows. Mirrors the
+/// `aggregation_only_export_privacy_pin` test for the new finding kind.
+#[tokio::test]
+async fn cross_peer_co_occurrence_aggregate_only_no_peer_hash_leak() {
+    let tmp = make_brain_root();
+    let recent = ts_recent();
+    write_ledger(
+        tmp.path(),
+        &[
+            &received_row_with_feature_vector(
+                &recent,
+                "PRIVATE_PEER_HASH_ALPHA",
+                "medium",
+                7,
+                "i1",
+            ),
+            &received_row_with_feature_vector(
+                &recent,
+                "PRIVATE_PEER_HASH_BETA",
+                "medium",
+                7,
+                "i2",
+            ),
+            &received_row_with_feature_vector(
+                &recent,
+                "PRIVATE_PEER_HASH_GAMMA",
+                "medium",
+                7,
+                "i3",
+            ),
+        ],
+    );
+
+    let result = analyze_federated_patterns(tmp.path().to_str().unwrap()).await;
+    let findings = findings_by_prefix(&result, "federated_patterns:cross_peer_co_occurrence");
+    assert_eq!(
+        findings.len(),
+        1,
+        "expected exactly one co-occurrence finding for 3 distinct peers; got {findings:?}"
+    );
+    let detail = findings[0]["detail"].as_str().expect("detail present");
+
+    // Detail should mention the COUNT (3) but never any specific peer hash.
+    assert!(
+        detail.contains("3 distinct anonymized origins"),
+        "detail must report aggregate peer count; got: {detail}"
+    );
+    for hash in [
+        "PRIVATE_PEER_HASH_ALPHA",
+        "PRIVATE_PEER_HASH_BETA",
+        "PRIVATE_PEER_HASH_GAMMA",
+    ] {
+        assert!(
+            !detail.contains(hash),
+            "BR-5 privacy regression: cross-peer co-occurrence finding leaked \
+             individual peer hash `{hash}` into detail. The finding MUST emit \
+             aggregate counts + severity + window only.",
+        );
+    }
+}
