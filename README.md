@@ -33,7 +33,7 @@ below.
 | Directory | Contents |
 |-----------|----------|
 | `neurogrim/` | Rust Brain engine (workspace: core, sensory, mcp, a2a [Stage 6], cli crates) |
-| `spec/` | The LSP Brains Specification v2.1 (13 sections + Appendix G), dual-brain design, methodology evolution |
+| `spec/` | Redirect stub — the spec moved to [LSP-Brains](https://github.com/KeenanHoffman/LSP-Brains) as of v2 (currently v3.0 there) |
 | `sdk-python/` | Python SDK for writing custom sensory tools (`lsp-brains` package) |
 | `docs/` | Domain catalog, architecture guides |
 | `whitepaper/` | LSP Brains methodology whitepaper (Markdown; prior HTML build archived 2026-04-17) |
