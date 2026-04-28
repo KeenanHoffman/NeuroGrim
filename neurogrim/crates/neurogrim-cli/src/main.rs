@@ -55,6 +55,13 @@ enum Commands {
         /// path is plain-text by construction.
         #[arg(long)]
         plain: bool,
+        /// v3.3 F4: list every declared domain in the prose signals
+        /// section instead of capping at the top 3. Default behavior
+        /// auto-expands when the Brain is all-advisory (no weighted
+        /// domains), so this flag is mostly useful for weighted Brains
+        /// where the operator wants the full picture.
+        #[arg(long)]
+        all_domains: bool,
     },
 
     /// Display human-readable health dashboard
@@ -184,6 +191,19 @@ enum Commands {
         /// the template's default domain set.
         #[arg(long)]
         domains: Option<String>,
+        /// v3.3 F8: project-specific Brain description for `meta.description`.
+        /// Defaults to a generic "initialized via `neurogrim init...`" string
+        /// if omitted. Useful when the operator has bespoke framing for the
+        /// Brain that won't fit a template.
+        #[arg(long)]
+        description: Option<String>,
+        /// v3.3 F10: per-domain authoring intent, recorded as `_todo_<name>`
+        /// on the domain's definition. Repeatable. Format: `NAME=DESCRIPTION`.
+        /// Example: `--domain-describe "test-coverage=Sensor (when authored)
+        /// will report uncovered modules from cargo-tarpaulin output."`
+        /// Captures sensor intent so a future author has a starting point.
+        #[arg(long)]
+        domain_describe: Vec<String>,
     },
 
     /// Manage local machine-specific awareness (tool paths, OS quirks, known patterns)
@@ -367,7 +387,8 @@ async fn main() -> Result<()> {
             human_persona,
             prose,
             plain,
-        } => commands::agent::run(&registry, hat, human_persona, prose, plain).await,
+            all_domains,
+        } => commands::agent::run(&registry, hat, human_persona, prose, plain, all_domains).await,
         Commands::Health {
             registry,
             plain,
@@ -388,7 +409,19 @@ async fn main() -> Result<()> {
             template,
             name,
             domains,
-        } => commands::init::run(&project_root, &output, yes, template, name, domains).await,
+            description,
+            domain_describe,
+        } => commands::init::run(
+            &project_root,
+            &output,
+            yes,
+            template,
+            name,
+            domains,
+            description,
+            domain_describe,
+        )
+        .await,
         Commands::Awareness {
             project_root,
             subcommand,

@@ -16,8 +16,8 @@
 //!   6. federation children have unique A2A ports
 
 use neurogrim_core::registry::BrainRegistry;
-use std::collections::HashMap;
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -59,8 +59,10 @@ impl Finding {
     }
 }
 
-/// Run all six check families and return aggregated findings. The
-/// caller decides how to render them and what exit code to emit.
+/// Run all check families and return aggregated findings. The caller
+/// decides how to render them and what exit code to emit.
+///
+/// v3.3 F3: added `check_autonomy` for autonomy-block schema correctness.
 pub fn audit(registry: &BrainRegistry, project_root: &Path) -> Vec<Finding> {
     let mut findings = Vec::new();
     findings.extend(check_validate(registry));
@@ -68,7 +70,8 @@ pub fn audit(registry: &BrainRegistry, project_root: &Path) -> Vec<Finding> {
     findings.extend(check_principle_map_alignment(registry));
     findings.extend(check_cmdb_paths(registry, project_root));
     findings.extend(check_culture_yaml(project_root));
-    findings.extend(check_federation_ports(registry));
+    findings.extend(check_federation_ports(registry, project_root));
+    findings.extend(check_autonomy(registry));
     findings
 }
 
@@ -190,22 +193,80 @@ pub fn check_culture_yaml(project_root: &Path) -> Vec<Finding> {
 
 // --- Check 6: federation children have unique A2A ports -------------
 
-pub fn check_federation_ports(reg: &BrainRegistry) -> Vec<Finding> {
-    let mut findings = Vec::new();
-    let Some(children) = reg.config.extra.get("children").and_then(|v| v.as_object()) else {
-        return findings;
-    };
-
+/// v3.3 F7: walks `config.children` AND each child's `brain_path` registry
+/// recursively, collecting `port → list of "owner_id" labels` for every
+/// peer at any level. Detects port conflicts across the full federation
+/// tree, not just direct children.
+///
+/// `project_root` is the directory containing the registry being walked
+/// (used to resolve relative `brain_path` entries). `visited` tracks
+/// already-walked registry paths to prevent infinite recursion on
+/// pathological cyclic federations.
+pub fn collect_transitive_ports(
+    reg: &BrainRegistry,
+    project_root: &Path,
+) -> HashMap<u16, Vec<String>> {
     let mut by_port: HashMap<u16, Vec<String>> = HashMap::new();
+    let mut visited: HashSet<PathBuf> = HashSet::new();
+    walk_children(
+        reg,
+        project_root,
+        "",
+        &mut by_port,
+        &mut visited,
+    );
+    by_port
+}
+
+fn walk_children(
+    reg: &BrainRegistry,
+    project_root: &Path,
+    prefix: &str,
+    by_port: &mut HashMap<u16, Vec<String>>,
+    visited: &mut HashSet<PathBuf>,
+) {
+    let Some(children) = reg.config.extra.get("children").and_then(|v| v.as_object()) else {
+        return;
+    };
     for (id, val) in children {
-        let endpoint = val.get("a2a_endpoint").and_then(|v| v.as_str());
-        let Some(endpoint) = endpoint else {
+        let label = if prefix.is_empty() {
+            id.clone()
+        } else {
+            format!("{prefix}/{id}")
+        };
+
+        // Record this child's port at the current level.
+        if let Some(endpoint) = val.get("a2a_endpoint").and_then(|v| v.as_str()) {
+            if let Some(port) = parse_port(endpoint) {
+                by_port.entry(port).or_default().push(label.clone());
+            }
+        }
+
+        // Recurse into the child's own registry if it's reachable on disk.
+        let Some(brain_path) = val.get("brain_path").and_then(|v| v.as_str()) else {
             continue;
         };
-        if let Some(port) = parse_port(endpoint) {
-            by_port.entry(port).or_default().push(id.clone());
+        let child_root = project_root.join(brain_path);
+        let child_registry_path = child_root.join(".claude").join("brain-registry.json");
+        let canonical = child_registry_path
+            .canonicalize()
+            .unwrap_or_else(|_| child_registry_path.clone());
+        if !visited.insert(canonical) {
+            continue; // already walked this registry; cycle guard
         }
+        let Ok(json) = std::fs::read_to_string(&child_registry_path) else {
+            continue; // peer not on disk; just skip (still counted at this level)
+        };
+        let Ok(child_reg) = BrainRegistry::from_json(&json) else {
+            continue;
+        };
+        walk_children(&child_reg, &child_root, &label, by_port, visited);
     }
+}
+
+pub fn check_federation_ports(reg: &BrainRegistry, project_root: &Path) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let by_port = collect_transitive_ports(reg, project_root);
     for (port, ids) in by_port {
         if ids.len() > 1 {
             let mut sorted = ids;
@@ -213,13 +274,231 @@ pub fn check_federation_ports(reg: &BrainRegistry) -> Vec<Finding> {
             findings.push(Finding::err(
                 "federation-ports",
                 format!(
-                    "port {port} is shared by federation children {:?}; \
-                     each peer must own a unique port",
+                    "port {port} is shared by federation peers {:?}; \
+                     each peer must own a unique port (transitive across the whole tree)",
                     sorted
                 ),
             ));
         }
     }
+    findings
+}
+
+// --- Check 7: autonomy block schema correctness (v3.3 F3) -----------
+
+/// The four canonical autonomy levels. Adding new ones requires a
+/// methodology change, not a registry edit.
+const CANONICAL_LEVELS: &[&str] = &["auto", "notify", "approve", "blocked"];
+
+/// Validate the `autonomy` block in `config.extra`:
+///
+/// - `levels` should declare the four canonical levels with `description`
+///   + `requires_approval`
+/// - Each `action_types[].default_level` must reference an existing level
+/// - Each `safety_invariants[]` entry should have a `rule` + at least one
+///   of `minimum_level` / `enforced_level`, and any level it references
+///   must exist in `levels`
+/// - Both `minimum_level` AND `enforced_level` on the same invariant is
+///   ambiguous — pick one (warn)
+/// - `description` recommended on action_types + safety_invariants (warn
+///   when missing — operators reading the registry six months later need
+///   to know why a rule exists)
+/// - Warn on unknown top-level keys inside `autonomy.action_types[]` or
+///   `autonomy.safety_invariants[]` (catches v3.2.2-era invented fields
+///   like `autonomy_bias`)
+pub fn check_autonomy(reg: &BrainRegistry) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    // BrainConfig.autonomy is a typed `serde_json::Value`, defaulting to
+    // Value::Null when absent. Only proceed when it's an object.
+    let Some(autonomy) = reg.config.autonomy.as_object() else {
+        return findings;
+    };
+
+    // 1. Levels — collect the set of level names this registry declares.
+    let declared_levels: std::collections::HashSet<&str> = autonomy
+        .get("levels")
+        .and_then(|v| v.as_object())
+        .map(|m| m.keys().map(|s| s.as_str()).collect())
+        .unwrap_or_default();
+
+    // Soft-warn on missing canonical levels.
+    if !declared_levels.is_empty() {
+        for canon in CANONICAL_LEVELS {
+            if !declared_levels.contains(canon) {
+                findings.push(Finding::warn(
+                    "autonomy",
+                    format!(
+                        "autonomy.levels does not declare the canonical level '{canon}'; \
+                         agents MAY default to a tighter level when reasoning about it"
+                    ),
+                ));
+            }
+        }
+    }
+
+    // 2. Action types — every default_level must reference an existing level.
+    if let Some(action_types) = autonomy.get("action_types").and_then(|v| v.as_object()) {
+        for (action, body) in action_types {
+            let Some(body) = body.as_object() else {
+                findings.push(Finding::err(
+                    "autonomy",
+                    format!("autonomy.action_types.{action} is not an object"),
+                ));
+                continue;
+            };
+            // Every action MUST have default_level
+            let Some(level) = body.get("default_level").and_then(|v| v.as_str()) else {
+                findings.push(Finding::err(
+                    "autonomy",
+                    format!(
+                        "autonomy.action_types.{action} missing required field `default_level`"
+                    ),
+                ));
+                continue;
+            };
+            if !declared_levels.is_empty() && !declared_levels.contains(level) {
+                findings.push(Finding::err(
+                    "autonomy",
+                    format!(
+                        "autonomy.action_types.{action}.default_level = '{level}' is not \
+                         declared in autonomy.levels"
+                    ),
+                ));
+            } else if declared_levels.is_empty()
+                && !CANONICAL_LEVELS.contains(&level)
+            {
+                findings.push(Finding::err(
+                    "autonomy",
+                    format!(
+                        "autonomy.action_types.{action}.default_level = '{level}' is not a \
+                         canonical level (auto / notify / approve / blocked)"
+                    ),
+                ));
+            }
+            if !body.contains_key("description") {
+                findings.push(Finding::warn(
+                    "autonomy",
+                    format!(
+                        "autonomy.action_types.{action} is missing `description` — operators \
+                         auditing the registry need to know what this action class covers"
+                    ),
+                ));
+            }
+            // Warn on unknown fields (catches v3.2.2-era invented fields like `autonomy_bias`).
+            for key in body.keys() {
+                if !matches!(
+                    key.as_str(),
+                    "default_level" | "blast_radius" | "reversible" | "description"
+                ) {
+                    findings.push(Finding::warn(
+                        "autonomy",
+                        format!(
+                            "autonomy.action_types.{action} has unknown field '{key}'; \
+                             schema is closed (default_level, blast_radius, reversible, \
+                             description). Field will be ignored at runtime."
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    // 3. Safety invariants
+    if let Some(invariants) = autonomy
+        .get("safety_invariants")
+        .and_then(|v| v.as_array())
+    {
+        for (i, inv) in invariants.iter().enumerate() {
+            let Some(inv) = inv.as_object() else {
+                findings.push(Finding::err(
+                    "autonomy",
+                    format!("autonomy.safety_invariants[{i}] is not an object"),
+                ));
+                continue;
+            };
+            // rule is required
+            let rule_label = inv
+                .get("rule")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("[{i}]"));
+            if !inv.contains_key("rule") {
+                findings.push(Finding::err(
+                    "autonomy",
+                    format!("autonomy.safety_invariants[{i}] missing required field `rule`"),
+                ));
+            }
+            let has_min = inv.contains_key("minimum_level");
+            let has_enf = inv.contains_key("enforced_level");
+            if !has_min && !has_enf {
+                findings.push(Finding::err(
+                    "autonomy",
+                    format!(
+                        "autonomy.safety_invariants[{rule_label}] needs at least one of \
+                         `minimum_level` or `enforced_level` — invariant has no effect otherwise"
+                    ),
+                ));
+            }
+            if has_min && has_enf {
+                findings.push(Finding::warn(
+                    "autonomy",
+                    format!(
+                        "autonomy.safety_invariants[{rule_label}] has BOTH `minimum_level` \
+                         and `enforced_level` — semantics are ambiguous; pick one"
+                    ),
+                ));
+            }
+            for level_field in &["minimum_level", "enforced_level"] {
+                if let Some(level) = inv.get(*level_field).and_then(|v| v.as_str()) {
+                    if !declared_levels.is_empty() && !declared_levels.contains(level) {
+                        findings.push(Finding::err(
+                            "autonomy",
+                            format!(
+                                "autonomy.safety_invariants[{rule_label}].{level_field} = \
+                                 '{level}' is not declared in autonomy.levels"
+                            ),
+                        ));
+                    } else if declared_levels.is_empty()
+                        && !CANONICAL_LEVELS.contains(&level)
+                    {
+                        findings.push(Finding::err(
+                            "autonomy",
+                            format!(
+                                "autonomy.safety_invariants[{rule_label}].{level_field} = \
+                                 '{level}' is not a canonical level"
+                            ),
+                        ));
+                    }
+                }
+            }
+            if !inv.contains_key("description") {
+                findings.push(Finding::warn(
+                    "autonomy",
+                    format!(
+                        "autonomy.safety_invariants[{rule_label}] is missing `description` — \
+                         auditors WILL ask why this rule exists"
+                    ),
+                ));
+            }
+            // Warn on unknown fields
+            for key in inv.keys() {
+                if !matches!(
+                    key.as_str(),
+                    "rule" | "minimum_level" | "enforced_level" | "description"
+                ) {
+                    findings.push(Finding::warn(
+                        "autonomy",
+                        format!(
+                            "autonomy.safety_invariants[{rule_label}] has unknown field \
+                             '{key}'; schema is closed (rule, minimum_level, enforced_level, \
+                             description). Field will be ignored at runtime."
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
     findings
 }
 
@@ -383,7 +662,8 @@ mod tests {
                 }
             }"#,
         );
-        let f = check_federation_ports(&r);
+        let tmp = tempfile::TempDir::new().unwrap();
+        let f = check_federation_ports(&r, tmp.path());
         assert_eq!(f.len(), 1);
         assert_eq!(f[0].severity, Severity::Error);
         assert!(f[0].message.contains("8421"));
@@ -406,7 +686,69 @@ mod tests {
                 }
             }"#,
         );
-        assert!(check_federation_ports(&r).is_empty());
+        let tmp = tempfile::TempDir::new().unwrap();
+        assert!(check_federation_ports(&r, tmp.path()).is_empty());
+    }
+
+    #[test]
+    fn check_federation_ports_catches_transitive_clash() {
+        // v3.3 F7: parent has 1 child at 8421; that child's own registry
+        // declares ANOTHER child at 8422; parent declares a 2nd direct
+        // child also at 8422. The transitive walker should catch the clash
+        // between (parent → child2) and (parent → child1 → grandchild)
+        // even though they live at different levels.
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        // Set up child1 with its own registry that declares a grandchild at 8422.
+        let child1_dir = tmp.path().join("child1");
+        std::fs::create_dir_all(child1_dir.join(".claude")).unwrap();
+        std::fs::write(
+            child1_dir.join(".claude/brain-registry.json"),
+            r#"{
+                "meta": {"schema_version": "2.1", "description": "child1", "updated_by": "x"},
+                "config": {
+                    "domain_weights": {"a": 1.0},
+                    "domain_definitions": {
+                        "a": {"scoring_source": {"type": "cmdb", "path": ".claude/a.json"}}
+                    },
+                    "children": {
+                        "grandchild": {
+                            "a2a_endpoint": "http://localhost:8422/a2a/v1/",
+                            "brain_path": "../grandchild"
+                        }
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+
+        // Parent: declares child1 at 8421 + child2 at 8422 (clashes with grandchild).
+        let parent = fixture(
+            r#"{
+                "meta": {"schema_version": "2.1", "description": "parent", "updated_by": "x"},
+                "config": {
+                    "domain_weights": {"a": 1.0},
+                    "domain_definitions": {
+                        "a": {"scoring_source": {"type": "cmdb", "path": ".claude/a.json"}}
+                    },
+                    "children": {
+                        "child1": {
+                            "a2a_endpoint": "http://localhost:8421/a2a/v1/",
+                            "brain_path": "child1"
+                        },
+                        "child2": {
+                            "a2a_endpoint": "http://localhost:8422/a2a/v1/",
+                            "brain_path": "child2"
+                        }
+                    }
+                }
+            }"#,
+        );
+        let f = check_federation_ports(&parent, tmp.path());
+        assert_eq!(f.len(), 1);
+        assert!(f[0].message.contains("8422"));
+        assert!(f[0].message.contains("child1/grandchild"));
+        assert!(f[0].message.contains("child2"));
     }
 
     #[test]
@@ -422,7 +764,7 @@ mod tests {
     }
 
     #[test]
-    fn audit_runs_all_six_check_families() {
+    fn audit_runs_all_check_families() {
         // Smoke test: against MIN_VALID + a tmp dir, audit runs to completion
         // and returns 0 errors but ≥1 warn (missing CMDB + missing culture).
         let r = fixture(MIN_VALID);
@@ -431,5 +773,200 @@ mod tests {
         let errors = findings.iter().filter(|f| f.severity == Severity::Error).count();
         assert_eq!(errors, 0, "got: {:?}", findings);
         assert!(findings.len() >= 2, "got: {:?}", findings);
+    }
+
+    // --- F3: autonomy schema checks --------------------------------
+
+    #[test]
+    fn check_autonomy_clean_when_no_block() {
+        let r = fixture(MIN_VALID);
+        assert!(check_autonomy(&r).is_empty());
+    }
+
+    #[test]
+    fn check_autonomy_clean_on_well_formed_block() {
+        let r = fixture(
+            r#"{
+                "meta": {"schema_version": "2.1", "description": "x", "updated_by": "x"},
+                "config": {
+                    "domain_weights": {"a": 1.0},
+                    "domain_definitions": {
+                        "a": {"scoring_source": {"type": "cmdb", "path": ".claude/a.json"}}
+                    },
+                    "autonomy": {
+                        "levels": {
+                            "auto": {"description": "auto", "requires_approval": false},
+                            "notify": {"description": "notify", "requires_approval": false},
+                            "approve": {"description": "approve", "requires_approval": true},
+                            "blocked": {"description": "blocked", "requires_approval": true}
+                        },
+                        "action_types": {
+                            "submit-application": {
+                                "default_level": "approve",
+                                "blast_radius": "high",
+                                "reversible": false,
+                                "description": "submitting an application"
+                            }
+                        },
+                        "safety_invariants": [
+                            {
+                                "rule": "agents-must-not-submit-without-approval",
+                                "minimum_level": "approve",
+                                "description": "applications carry operator identity"
+                            }
+                        ]
+                    }
+                }
+            }"#,
+        );
+        assert!(check_autonomy(&r).is_empty(), "got: {:?}", check_autonomy(&r));
+    }
+
+    #[test]
+    fn check_autonomy_catches_invented_field() {
+        // F3 worked example: the v3.2.2 agent invented `autonomy_bias` which
+        // is silently accepted at runtime. Doctor should warn.
+        let r = fixture(
+            r#"{
+                "meta": {"schema_version": "2.1", "description": "x", "updated_by": "x"},
+                "config": {
+                    "domain_weights": {"a": 1.0},
+                    "domain_definitions": {
+                        "a": {"scoring_source": {"type": "cmdb", "path": ".claude/a.json"}}
+                    },
+                    "autonomy": {
+                        "action_types": {
+                            "submit-application": {
+                                "default_level": "approve",
+                                "autonomy_bias": "invented field"
+                            }
+                        }
+                    }
+                }
+            }"#,
+        );
+        let f = check_autonomy(&r);
+        assert!(
+            f.iter().any(|x| x.message.contains("autonomy_bias")),
+            "got: {:?}",
+            f
+        );
+    }
+
+    #[test]
+    fn check_autonomy_catches_unknown_level_reference() {
+        let r = fixture(
+            r#"{
+                "meta": {"schema_version": "2.1", "description": "x", "updated_by": "x"},
+                "config": {
+                    "domain_weights": {"a": 1.0},
+                    "domain_definitions": {
+                        "a": {"scoring_source": {"type": "cmdb", "path": ".claude/a.json"}}
+                    },
+                    "autonomy": {
+                        "levels": {
+                            "auto": {"description": "auto", "requires_approval": false},
+                            "approve": {"description": "approve", "requires_approval": true}
+                        },
+                        "safety_invariants": [
+                            {
+                                "rule": "x",
+                                "minimum_level": "supervisor",
+                                "description": "y"
+                            }
+                        ]
+                    }
+                }
+            }"#,
+        );
+        let f = check_autonomy(&r);
+        assert!(
+            f.iter().any(|x| x.severity == Severity::Error
+                && x.message.contains("supervisor")),
+            "got: {:?}",
+            f
+        );
+    }
+
+    #[test]
+    fn check_autonomy_warns_on_missing_description() {
+        let r = fixture(
+            r#"{
+                "meta": {"schema_version": "2.1", "description": "x", "updated_by": "x"},
+                "config": {
+                    "domain_weights": {"a": 1.0},
+                    "domain_definitions": {
+                        "a": {"scoring_source": {"type": "cmdb", "path": ".claude/a.json"}}
+                    },
+                    "autonomy": {
+                        "safety_invariants": [
+                            { "rule": "x", "minimum_level": "approve" }
+                        ]
+                    }
+                }
+            }"#,
+        );
+        let f = check_autonomy(&r);
+        assert!(f.iter().any(|x| x.message.contains("description")));
+    }
+
+    #[test]
+    fn check_autonomy_errors_on_invariant_without_level() {
+        let r = fixture(
+            r#"{
+                "meta": {"schema_version": "2.1", "description": "x", "updated_by": "x"},
+                "config": {
+                    "domain_weights": {"a": 1.0},
+                    "domain_definitions": {
+                        "a": {"scoring_source": {"type": "cmdb", "path": ".claude/a.json"}}
+                    },
+                    "autonomy": {
+                        "safety_invariants": [
+                            { "rule": "x", "description": "y" }
+                        ]
+                    }
+                }
+            }"#,
+        );
+        let f = check_autonomy(&r);
+        assert!(
+            f.iter().any(|x| x.severity == Severity::Error
+                && x.message.contains("minimum_level")
+                && x.message.contains("enforced_level")),
+            "got: {:?}",
+            f
+        );
+    }
+
+    #[test]
+    fn check_autonomy_warns_on_both_min_and_enforced() {
+        let r = fixture(
+            r#"{
+                "meta": {"schema_version": "2.1", "description": "x", "updated_by": "x"},
+                "config": {
+                    "domain_weights": {"a": 1.0},
+                    "domain_definitions": {
+                        "a": {"scoring_source": {"type": "cmdb", "path": ".claude/a.json"}}
+                    },
+                    "autonomy": {
+                        "safety_invariants": [
+                            {
+                                "rule": "x",
+                                "minimum_level": "approve",
+                                "enforced_level": "blocked",
+                                "description": "y"
+                            }
+                        ]
+                    }
+                }
+            }"#,
+        );
+        let f = check_autonomy(&r);
+        assert!(
+            f.iter().any(|x| x.severity == Severity::Warn
+                && x.message.contains("ambiguous")),
+            "got: {:?}",
+            f
+        );
     }
 }

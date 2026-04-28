@@ -102,6 +102,11 @@ pub fn humanize(name: &str) -> String {
 /// Scaffold a new domain. Returns details of what was done so the
 /// caller can render appropriate output (CLI prints "next steps";
 /// MCP returns JSON).
+///
+/// v3.3 F10: `sensor_intent` (when supplied) is recorded as a
+/// `_todo_<name>` field on the domain's definition entry. Captures
+/// the operator's intent for what a future sensor will observe;
+/// useful when re-reading the registry months later.
 pub async fn scaffold_domain(
     name: &str,
     description: Option<&str>,
@@ -110,6 +115,7 @@ pub async fn scaffold_domain(
     registry_rel: &str,
     directory: &str,
     force: bool,
+    sensor_intent: Option<&str>,
 ) -> Result<ScaffoldOutcome> {
     validate_name(name).with_context(|| format!("invalid domain name '{name}'"))?;
 
@@ -176,16 +182,22 @@ pub async fn scaffold_domain(
         .or_insert_with(|| json!({}))
         .as_object_mut()
         .ok_or_else(|| anyhow!("config.domain_definitions is not an object"))?;
-    defs.insert(
-        name.to_string(),
-        json!({
-            "scoring_source": {
-                "type": "cmdb",
-                "path": cmdb_rel,
-            },
-            "exported_variables": {}
-        }),
-    );
+    let mut domain_def = json!({
+        "scoring_source": {
+            "type": "cmdb",
+            "path": cmdb_rel,
+        },
+        "exported_variables": {}
+    });
+    // v3.3 F10: optional `_todo_<name>` field carries operator-supplied
+    // sensor intent. The leading underscore makes it a documentation key
+    // (the registry's custom deserializer skips it during validation).
+    if let Some(intent) = sensor_intent {
+        if let Some(obj) = domain_def.as_object_mut() {
+            obj.insert(format!("_todo_{name}"), json!(intent));
+        }
+    }
+    defs.insert(name.to_string(), domain_def);
 
     let serialized = serde_json::to_string_pretty(&registry)? + "\n";
     fs::write(&registry_pb, serialized)
@@ -417,6 +429,7 @@ mod tests {
             ".claude/brain-registry.json",
             tmp.path().to_str().unwrap(),
             false,
+            None,
         )
         .await
         .unwrap();
@@ -438,6 +451,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn scaffold_with_sensor_intent_writes_todo_field() {
+        // F10: --sensor-intent appears as `_todo_<name>` on the domain definition.
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        std::fs::write(
+            tmp.path().join(".claude/brain-registry.json"),
+            minimal_registry_json(),
+        )
+        .unwrap();
+
+        scaffold_domain(
+            "with-intent",
+            Some("Domain With Intent"),
+            0.0,
+            SensorType::Stub,
+            ".claude/brain-registry.json",
+            tmp.path().to_str().unwrap(),
+            false,
+            Some("Sensor (when authored) reads X and reports Y."),
+        )
+        .await
+        .unwrap();
+
+        let updated: Value = serde_json::from_str(
+            &std::fs::read_to_string(tmp.path().join(".claude/brain-registry.json")).unwrap(),
+        )
+        .unwrap();
+        let def = &updated["config"]["domain_definitions"]["with-intent"];
+        assert_eq!(
+            def["_todo_with-intent"],
+            "Sensor (when authored) reads X and reports Y."
+        );
+    }
+
+    #[tokio::test]
     async fn scaffold_python_includes_sensor() {
         let tmp = TempDir::new().unwrap();
         std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
@@ -455,6 +503,7 @@ mod tests {
             ".claude/brain-registry.json",
             tmp.path().to_str().unwrap(),
             false,
+            None,
         )
         .await
         .unwrap();
@@ -485,6 +534,7 @@ mod tests {
             ".claude/brain-registry.json",
             tmp.path().to_str().unwrap(),
             false,
+            None,
         )
         .await
         .unwrap_err();
@@ -509,6 +559,7 @@ mod tests {
             ".claude/brain-registry.json",
             tmp.path().to_str().unwrap(),
             true,
+            None,
         )
         .await
         .unwrap();
@@ -540,6 +591,7 @@ mod tests {
             ".claude/brain-registry.json",
             tmp.path().to_str().unwrap(),
             false,
+            None,
         )
         .await
         .unwrap_err();

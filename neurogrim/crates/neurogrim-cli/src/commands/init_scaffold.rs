@@ -25,7 +25,7 @@ use anyhow::{anyhow, bail, Context, Result};
 // chrono no longer used here directly — stub_cmdb_json delegates to
 // neurogrim_mcp::domain::stub_cmdb_json which holds the timestamp logic.
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
 
@@ -81,6 +81,7 @@ const HUMAN_COMMS_SKILL: &str = include_str!("../../data/init-skills/human-comms
 const WRITE_SKILL_SKILL: &str = include_str!("../../data/init-skills/write-skill/SKILL.md");
 const NEUROGRIM_ONBOARDING_SKILL: &str =
     include_str!("../../data/init-skills/neurogrim-onboarding/SKILL.md");
+const CLI_MODE_SKILL: &str = include_str!("../../data/init-skills/cli-mode/SKILL.md");
 
 /// Bundled file: relative path within `.claude/skills/<skill-name>/` and
 /// its content. Used by `materialize_skills` to write out all files for
@@ -122,6 +123,9 @@ fn bundled_skill_files(name: &str) -> Option<&'static [BundledSkillFile]> {
     static NEUROGRIM_ONBOARDING: &[BundledSkillFile] = &[
         BundledSkillFile { relative_path: "SKILL.md", content: NEUROGRIM_ONBOARDING_SKILL },
     ];
+    static CLI_MODE: &[BundledSkillFile] = &[
+        BundledSkillFile { relative_path: "SKILL.md", content: CLI_MODE_SKILL },
+    ];
     match name {
         "hats" => Some(HATS),
         "imagination-mode" => Some(IMAGINATION_MODE),
@@ -130,6 +134,7 @@ fn bundled_skill_files(name: &str) -> Option<&'static [BundledSkillFile]> {
         "human-comms" => Some(HUMAN_COMMS),
         "write-skill" => Some(WRITE_SKILL),
         "neurogrim-onboarding" => Some(NEUROGRIM_ONBOARDING),
+        "cli-mode" => Some(CLI_MODE),
         _ => None,
     }
 }
@@ -264,7 +269,8 @@ pub async fn scaffold_full(cfg: &ScaffoldConfig) -> Result<()> {
                 anyhow!(
                     "skill '{skill}' is not in the bundled set. \
                      Bundled skills: hats, imagination-mode, north-star, \
-                     rubber-duck, human-comms, write-skill, neurogrim-onboarding."
+                     rubber-duck, human-comms, write-skill, neurogrim-onboarding, \
+                     cli-mode."
                 )
             })?;
             let skill_dir = skills_dir.join(skill);
@@ -352,6 +358,8 @@ pub fn template_registry_json(
     project_name: &str,
     template_name: &str,
     domains: &[String],
+    description_override: Option<&str>,
+    domain_descriptions: &std::collections::HashMap<String, String>,
 ) -> Result<String> {
     let mut domain_weights = serde_json::Map::new();
     let mut advisory_domains = Vec::new();
@@ -374,23 +382,39 @@ pub fn template_registry_json(
             .collect::<Vec<_>>()
             .join(" ");
         principle_map.insert(d.clone(), json!(display));
-        domain_definitions.insert(
-            d.clone(),
+
+        // v3.3 F10: include _todo_<domain> with the operator-supplied
+        // description string when present. The `_<key>` underscore-prefix
+        // convention is filtered out of `domain_definitions` deserialization
+        // (registry.rs), so it stays as documentation without affecting
+        // scoring or schema validation.
+        let mut def = serde_json::Map::new();
+        def.insert(
+            "scoring_source".to_string(),
             json!({
-                "scoring_source": {
-                    "type": "cmdb",
-                    "path": format!(".claude/{d}-cmdb.json")
-                }
+                "type": "cmdb",
+                "path": format!(".claude/{d}-cmdb.json")
             }),
         );
+        if let Some(desc) = domain_descriptions.get(d) {
+            def.insert(format!("_todo_{d}"), json!(desc));
+        }
+        domain_definitions.insert(d.clone(), Value::Object(def));
     }
+
+    // v3.3 F8: prefer operator-supplied --description; fall back to the
+    // generic init-template framing when absent.
+    let meta_description = match description_override {
+        Some(d) if !d.trim().is_empty() => d.to_string(),
+        _ => format!(
+            "{project_name} Brain — initialized via `neurogrim init --template {template_name}` (v3.1.1+). All declared domains advisory weight 0.0; sensors deferred. CMDBs at score 50 are honest 'unknown' per spec principle #2."
+        ),
+    };
 
     let registry = json!({
         "meta": {
             "schema_version": "2.1",
-            "description": format!(
-                "{project_name} Brain — initialized via `neurogrim init --template {template_name}` (v3.1.1+). All declared domains advisory weight 0.0; sensors deferred. CMDBs at score 50 are honest 'unknown' per spec principle #2."
-            ),
+            "description": meta_description,
             "updated_by": "neurogrim-init",
             "project": project_name,
             "note": "Self-contained: works standalone without an LSP Brains ecosystem adjacent."
@@ -534,7 +558,7 @@ mod tests {
 
     #[test]
     fn all_bundled_skills_resolve() {
-        for name in ["hats", "imagination-mode", "north-star", "rubber-duck", "human-comms", "write-skill", "neurogrim-onboarding"] {
+        for name in ["hats", "imagination-mode", "north-star", "rubber-duck", "human-comms", "write-skill", "neurogrim-onboarding", "cli-mode"] {
             let files = bundled_skill_files(name)
                 .unwrap_or_else(|| panic!("bundled_skill_files({name}) returned None"));
             assert!(!files.is_empty(), "skill '{name}' has no bundled files");

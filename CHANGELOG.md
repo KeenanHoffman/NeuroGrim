@@ -4,6 +4,95 @@ All notable changes to NeuroGrim + the LSP Brains specification live
 here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-04-28
+
+*Agent-authoring substrate. Closes all 10 friction points (F1–F10)
+surfaced by the v3.2.2 agent-driven adoption test on the job-hunt
+pilot, including a real runtime liveness bug (port 8423 collision
+across the federation tree).*
+
+### Added — explain topic
+- **`neurogrim explain autonomy`** (F1) — bundled topic covering the
+  autonomy block schema: levels, action_types, safety_invariants. The
+  v3.2.2 agent had to grep the binary for field names; this closes
+  that discoverability gap. Also serves as the worked example for the
+  v3.2.2-era schema divergence (the agent invented `autonomy_bias`
+  instead of using the canonical `blast_radius` / `reversible` /
+  `description` set).
+
+### Added — `doctor` checks
+- **`check_autonomy`** (F3) — validates the autonomy block end-to-end:
+  declared levels include the four canonical names; `action_types[].default_level`
+  references a known level; `safety_invariants[]` entries have
+  `rule` + at least one of `minimum_level` / `enforced_level`; both
+  set is ambiguous (warn); unknown fields trigger warnings (catches
+  invented fields like `autonomy_bias`); `description` recommended
+  on action_types + safety_invariants.
+- **`check_federation_ports` walks transitively** (F7) — the v3.2.2
+  port-uniqueness check only considered direct children. v3.3 walks
+  each peer's `brain_path/.claude/brain-registry.json` recursively
+  and reports clashes across the entire federation tree. Includes
+  cycle-guard via visited-paths set.
+
+### Added — CLI flags
+- **`neurogrim agent --prose --all-domains`** (F4) — list every
+  declared domain in the prose signals section instead of capping
+  at top 3. Auto-expands when the Brain is all-advisory (the
+  "strongest signals" framing is misleading when no domain has
+  weight > 0). MCP `orient` tool has matching `all_domains: bool`.
+- **`neurogrim skill new --stub`** (F2) — produces a minimal-but-routable
+  skill: sensible-default frontmatter (no literal `TODO —` strings)
+  + a single-paragraph body identifying the file as a stub. Routing
+  index has something to match against immediately. Use this when
+  the operator's intent is "scaffold stubs, fill bodies later."
+- **`neurogrim init --description "<text>"`** (F8) — operator-supplied
+  Brain description for `meta.description`. Replaces the generic
+  "initialized via `neurogrim init` ..." boilerplate when bespoke
+  framing is needed.
+- **`neurogrim init --domain-describe "NAME=DESCRIPTION"`** (F10) —
+  repeatable. Each entry becomes a `_todo_<name>` field on the
+  domain's definition, capturing operator-supplied sensor authoring
+  intent for when the sensor is later written.
+- **`neurogrim domain new --sensor-intent "<text>"`** (F10) — same
+  but for adding domains one-at-a-time after init. MCP `domain_new`
+  tool has matching `sensor_intent: Option<String>`.
+
+### Added — automatic transitive port allocation
+- **`neurogrim federation register` allocator walks transitively** (F7).
+  The v3.2.2-era port-8423 collision (job-hunt allocated to a port
+  already used by python-starter — the ecosystem's grandchild) is no
+  longer possible. The allocator reads each peer's registry from disk
+  and considers the full transitive port set when picking the next
+  free slot.
+
+### Added — bundled skill
+- **`cli-mode` ships in `init-skills/`** (F5) — the `neurogrim-onboarding`
+  skill referenced `cli-mode` but it wasn't bundled, producing a
+  Read-fail for any agent following the reference. v3.3 ships it
+  in the abstract-project / code-project / mixed templates.
+
+### Changed
+- **`init` no longer logs two `.gitignore` updates** (F6) — when
+  `--template` is set, the registry-phase awareness-only update is
+  skipped because the template's gitignore-snippet covers the same
+  entry. Single update operation, single log line.
+- **`validate` surfaces autonomy-block counts** — adds `Autonomy: N
+  levels, M action_types, K safety_invariants` to the summary so
+  operators can see at a glance whether they have safety declarations.
+- **Workspace `version` 3.2.2 → 3.3.0** across all 6 crates +
+  `[workspace.dependencies]` synchronized.
+
+### Background — what prompted this release
+
+A fresh Claude Code session re-bootstrapped the job-hunt project
+end-to-end via the published v3.2.2 CLI (`cargo install neurogrim-cli`).
+The agent's adoption-feedback report surfaced six friction points
+(F1–F6); the operator-side audit added four more (F7–F10) including
+the F7 port collision. Per-finding rationale is in
+`audit/job-hunt-rebootstrap-prompt-2026-04-28.md` and the
+`adoption-feedback-2026-04-28.md` report at
+`D:/job-hunt/archive/adoption-feedback-2026-04-28.md`.
+
 ## [3.2.2] - 2026-04-28
 
 *Publish-prep release. No new features; closes the last `cargo publish`

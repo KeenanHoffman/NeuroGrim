@@ -53,6 +53,7 @@ copy = [
     "human-comms",
     "write-skill",
     "neurogrim-onboarding",
+    "cli-mode",
 ]
 
 [safety_invariants]

@@ -52,6 +52,30 @@ pub async fn run(registry_path: &str) -> Result<()> {
         registry.config.sensory_servers.len()
     );
 
+    // v3.3 F3: surface the autonomy block alongside the other counts so
+    // operators can see at a glance that they have safety declarations
+    // (or that they are missing).
+    let autonomy = registry.config.autonomy.as_object();
+    let action_types_count = autonomy
+        .and_then(|a| a.get("action_types"))
+        .and_then(|v| v.as_object())
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let safety_invariants_count = autonomy
+        .and_then(|a| a.get("safety_invariants"))
+        .and_then(|v| v.as_array())
+        .map(|v| v.len())
+        .unwrap_or(0);
+    let levels_count = autonomy
+        .and_then(|a| a.get("levels"))
+        .and_then(|v| v.as_object())
+        .map(|m| m.len())
+        .unwrap_or(0);
+    println!(
+        "  Autonomy: {} levels, {} action_types, {} safety_invariants",
+        levels_count, action_types_count, safety_invariants_count
+    );
+
     if !missing_defs.is_empty() {
         println!(
             "  WARN: Domains without definitions: {}",

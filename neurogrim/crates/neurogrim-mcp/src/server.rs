@@ -270,6 +270,10 @@ pub struct OrientParams {
     /// Optional hat to bias the rendered prose. Same hats supported by
     /// the CLI's `agent --hat <name>`.
     pub hat: Option<String>,
+    /// v3.3 F4: list every declared domain instead of capping at the
+    /// top 3. Default behavior auto-expands when the Brain is
+    /// all-advisory (no weighted domains).
+    pub all_domains: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -293,6 +297,9 @@ pub struct DomainNewParams {
     pub sensor_type: Option<String>,
     /// Overwrite an existing domain. Default false.
     pub force: Option<bool>,
+    /// v3.3 F10: Operator-supplied sensor authoring intent. Stored
+    /// as `_todo_<name>` on the domain's definition entry.
+    pub sensor_intent: Option<String>,
 }
 
 // --- Tool implementations ---
@@ -357,7 +364,13 @@ impl BrainServer {
     )]
     async fn orient(&self, Parameters(p): Parameters<OrientParams>) -> String {
         let agent_output = self.run_scoring(p.hat, None).await;
-        crate::prose::render_prose(&self.registry, &self.project_root, &agent_output, true)
+        crate::prose::render_prose(
+            &self.registry,
+            &self.project_root,
+            &agent_output,
+            true,
+            p.all_domains.unwrap_or(false),
+        )
     }
 
     #[tool(
@@ -456,6 +469,7 @@ impl BrainServer {
             ".claude/brain-registry.json",
             &directory,
             force,
+            p.sensor_intent.as_deref(),
         )
         .await;
 

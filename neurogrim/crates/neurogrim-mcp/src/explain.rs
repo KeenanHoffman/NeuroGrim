@@ -17,12 +17,13 @@ const TOPIC_SCORING: &str = include_str!("../data/explain/scoring.md");
 const TOPIC_FEDERATION: &str = include_str!("../data/explain/federation.md");
 const TOPIC_CLI: &str = include_str!("../data/explain/cli.md");
 const TOPIC_CULTURE: &str = include_str!("../data/explain/culture.md");
+const TOPIC_AUTONOMY: &str = include_str!("../data/explain/autonomy.md");
 
 /// Spec/methodology version this bundle was compiled against. Matches
 /// the version header in each `data/explain/*.md`. Bumped manually
 /// when methodology evolves enough to invalidate prior agent
 /// guidance. The `--version` surface in CLI + MCP both read this.
-pub const BUNDLED_VERSION: &str = "v3.2";
+pub const BUNDLED_VERSION: &str = "v3.3";
 
 /// Canonical-source path relative to the workspace root, surfaced via
 /// `neurogrim explain --version` and the MCP `explain --topic
@@ -74,6 +75,11 @@ pub fn topics() -> &'static [(&'static str, &'static str, &'static str)] {
             "culture.yaml — five values as floor-only invariants",
             TOPIC_CULTURE,
         ),
+        (
+            "autonomy",
+            "Autonomy block: action_types, levels, safety_invariants (v3.3)",
+            TOPIC_AUTONOMY,
+        ),
     ]
 }
 
@@ -94,8 +100,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn topic_count_is_8() {
-        assert_eq!(topics().len(), 8);
+    fn topic_count_is_9() {
+        assert_eq!(topics().len(), 9);
     }
 
     #[test]

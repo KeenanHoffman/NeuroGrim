@@ -1,4 +1,4 @@
-<!-- topic: culture — bundled in neurogrim-cli v3.2 -->
+<!-- topic: culture — bundled in neurogrim-cli v3.3 -->
 # Cultural substrate — the floor-only invariant
 
 Every Brain ships with `.claude/culture.yaml` declaring five

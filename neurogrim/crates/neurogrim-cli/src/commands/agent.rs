@@ -15,10 +15,11 @@ pub async fn run(
     human_persona: Option<String>,
     prose_mode: bool,
     plain: bool,
+    all_domains: bool,
 ) -> Result<()> {
     let ctx = BrainContext::load(registry_path, hat, human_persona).await?;
     if prose_mode {
-        prose::display_prose(&ctx, plain);
+        prose::display_prose(&ctx, plain, all_domains);
     } else {
         json::display_agent_json(&ctx.agent_output);
     }

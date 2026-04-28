@@ -535,6 +535,8 @@ pub async fn run(
     template: Option<String>,
     name_override: Option<String>,
     domains_arg: Option<String>,
+    description: Option<String>,
+    domain_describe: Vec<String>,
 ) -> Result<()> {
     eprintln!("✦ Conjuring registry…");
     let root = PathBuf::from(project_root);
@@ -650,24 +652,30 @@ pub async fn run(
         tokio::fs::write(&awareness_path, awareness_json).await?;
     }
 
-    // Add awareness file to .gitignore (create if missing, skip if entry already present)
-    let gitignore_path = root.join(".gitignore");
-    let gitignore_entry = ".claude/brain/local-awareness.json";
-    let existing_gitignore = tokio::fs::read_to_string(&gitignore_path)
-        .await
-        .unwrap_or_default();
-    if !existing_gitignore.contains(gitignore_entry) {
-        let append = format!(
-            "\n# Local machine awareness — machine-specific facts, never commit\n{}\n",
-            gitignore_entry
-        );
-        let mut file = tokio::fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&gitignore_path)
-            .await?;
-        file.write_all(append.as_bytes()).await?;
-        println!("Updated: .gitignore (added local-awareness.json)");
+    // Add awareness file to .gitignore (create if missing, skip if entry already present).
+    // v3.3 F6: skipped when --template is set — the template's gitignore-snippet
+    // includes `.claude/brain/local-awareness.json` already, so the template-scaffold
+    // step would have produced a duplicate gitignore-update log line. The template
+    // path subsumes this section.
+    if template.is_none() {
+        let gitignore_path = root.join(".gitignore");
+        let gitignore_entry = ".claude/brain/local-awareness.json";
+        let existing_gitignore = tokio::fs::read_to_string(&gitignore_path)
+            .await
+            .unwrap_or_default();
+        if !existing_gitignore.contains(gitignore_entry) {
+            let append = format!(
+                "\n# Local machine awareness — machine-specific facts, never commit\n{}\n",
+                gitignore_entry
+            );
+            let mut file = tokio::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&gitignore_path)
+                .await?;
+            file.write_all(append.as_bytes()).await?;
+            println!("Updated: .gitignore (added local-awareness.json)");
+        }
     }
 
     // Write registry
@@ -700,6 +708,23 @@ pub async fn run(
             }
         }
 
+        // Parse --domain-describe entries (NAME=DESCRIPTION, repeatable).
+        // v3.3 F10: each becomes a `_todo_<name>` placeholder on the
+        // domain's definition entry, captured as authoring intent for
+        // when the sensor is later written.
+        let mut domain_descs: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for entry in &domain_describe {
+            if let Some((k, v)) = entry.split_once('=') {
+                domain_descs.insert(k.trim().to_string(), v.trim().to_string());
+            } else {
+                eprintln!(
+                    "warn: --domain-describe entry '{entry}' is missing '=NAME=DESCRIPTION' \
+                     shape; skipping. Use --domain-describe 'my-domain=what its sensor will see'."
+                );
+            }
+        }
+
         // Replace the legacy registry (which hardcodes code-quality /
         // test-health / deploy-readiness weighted) with a template-aware
         // one that declares the actual domain set as advisory.
@@ -707,6 +732,8 @@ pub async fn run(
             &project_name,
             &template_name,
             &final_domains,
+            description.as_deref(),
+            &domain_descs,
         )?;
         tokio::fs::write(&output_path, &template_registry).await?;
         eprintln!("Wrote: {} (template-aware)", output);

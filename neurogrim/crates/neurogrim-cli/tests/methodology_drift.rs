@@ -25,6 +25,7 @@ const TOPICS: &[&str] = &[
     "federation",
     "cli",
     "culture",
+    "autonomy",
 ];
 
 fn data_explain_dir() -> PathBuf {

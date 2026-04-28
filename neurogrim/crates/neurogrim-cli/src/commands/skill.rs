@@ -41,6 +41,16 @@ pub enum SkillCmd {
         /// Overwrite an existing SKILL.md if present. Default refuses.
         #[arg(long)]
         force: bool,
+
+        /// v3.3 F2: produce a minimal-but-routable stub instead of the
+        /// full authoring skeleton. The stub ships with sensible-default
+        /// frontmatter (so the routing index has something to match against
+        /// immediately) and a single-paragraph body that says "this skill
+        /// is a stub the operator will flesh out — current routing is
+        /// provisional." Use this when the operator's intent is "scaffold
+        /// stubs, I'll fill bodies later" rather than "author this skill now."
+        #[arg(long)]
+        stub: bool,
     },
 }
 
@@ -50,7 +60,8 @@ pub async fn run(args: Args) -> Result<()> {
             name,
             directory,
             force,
-        } => cmd_new(&name, &directory, force).await,
+            stub,
+        } => cmd_new(&name, &directory, force, stub).await,
     }
 }
 
@@ -86,7 +97,7 @@ fn validate_name(name: &str) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_new(name: &str, directory: &str, force: bool) -> Result<()> {
+async fn cmd_new(name: &str, directory: &str, force: bool, stub: bool) -> Result<()> {
     validate_name(name).with_context(|| format!("invalid skill name '{name}'"))?;
 
     let root = PathBuf::from(directory);
@@ -112,7 +123,11 @@ async fn cmd_new(name: &str, directory: &str, force: bool) -> Result<()> {
         .await
         .with_context(|| format!("failed to mkdir {}", skill_dir.display()))?;
 
-    let content = render_skill_skeleton(name);
+    let content = if stub {
+        render_skill_stub(name)
+    } else {
+        render_skill_skeleton(name)
+    };
     fs::write(&skill_md, content)
         .await
         .with_context(|| format!("failed to write {}", skill_md.display()))?;
@@ -120,8 +135,16 @@ async fn cmd_new(name: &str, directory: &str, force: bool) -> Result<()> {
     eprintln!("Wrote: {}", skill_md.display());
     eprintln!();
     eprintln!("Next steps:");
-    eprintln!("  • Fill in the frontmatter (description + when_to_use are routing-critical)");
-    eprintln!("  • Author the body following the `write-skill` authoring standard");
+    if stub {
+        eprintln!("  • This is a STUB — routable but not yet authored. Tighten the");
+        eprintln!("    `description` + `when_to_use` frontmatter when you have a clearer");
+        eprintln!("    sense of when this skill should fire.");
+        eprintln!("  • Expand the body following the `write-skill` authoring standard");
+        eprintln!("    when ready (run `neurogrim explain` for context).");
+    } else {
+        eprintln!("  • Fill in the frontmatter (description + when_to_use are routing-critical)");
+        eprintln!("  • Author the body following the `write-skill` authoring standard");
+    }
     eprintln!("  • The skill is discoverable to Claude Code automatically");
     Ok(())
 }
@@ -190,6 +213,74 @@ examples beat abstract claims.
     )
 }
 
+/// v3.3 F2: render a minimal stub skill file. Routable (frontmatter
+/// has sensible-default `description` + `when_to_use` rather than
+/// literal `TODO —` placeholders) but the body is a single paragraph
+/// flagging the skill as a stub. The operator can fill it in later
+/// without it routing badly in the meantime.
+fn render_skill_stub(name: &str) -> String {
+    let display = humanize_kebab(name);
+    let trigger_phrase = name.replace('-', " ");
+    format!(
+        r#"---
+name: {name}
+description: >-
+  A project-specific skill for {trigger_phrase}. STUB — the operator
+  has scaffolded this skill but not yet authored its body. Routes on
+  the literal trigger phrase '{trigger_phrase}'; expand the
+  description when you tighten the routing contract.
+when_to_use: >-
+  The user mentions {trigger_phrase}, asks about it, or starts a task
+  that overlaps with the {display} domain. Refine the trigger
+  phrases when authoring the full skill.
+---
+
+# Skill: {display}
+
+**Status:** STUB. This skill was scaffolded by `neurogrim skill new
+--stub` and has not yet been authored. The frontmatter routes
+provisionally on the literal name `{trigger_phrase}`; the body
+below is a placeholder.
+
+## What this skill will cover
+
+When this stub is fleshed out it should describe:
+
+- The methodology / discipline this skill captures.
+- Concrete steps the agent should follow when invoked.
+- What it does NOT do (negative scope to disambiguate from adjacent skills).
+- Cultural-substrate considerations (positivity / integrity /
+  honesty / critical-but-kind / respect — see `culture.yaml`).
+- Cross-references to paired Brain domains and related skills.
+
+For the full authoring contract, run `neurogrim explain` and read
+the bundled `write-skill` skill in `.claude/skills/write-skill/SKILL.md`.
+
+## Until then
+
+The agent SHOULD treat this skill as a marker that the topic exists
+in the project's domain set, not as authoritative guidance. Decisions
+made under this skill are the operator's; the agent should ask before
+acting on this skill's territory.
+"#
+    )
+}
+
+/// Humanize a kebab-case identifier for an H1: "resume-prep-protocol"
+/// → "Resume Prep Protocol". Shared between full skeleton + stub.
+fn humanize_kebab(name: &str) -> String {
+    name.split('-')
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                Some(ch) => ch.to_uppercase().collect::<String>() + c.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,7 +344,7 @@ mod tests {
     #[tokio::test]
     async fn cmd_new_writes_skill_md() {
         let tmp = TempDir::new().unwrap();
-        cmd_new("test-skill", tmp.path().to_str().unwrap(), false)
+        cmd_new("test-skill", tmp.path().to_str().unwrap(), false, false)
             .await
             .unwrap();
         let path = tmp.path().join(".claude/skills/test-skill/SKILL.md");
@@ -265,10 +356,10 @@ mod tests {
     #[tokio::test]
     async fn cmd_new_refuses_existing_without_force() {
         let tmp = TempDir::new().unwrap();
-        cmd_new("test-skill", tmp.path().to_str().unwrap(), false)
+        cmd_new("test-skill", tmp.path().to_str().unwrap(), false, false)
             .await
             .unwrap();
-        let err = cmd_new("test-skill", tmp.path().to_str().unwrap(), false)
+        let err = cmd_new("test-skill", tmp.path().to_str().unwrap(), false, false)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("already exists"));
@@ -277,17 +368,46 @@ mod tests {
     #[tokio::test]
     async fn cmd_new_overwrites_with_force() {
         let tmp = TempDir::new().unwrap();
-        cmd_new("test-skill", tmp.path().to_str().unwrap(), false)
+        cmd_new("test-skill", tmp.path().to_str().unwrap(), false, false)
             .await
             .unwrap();
-        // Mutate the file so we can verify --force overwrites.
         let path = tmp.path().join(".claude/skills/test-skill/SKILL.md");
         std::fs::write(&path, "MUTATED").unwrap();
-        cmd_new("test-skill", tmp.path().to_str().unwrap(), true)
+        cmd_new("test-skill", tmp.path().to_str().unwrap(), true, false)
             .await
             .unwrap();
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(!content.contains("MUTATED"));
         assert!(content.contains("name: test-skill"));
+    }
+
+    // F2: --stub flag
+
+    #[tokio::test]
+    async fn cmd_new_stub_writes_routable_skill() {
+        let tmp = TempDir::new().unwrap();
+        cmd_new("foo-bar", tmp.path().to_str().unwrap(), false, true)
+            .await
+            .unwrap();
+        let path = tmp.path().join(".claude/skills/foo-bar/SKILL.md");
+        let content = std::fs::read_to_string(&path).unwrap();
+        // Stub frontmatter is routable: description and when_to_use are
+        // sensible-default sentences, not literal "TODO —" strings.
+        assert!(content.contains("name: foo-bar"));
+        assert!(!content.contains("TODO — one-line"));
+        assert!(content.contains("foo bar"));
+        assert!(content.contains("STUB"));
+    }
+
+    #[test]
+    fn render_skill_stub_no_todo_strings() {
+        let s = render_skill_stub("test-skill");
+        // Stub MUST NOT have literal TODO sentinels in frontmatter
+        // (those break the routing index — F2's primary motivation).
+        assert!(!s.contains("description: TODO"));
+        assert!(!s.contains("when_to_use: TODO"));
+        // But should clearly identify itself as a stub.
+        assert!(s.contains("STUB"));
+        assert!(s.contains("name: test-skill"));
     }
 }

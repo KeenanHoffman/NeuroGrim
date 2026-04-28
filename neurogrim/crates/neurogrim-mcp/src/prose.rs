@@ -33,16 +33,22 @@ use std::path::Path;
 /// to suppress ANSI color escapes (use this when the output will be
 /// piped or embedded in another tool's context — including the MCP
 /// `orient` response).
+///
+/// v3.3 F4: pass `all_domains=true` to list every declared domain in
+/// the signals section instead of capping at 3. For all-advisory
+/// Brains the section is also auto-expanded (the "strongest signals"
+/// framing is misleading when nothing has been promoted to weighted).
 pub fn render_prose(
     registry: &BrainRegistry,
     project_root: &Path,
     agent_output: &AgentOutput,
     plain: bool,
+    all_domains: bool,
 ) -> String {
     let mut out = String::new();
     section_identity(&mut out, registry, project_root, plain);
     section_current_state(&mut out, registry, agent_output, plain);
-    section_strongest_signals(&mut out, registry, agent_output, plain);
+    section_strongest_signals(&mut out, registry, agent_output, plain, all_domains);
     section_calls_to_action(&mut out, agent_output, plain);
     section_skills(&mut out, project_root);
     section_hats(&mut out, registry, plain);
@@ -178,6 +184,7 @@ fn section_strongest_signals(
     registry: &BrainRegistry,
     agent_output: &AgentOutput,
     plain: bool,
+    all_domains: bool,
 ) {
     let mut entries: Vec<(&String, u8, u8, f64)> = agent_output
         .domains
@@ -190,15 +197,35 @@ fn section_strongest_signals(
             .then_with(|| a.0.cmp(b.0))
     });
 
-    let top: Vec<_> = entries.iter().take(3).collect();
-    if top.is_empty() {
+    if entries.is_empty() {
         let _ = writeln!(out, "Strongest signals: (no domains scored)");
         out.push('\n');
         return;
     }
 
-    let _ = writeln!(out, "Strongest signals:");
-    for (name, eff, conf, _w) in top {
+    // v3.3 F4: list all domains when (a) the operator passed --all-domains
+    // OR (b) the Brain is all-advisory (no domain has weight > 0). In the
+    // all-advisory case, "strongest signals" framing is misleading because
+    // no signal has been promoted to weighted — the operator wants the
+    // full picture, not a top-3 truncation of identical 50/50 scores.
+    let is_all_advisory = registry
+        .config
+        .domain_weights
+        .values()
+        .all(|w| *w == 0.0);
+    let limit = if all_domains || is_all_advisory {
+        entries.len()
+    } else {
+        3
+    };
+    let header = if all_domains || is_all_advisory {
+        format!("All domains ({}):", entries.len())
+    } else {
+        "Strongest signals:".to_string()
+    };
+
+    let _ = writeln!(out, "{}", header);
+    for (name, eff, conf, _w) in entries.iter().take(limit) {
         let display = registry
             .config
             .principle_map

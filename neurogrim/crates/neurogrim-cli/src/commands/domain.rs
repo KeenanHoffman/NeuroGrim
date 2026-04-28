@@ -57,6 +57,14 @@ pub enum DomainCmd {
         /// Default refuses to clobber.
         #[arg(long)]
         force: bool,
+
+        /// v3.3 F10: Operator-supplied sensor authoring intent. Stored
+        /// as `_todo_<name>` on the domain's definition entry. Useful
+        /// for capturing what a future sensor will observe BEFORE
+        /// authoring it. Distinct from `--description` (which sets the
+        /// humanized display name in `principle_map`).
+        #[arg(long)]
+        sensor_intent: Option<String>,
     },
 }
 
@@ -89,6 +97,7 @@ pub async fn run(args: Args) -> Result<()> {
             registry,
             directory,
             force,
+            sensor_intent,
         } => {
             let outcome = scaffold_domain(
                 &name,
@@ -98,6 +107,7 @@ pub async fn run(args: Args) -> Result<()> {
                 &registry,
                 &directory,
                 force,
+                sensor_intent.as_deref(),
             )
             .await
             .with_context(|| format!("scaffolding domain '{name}'"))?;

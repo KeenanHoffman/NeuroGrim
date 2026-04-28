@@ -103,9 +103,12 @@ async fn cmd_register(
 
     // Determine the port: explicit --port wins; otherwise allocate the
     // next free port starting at 8421 (the canonical first-child slot).
+    // v3.3 F7: the allocator now walks transitively into each child's
+    // own registry (when reachable on disk), so we won't pick a port
+    // already in use by a grandchild.
     let allocated_port = match port_arg {
         Some(p) => p,
-        None => allocate_next_port(&registry).unwrap_or(8421),
+        None => allocate_next_port(&registry, &registry_pb).unwrap_or(8421),
     };
 
     // Build the child entry.
@@ -165,29 +168,49 @@ async fn cmd_register(
     Ok(())
 }
 
-/// Walk `config.children` and find the next port not already in use.
-/// Starts at 8421 (NeuroGrim's first-child convention) and increments.
-/// Returns None when no children block exists yet (caller defaults to 8421).
-fn allocate_next_port(registry: &Value) -> Option<u16> {
-    let children = registry
-        .get("config")?
-        .get("children")?
-        .as_object()?;
-    let mut used: Vec<u16> = Vec::new();
-    for (_name, entry) in children.iter() {
-        if let Some(endpoint) = entry.get("a2a_endpoint").and_then(|v| v.as_str()) {
-            // Parse port from a URL like http://localhost:8421/a2a/v1/
-            if let Some(port_str) = endpoint
-                .split(':')
-                .nth(2)
-                .and_then(|s| s.split('/').next())
-            {
-                if let Ok(p) = port_str.parse::<u16>() {
-                    used.push(p);
-                }
-            }
+/// Walk `config.children` transitively and find the next port not in
+/// use anywhere in the federation tree. Starts at 8421 (NeuroGrim's
+/// first-child convention) and increments.
+///
+/// v3.3 F7: the walk reads each child's `brain_path/.claude/brain-registry.json`
+/// when reachable, so allocator decisions consider the FULL transitive
+/// federation, not just direct children. This prevents the v3.2.2-era
+/// failure mode where job-hunt got allocated to port 8423 (which is
+/// python-starter's port — NeuroGrim's child, the ecosystem's grandchild).
+///
+/// Returns None when the registry has no `config.children` block yet
+/// (caller defaults to 8421).
+fn allocate_next_port(registry: &Value, registry_path: &PathBuf) -> Option<u16> {
+    use neurogrim_core::registry::BrainRegistry;
+    use neurogrim_mcp::doctor::collect_transitive_ports;
+
+    // Need a BrainRegistry to call collect_transitive_ports. Fall back to
+    // the local-only walk if parsing fails.
+    let registry_str = serde_json::to_string(registry).ok()?;
+    let parsed = BrainRegistry::from_json(&registry_str).ok()?;
+    let project_root = registry_path
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let by_port = collect_transitive_ports(&parsed, &project_root);
+    let used: std::collections::HashSet<u16> = by_port.keys().copied().collect();
+
+    if used.is_empty() {
+        // Mirror the v3.2.x behavior: returning None lets the caller
+        // default to 8421 (the first-child slot) when no children
+        // block exists yet.
+        let children_empty = registry
+            .get("config")
+            .and_then(|c| c.get("children"))
+            .and_then(|c| c.as_object())
+            .map(|o| o.is_empty())
+            .unwrap_or(true);
+        if children_empty {
+            return None;
         }
     }
+
     let mut candidate = 8421u16;
     while used.contains(&candidate) {
         candidate = candidate.checked_add(1)?;
@@ -241,14 +264,18 @@ mod tests {
     #[test]
     fn allocate_next_port_starts_at_8421_when_no_children() {
         let r = minimal_registry();
-        assert_eq!(allocate_next_port(&r), None);
+        let tmp = TempDir::new().unwrap();
+        let reg_path = tmp.path().join("brain-registry.json");
+        assert_eq!(allocate_next_port(&r, &reg_path), None);
     }
 
     #[test]
     fn allocate_next_port_skips_used() {
         let r = registry_with_children();
+        let tmp = TempDir::new().unwrap();
+        let reg_path = tmp.path().join("brain-registry.json");
         // 8421 is in use → 8422 is next.
-        assert_eq!(allocate_next_port(&r), Some(8422));
+        assert_eq!(allocate_next_port(&r, &reg_path), Some(8422));
     }
 
     #[tokio::test]

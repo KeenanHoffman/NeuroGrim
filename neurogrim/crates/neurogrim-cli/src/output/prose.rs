@@ -9,12 +9,15 @@ use crate::commands::context::BrainContext;
 
 /// Render the prose orientation and write it to stdout. `plain=true`
 /// suppresses ANSI color escapes (required when stdout is piped).
-pub fn display_prose(ctx: &BrainContext, plain: bool) {
+/// v3.3 F4: `all_domains=true` lists every declared domain instead
+/// of capping at the top 3.
+pub fn display_prose(ctx: &BrainContext, plain: bool, all_domains: bool) {
     let rendered = neurogrim_mcp::prose::render_prose(
         &ctx.registry,
         &ctx.project_root,
         &ctx.agent_output,
         plain,
+        all_domains,
     );
     print!("{}", rendered);
 }
