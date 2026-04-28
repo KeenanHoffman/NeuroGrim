@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/KeenanHoffman/LSP-Brains/schemas/hat-contract-v1.schema.json",
+  "title": "Hat Contract v1",
+  "description": "Persona-hat declaration contract for LSP Brains agents (spec §5.4.1). Validates the YAML frontmatter on a per-hat markdown file at `.claude/skills/hats/<hat-name>.md`. NOTE: this is the persona-hat contract (Hat-model B in the §5.4.1 glossary; the operational lens declared in `skills/hats/`) — NOT the registry-hat (Hat-model A in §5.4; declared in `brain-registry.json:config.hats.*` and validated by `brain-registry-v2.schema.json:413-433`). The two layers are intentionally distinct per Q5 = 5c (operator-confirmed 2026-04-27). Closed-set vocabulary for `allowed_tools` / `forbidden_tools` items (per Q1, additive promotion path) — same discipline as `culture-manifest-v1`: operator MAY add to vocabulary via spec change, MUST NOT remove.",
+  "type": "object",
+  "required": ["name", "description"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The hat's identifier — kebab-case, must match the filename (without extension) for unambiguous discovery. E.g., `supply-chain-auditor` for `.claude/skills/hats/supply-chain-auditor.md`."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line summary of the hat's operational lens. Surfaces in `capability-hygiene` reporting + the hat catalog index."
+    },
+    "briefing": {
+      "type": "string",
+      "description": "Optional one-line subagent calibration text. Used when this hat is donned by a subagent — sets tone + guard-rails before the subagent reads the full SKILL.md catalog entry."
+    },
+    "allowed_tools": {
+      "type": "array",
+      "description": "Closed-set positive contract: which tools the hat MAY invoke. Items use the closed `ToolName` vocabulary. Per Q10, positive contracts are advisory in v1 (no runtime cross-reference) — declared for forward-compat with E-B2-3 v2 (BACKLOG B-23).",
+      "items": { "$ref": "#/definitions/ToolName" }
+    },
+    "forbidden_tools": {
+      "type": "array",
+      "description": "Closed-set anti-capability contract: which tools the hat MUST NOT invoke. Items use the closed `ToolName` vocabulary. The load-bearing field for E-B2-3 v1 — encodes the prose `MUST_NOT` claims from `skills/hats/SKILL.md` (e.g., `source-reader`'s read-only boundary; `supply-chain-auditor`'s no-install discipline) as machine-readable structure.",
+      "items": { "$ref": "#/definitions/ToolName" }
+    },
+    "network_targets": {
+      "type": "object",
+      "description": "Optional FQDN-keyed network-target restrictions (per Q8). Distinct from tool names: a hat may permit `WebFetch` (the tool) but restrict it to specific FQDNs (e.g., supply-chain-auditor → osv.dev only). E-B2-4 (trust-budget) reads this alongside `forbidden_tools`.",
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "description": "FQDN-style strings the hat MAY contact. Wildcards permitted (e.g., `*.npmjs.com`). Items are free-form strings — closed-vocabulary discipline applies to `forbidden_tools` and `allowed_tools` only.",
+          "items": { "type": "string" }
+        },
+        "forbidden": {
+          "type": "array",
+          "description": "FQDN-style strings the hat MUST NOT contact. Wildcards permitted (e.g., `*.npmjs.com`).",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "ToolName": {
+      "type": "string",
+      "description": "Closed-vocabulary tool-name enum (Q1). Concrete names matching the Claude Code tool surface; abstract verbs (`execute_code`, `contact_external_service`) deliberately rejected as they don't map cleanly to what a static validator can observe. New vocabulary terms require a spec change with explicit METHODOLOGY-EVOLUTION entry — same additivity discipline as `culture-manifest-v1.values`. The `mcp:*` wildcard covers the MCP namespace; `package_install` is a semantic alias for the supply-chain-auditor's `npm install` / `pip install` / `cargo build` set.",
+      "enum": [
+        "Bash",
+        "Write",
+        "Edit",
+        "WebFetch",
+        "WebSearch",
+        "network_egress",
+        "mcp:*",
+        "package_install"
+      ]
+    }
+  }
+}

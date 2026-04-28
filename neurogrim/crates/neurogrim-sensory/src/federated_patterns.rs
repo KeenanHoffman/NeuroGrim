@@ -96,9 +96,13 @@ use std::path::{Path, PathBuf};
 /// forgiving by design per Q11 forward-compat lock). Embedding keeps the
 /// schema as a documentation anchor and ensures the v1 schema location stays
 /// load-bearing — moving or renaming the schema breaks the build.
+// v3.2.2: schema vendored into `data/schemas/` so it resolves in
+// `cargo publish` tarballs. Canonical source remains
+// `LSP-Brains/schemas/pattern-aggregation-ledger-v1.schema.json`;
+// drift caught by schema-conformance tests.
 #[allow(dead_code)]
 const PATTERN_AGGREGATION_LEDGER_SCHEMA_JSON: &str = include_str!(
-    "../../../../../LSP-Brains/schemas/pattern-aggregation-ledger-v1.schema.json"
+    "../data/schemas/pattern-aggregation-ledger-v1.schema.json"
 );
 
 // ── Closed-set finding kinds (Q17 lock) ─────────────────────────────────────

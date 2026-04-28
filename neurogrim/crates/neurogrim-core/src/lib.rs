@@ -1,3 +1,54 @@
+//! # neurogrim-core
+//!
+//! Pure scoring, correlation, and trajectory logic for the LSP Brains
+//! methodology — zero I/O, no async, no protocol concerns. Consumed by
+//! [`neurogrim-sensory`], [`neurogrim-mcp`], [`neurogrim-a2a`],
+//! [`neurogrim-ecosystem`], and [`neurogrim-cli`].
+//!
+//! ## What's here
+//!
+//! - **[`registry`]** — `BrainRegistry`, `DomainDefinition`, `ScoringSource`:
+//!   the parsed shape of `brain-registry.json`.
+//! - **[`scoring`]** — `Scorecard`, `build_scorecard`, `unified_confidence`:
+//!   per-domain → unified-score aggregation with confidence weighting and
+//!   floor-gate semantics (LSP Brains spec §4).
+//! - **[`agent_output`]** — `AgentOutput`, `AgentDomain`, `Recommendation`:
+//!   the canonical machine-readable contract emitted by
+//!   `neurogrim agent`. Schema-versioned (`schema_version: "1"`); used by
+//!   A2A peers and ecosystem aggregation.
+//! - **[`correlation`]** — `evaluate_condition`, `evaluate_incident_patterns`:
+//!   cross-domain pattern detection (spec §4.6, §15).
+//! - **[`trajectory`]** — `compute_trajectory`, `TrajectoryResult`,
+//!   `TrajectoryClassification`: velocity / acceleration / classification
+//!   over a windowed score history (spec §7).
+//! - **[`governance`]** — `build_domain_recommendations`, gate-tier ranking
+//!   (spec §5).
+//! - **[`learning`]** — proposal-effectiveness ledger; closes the agent
+//!   feedback loop (principle #4).
+//! - **[`calibration_ledger`]** — Brains-2.0 §17 per-domain calibration
+//!   meta-observer plumbing.
+//! - **[`ecosystem`]** — `ChildEntry`, `EcosystemRegistry`, topological
+//!   ordering for fractal-composition score aggregation (spec §9).
+//! - **[`awareness`]** — `LocalAwareness`: per-machine fact store (tool
+//!   paths, OS quirks). Surface for `neurogrim awareness`.
+//! - **[`confidence`]**, **[`types`]** — primitive newtypes (`Score`,
+//!   `Weight`, `Confidence`, `ScoreLabel`, `TrajectoryClassification`).
+//!
+//! ## Stability
+//!
+//! `AgentOutput` is the cross-version contract — peers at older minor
+//! versions deserialize gracefully via `#[serde(default)]` on additive
+//! fields. The other modules are not yet stability-marked; consumers
+//! outside this workspace should expect breaking changes between minor
+//! releases until v4.x.
+//!
+//! ## See also
+//!
+//! - [`neurogrim-cli`](https://crates.io/crates/neurogrim-cli) — the
+//!   binary that wires everything together
+//! - [LSP Brains specification](https://github.com/KeenanHoffman/LSP-Brains)
+//!   — RFC-2119 normative spec this crate implements
+
 pub mod agent_output;
 pub mod awareness;
 pub mod calibration_ledger;

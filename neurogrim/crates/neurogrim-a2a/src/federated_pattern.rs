@@ -111,8 +111,14 @@ use url::Url;
 /// via typed deserialization. The schema text is included here so
 /// any future sensor-level jsonschema validator can pick it up
 /// without depending on the LSP-Brains submodule layout.
+///
+/// v3.2.2: schema vendored into `data/schemas/` so the file resolves
+/// in `cargo publish` tarballs (the LSP-Brains sibling repo isn't
+/// included in published crates). Canonical source remains
+/// `LSP-Brains/schemas/a2a-federated-pattern-v1.schema.json`; drift
+/// between the two copies is caught by the schema-conformance tests.
 pub const FEDERATED_PATTERN_SCHEMA_JSON: &str =
-    include_str!("../../../../../LSP-Brains/schemas/a2a-federated-pattern-v1.schema.json");
+    include_str!("../data/schemas/a2a-federated-pattern-v1.schema.json");
 
 // =========================================================================
 // Closed-set rate-limit / hop-limit constants (Q6 + Q15 locks)

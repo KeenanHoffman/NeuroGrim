@@ -4,6 +4,170 @@ All notable changes to NeuroGrim + the LSP Brains specification live
 here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.2] - 2026-04-28
+
+*Publish-prep release. No new features; closes the last `cargo publish`
+blockers identified in the v3.2.1 audit.*
+
+### Changed
+- Workspace `version` bumped from `3.0.0` (stale through v3.1, v3.1.1,
+  v3.2, v3.2.1) to `3.2.2`. Inter-workspace deps in
+  `[workspace.dependencies]` synchronized.
+- **Schema vendoring**: 5 `include_str!` references in `neurogrim-a2a`
+  and `neurogrim-sensory` previously pointed at
+  `../../../../../LSP-Brains/schemas/*.schema.json` (sibling-repo
+  relative), which broke `cargo publish` since LSP-Brains isn't part of
+  the published tarball. Schemas are now vendored into each consuming
+  crate's `data/schemas/` directory; canonical source remains in the
+  LSP-Brains repo, drift caught by existing schema-conformance tests.
+  - `neurogrim-a2a/data/schemas/a2a-federated-pattern-v1.schema.json`
+  - `neurogrim-sensory/data/schemas/hat-contract-v1.schema.json`
+  - `neurogrim-sensory/data/schemas/invocation-ledger-v1.schema.json`
+  - `neurogrim-sensory/data/schemas/pattern-aggregation-ledger-v1.schema.json`
+  - `neurogrim-sensory/data/schemas/trust-budget-v1.schema.json`
+
+### Added
+- Crate-level rustdoc on `neurogrim-core/src/lib.rs` covering each
+  public module's role + stability stance.
+
+## [3.2.1] - 2026-04-28
+
+*Closes the two real onboarding gaps from the v3.2 audit: MCP
+exposure of the new commands + propagating the bundled
+`neurogrim-onboarding` skill to existing federation Brains.*
+
+### Added
+- **Four new MCP tools** mirroring the v3.2 CLI commands so agents
+  using `neurogrim serve` (the default tool-invocation surface) can
+  reach onboarding entry points without bash:
+  - `orient` — agent-friendly prose summary (= `agent --prose`)
+  - `doctor` — config audit returning structured JSON findings
+  - `explain` — bundled methodology primer (8 topics)
+  - `domain_new` — domain scaffolder
+- `neurogrim-onboarding` skill propagated byte-identical across all
+  6 federation copies (canonical bundled source +
+  ecosystem/NeuroGrim/LSP-Brains/python-starter/job-hunt).
+
+### Changed
+- **Architecture refactor**: shared logic moved from `neurogrim-cli`
+  to `neurogrim-mcp` so MCP tools and CLI commands use a single
+  source of truth — new modules `mcp::prose`, `mcp::doctor`,
+  `mcp::explain`, `mcp::domain`. The 8 `data/explain/*.md` files
+  relocated to `neurogrim-mcp/data/explain/` accordingly.
+- `neurogrim-cli/src/output/prose.rs`, `commands/doctor.rs`,
+  `commands/explain.rs`, `commands/domain.rs` are now thin clap +
+  printing wrappers.
+
+## [3.2.0] - 2026-04-28
+
+*Agent Onboarding & Domain Authoring campaign. Three workstreams
+(Phase A introspection, Phase B methodology primer, Phase C domain
+scaffolder) close the entry-point gap for AI agents on first contact
+with a NeuroGrim project.*
+
+### Added — Phase A: Brain introspection
+- **`neurogrim agent --prose [--plain]`**: agent-friendly prose
+  orientation summary. 8 sections — Brain identity, current state,
+  strongest signals, calls to action, available skills, available
+  hats, federation peers, footer. All-advisory Brains render
+  "Score: N/A (observe-only posture)" rather than a misleading 0/100.
+- **`neurogrim doctor [--plain]`**: read-only configuration auditor
+  distinct from `validate` (registry-shape only) and `health`/`score`
+  (run scoring pipeline). Six check families: schema validate,
+  domain-definitions alignment, principle_map alignment, CMDB path
+  resolution, culture.yaml presence, federation port uniqueness.
+  Exit 0/1/2 by severity; advisory-orphan vs weighted-orphan severity
+  split caught NeuroGrim's own pre-existing `_todo_rust-health`
+  placeholder as a warn (not error).
+
+### Added — Phase B: Methodology primer
+- **`neurogrim explain <topic>`**: 8 bundled topic files
+  (methodology, domain, sensor, hat, scoring, federation, cli,
+  culture). Loaded via `include_str!` at compile time; ~80 KB binary
+  growth. With no topic, lists topics with one-line summaries. With
+  `--version`, prints bundle metadata.
+- **Bundled `neurogrim-onboarding` skill** in `init-skills/`. Every
+  new project from `init --template` gets it automatically; routing
+  frontmatter triggers on "what is this Brain", "where do I start",
+  "I just entered this project", etc.
+- `tests/methodology_drift.rs`: 5 integration checks verifying bundled
+  topic files are well-formed (presence, version-header uniformity,
+  substantive content, valid command references).
+- `NeuroGrim/CLAUDE.md` gains a "Getting Oriented" section pointing
+  at the four onboarding commands.
+
+### Added — Phase C: Domain scaffolder
+- **`neurogrim domain new <name>`**: scaffolder mirroring `skill new`
+  UX. Mutates `brain-registry.json` atomically across 3 sections
+  (`domain_weights`, `principle_map`, `domain_definitions`), generates
+  a stub CMDB, and optionally scaffolds a Python sensor skeleton at
+  `sensory/check_<name>.py`. Idempotent re-registration with `--force`.
+- `--type stub|python` (default `stub`); `--type rust` is intentionally
+  unsupported (contributor work, not adopter work).
+- 7 subprocess integration tests covering stub path, python path,
+  force, kebab-case validation, post-mutation `validate` + `agent --prose`.
+
+## [3.1.1] - 2026-04-28
+
+*Init automation. The 50-step manual sibling-Brain onboarding from
+v3.1 B'1 collapses to a few CLI commands using bundled templates.*
+
+### Added
+- **`neurogrim init --template <kind>`**: full Brain-integration
+  scaffolding beyond the registry. Three templates: `abstract-project`
+  (no primary code), `code-project` (software project; default
+  detection), `mixed`. Generates `culture.yaml`, stub CMDBs,
+  bundled skills, PostToolUse hook script, `CLAUDE.md`, `.gitignore`
+  extension.
+- **`neurogrim skill new <name>`**: scaffolds a project-specific
+  `SKILL.md` skeleton. kebab-case validated; idempotent with `--force`.
+- **`neurogrim federation register --name <peer> --path <path>`**:
+  adds a child Brain to local federation. Auto-allocates the next
+  unused A2A port from 8421. `--read-only` for sibling-project peers
+  (bumps registry schema_version 2 → 2.1 if needed).
+- **Bundled artifacts** at compile time: 3 init templates with
+  manifests, 6 general-purpose skills (hats, imagination-mode,
+  north-star, rubber-duck, human-comms, write-skill), culture.yaml,
+  hook script, narration templates.
+- 6 subprocess integration tests covering the full bootstrap flow.
+
+## [3.1.0] - 2026-04-28
+
+*"Activate the Grammar" campaign. Five workstreams (A–E) take the
+v3.0 structurally-complete grammar and put it to work.*
+
+### Added — Workstream A: Sensor authoring
+- **`rust-health` sensor** at `neurogrim-sensory/src/rust_health.rs`:
+  static-only signals — Cargo.toml, Cargo.lock, MSRV, rustfmt,
+  clippy config, cargo-deny, `[lints]`, CI integration.
+- PostToolUse invocation-ledger hook enabled in all 4 federation
+  Brains (was: only ecosystem). 30-day calibration window opens.
+
+### Added — Workstream B: Sibling project as observed peer
+- `read_only: true` flag on registry `config.children` entries
+  (LSP-Brains schema additive v2 → v2.1, commit 9cb83cf).
+- `check_culture_coherence.py` extended to discover the federation
+  set dynamically (was: hardcoded 4-path list, commit 6be88da).
+- `check_observed_peers.py` ecosystem-level sensor reads sibling
+  scores via A2A.
+- B'1 Pilot #1: job-hunt registered as the 5th Brain (read-only
+  sibling, port 8424).
+
+### Added — Workstream C: Hat-calibrated narration
+- **`neurogrim narrate --hat <name>`**: 3–5 lines of
+  hat-templated prose. 7 declared hats; deterministic templates
+  (no LLM) loaded from bundled TOML.
+
+### Added — Workstream D: Spec dogfooding
+- 11 missing Appendix E glossary entries authored in
+  `LSP-BRAINS-SPEC.md` (`glossary-freshness` score 37 → 84).
+
+### Added — Workstream E: Federated patterns intelligence
+- `cross_peer_co_occurrence` finding kind in
+  `neurogrim-sensory/src/federated_patterns.rs`. Detection: ≥2
+  distinct anonymized origins emitting semantically-similar feature
+  vectors within a 7-day window.
+
 ## [3.0.0] - 2026-04-27
 
 *Stable consolidated release. Closes the supply-chain campaign

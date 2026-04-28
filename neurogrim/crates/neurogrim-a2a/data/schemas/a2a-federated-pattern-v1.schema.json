@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/KeenanHoffman/LSP-Brains/schemas/a2a-federated-pattern-v1.schema.json",
+  "title": "A2A Federated Pattern Payload v1",
+  "description": "Payload shape for the `federated-pattern` A2A message type (spec §16.6 extension at v2.12 — Brains-2.0 E-B2-7). Carried as the `payload` of an `a2a-envelope-v1` whose `message_type` is `federated-pattern`.\n\nConsent model: bidirectional opt-in. A Brain MUST declare `federated-pattern` in its Agent Card `capabilities.accepts[]` to receive patterns; MUST declare it in `capabilities.emits[]` to send patterns. A Brain MUST NOT send a `federated-pattern` to a peer whose Agent Card does not declare `federated-pattern` in `accepts[]`. Same posture as the §16.6 supply-chain-signal precedent — rationale identical (legal exposure, false-positive multiplication).\n\nPrivacy model (Q1 + Q8 lock — `federated-pattern` is the FIRST cross-Brain primitive in the Brains-2.0 campaign): the payload is anonymized BY CONSTRUCTION. The closed-set `pattern_kind` enum is single-valued at v1 (`vigilance-pattern`); the `feature_vector` is closed-set numeric-only (no strings, no FQDNs, no operator handles, no per-skill names, no file paths); the `anonymized_origin` is an opaque hash. Top-level `additionalProperties: false` is the structural enforcement of the privacy contract — relaxing it requires re-opening the BR-6 conversation at the charter level. The `metadata` escape hatch with `additionalProperties: true` is permitted for operator-extensions, BUT spec MUST language explicitly forbids placing PII / project paths / operator handles inside `metadata`. The schema cannot enforce that prohibition structurally; the validator pins the discipline at higher layers (CLI parse-time + receiver default-handler).\n\nRecursion-loop trap mitigation (Q9 wire-level): every federated-pattern carries `origin_set[]` — an array of opaque-hash brain ids tracking every Brain that has previously HANDLED this pattern. The original sender adds itself; every relayer adds itself. The receiver MUST validate `origin_set[]` does not contain its own opaque hash (drop with `dropped_reason=recursion-guard`). Hop limit (Q15): MAX_HOPS=4 (sender + 3 relayers); messages with `origin_set.length > 4` are dropped with `dropped_reason=hop-limit-exceeded`.\n\nLanguage discipline: published findings MUST use non-attributive language per §16.4. The `legal_disclaimer` field is a forcing function mirroring supply-chain-signal — operators MAY populate it with a short conservative-language summary suitable for human-facing reports without per-finding legal review.\n\nReceivers MUST treat patterns as advisory-only at v1 and v2; v3 reputation decay (BACKLOG B-23) is the natural calibration-gated upgrade. NO automatic correlation-rule update; NO automatic CMDB advisory finding-creation; NO retransmission to other peers without explicit operator action.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "pattern_kind",
+    "feature_vector",
+    "anonymized_origin",
+    "origin_set",
+    "peer_brain_id",
+    "discovered_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1",
+      "description": "Payload schema version. Independent from the enclosing `a2a-envelope-v1` schema_version. Forward-compat per E4-7: any v2 schema (additive per charter discipline #2) requires bumping this const so v1 consumers detect the version mismatch deterministically."
+    },
+    "pattern_kind": {
+      "$ref": "#/definitions/PatternKind",
+      "description": "Closed-set pattern-family discriminator. v1 enum has exactly one entry: `vigilance-pattern` (the supply-chain-rooted v1 use case). Future kinds (e.g., `operator-calibration-pattern`, `hat-contract-pattern`, `trust-budget-pattern`) are v2/v3 candidates per BACKLOG B-23 and require additive spec change + schema bump. Same closed-set discipline as `hat-contract-v1.ToolName`, `trust-budget-v1.Ecosystem`, and `invocation-ledger-v1.Disposition`."
+    },
+    "feature_vector": {
+      "$ref": "#/definitions/FeatureVector",
+      "description": "Closed-set numeric-only feature vector at v1. The structural privacy mitigation for `privacy under composition` (Q8): bounded numeric features cannot exfiltrate operator-specific patterns the way free-text could. NO strings, NO FQDNs, NO operator handles, NO per-skill names, NO file paths — enforced via `additionalProperties: false` on the FeatureVector definition. Multi-pattern temporal composition COULD theoretically re-identify (10 patterns over a week reveal observation-cadence), but the closed-set kind + bounded numeric vector + opaque origin hash limits the attack surface materially."
+    },
+    "anonymized_origin": {
+      "type": "string",
+      "description": "Opaque hash identifying the originating Brain. Format is implementation-defined per Q15: implementations SHOULD compute `sha256(brain_id || daily_nonce)` where `daily_nonce` rotates daily (cross-day attribution intentionally hard). The schema validates this as an opaque string only; format-correctness is the writer's responsibility."
+    },
+    "origin_set": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "string",
+        "description": "Opaque-hash brain id (same format as `anonymized_origin`)."
+      },
+      "description": "Hop-tracking list (Q9 wire-level recursion-guard + Q15 hop limit). Every Brain that has HANDLED this pattern adds its own opaque hash. The original sender adds itself; every relayer (receiver who chooses to re-emit) adds itself. The receiver MUST verify its own opaque-hash is NOT in this list before processing (drop with `dropped_reason=recursion-guard` otherwise). MaxItems 4 enforces MAX_HOPS=4 (sender + 3 relayers) — messages with `origin_set.length > 4` are structurally rejected at the schema level (Q15 lock)."
+    },
+    "peer_brain_id": {
+      "type": "string",
+      "description": "Opaque-hash identifier of the receiving Brain (from the sender's perspective). Sender includes who they are sending to so the receiver can verify routing correctness. Same opaque-hash format as `anonymized_origin`."
+    },
+    "discovered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of when the originating Brain first detected the local correlation pattern. Receivers MAY use this for staleness checks."
+    },
+    "severity_class": {
+      "$ref": "#/definitions/SeverityClass",
+      "description": "Optional severity classification mirroring supply-chain-signal. Receivers MAY use this to prioritize triage."
+    },
+    "legal_disclaimer": {
+      "type": "string",
+      "description": "Optional. Conservative-language summary suitable for inclusion in human-facing reports without per-finding legal review. Forcing function for §16.4's non-attributive-language requirement (mirrors supply-chain-signal). Implementations SHOULD populate this for any pattern shared with peers; receivers SHOULD prefer this field over inferring intent from feature-vector counts."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional implementation-defined metadata escape hatch (operator-extension surface). Spec MUST language explicitly FORBIDS placing PII / project paths / operator handles / per-skill names / FQDNs inside `metadata`. The schema's `additionalProperties: true` permits free-form keys for forward-compat and operator-experimentation, but the privacy contract is enforced at the CLI parse-time + receiver default-handler layers, NOT at the schema. Implementations SHOULD avoid populating this field at v1; v2 candidates may promote specific metadata keys to top-level fields with the standard additive-promotion discipline."
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "PatternKind": {
+      "type": "string",
+      "description": "Closed-vocabulary pattern-family enum (Q14). v1 has exactly ONE entry: `vigilance-pattern`. Locks the v1 federation surface to the supply-chain-rooted use case. Adding more kinds at v1 is scope creep; each kind has its own privacy + payload-shape considerations. Single-kind v1 is conservative + structurally simple + provides a working federation primitive without the privacy-under-composition concerns of other candidates (e.g., `operator-calibration-pattern` would carry operator dispositions). Future values require additive spec change + schema bump — same discipline as `hat-contract-v1.ToolName`, `trust-budget-v1.Ecosystem`, and `invocation-ledger-v1.Disposition`. Vocabulary changes surface as deliberate test edits in the schema-conformance suite, not silent drift.",
+      "enum": [
+        "vigilance-pattern"
+      ]
+    },
+    "FeatureVector": {
+      "type": "object",
+      "description": "Closed-set numeric-only feature vector at v1. Structural privacy mitigation for `privacy under composition` (Q1 + Q8 lock): bounded numeric features cannot exfiltrate operator-specific patterns the way free-text could. The `additionalProperties: false` discipline below is the structural enforcement — relaxing it requires explicitly re-opening the BR-6 + privacy-under-composition conversation (charter-level). Free-text fields (`note`, `justification`, `comment`, `body`, `text`, `prose`, `description_free_text`, `path`, `file_path`, `operator_handle`, `username`, `skill_name`) are forbidden by schema construction.",
+      "required": [
+        "numeric_count",
+        "severity_class",
+        "observation_window_days"
+      ],
+      "properties": {
+        "numeric_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of correlated observations underlying the pattern (e.g., how many vigilance signals fired together). Numeric-only; no semantics encoded in non-numeric form."
+        },
+        "severity_class": {
+          "$ref": "#/definitions/SeverityClass",
+          "description": "Closed-set severity discriminator (mirrors supply-chain-signal). The only enum-typed feature in the vector — every other feature is bounded-numeric."
+        },
+        "observation_window_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Window-size in days over which the correlation was observed. Bounded-numeric; no per-project timing leakage beyond a single integer."
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeverityClass": {
+      "type": "string",
+      "description": "Closed-set severity classification mirroring `a2a-supply-chain-signal-v1.severity_class`. Same closed-set discipline as the supply-chain-signal precedent.",
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    }
+  }
+}

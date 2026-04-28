@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/KeenanHoffman/LSP-Brains/schemas/trust-budget-v1.schema.json",
+  "title": "Trust Budget v1",
+  "description": "Per-Brain trust-budget contract (spec §16.8). Validates the `trust-budget.toml` committed at a Brain's repo root. Declares the operator-intentional trust surface across three dimensions: direct crate dependencies (per-ecosystem), shell-out commands, and external services. v1 is descriptive-only and advisory (weight 0.0); the `trust-budget` sensor cross-references the declared surface against the actual surface and emits `undeclared` / `overdeclared` findings (per Q8). Closed-set vocabulary discipline applies to `ecosystem` and `trust_posture` (per Q1) — same additive promotion path as `culture-manifest-v1.values` and `hat-contract-v1.ToolName`. The optional top-level `extensions` object (E4-7 forward-compat) is the explicit experimentation surface; field additions there do not require a schema bump. Prescriptive growth-budget fields (e.g., `max_growth_per_release`) are deferred to v2 per Q9 + BACKLOG B-23.",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1",
+      "description": "Trust-budget schema version. Forward-compat per E4-7: any v2 schema (additive per charter discipline #2) requires bumping this const so v1 consumers detect the version mismatch deterministically."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional top-level operator notes — free-form prose explaining the trust posture, calibration history, or known seeded findings. Not normative; documentation only."
+    },
+    "declared_crates": {
+      "type": "array",
+      "description": "Direct (operator-meaningful) crate / package dependencies declared as part of the trust surface. Per Q1, scope is direct deps only — transitive deps (e.g., the 369 packages in NeuroGrim's `Cargo.lock`) are deferred to v2 per BACKLOG B-23. The trust-budget sensor cross-references this list against the actual lockfile surface (via `supply_chain_sca::lockfile::cargo::parse`) and emits `trust_budget:undeclared:crate:<name>` / `trust_budget:overdeclared:crate:<name>` advisory findings.",
+      "items": {
+        "type": "object",
+        "required": ["name", "ecosystem"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The crate / package name as it appears in the manifest (e.g., `serde` for cargo, `requests` for pypi)."
+          },
+          "ecosystem": {
+            "$ref": "#/definitions/Ecosystem"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional per-crate operator notes — provenance, why it's trusted, last review date."
+          },
+          "seeded": {
+            "type": "boolean",
+            "description": "E4-1 mitigation: marks the entry as a first-run / operator-known finding. The sensor MAY treat seeded entries as advisory-only to suppress BR-3 false-positive cascade during initial calibration. Defaults to false (i.e., not seeded)."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "declared_shell_outs": {
+      "type": "array",
+      "description": "Shell-out commands the Brain's repo invokes (e.g., `git`, `curl`, `cargo`). Per Y-2, v1 is static-only: the sensor scans `scripts/*.sh` for matching command names and emits drift findings. Runtime observation (via the invocation-ledger) is deferred to BACKLOG B-23. The sensor cross-references the declared command list against actual shell-out call sites and emits `trust_budget:undeclared:shell_out:<cmd>` / `trust_budget:overdeclared:shell_out:<cmd>` findings.",
+      "items": {
+        "type": "object",
+        "required": ["command_name"],
+        "properties": {
+          "command_name": {
+            "type": "string",
+            "description": "The shell command's name as it appears at the start of an invocation line in `scripts/*.sh` (e.g., `cargo`, `git`, `curl`). Argument-less name only; flags + arguments are not part of the declaration."
+          },
+          "script_paths": {
+            "type": "array",
+            "description": "Optional list of relative paths under the Brain's repo where this shell-out is expected. Used by the sensor to scope where it looks for actual call sites; absence means \"anywhere under `scripts/`\".",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional per-shell-out operator notes — purpose, why the command is trusted, alternatives considered."
+          },
+          "seeded": {
+            "type": "boolean",
+            "description": "E4-1 mitigation (mirror of `declared_crates.seeded`): marks the entry as a first-run / operator-known finding. Defaults to false."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "declared_external_services": {
+      "type": "array",
+      "description": "External services (FQDN-keyed) the Brain's code is expected to contact at runtime. Per Y-3, the operator declares the EXPECTED set; the sensor cross-references against actual call sites in the Brain's source code and emits `trust_budget:undeclared:service:<fqdn>` / `trust_budget:overdeclared:service:<fqdn>` advisory findings. Distinct from `hat-contract-v1.network_targets`: the hat-contract scopes per-hat allow/forbid lists; this list scopes the workspace's whole external-service surface.",
+      "items": {
+        "type": "object",
+        "required": ["fqdn", "purpose", "trust_posture"],
+        "properties": {
+          "fqdn": {
+            "type": "string",
+            "description": "Fully-qualified domain name of the external service (e.g., `osv.dev`, `api.crates.io`). Wildcards permitted for service families (e.g., `*.npmjs.com`)."
+          },
+          "purpose": {
+            "type": "string",
+            "description": "One-line description of what the Brain calls this service for. Auditable; surfaces in dogfood smoke-checks."
+          },
+          "trust_posture": {
+            "$ref": "#/definitions/TrustPosture"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional per-service operator notes — last review date, operator-audited paths, attestation references."
+          },
+          "seeded": {
+            "type": "boolean",
+            "description": "E4-1 mitigation (mirror of `declared_crates.seeded`): marks the entry as a first-run / operator-known finding. Defaults to false."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "E4-7 forward-compat surface. Operators MAY add experimental fields here without a schema bump — explicit experimentation space, mirroring the E-SC-7 recommendation. Fields under `extensions` are NOT normative and the sensor MUST ignore them at v1; v2 may promote individual extensions to top-level fields with the standard additive-promotion discipline.",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Ecosystem": {
+      "type": "string",
+      "description": "Closed-vocabulary ecosystem enum (Q1). Matches the supply-chain SCA module's three lockfile parsers (`cargo`, `pypi`, `npm`) plus `system` for OS-provided binaries (e.g., `git`, `curl`) that aren't tracked by a package registry. New vocabulary terms require a spec change with an explicit METHODOLOGY-EVOLUTION entry — same additive discipline as `hat-contract-v1.ToolName` and `culture-manifest-v1.values`.",
+      "enum": [
+        "cargo",
+        "pypi",
+        "npm",
+        "system"
+      ]
+    },
+    "TrustPosture": {
+      "type": "string",
+      "description": "Closed-vocabulary trust-posture enum (Q1). Discriminates HOW the operator trusts an external service: `api_only` (read-only API call, no code execution); `official_registry` (package-registry default, e.g., crates.io / PyPI / npm); `operator_audited` (operator has read the code path); `vendor_attested` (vendor-signed attestation, e.g., signed-package provenance). New vocabulary terms require a spec change.",
+      "enum": [
+        "api_only",
+        "official_registry",
+        "operator_audited",
+        "vendor_attested"
+      ]
+    }
+  }
+}

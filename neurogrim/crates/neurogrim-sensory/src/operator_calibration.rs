@@ -79,9 +79,13 @@ use std::path::{Path, PathBuf};
 /// design per P0-2 / Q3 forgiveness lock). Embedding keeps the schema as
 /// a documentation anchor and ensures the v1 schema location stays
 /// load-bearing — moving or renaming the schema breaks the build.
+// v3.2.2: schema vendored into `data/schemas/` so it resolves in
+// `cargo publish` tarballs. Canonical source remains
+// `LSP-Brains/schemas/invocation-ledger-v1.schema.json`; drift caught
+// by schema-conformance tests.
 #[allow(dead_code)]
 const OPERATOR_CALIBRATION_SCHEMA_JSON: &str = include_str!(
-    "../../../../../LSP-Brains/schemas/invocation-ledger-v1.schema.json"
+    "../data/schemas/invocation-ledger-v1.schema.json"
 );
 
 // ── Locked thresholds ───────────────────────────────────────────────────────

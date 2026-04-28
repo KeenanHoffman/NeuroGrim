@@ -91,12 +91,13 @@ const TRUST_BUDGET_TRUST_POSTURE_VOCABULARY: &[&str] = &[
 
 // ── Embedded schema ─────────────────────────────────────────────────────────
 
-/// Embedded trust-budget contract schema. Path is relative to this source
-/// file (`src/trust_budget.rs`); the build fails at compile time if the
-/// schema is missing. Five hops: src → crate → crates → neurogrim →
-/// NeuroGrim → ecosystem root.
+/// Embedded trust-budget contract schema. v3.2.2: schema vendored
+/// into `data/schemas/` so it resolves in `cargo publish` tarballs
+/// (the LSP-Brains sibling repo isn't included in published crates).
+/// Canonical source remains `LSP-Brains/schemas/trust-budget-v1.schema.json`;
+/// drift between the two copies is caught by the schema-conformance tests.
 const TRUST_BUDGET_SCHEMA_JSON: &str = include_str!(
-    "../../../../../LSP-Brains/schemas/trust-budget-v1.schema.json"
+    "../data/schemas/trust-budget-v1.schema.json"
 );
 
 // ── Shell-out vocabulary ────────────────────────────────────────────────────

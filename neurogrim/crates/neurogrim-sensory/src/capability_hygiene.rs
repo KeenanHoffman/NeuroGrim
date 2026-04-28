@@ -113,12 +113,13 @@ const HAT_CONTRACT_TOOL_VOCABULARY: &[&str] = &[
     "package_install",
 ];
 
-/// Embedded persona-hat contract schema. Path is relative to this source
-/// file (`src/capability_hygiene.rs`); the build fails at compile time if
-/// the schema is missing. Five hops: src → crate → crates → neurogrim →
-/// NeuroGrim → ecosystem root.
+/// Embedded persona-hat contract schema. v3.2.2: schema vendored into
+/// `data/schemas/` so it resolves in `cargo publish` tarballs (the
+/// LSP-Brains sibling repo isn't included in published crates).
+/// Canonical source remains `LSP-Brains/schemas/hat-contract-v1.schema.json`;
+/// drift between the two copies is caught by the schema-conformance tests.
 const HAT_CONTRACT_SCHEMA_JSON: &str = include_str!(
-    "../../../../../LSP-Brains/schemas/hat-contract-v1.schema.json"
+    "../data/schemas/hat-contract-v1.schema.json"
 );
 
 /// Correlation: minimum description length (chars).

@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/KeenanHoffman/LSP-Brains/schemas/pattern-aggregation-ledger-v1.schema.json",
+  "title": "Pattern Aggregation Ledger v1",
+  "description": "Validates a single entry in the high-frequency append-only pattern-aggregation ledger at `<project_root>/.claude/brain/pattern-aggregation-ledger.jsonl`. The ledger captures TWO row kinds (per E-B2-7 Q4 oneOf discrimination): (a) `ReceivedEntry` rows written by the federated-pattern default-receive handler — capturing every incoming federated-pattern envelope (including drops with their `dropped_reason`); and (b) `EmittedEntry` rows written by the federated-pattern sender wiring — capturing every outgoing federated-pattern envelope BEFORE transmission (operator audit trail per Q12). This is the FIRST Brains-2.0 ledger that captures BOTH inbound and outbound rows. The ledger remains gitignored runtime state; v1 is per-Brain LOCAL only with no A2A propagation.\n\nDiscriminator: `entry_kind ∈ {received, emitted}`. `received` rows add `from_brain_id` + `envelope_message_id` + optional `dropped_reason`; `emitted` rows add `to_brain_id` + `envelope_message_id`. Both kinds carry `schema_version` (const `1`), `entry_kind`, `ts` (ISO 8601 UTC), `peer_brain_id` (opaque hash), and `payload` (the full federated-pattern payload as an opaque object — the schema validates ledger STRUCTURE; the federated-pattern schema validates payload CONTENT at the message-handler layer). Cross-schema $ref to `a2a-federated-pattern-v1.schema.json` is intentionally avoided at the ledger schema layer to dodge cross-file resolution complexity.\n\nPrivacy contract: operator handle is NOT captured (federation is project-level, not operator-level — distinct from `domain-calibration-ledger-v1.TriagedEntry.human_operator` and `invocation-ledger-v1.DispositionEntry.human_operator`). The closed-set `DroppedReason` enum is the v1 vocabulary lock (Q4 + Q6 + Q11 + Q15) — new vocabulary terms require a spec change with an explicit METHODOLOGY-EVOLUTION entry. Per-entry forward-compat is via the optional `extensions` block (E4-7 pattern, mirrors `invocation-ledger-v1.SkillEntry.extensions`); top-level schema validates ONE row at a time. Closed-set discipline on `DroppedReason` is the v1 vocabulary lock.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/definitions/ReceivedEntry" },
+    { "$ref": "#/definitions/EmittedEntry" }
+  ],
+  "definitions": {
+    "DroppedReason": {
+      "type": "string",
+      "description": "Closed-vocabulary drop-reason enum (Q4 + Q6 + Q11 + Q15). Receiver-side reasons for dropping an inbound federated-pattern. `rate-limit-exceeded` = peer exceeded sliding-window per-peer threshold (Q6, BR-6 mitigation); `recursion-guard` = receiver's own opaque-hash was in `origin_set[]` (Q9 wire-level loop closure); `schema-validation-failed` = payload failed federated-pattern schema validation (Q3); `hop-limit-exceeded` = `origin_set.length > MAX_HOPS=4` (Q15 hop limit); `unknown-pattern-kind` = receiver does not understand the value of `pattern_kind` (Q11 cross-version compat — graceful degradation). Closed-set v1 (Q4 lock); new vocabulary terms require a spec change with an explicit METHODOLOGY-EVOLUTION entry — same additive discipline as `invocation-ledger-v1.Disposition`, `hat-contract-v1.ToolName`, `trust-budget-v1.Ecosystem`. Vocabulary changes surface as deliberate test edits, not silent drift.",
+      "enum": [
+        "rate-limit-exceeded",
+        "recursion-guard",
+        "schema-validation-failed",
+        "hop-limit-exceeded",
+        "unknown-pattern-kind"
+      ]
+    },
+    "ReceivedEntry": {
+      "type": "object",
+      "description": "A federated-pattern receipt row written by the default-receive handler (`federated_pattern.rs` — landing at C4). Captures the full inbound envelope including drop information when applicable. Drops are recorded as a row with `dropped_reason` populated; accepted messages have no `dropped_reason`. Either way every receipt is logged for operator visibility (Q3 receiver disposition + Q6 BR-6 observability).",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "entry_kind",
+        "ts",
+        "peer_brain_id",
+        "from_brain_id",
+        "envelope_message_id",
+        "payload"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1",
+          "description": "Pattern-aggregation-ledger schema version. Forward-compat per E4-7: any v2 schema (additive per charter discipline #2) requires bumping this const so v1 consumers detect the version mismatch deterministically."
+        },
+        "entry_kind": {
+          "type": "string",
+          "const": "received",
+          "description": "Row-kind discriminator for `ReceivedEntry`. Distinguishes from `EmittedEntry` (which uses `entry_kind: \"emitted\"`)."
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp at receive time. Monotonically increasing within a single ledger; uniqueness is the writer's responsibility."
+        },
+        "peer_brain_id": {
+          "type": "string",
+          "description": "Opaque-hash identifier of the local Brain (the receiver — i.e., the Brain that owns this ledger). Same opaque-hash format as `a2a-federated-pattern-v1.peer_brain_id`."
+        },
+        "from_brain_id": {
+          "type": "string",
+          "description": "Opaque-hash identifier of the sending Brain. Same opaque-hash format as `a2a-federated-pattern-v1.anonymized_origin`."
+        },
+        "envelope_message_id": {
+          "type": "string",
+          "description": "The `message_id` of the enclosing `a2a-envelope-v1`. Allows operators to correlate ledger rows with on-the-wire envelope traces."
+        },
+        "payload": {
+          "type": "object",
+          "description": "The full federated-pattern payload as received. The schema validates ledger STRUCTURE; the federated-pattern schema validates payload CONTENT at the message-handler layer (NOT here). Cross-schema $ref to `a2a-federated-pattern-v1.schema.json` is intentionally avoided to dodge cross-file resolution complexity. Field-level validation runs at the federated-pattern handler before this row is appended."
+        },
+        "dropped_reason": {
+          "$ref": "#/definitions/DroppedReason",
+          "description": "OPTIONAL. Populated for receiver-side drops (rate-limit, recursion-guard, schema-validation-failed, hop-limit-exceeded, unknown-pattern-kind). Absent or null for accepted messages. Closed-set 5-entry vocabulary per Q4."
+        },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "E4-7 forward-compat surface. Operators MAY add experimental fields under this object without a schema bump — explicit experimentation space, mirroring `invocation-ledger-v1.SkillEntry.extensions`. Fields under `extensions` are NOT normative; the sensor MUST ignore them at v1; v2 may promote individual extensions to top-level fields with the standard additive-promotion discipline."
+        }
+      }
+    },
+    "EmittedEntry": {
+      "type": "object",
+      "description": "A federated-pattern emission row written by the sender wiring BEFORE transmission (Q12 operator audit trail). Every emit is logged in the SENDER'S OWN ledger with `to_brain_id`, `envelope_message_id`, `payload`, `ts`. Operator MAY review what their Brain has shared via `neurogrim sensory federated-patterns`. NEUROGRIM_OPERATOR identity is NOT captured — federation is project-level, not operator-level. Spec MUST language: implementations MUST log emitted federated-patterns to the local pattern-aggregation-ledger BEFORE transmission.",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "entry_kind",
+        "ts",
+        "peer_brain_id",
+        "to_brain_id",
+        "envelope_message_id",
+        "payload"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1",
+          "description": "Same forward-compat semantics as `ReceivedEntry.schema_version`."
+        },
+        "entry_kind": {
+          "type": "string",
+          "const": "emitted",
+          "description": "Row-kind discriminator for `EmittedEntry`. Distinguishes from `ReceivedEntry` (which uses `entry_kind: \"received\"`)."
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp at emit time (BEFORE transmission per Q12 log-before-transmit discipline). Monotonically increasing within a single ledger."
+        },
+        "peer_brain_id": {
+          "type": "string",
+          "description": "Opaque-hash identifier of the local Brain (the sender — i.e., the Brain that owns this ledger)."
+        },
+        "to_brain_id": {
+          "type": "string",
+          "description": "Opaque-hash identifier of the receiving Brain (the peer the sender is transmitting to)."
+        },
+        "envelope_message_id": {
+          "type": "string",
+          "description": "The `message_id` of the outbound `a2a-envelope-v1`."
+        },
+        "payload": {
+          "type": "object",
+          "description": "The full federated-pattern payload as transmitted. Same cross-schema discipline as `ReceivedEntry.payload` — ledger validates STRUCTURE; federated-pattern schema validates CONTENT at the message-handler layer."
+        },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Same E4-7 forward-compat semantics as `ReceivedEntry.extensions`."
+        }
+      }
+    }
+  }
+}
