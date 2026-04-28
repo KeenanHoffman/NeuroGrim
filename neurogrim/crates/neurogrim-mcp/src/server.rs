@@ -263,6 +263,38 @@ pub struct TrajectoryParams {
     pub domain: Option<String>,
 }
 
+// --- v3.2.1 onboarding-tool parameter types ---
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct OrientParams {
+    /// Optional hat to bias the rendered prose. Same hats supported by
+    /// the CLI's `agent --hat <name>`.
+    pub hat: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ExplainParams {
+    /// Topic name. Omit to receive the list of available topics.
+    /// Available: methodology, domain, sensor, hat, scoring,
+    /// federation, cli, culture.
+    pub topic: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DomainNewParams {
+    /// Domain name (kebab-case). Must match `^[a-z][a-z0-9-]*$`.
+    pub name: String,
+    /// Humanized display name; defaults to title-case of `name`.
+    pub description: Option<String>,
+    /// Initial weight (0.0–1.0). Default 0.0 (advisory).
+    pub weight: Option<f64>,
+    /// Sensor type: "stub" (registry + CMDB only) or "python" (also
+    /// scaffolds sensory/check_<name>.py). Default "stub".
+    pub sensor_type: Option<String>,
+    /// Overwrite an existing domain. Default false.
+    pub force: Option<bool>,
+}
+
 // --- Tool implementations ---
 
 #[tool_router]
@@ -312,6 +344,139 @@ impl BrainServer {
         match self.registry.validate() {
             Ok(()) => serde_json::json!({"valid": true, "domains": self.registry.config.domain_weights.len(), "schema_version": self.registry.meta.schema_version}).to_string(),
             Err(e) => serde_json::json!({"valid": false, "error": e.to_string()}).to_string(),
+        }
+    }
+
+    #[tool(
+        description = "v3.2.1 — Agent-friendly prose orientation summary for an AI agent \
+        entering this NeuroGrim project. Returns the same content as `neurogrim agent --prose`: \
+        Brain identity, current score + trajectory, top signals, calls to action, available \
+        skills/hats, federation peers. ANSI colors suppressed (output is plain text suitable \
+        for embedding in agent context). Use this as the first introspection call when an \
+        agent needs to understand 'what is this Brain'."
+    )]
+    async fn orient(&self, Parameters(p): Parameters<OrientParams>) -> String {
+        let agent_output = self.run_scoring(p.hat, None).await;
+        crate::prose::render_prose(&self.registry, &self.project_root, &agent_output, true)
+    }
+
+    #[tool(
+        description = "v3.2.1 — Read-only configuration auditor (mirror of `neurogrim doctor`). \
+        Runs six check families against the loaded registry + on-disk artifacts: schema-validate, \
+        domain-definitions alignment, principle-map alignment, CMDB path resolution, \
+        culture.yaml presence, federation port uniqueness. Returns a JSON envelope with \
+        per-finding severity (error/warn/info), category, and message, plus an aggregate \
+        summary. Use this when configuring a Brain or before relying on its score output."
+    )]
+    async fn doctor(&self) -> String {
+        let findings = crate::doctor::audit(&self.registry, &self.project_root);
+        let errors = findings
+            .iter()
+            .filter(|f| matches!(f.severity, crate::doctor::Severity::Error))
+            .count();
+        let warns = findings
+            .iter()
+            .filter(|f| matches!(f.severity, crate::doctor::Severity::Warn))
+            .count();
+        serde_json::json!({
+            "errors": errors,
+            "warnings": warns,
+            "exit_code": if errors > 0 { 2 } else if warns > 0 { 1 } else { 0 },
+            "findings": findings,
+        })
+        .to_string()
+    }
+
+    #[tool(
+        description = "v3.2.1 — Bundled methodology primer (mirror of `neurogrim explain`). \
+        Eight self-contained topic files ship inside the binary: methodology, domain, sensor, \
+        hat, scoring, federation, cli, culture. Pass `topic` to receive that topic's markdown \
+        body. Omit `topic` to receive the list of available topics with one-line summaries. \
+        Use this when an agent needs to learn the LSP Brains methodology without reading the \
+        4000-line spec."
+    )]
+    async fn explain(&self, Parameters(p): Parameters<ExplainParams>) -> String {
+        match p.topic.as_deref() {
+            None => {
+                let mut out = format!(
+                    "neurogrim explain — bundled methodology primer ({})\n\n",
+                    crate::explain::BUNDLED_VERSION
+                );
+                out.push_str("Available topics:\n");
+                for (name, summary, _) in crate::explain::topics() {
+                    out.push_str(&format!("  {:<13} {}\n", name, summary));
+                }
+                out.push_str(
+                    "\nCall `explain` again with `topic=<name>` to read any topic.\n",
+                );
+                out
+            }
+            Some(name) => match crate::explain::lookup(name) {
+                Some(body) => body.to_string(),
+                None => {
+                    let names = crate::explain::topic_names().join(", ");
+                    format!(
+                        "{{\"error\": \"unknown topic '{name}'. Available: {names}\"}}"
+                    )
+                }
+            },
+        }
+    }
+
+    #[tool(
+        description = "v3.2.1 — Scaffold a new domain in this Brain's registry (mirror of \
+        `neurogrim domain new`). Mutates brain-registry.json (adds entries to domain_weights, \
+        principle_map, domain_definitions atomically), creates a stub CMDB, and optionally \
+        scaffolds a Python sensor skeleton at sensory/check_<name>.py. \
+        Required: `name` (kebab-case). Optional: `description` (humanized), `weight` (default \
+        0.0 = advisory), `sensor_type` ('stub' or 'python', default 'stub'), `force` (default \
+        false; required to overwrite an existing domain). Returns scaffolding outcome as JSON. \
+        Use this when an agent needs to declare a new measurement target."
+    )]
+    async fn domain_new(&self, Parameters(p): Parameters<DomainNewParams>) -> String {
+        let sensor_type = match p.sensor_type.as_deref() {
+            Some("python") => crate::domain::SensorType::Python,
+            Some("stub") | None => crate::domain::SensorType::Stub,
+            Some(other) => {
+                return serde_json::json!({
+                    "error": format!("invalid sensor_type '{other}'. Allowed: stub, python")
+                })
+                .to_string();
+            }
+        };
+        let weight = p.weight.unwrap_or(0.0);
+        let force = p.force.unwrap_or(false);
+        let directory = self.project_root.to_string_lossy().to_string();
+
+        let result = crate::domain::scaffold_domain(
+            &p.name,
+            p.description.as_deref(),
+            weight,
+            sensor_type,
+            ".claude/brain-registry.json",
+            &directory,
+            force,
+        )
+        .await;
+
+        match result {
+            Ok(outcome) => serde_json::json!({
+                "ok": true,
+                "name": outcome.name,
+                "display_name": outcome.display_name,
+                "weight": outcome.weight,
+                "was_existing": outcome.was_existing,
+                "registry_path": outcome.registry_path.display().to_string(),
+                "cmdb_path": outcome.cmdb_path.display().to_string(),
+                "sensor_path": outcome.sensor_path.as_ref().map(|p| p.display().to_string()),
+                "next_steps": next_steps_text(&outcome),
+            })
+            .to_string(),
+            Err(e) => serde_json::json!({
+                "ok": false,
+                "error": format!("{e:#}"),
+            })
+            .to_string(),
         }
     }
 
@@ -510,10 +675,45 @@ impl BrainServer {
     }
 }
 
+/// Build the "next steps" hint text for an MCP `domain_new` response.
+/// Mirrors the CLI's stderr printout but as a single string suitable
+/// for an MCP JSON envelope.
+fn next_steps_text(outcome: &crate::domain::ScaffoldOutcome) -> String {
+    let mut s = String::new();
+    if let Some(p) = outcome.sensor_path.as_ref() {
+        let py_module = outcome.name.replace('-', "_");
+        s.push_str(&format!(
+            "1. Open {} and implement analyze() (see `explain sensor`).\n",
+            p.display()
+        ));
+        s.push_str(&format!(
+            "2. Refresh the CMDB: py -3 sensory/check_{}.py . > .claude/{}-cmdb.json\n",
+            py_module, outcome.name
+        ));
+    } else {
+        s.push_str(
+            "1. Author a sensor that emits the CMDB envelope shape (see `explain sensor`).\n",
+        );
+        s.push_str(&format!(
+            "2. Refresh the CMDB into {} once the sensor exists.\n",
+            outcome.cmdb_path.display()
+        ));
+    }
+    s.push_str("3. Verify the domain shows up via `orient` (or `neurogrim agent --prose`).\n");
+    s.push_str("4. Validate registry shape via `doctor` (or `neurogrim doctor`).\n");
+    s.push_str("5. Read `explain domain` if needed.\n");
+    s
+}
+
 impl ServerHandler for BrainServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
-            instructions: Some("NeuroGrim LSP Brains scoring engine. Use get_health_score for the full project health picture.".into()),
+            instructions: Some("NeuroGrim LSP Brains scoring engine. \
+                v3.2.1: agents new to a project should call `orient` first \
+                (Brain summary), then `doctor` (config audit), then \
+                `explain methodology` (the model). Use `get_health_score` \
+                for the full project health picture, `domain_new` to \
+                scaffold a new measurement target.".into()),
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             ..Default::default()
         }

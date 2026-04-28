@@ -22,5 +22,12 @@ chrono = { workspace = true }
 rmcp = { workspace = true }
 schemars = { workspace = true }
 tracing = { workspace = true }
+# v3.2.1 — colored is needed by the prose renderer (agent --prose +
+# MCP `orient` tool). Color is a presentation concern, but the
+# renderer is shared across CLI and MCP so the dep lives here.
+colored = { workspace = true }
 neurogrim-core = { workspace = true }
 neurogrim-sensory = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

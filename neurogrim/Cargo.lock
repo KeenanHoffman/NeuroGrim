@@ -1425,12 +1425,14 @@ version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "colored",
  "neurogrim-core",
  "neurogrim-sensory",
  "rmcp",
  "schemars 0.8.22",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
 ]

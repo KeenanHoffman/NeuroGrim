@@ -22,7 +22,8 @@
 //! filesystem dependencies — works from a single binary distribution.
 
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::{SecondsFormat, Utc};
+// chrono no longer used here directly — stub_cmdb_json delegates to
+// neurogrim_mcp::domain::stub_cmdb_json which holds the timestamp logic.
 use serde::Deserialize;
 use serde_json::json;
 use std::path::Path;
@@ -438,37 +439,11 @@ pub fn template_registry_json(
     Ok(serde_json::to_string_pretty(&registry)? + "\n")
 }
 
-/// Build a stub CMDB JSON for a domain. Score 50, low_confidence: true,
-/// single descriptive finding. Mirrors the python-starter + job-hunt
-/// pattern (honest "unknown" per spec principle #2).
-///
-/// Reused by `neurogrim domain new` (v3.2 Phase C) for the same shape:
-/// a freshly-declared domain ships with a placeholder CMDB that
-/// `agent --prose` and `score` can read until a real sensor is
-/// authored.
+/// Build a stub CMDB JSON for a domain. v3.2.1 — re-exported from
+/// `neurogrim_mcp::domain` so the same renderer is used by both
+/// `neurogrim init --template` and `neurogrim domain new`.
 pub(crate) fn stub_cmdb_json(domain: &str) -> Result<String> {
-    let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
-    let cmdb = json!({
-        "meta": {
-            "updated_by": "neurogrim-init",
-            "updated_at": now,
-            "source": format!("Stub CMDB authored by `neurogrim init` template scaffolder. Score 50 = honest 'unknown' per spec principle #2. Sensor not yet authored for '{domain}'."),
-            "schema_version": "1"
-        },
-        "score": 50,
-        "updated_at": now,
-        "findings": [{
-            "name": format!("{domain}:stub"),
-            "status": "info",
-            "points": 0,
-            "detail": format!("Domain '{domain}' declared in registry; sensor not yet authored. Score 50 reflects honest unknown until a sensory tool produces real signal.")
-        }],
-        "exported_variables": {
-            format!("{domain}:low_confidence"): true,
-            format!("{domain}:sensor_authored"): false
-        }
-    });
-    Ok(serde_json::to_string_pretty(&cmdb)? + "\n")
+    neurogrim_mcp::domain::stub_cmdb_json(domain)
 }
 
 /// Render `settings.local.json` content. Hook config is identical

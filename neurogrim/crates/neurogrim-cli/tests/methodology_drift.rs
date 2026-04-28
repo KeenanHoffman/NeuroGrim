@@ -28,8 +28,16 @@ const TOPICS: &[&str] = &[
 ];
 
 fn data_explain_dir() -> PathBuf {
+    // v3.2.1 — explain data files moved from neurogrim-cli/data/explain
+    // to neurogrim-mcp/data/explain so the MCP server can expose
+    // `explain` from the same source of truth.
     let manifest = env!("CARGO_MANIFEST_DIR");
-    PathBuf::from(manifest).join("data").join("explain")
+    PathBuf::from(manifest)
+        .parent()
+        .unwrap()
+        .join("neurogrim-mcp")
+        .join("data")
+        .join("explain")
 }
 
 #[test]

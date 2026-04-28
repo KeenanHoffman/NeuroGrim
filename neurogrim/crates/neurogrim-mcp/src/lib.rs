@@ -5,6 +5,10 @@
 //! - MCP Client: discovers and invokes sensory tool servers
 
 pub mod client;
+pub mod doctor;
+pub mod domain;
+pub mod explain;
+pub mod prose;
 pub mod server;
 pub mod transport;
 
