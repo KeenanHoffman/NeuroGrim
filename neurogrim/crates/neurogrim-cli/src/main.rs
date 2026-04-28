@@ -325,6 +325,11 @@ enum Commands {
     /// scaffolds a SKILL.md skeleton for a project-specific skill.
     Skill(commands::skill::Args),
 
+    /// Domain workflow commands. v3.2: `neurogrim domain new <name>`
+    /// scaffolds a new domain (registry mutation + stub CMDB +
+    /// optional Python sensor skeleton).
+    Domain(commands::domain::Args),
+
     /// Federation workflow commands. v3.1.1+: `neurogrim federation register`
     /// adds a child Brain to the local registry (ecosystem-coordinator
     /// workflow; supports the `--read-only` flag for sibling-project peers).
@@ -427,6 +432,7 @@ async fn main() -> Result<()> {
             commands::a2a_token::run(store, subcommand).await
         }
         Commands::Skill(args) => commands::skill::run(args).await,
+        Commands::Domain(args) => commands::domain::run(args).await,
         Commands::Federation(args) => commands::federation::run(args).await,
     }
 }

@@ -441,7 +441,12 @@ pub fn template_registry_json(
 /// Build a stub CMDB JSON for a domain. Score 50, low_confidence: true,
 /// single descriptive finding. Mirrors the python-starter + job-hunt
 /// pattern (honest "unknown" per spec principle #2).
-fn stub_cmdb_json(domain: &str) -> Result<String> {
+///
+/// Reused by `neurogrim domain new` (v3.2 Phase C) for the same shape:
+/// a freshly-declared domain ships with a placeholder CMDB that
+/// `agent --prose` and `score` can read until a real sensor is
+/// authored.
+pub(crate) fn stub_cmdb_json(domain: &str) -> Result<String> {
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let cmdb = json!({
         "meta": {
