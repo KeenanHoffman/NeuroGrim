@@ -15,7 +15,10 @@ trajectory intelligence, and gated governance. Sensory tools are small spells ca
 against the project; the Brain keeps a grimoire of their readings and tells you what
 has changed.
 
-**Current version:** `3.0.0` — first public stable release (closes the supply-chain + Brains-2.0 self-observability master-gate campaigns).
+**Current version:** `3.4.0` — adds the dashboard: a self-contained
+HTTP + React UI (`neurogrim ui`) that gives humans a visual surface
+for the Brain alongside the existing CLI and MCP server. Five pages,
+SSE-driven live updates, hat-lens picker, dark/light theme.
 See [CHANGELOG.md](CHANGELOG.md) for what shipped + what's open.
 
 > **First time here?** Read **[PITCH.md](PITCH.md)** first — elevator pitch with
@@ -35,7 +38,7 @@ below.
 
 | Directory | Contents |
 |-----------|----------|
-| `neurogrim/` | Rust Brain engine (workspace: core, sensory, mcp, a2a [Stage 6], cli crates) |
+| `neurogrim/` | Rust Brain engine (workspace: core, sensory, mcp, a2a, ecosystem, dashboard, cli crates) |
 | `spec/` | Redirect stub — the spec moved to [LSP-Brains](https://github.com/KeenanHoffman/LSP-Brains) as of v2 (currently v3.0 there) |
 | `sdk-python/` | Python SDK for writing custom sensory tools (`lsp-brains` package) |
 | `docs/` | Domain catalog, architecture guides |
@@ -107,6 +110,24 @@ neurogrim narrate --hat visionary --registry .claude/brain-registry.json
 # Run a built-in sensory tool (when applicable):
 neurogrim sensory test-health --project-root . > .claude/test-health-cmdb.json
 ```
+
+### The dashboard (v3.4)
+
+```bash
+neurogrim ui
+```
+
+Launches a self-contained HTTP server on `http://127.0.0.1:8420/`
+and opens your default browser. Five pages — Overview, Domains,
+per-domain detail, Federation, Skills — backed by an embedded
+React app. Live updates flow over SSE: edit a CMDB, watch the
+score and sparkline refresh in ~250 ms without a manual reload.
+
+The dashboard is **read-only** in v3.4 (mutation endpoints are
+v3.5+ work). Useful flags: `--port`, `--bind`, `--no-browser`,
+`--registry`. Browser launch is self-skipping in CI / no-DISPLAY
+/ headless-SSH environments and uses `cmd.exe /c start` inside
+WSL. Full surface tour: `neurogrim explain ui`.
 
 ### Run Tests
 

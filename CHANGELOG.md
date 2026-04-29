@@ -4,6 +4,178 @@ All notable changes to NeuroGrim + the LSP Brains specification live
 here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-04-28
+
+*The third audience surface — a self-contained HTTP + React
+dashboard (`neurogrim ui`) that gives humans a visual companion
+to the CLI and MCP server. Five pages, SSE-driven live updates,
+hat-lens picker, dark/light theme. New crate
+`neurogrim-dashboard` (the seventh in the workspace).*
+
+### Added — `neurogrim ui` command + `neurogrim-dashboard` crate
+
+The dashboard ships as a single binary: the React frontend is
+built into `frontend/dist/` and embedded at compile time via
+`rust-embed`. Operators `cargo install neurogrim-cli` and the UI
+ships with it — no Node.js required at runtime. Read-only in
+v3.4 by design; mutation endpoints are gated behind a
+`--allow-mutations` flag planned for v3.5.
+
+#### Five pages
+
+- **Overview** (`/`) — landing page with score gauge, trajectory
+  badge, top three strongest signals, top three recommendations,
+  and the all-advisory "N/A · observe-only posture" rendering for
+  Brains that haven't promoted any domain to weighted yet.
+- **Domains** (`/domains`) — sortable table per declared domain
+  with weight, raw score, effective score, confidence,
+  trajectory, last-updated. Color-coded scores (green/amber/red).
+  Click a row to drill in.
+- **Domain detail** (`/domains/:name`) — findings table with
+  status badges + signed point deltas, Recharts sparkline of
+  recent score history, CMDB metadata, and the sensor authoring
+  intent block (`_todo_<name>`) when the sensor hasn't been
+  written yet.
+- **Federation** (`/federation`) — one-hop view of declared
+  peers with hand-drawn SVG topology (self + peers, color-coded
+  by liveness, dashed edges for read-only siblings) and an
+  Agent Card excerpt panel on click. A2A peers are probed at
+  `/.well-known/agent-card.json` with a 1.5s timeout;
+  subprocess peers stay `unprobed` by design.
+- **Skills** (`/skills`) — inventory of every skill under
+  `.claude/skills/` paired with invocation-ledger stats. Filter
+  chips (alive / dead / new / no-ledger), search by name +
+  description, click-to-expand detail. Surfaces a CTA banner
+  when the PostToolUse hook hasn't been wired yet so the ledger
+  is missing.
+
+#### Live updates over SSE
+
+A `notify::RecommendedWatcher` translates filesystem changes
+into typed `DashboardEvent` variants
+(`RegistryChanged` / `ScoreChanged{domain}` / `SkillInvoked`)
+and broadcasts them over `tokio::sync::broadcast`. The
+`/api/events` SSE handler subscribes a fresh receiver per
+connection; the React frontend's `useDashboardEvents` hook
+parses each event and invalidates only the relevant TanStack
+Query keys. End-to-end latency on Windows: ~250 ms.
+
+A small color-coded indicator in the sidebar footer surfaces
+connection status (live / connecting / offline / disabled) so
+the operator can tell at a glance whether they're getting
+real-time updates.
+
+#### Hat-lens picker
+
+Dropdown in the sidebar that lists every hat declared in
+`config.hats` plus a synthetic `default` entry. Selecting a hat
+adds `?hat=<name>` to every score-aware request so the Brain
+output flows through that hat's `domain_multipliers`. Selection
+persists in `localStorage`. The picker collapses to a static
+"no hats" label when the registry has no hats declared.
+
+#### Theme
+
+Dark/light toggle in the sidebar footer. Persists in
+`localStorage`; first-load fallback honors
+`prefers-color-scheme`. Tailwind's `darkMode: ["class"]`
+strategy applies the `dark` class to `<html>`.
+
+#### Cross-platform browser launch
+
+`neurogrim ui` opens the default browser by default with
+hardened detection logic: skips on `CI=true`, on Linux without
+`DISPLAY` / `WAYLAND_DISPLAY`, and in headless SSH sessions —
+each with a distinct stderr message explaining *why* it
+skipped. WSL is detected via `/proc/version` and the URL is
+routed through `cmd.exe /c start` to reach the Windows host
+browser. Always honors `--no-browser`.
+
+### Added — `neurogrim explain ui`
+
+Tenth bundled methodology topic covering the dashboard surface:
+the five pages, `neurogrim ui` flags, browser-launch decisions,
+SSE wire details, hat lens, theme, surface comparison
+(CLI vs MCP vs dashboard), architecture (rust-embed bundling,
+ts-rs bindings, TanStack Router, the seven `/api/*` routes).
+
+`BUNDLED_VERSION` bumped to `v3.4` and every topic file's
+version header updated accordingly.
+
+### Added — `neurogrim-dashboard` crate API surface
+
+- `GET /api/health` — server version + registry path
+- `GET /api/overview?hat=<name>` — score gauge data + top recs
+- `GET /api/domains?hat=<name>` — sortable list view
+- `GET /api/domains/:name?hat=<name>` — drill-in detail
+- `GET /api/federation` — peers + Agent Card probes
+- `GET /api/skills` — inventory + ledger stats
+- `GET /api/hats` — picker choices
+- `GET /api/events` — SSE stream
+
+Every wire-format type derives `ts_rs::TS` and exports to
+`crates/neurogrim-dashboard/bindings/` at `cargo test` time so
+the frontend stays type-aligned with the Rust source of truth.
+
+### Tooling — frontend stack
+
+React 18 + TypeScript 5.7 + Vite 5.4 + Tailwind 3.4 + shadcn/ui
+copy-paste components + Recharts (gauge + sparkline) +
+TanStack Query 5.62 + TanStack Router 1.95. No new npm
+dependencies introduced beyond the initial Phase 0 set —
+phases 1.3 and 2.1 explicitly avoided installing `react-flow`
+and a separate SSE client library, building both surfaces
+on existing primitives instead.
+
+### Tooling — supply-chain discipline (interrupt during Phase 0)
+
+- New bundled `dependency-discipline` skill in
+  `init-skills/` (152 lines) — captures the discipline
+  NeuroGrim's methodology requires before any dep enters
+  the project's trust boundary. Federated to all Brain
+  copies.
+- `cargo xtask sca-check` runs `cargo audit` + `npm audit`
+  with severity gating; alias declared in
+  `neurogrim/.cargo/config.toml`.
+- `audit/dep-accepted-2026-04-28.md` documents the five
+  esbuild moderate findings (GHSA-67mh-4wv8-2f99) accepted
+  as dev-only.
+
+### Changed
+- **Workspace `version` 3.3.0 → 3.4.0** across all 7 crates +
+  `[workspace.dependencies]`. Frontend `package.json` synced.
+- `neurogrim-cli` now depends on `neurogrim-dashboard` (new).
+- `BrainContext` relocated from `neurogrim-cli` to
+  `neurogrim-mcp` (Phase 0.1) so both the CLI and the
+  dashboard server share a single source of truth for
+  registry + scoring pipeline loading.
+
+### Test surface delta
+- 51 Rust dashboard tests (events classification, watcher
+  integration, route smoke, skills scanner with YAML
+  block-scalar fix, hats endpoint, ScoreQuery normalization)
+- 10 ui-cmd tests (browser-launch decision matrix)
+- 104 vitest tests across 14 files (component rendering,
+  routing, theme persistence, SSE hook lifecycle, hat-picker
+  Context wiring)
+- 1 new explain regression test (`ui_topic_describes_the_five_pages_and_sse`)
+
+### Breaking changes
+None. The CLI surface is unchanged; the new `ui` subcommand is
+additive. The dashboard ships read-only by design — any
+existing automation pointed at the registry is untouched.
+
+### Background — what prompted this release
+
+The CLI gives agents a canonical contract; the MCP server gives
+LLMs typed tools. But neither surface is reach-and-glance for
+humans wanting charts, sparklines, and a sortable view of every
+domain. The v3.4 dashboard closes that audience gap, while
+adding the SSE substrate that v3.5+ live mutation flows will
+need. The supply-chain interrupt early in the phase strengthened
+the npm-dependency policy across the project; that discipline
+work was a precondition for ever shipping a frontend.
+
 ## [3.3.0] - 2026-04-28
 
 *Agent-authoring substrate. Closes all 10 friction points (F1–F10)

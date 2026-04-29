@@ -1520,7 +1520,7 @@ checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
 
 [[package]]
 name = "neurogrim-a2a"
-version = "3.3.0"
+version = "3.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1549,7 +1549,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-cli"
-version = "3.3.0"
+version = "3.4.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-core"
-version = "3.3.0"
+version = "3.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-dashboard"
-version = "3.3.0"
+version = "3.4.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1620,7 +1620,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-ecosystem"
-version = "3.3.0"
+version = "3.4.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1639,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-mcp"
-version = "3.3.0"
+version = "3.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1659,7 +1659,7 @@ dependencies = [
 
 [[package]]
 name = "neurogrim-sensory"
-version = "3.3.0"
+version = "3.4.0"
 dependencies = [
  "anyhow",
  "cargo-lock",
