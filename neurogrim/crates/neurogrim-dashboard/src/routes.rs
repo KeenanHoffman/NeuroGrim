@@ -757,9 +757,82 @@ async fn probe_peer(
     let addr = format!("{host}:{port}");
     let is_localhost = matches!(host, "127.0.0.1" | "::1" | "localhost");
 
-    match timeout(PEER_TCP_TIMEOUT, tokio::net::TcpStream::connect(&addr)).await {
+    // Dual-stack-aware connect. On Windows, "localhost" resolves to
+    // both ::1 and 127.0.0.1; tokio's TcpStream::connect((host, port))
+    // tries only the first resolved address. If the daemon is bound
+    // to 127.0.0.1 (the common case for `neurogrim a2a-serve`) but
+    // ::1 sorts first, the connect times out on the IPv6 try and
+    // we'd misclassify a running daemon as `not-running`. Resolve
+    // explicitly and try each address until one connects.
+    let connect_result = match tokio::net::lookup_host(addr.as_str()).await {
+        Ok(addrs) => {
+            let candidates: Vec<_> = addrs.collect();
+            if candidates.is_empty() {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::AddrNotAvailable,
+                    "no addresses resolved",
+                ))
+            } else {
+                // Try each candidate within the overall timeout.
+                let mut last_err: Option<std::io::Error> = None;
+                let mut got_stream = None;
+                for candidate in candidates {
+                    match timeout(
+                        PEER_TCP_TIMEOUT,
+                        tokio::net::TcpStream::connect(&candidate),
+                    )
+                    .await
+                    {
+                        Ok(Ok(s)) => {
+                            got_stream = Some(s);
+                            break;
+                        }
+                        Ok(Err(e)) => last_err = Some(e),
+                        Err(_) => {
+                            last_err = Some(std::io::Error::new(
+                                std::io::ErrorKind::TimedOut,
+                                "tcp connect timed out",
+                            ));
+                        }
+                    }
+                }
+                match got_stream {
+                    Some(s) => Ok(Ok(s)),
+                    None => Ok(Err(last_err.unwrap_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "all candidate addresses failed",
+                        )
+                    }))),
+                }
+            }
+        }
+        Err(e) => Err(e),
+    };
+
+    match connect_result {
         Ok(Ok(_stream)) => {
             // TCP open — drop the stream and proceed to Agent Card fetch.
+        }
+        Ok(Err(e)) if e.kind() == std::io::ErrorKind::TimedOut => {
+            // All candidate addresses timed out. Same localhost-vs-
+            // remote logic as a DNS-lookup-success-then-timeout used
+            // to apply: localhost → not-running, remote → unreachable.
+            let (kind, descriptor) = if is_localhost {
+                ("not-running", "no daemon listening")
+            } else {
+                ("unreachable", "host did not respond to TCP SYN")
+            };
+            return (
+                PeerStatusDto {
+                    kind: kind.to_string(),
+                    message: format!(
+                        "{descriptor} (tcp connect to {addr} timed out after {} ms)",
+                        PEER_TCP_TIMEOUT.as_millis()
+                    ),
+                },
+                None,
+            );
         }
         Ok(Err(e)) => {
             // Connection refused / reset / etc. → daemon not running.
@@ -781,31 +854,15 @@ async fn probe_peer(
                 None,
             );
         }
-        Err(_) => {
-            // TCP-level timeout. Two real-world cases:
-            //
-            // - Localhost (127.0.0.1 / ::1): a closed port on
-            //   Windows takes seconds to return ConnectionRefused
-            //   (kernel SYN retries). For localhost there's no
-            //   firewall-or-routing alternative, so a timeout
-            //   here effectively means "daemon not running".
-            //
-            // - Remote host: timeout could legitimately be
-            //   firewall, routing, or a slow connect. Classify
-            //   as `unreachable` to leave the daemon-state
-            //   question undetermined.
-            let (kind, descriptor) = if is_localhost {
-                ("not-running", "no daemon listening")
-            } else {
-                ("unreachable", "host did not respond to TCP SYN")
-            };
+        Err(e) => {
+            // DNS resolution failed entirely (host couldn't be
+            // resolved). Classify as `unreachable` because the
+            // daemon-state question can't be answered without
+            // even an address to try.
             return (
                 PeerStatusDto {
-                    kind: kind.to_string(),
-                    message: format!(
-                        "{descriptor} (tcp connect to {addr} timed out after {} ms)",
-                        PEER_TCP_TIMEOUT.as_millis()
-                    ),
+                    kind: "unreachable".to_string(),
+                    message: format!("could not resolve {host}: {e}"),
                 },
                 None,
             );
