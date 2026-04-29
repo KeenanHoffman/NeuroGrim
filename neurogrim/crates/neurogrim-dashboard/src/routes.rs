@@ -6,13 +6,14 @@
 //! Phase 2: `/api/events` (SSE live updates).
 
 use axum::{
-    extract::State,
+    extract::{Path as AxumPath, State},
     http::{header, StatusCode, Uri},
     response::{IntoResponse, Json, Response},
     routing::get,
     Router,
 };
-use neurogrim_core::types::TrajectoryClassification;
+use neurogrim_core::trajectory::compute_trajectory;
+use neurogrim_core::types::{ScoreSnapshot, TrajectoryClassification};
 use neurogrim_mcp::context::BrainContext;
 use neurogrim_mcp::prose::first_sentence;
 use rust_embed::RustEmbed;
@@ -20,7 +21,8 @@ use std::path::Path;
 
 use crate::state::AppState;
 use crate::types::{
-    DomainSignalDto, HealthResponse, OverviewResponse, RecommendationDto,
+    DomainDetailResponse, DomainListItemDto, DomainSignalDto, DomainsListResponse,
+    FindingDto, HealthResponse, HistoryPointDto, OverviewResponse, RecommendationDto,
 };
 
 /// Frontend bundle embedded at compile time. Built by `npm run build`
@@ -35,6 +37,8 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/overview", get(overview))
+        .route("/api/domains", get(domains_list))
+        .route("/api/domains/:name", get(domain_detail))
         .fallback(static_handler)
         .with_state(state)
 }
@@ -198,6 +202,288 @@ fn classification_string(c: &TrajectoryClassification) -> &'static str {
         TrajectoryClassification::Volatile => "volatile",
         TrajectoryClassification::NoData => "no-data",
     }
+}
+
+// =================================================================
+// Phase 1.2 — Domains list + detail
+// =================================================================
+
+/// `GET /api/domains` — flat list of every declared domain with
+/// per-domain score / confidence / weight / trajectory. Powers the
+/// Domains-page sortable table.
+async fn domains_list(State(state): State<AppState>) -> Response {
+    let ctx = match BrainContext::load(&state.registry_path, None, None).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext: {e:#}")
+                })),
+            )
+                .into_response();
+        }
+    };
+    Json(build_domains_list(&ctx)).into_response()
+}
+
+fn build_domains_list(ctx: &BrainContext) -> DomainsListResponse {
+    let registry = &ctx.registry;
+    let agent_output = &ctx.agent_output;
+
+    let mut domains: Vec<DomainListItemDto> = registry
+        .config
+        .domain_weights
+        .iter()
+        .map(|(name, weight)| {
+            let display_name = registry
+                .config
+                .principle_map
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| name.clone());
+
+            // AgentOutput.domains carries the per-domain scoring
+            // outputs (raw_score / effective_score / confidence).
+            // Missing domain = sensor not yet authored / CMDB
+            // missing → defaults of 0.
+            let (raw_score, effective_score, confidence) =
+                match agent_output.domains.get(name) {
+                    Some(d) => (d.score, d.effective_score, d.confidence),
+                    None => (0, 0, 0),
+                };
+
+            // Per-domain trajectory: re-evaluated from the same
+            // history the unified trajectory uses, but filtered
+            // to this domain. compute_trajectory accepts an
+            // Option<&str> for the domain key.
+            let trajectory = agent_output
+                .domains
+                .get(name)
+                .and_then(|d| d.trajectory.clone());
+
+            let (trajectory_class, trajectory_velocity, trajectory_samples) =
+                match trajectory {
+                    Some(t) => (
+                        classification_string(&t.classification).to_string(),
+                        t.velocity,
+                        t.samples as u32,
+                    ),
+                    None => ("no-data".to_string(), 0.0, 0),
+                };
+
+            // Probe the CMDB on disk for `meta.updated_at`. None
+            // when the CMDB doesn't exist (the v3.2 stub-domain
+            // pattern: registry declares the domain, sensor not
+            // yet written).
+            let last_updated = registry
+                .config
+                .domain_definitions
+                .get(name)
+                .and_then(|def| def.scoring_source.as_ref())
+                .and_then(|src| src.path.as_ref())
+                .and_then(|rel| {
+                    let full = ctx.project_root.join(rel);
+                    std::fs::read_to_string(&full).ok()
+                })
+                .and_then(|s| {
+                    let trimmed = s.trim_start_matches('\u{FEFF}');
+                    serde_json::from_str::<serde_json::Value>(trimmed).ok()
+                })
+                .and_then(|v| {
+                    v.get("meta")
+                        .and_then(|m| m.get("updated_at"))
+                        .and_then(|t| t.as_str())
+                        .map(|s| s.to_string())
+                });
+
+            DomainListItemDto {
+                name: name.clone(),
+                display_name,
+                weight: *weight,
+                raw_score,
+                effective_score,
+                confidence,
+                trajectory_class,
+                trajectory_velocity,
+                trajectory_samples,
+                last_updated,
+            }
+        })
+        .collect();
+
+    // Stable default order: name asc. The frontend can re-sort
+    // client-side; this keeps the wire response deterministic.
+    domains.sort_by(|a, b| a.name.cmp(&b.name));
+
+    DomainsListResponse { domains }
+}
+
+/// `GET /api/domains/:name` — drill-in detail for a single domain.
+/// Includes CMDB findings + score history sparkline + sensor
+/// authoring intent (when present).
+async fn domain_detail(
+    State(state): State<AppState>,
+    AxumPath(name): AxumPath<String>,
+) -> Response {
+    let ctx = match BrainContext::load(&state.registry_path, None, None).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext: {e:#}")
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    match build_domain_detail(&ctx, &name) {
+        Some(detail) => Json(detail).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": format!("domain '{name}' not in registry")
+            })),
+        )
+            .into_response(),
+    }
+}
+
+fn build_domain_detail(ctx: &BrainContext, name: &str) -> Option<DomainDetailResponse> {
+    let registry = &ctx.registry;
+    let agent_output = &ctx.agent_output;
+
+    let weight = *registry.config.domain_weights.get(name)?;
+    let display_name = registry
+        .config
+        .principle_map
+        .get(name)
+        .cloned()
+        .unwrap_or_else(|| name.to_string());
+
+    let (raw_score, effective_score, confidence) =
+        match agent_output.domains.get(name) {
+            Some(d) => (d.score, d.effective_score, d.confidence),
+            None => (0, 0, 0),
+        };
+
+    let trajectory = agent_output
+        .domains
+        .get(name)
+        .and_then(|d| d.trajectory.clone());
+    let (trajectory_class, trajectory_velocity, trajectory_samples) = match trajectory {
+        Some(t) => (
+            classification_string(&t.classification).to_string(),
+            t.velocity,
+            t.samples as u32,
+        ),
+        None => ("no-data".to_string(), 0.0, 0),
+    };
+
+    // Resolve the CMDB path for findings + last_updated.
+    let def = registry.config.domain_definitions.get(name);
+    let cmdb_path_rel = def
+        .and_then(|d| d.scoring_source.as_ref())
+        .and_then(|s| s.path.as_ref())
+        .cloned()
+        .unwrap_or_else(|| format!(".claude/{name}-cmdb.json"));
+    let cmdb_full = ctx.project_root.join(&cmdb_path_rel);
+
+    let cmdb_json: Option<serde_json::Value> = std::fs::read_to_string(&cmdb_full)
+        .ok()
+        .and_then(|s| {
+            let trimmed = s.trim_start_matches('\u{FEFF}').to_string();
+            serde_json::from_str(&trimmed).ok()
+        });
+
+    let findings: Vec<FindingDto> = cmdb_json
+        .as_ref()
+        .and_then(|v| v.get("findings"))
+        .and_then(|f| f.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|f| {
+                    Some(FindingDto {
+                        name: f.get("name")?.as_str()?.to_string(),
+                        status: f.get("status")?.as_str()?.to_string(),
+                        points: f.get("points").and_then(|p| p.as_i64()).unwrap_or(0)
+                            as i32,
+                        detail: f
+                            .get("detail")
+                            .and_then(|d| d.as_str())
+                            .map(|s| s.to_string()),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let last_updated = cmdb_json
+        .as_ref()
+        .and_then(|v| {
+            v.get("meta")
+                .and_then(|m| m.get("updated_at"))
+                .and_then(|t| t.as_str())
+                .map(|s| s.to_string())
+        });
+
+    // Sensor authoring intent — the `_todo_<name>` placeholder
+    // captured by `domain new --sensor-intent` (or the v3.4
+    // `init --domain-describe` flag).
+    let sensor_intent = def
+        .and_then(|d| d.extra.get(&format!("_todo_{name}")))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    // Score history (last 30 days). The history file is at
+    // `.claude/brain/score-history.json`; entries carry per-domain
+    // `SnapshotDomain { score, confidence }`.
+    let history_path = ctx
+        .project_root
+        .join(".claude")
+        .join("brain")
+        .join("score-history.json");
+    let history: Vec<HistoryPointDto> = std::fs::read_to_string(&history_path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<ScoreSnapshot>>(&s).ok())
+        .map(|snapshots| {
+            snapshots
+                .iter()
+                .filter_map(|snap| {
+                    snap.domains.get(name).map(|d| HistoryPointDto {
+                        scored_at: snap.scored_at.to_rfc3339(),
+                        score: d.score,
+                        confidence: d.confidence,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // (compute_trajectory is unused here — we return the
+    // trajectory already computed in the AgentOutput. Importing
+    // it keeps the option open for future per-domain trajectory
+    // overrides.)
+    let _ = compute_trajectory;
+
+    Some(DomainDetailResponse {
+        name: name.to_string(),
+        display_name,
+        weight,
+        raw_score,
+        effective_score,
+        confidence,
+        trajectory_class,
+        trajectory_velocity,
+        trajectory_samples,
+        sensor_intent,
+        findings,
+        history,
+        cmdb_path: cmdb_full.to_string_lossy().to_string(),
+        last_updated,
+    })
 }
 
 /// Serve embedded frontend assets; fall back to `index.html` for

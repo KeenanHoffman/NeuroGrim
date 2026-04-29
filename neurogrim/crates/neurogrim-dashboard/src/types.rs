@@ -116,6 +116,96 @@ pub struct RecommendationDto {
     pub description: String,
 }
 
+// =================================================================
+// Phase 1.2 — Domains page + detail
+// =================================================================
+
+/// Response body of `GET /api/domains` — the sortable list view that
+/// powers the Domains page table.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct DomainsListResponse {
+    pub domains: Vec<DomainListItemDto>,
+}
+
+/// One row in the domains table. Includes everything sortable from
+/// the page UI (name, weight, scores, confidence, trajectory).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct DomainListItemDto {
+    pub name: String,
+    pub display_name: String,
+    pub weight: f64,
+    pub raw_score: u8,
+    pub effective_score: u8,
+    pub confidence: u8,
+    /// Trajectory classification at the per-domain level. One of
+    /// "improving" | "degrading" | "stable" | "volatile" | "no-data".
+    pub trajectory_class: String,
+    pub trajectory_velocity: f64,
+    pub trajectory_samples: u32,
+    /// CMDB `meta.updated_at` (ISO 8601 UTC). `None` when the CMDB
+    /// is missing on disk (the domain registers but no sensor has
+    /// produced a CMDB yet — the v3.2 stub-domain pattern).
+    pub last_updated: Option<String>,
+}
+
+/// Response body of `GET /api/domains/:name` — the drill-in detail.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct DomainDetailResponse {
+    pub name: String,
+    pub display_name: String,
+    pub weight: f64,
+    pub raw_score: u8,
+    pub effective_score: u8,
+    pub confidence: u8,
+    pub trajectory_class: String,
+    pub trajectory_velocity: f64,
+    pub trajectory_samples: u32,
+    /// Operator-supplied sensor authoring intent — the
+    /// `_todo_<name>` placeholder on the domain definition (set
+    /// via `domain new --sensor-intent`). Useful when the sensor
+    /// hasn't been written yet. None when absent.
+    pub sensor_intent: Option<String>,
+    /// CMDB findings array (preserved verbatim from the on-disk
+    /// envelope). Empty array when no CMDB exists or no findings
+    /// were emitted.
+    pub findings: Vec<FindingDto>,
+    /// Score-history sparkline data. Each entry is one tick. May
+    /// be empty (Brain just initialized) or sparse.
+    pub history: Vec<HistoryPointDto>,
+    /// Filesystem path to the CMDB JSON, displayed for operator
+    /// awareness ("which file would I edit to refresh this").
+    pub cmdb_path: String,
+    /// CMDB `meta.updated_at` if present; None when no CMDB on disk.
+    pub last_updated: Option<String>,
+}
+
+/// CMDB finding entry. Schema mirrors the canonical
+/// `cmdb-envelope-v1.schema.json` finding shape.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct FindingDto {
+    pub name: String,
+    pub status: String,
+    pub points: i32,
+    /// Optional human-readable explanation. Sensors SHOULD include
+    /// it on warnings/errors; for "pass" findings it's commonly
+    /// absent.
+    pub detail: Option<String>,
+}
+
+/// One point in a domain's score-history sparkline.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct HistoryPointDto {
+    /// ISO 8601 UTC timestamp.
+    pub scored_at: String,
+    pub score: u8,
+    pub confidence: u8,
+}
+
 #[cfg(test)]
 mod tests {
     /// Compile-time-style check: all #[derive(TS)] types in this
