@@ -53,4 +53,18 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  /* Tell the browser which color-scheme its native UI should use.
+     Without this, native form controls (select dropdown panes,
+     input text-completion popovers, scrollbars, date pickers,
+     etc.) render with the OS default — which on Windows is the
+     light theme regardless of our CSS. The visible symptom was
+     <option> text appearing white-on-white in our dark mode,
+     since the dropdown panel uses the system theme. */
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
 }
