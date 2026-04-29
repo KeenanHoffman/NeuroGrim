@@ -80,4 +80,27 @@
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
   }
+
+  /* Override the OS-default highlight color (a bright blue on
+     Windows, a saturated tint elsewhere) with a subdued tone that
+     matches the rest of the dashboard.
+     - `option:checked` styles the currently-selected entry —
+       portable across browsers.
+     - `option:hover` is best-effort: Chromium's native combobox
+       sometimes ignores the rule for the dropdown panel, but it
+       no-ops gracefully when it does. The `!important` is needed
+       because user-agent styles for the hover state have high
+       specificity.
+     The linear-gradient form forces newer Chromium to use the
+     specified color even when its hover highlight would otherwise
+     win — a known interop trick. */
+  select option:checked,
+  select option:hover {
+    background-color: hsl(var(--secondary)) !important;
+    background: linear-gradient(
+      hsl(var(--secondary)),
+      hsl(var(--secondary))
+    );
+    color: hsl(var(--secondary-foreground));
+  }
 }
