@@ -43,6 +43,19 @@ impl BrainServer {
         }
     }
 
+    /// Accessor for `crate::autonomy` — read-only view of the
+    /// loaded registry, used to derive the autonomy config at
+    /// dispatch time.
+    pub fn registry(&self) -> &BrainRegistry {
+        &self.registry
+    }
+
+    /// Accessor for `crate::autonomy` — used to resolve the
+    /// approvals queue path for the brain this server hosts.
+    pub fn project_root(&self) -> &std::path::Path {
+        &self.project_root
+    }
+
     async fn load_cmdb_from_disk(&self) -> HashMap<String, CmdbData> {
         let mut data = HashMap::new();
         for (domain_key, def) in &self.registry.config.domain_definitions {
@@ -318,6 +331,16 @@ pub struct QueuePeekParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct AwaitApprovalParams {
+    /// The action_id returned by an earlier mutation tool that hit
+    /// the Approve autonomy level. Operators resolve approvals on
+    /// `_neurogrim/approval-resolutions`; this tool reads that
+    /// ledger and returns the operator's decision (or `pending`
+    /// when none exists yet).
+    pub action_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct DomainNewParams {
     /// Domain name (kebab-case). Must match `^[a-z][a-z0-9-]*$`.
     pub name: String,
@@ -370,6 +393,10 @@ impl BrainServer {
 
     #[tool(description = "Re-invoke sensory tools and return updated scores.")]
     async fn refresh_sensory(&self) -> String {
+        // S13-B-5: autonomy gate. Mutation tool — default Approve.
+        if let Some(early) = crate::autonomy::maybe_block(self, "refresh_sensory").await {
+            return early;
+        }
         let cmdb_data = self.load_cmdb_from_disk().await;
         {
             let mut cache = self.cmdb_cache.write().await;
@@ -480,6 +507,10 @@ impl BrainServer {
         Use this when an agent needs to declare a new measurement target."
     )]
     async fn domain_new(&self, Parameters(p): Parameters<DomainNewParams>) -> String {
+        // S13-B-5: autonomy gate. Mutation tool — default Approve.
+        if let Some(early) = crate::autonomy::maybe_block(self, "domain_new").await {
+            return early;
+        }
         let sensor_type = match p.sensor_type.as_deref() {
             Some("python") => crate::domain::SensorType::Python,
             Some("stub") | None => crate::domain::SensorType::Stub,
@@ -557,6 +588,12 @@ impl BrainServer {
         &self,
         Parameters(p): Parameters<SubagentOutcomeParams>,
     ) -> String {
+        // S13-B-5: autonomy gate. Mutation tool — default Approve.
+        if let Some(early) =
+            crate::autonomy::maybe_block(self, "record_subagent_outcome").await
+        {
+            return early;
+        }
         let log_path = self
             .project_root
             .join(".claude/brain/subagent-outcomes.jsonl");
@@ -736,6 +773,16 @@ impl BrainServer {
         &self,
         Parameters(p): Parameters<QueuePublishParams>,
     ) -> String {
+        // S13-B-5: autonomy gate. Mutation tool — default Approve.
+        // Note: agents calling `queue_publish` to RESOLVE an
+        // approval (publishing on `_neurogrim/approval-resolutions`)
+        // would also hit this gate, which would block the resolution
+        // path. Operators resolve via the dashboard UI (B-6) or the
+        // CLI `neurogrim queue publish` (no autonomy gate on the
+        // CLI by design — the operator IS the authority).
+        if let Some(early) = crate::autonomy::maybe_block(self, "queue_publish").await {
+            return early;
+        }
         if !neurogrim_core::queue::Topic::is_valid(&p.topic) {
             return serde_json::json!({
                 "error": "invalid topic name",
@@ -854,6 +901,34 @@ impl BrainServer {
             .map(|m| serde_json::to_value(m).unwrap_or(serde_json::Value::Null))
             .collect();
         serde_json::json!({"topic": p.topic, "messages": messages}).to_string()
+    }
+
+    #[tool(
+        description = "v4.1 — Poll the autonomy approvals ledger for a decision \
+        on the given action_id. Returns {status: 'pending' | 'approved' | 'denied', \
+        operator?, decided_at?}. Agents call this after a mutation tool returned \
+        `status: pending_approval` to learn whether the operator approved or \
+        denied. Reads from `_neurogrim/approval-resolutions`."
+    )]
+    async fn await_approval(
+        &self,
+        Parameters(p): Parameters<AwaitApprovalParams>,
+    ) -> String {
+        match crate::autonomy::read_approval_resolution(&self.project_root, &p.action_id) {
+            Some(res) => serde_json::json!({
+                "status": res.decision,
+                "action_id": res.action_id,
+                "operator": res.operator,
+                "decided_at": res.decided_at,
+            })
+            .to_string(),
+            None => serde_json::json!({
+                "status": "pending",
+                "action_id": p.action_id,
+                "hint": "operator hasn't resolved yet — poll again, or visit /brains/:id/approvals in the dashboard",
+            })
+            .to_string(),
+        }
     }
 }
 

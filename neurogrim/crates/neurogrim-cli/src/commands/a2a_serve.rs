@@ -119,6 +119,14 @@ pub fn build_agent_card_with_auth(
         },
         authentication: Authentication { scheme: auth },
         topology: None,
+        // v4.1 S13-B-9: queue endpoints are advertised by the
+        // dashboard, not the a2a-serve binary. The Brain's primary
+        // bus surface lives on the dashboard's HTTP port; the a2a
+        // peer is a separate process and doesn't host queues.
+        // Adopters wanting cross-Brain queue subscription run the
+        // dashboard alongside `a2a-serve` and serve the Agent Card
+        // from the dashboard (which populates this field).
+        queue_endpoints: None,
     }
 }
 

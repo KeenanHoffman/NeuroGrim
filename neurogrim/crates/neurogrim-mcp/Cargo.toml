@@ -39,6 +39,10 @@ neurogrim-ecosystem = { workspace = true }
 # pattern + same crate version as `neurogrim-sensory::trust_budget`.
 serde_yaml = { workspace = true }
 jsonschema = "0.17"
+# v4.1 S13-B-5 — autonomy module's approval requests carry a
+# uuid v4 action_id. Same crate version as neurogrim-cli +
+# neurogrim-core for consistency.
+uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
 tempfile = "3"

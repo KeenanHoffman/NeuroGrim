@@ -44,12 +44,14 @@ use crate::services::{
 use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
 use crate::types::{
-    AgentCardExcerptDto, BrainListItemDto, BrainsListResponse, DomainDetailResponse,
+    AgentCardExcerptDto, ApprovalRequestView, ApprovalResolutionView, ApprovalsPageResponse,
+    BrainListItemDto, BrainsListResponse, DomainDetailResponse,
     DomainListItemDto, DomainSignalDto, DomainsListResponse, FederationResponse, FindingDto,
     HatDto, HatsResponse, HealthResponse, HistoryPointDto, OverviewResponse, PeerDto,
     PeerStatusDto, PublishGateLedgerView, PublishGateView, PublishGatesPageResponse,
     QueueMessageDto, QueuePublishRequest, QueuePublishResponse, QueueReadResponse,
-    QueueTopicStatsDto, QueuesListResponse, RecommendationDto, SelfBrainDto, SkillsResponse,
+    QueueTopicStatsDto, QueuesListResponse, RecommendationDto, ResolveApprovalRequest,
+    ResolveApprovalResponse, SelfBrainDto, SkillsResponse,
 };
 
 /// Query params accepted by score-aware routes (overview, domains
@@ -144,6 +146,17 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/brains/:brain_id/queues/*rest",
             get(brain_queue_read_or_events).post(brain_queue_publish),
+        )
+        // v4.1 S13-B-6: autonomy approvals page. Joins the pending
+        // requests on `_neurogrim/approvals` with the recently-
+        // resolved entries on `_neurogrim/approval-resolutions`.
+        .route(
+            "/api/brains/:brain_id/approvals",
+            get(brain_approvals_list),
+        )
+        .route(
+            "/api/brains/:brain_id/approvals/:action_id/resolve",
+            axum::routing::post(brain_approvals_resolve),
         )
         // ---- Live updates ----
         .route("/api/events", get(events_sse))
@@ -2330,6 +2343,204 @@ fn qm_to_dto(m: &neurogrim_core::queue::QueueMessage) -> QueueMessageDto {
         priority: priority.to_string(),
         expires_at: m.expires_at.map(|x| x.to_rfc3339()),
     }
+}
+
+// ── S13-B-6: autonomy approvals handlers ────────────────────────────────
+
+/// `GET /api/brains/:brain_id/approvals` — pending approvals + recent
+/// resolutions joined by action_id.
+async fn brain_approvals_list(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let approvals_path = approvals_topic_path(&brain.project_root);
+    let resolutions_path = resolutions_topic_path(&brain.project_root);
+
+    // Resolutions come first — we need a set of resolved action_ids
+    // to filter the approvals list.
+    let resolutions = read_resolutions(&resolutions_path);
+    let resolved_ids: std::collections::HashSet<&str> =
+        resolutions.iter().map(|r| r.action_id.as_str()).collect();
+
+    let pending = read_pending_approvals(&approvals_path, &resolved_ids);
+
+    Json(ApprovalsPageResponse {
+        pending,
+        recent_resolutions: resolutions,
+    })
+    .into_response()
+}
+
+/// `POST /api/brains/:brain_id/approvals/:action_id/resolve` — operator
+/// click flow. Body: `{decision: "approve" | "deny"}`. Stamps the
+/// resolution with the dashboard server's `$NEUROGRIM_OPERATOR` env
+/// (resolved at startup; falls back to "unknown" only when explicitly
+/// permitted by mutations-allowed). Gated by `--allow-mutations`.
+async fn brain_approvals_resolve(
+    State(state): State<AppState>,
+    AxumPath((brain_id, action_id)): AxumPath<(String, String)>,
+    Json(body): Json<ResolveApprovalRequest>,
+) -> Response {
+    if !state.mutations_allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "mutations-disabled",
+                "code": "mutations-disabled",
+                "hint": "start the dashboard with --allow-mutations to enable approval resolution",
+            })),
+        )
+            .into_response();
+    }
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let decision = body.decision.trim().to_ascii_lowercase();
+    if decision != "approve" && decision != "deny" {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "invalid decision",
+                "expected": ["approve", "deny"],
+                "got": body.decision,
+            })),
+        )
+            .into_response();
+    }
+    let operator = std::env::var("NEUROGRIM_OPERATOR")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let decided_at = chrono::Utc::now().to_rfc3339();
+
+    let resolution_path = resolutions_topic_path(&brain.project_root);
+    let payload = serde_json::json!({
+        "action_id": action_id,
+        "decision": decision,
+        "operator": operator,
+        "decided_at": decided_at,
+    });
+    let topic = neurogrim_mcp::autonomy::APPROVAL_RESOLUTIONS_TOPIC;
+    let msg = neurogrim_core::queue::QueueMessage::new(topic, payload);
+    if let Err(e) = neurogrim_core::queue::append(&resolution_path, &msg) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("write failed: {e}")})),
+        )
+            .into_response();
+    }
+
+    Json(ResolveApprovalResponse {
+        action_id,
+        decision,
+        operator,
+        decided_at,
+    })
+    .into_response()
+}
+
+fn approvals_topic_path(project_root: &Path) -> std::path::PathBuf {
+    project_root
+        .join(".claude")
+        .join("brain")
+        .join("queues")
+        .join("_neurogrim")
+        .join("approvals.jsonl")
+}
+
+fn resolutions_topic_path(project_root: &Path) -> std::path::PathBuf {
+    project_root
+        .join(".claude")
+        .join("brain")
+        .join("queues")
+        .join("_neurogrim")
+        .join("approval-resolutions.jsonl")
+}
+
+fn read_resolutions(path: &Path) -> Vec<ApprovalResolutionView> {
+    let reader = match neurogrim_core::queue::JsonlQueueReader::open(path) {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
+    let mut out: Vec<ApprovalResolutionView> = reader
+        .into_messages()
+        .into_iter()
+        .filter_map(|m| {
+            let action_id = m.payload.get("action_id")?.as_str()?.to_string();
+            let decision = m
+                .payload
+                .get("decision")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let operator = m
+                .payload
+                .get("operator")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let decided_at = m
+                .payload
+                .get("decided_at")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .unwrap_or_else(|| m.produced_at.to_rfc3339());
+            Some(ApprovalResolutionView {
+                action_id,
+                decision,
+                operator,
+                decided_at,
+            })
+        })
+        .collect();
+    // Newest-first; cap at 50.
+    out.reverse();
+    out.truncate(50);
+    out
+}
+
+fn read_pending_approvals(
+    path: &Path,
+    resolved_ids: &std::collections::HashSet<&str>,
+) -> Vec<ApprovalRequestView> {
+    let reader = match neurogrim_core::queue::JsonlQueueReader::open(path) {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
+    let mut out: Vec<ApprovalRequestView> = reader
+        .into_messages()
+        .into_iter()
+        .filter_map(|m| {
+            let action_id = m.payload.get("action_id")?.as_str()?.to_string();
+            if resolved_ids.contains(action_id.as_str()) {
+                return None;
+            }
+            let tool = m
+                .payload
+                .get("tool")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(unknown)")
+                .to_string();
+            let action_type = m
+                .payload
+                .get("action_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(unknown)")
+                .to_string();
+            Some(ApprovalRequestView {
+                action_id,
+                tool,
+                action_type,
+                requested_at: m.produced_at.to_rfc3339(),
+            })
+        })
+        .collect();
+    out.reverse(); // newest-first
+    out
 }
 
 // ── S12-G-6: publish-gates page handler ─────────────────────────────────

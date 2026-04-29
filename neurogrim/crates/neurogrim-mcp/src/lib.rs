@@ -4,6 +4,7 @@
 //! - MCP Server: exposes scoring tools to AI agents
 //! - MCP Client: discovers and invokes sensory tool servers
 
+pub mod autonomy;
 pub mod client;
 pub mod context;
 pub mod doctor;

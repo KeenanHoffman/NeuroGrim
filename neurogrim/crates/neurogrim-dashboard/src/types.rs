@@ -477,6 +477,63 @@ pub struct SkillDto {
     pub hygiene_status: String,
 }
 
+// ── Approvals page (S13-B-6) ─────────────────────────────────────────────
+
+/// Response body of `GET /api/brains/:brain_id/approvals` — pending
+/// + recently-resolved autonomy approvals. Backs the new
+/// `/brains/:id/approvals` page; agents calling mutation tools that
+/// resolve to `Approve` autonomy land entries on
+/// `_neurogrim/approvals` and operators resolve them here.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ApprovalsPageResponse {
+    /// Approval requests that haven't been resolved yet. Joined
+    /// from `_neurogrim/approvals` minus anything in
+    /// `_neurogrim/approval-resolutions`. Newest-first.
+    pub pending: Vec<ApprovalRequestView>,
+    /// Recently-resolved approvals. Newest-first; capped at 50.
+    pub recent_resolutions: Vec<ApprovalResolutionView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ApprovalRequestView {
+    pub action_id: String,
+    pub tool: String,
+    pub action_type: String,
+    pub requested_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ApprovalResolutionView {
+    pub action_id: String,
+    /// `"approve"` | `"deny"` (others surfaced for forward-compat).
+    pub decision: String,
+    pub operator: Option<String>,
+    pub decided_at: String,
+}
+
+/// Request body of `POST /api/brains/:brain_id/approvals/:action_id/resolve`.
+/// Operator click flow: the dashboard server reads its own
+/// `$NEUROGRIM_OPERATOR` env at startup and stamps it on the
+/// resolution; buttons send only `{decision}`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ResolveApprovalRequest {
+    /// `"approve"` | `"deny"`.
+    pub decision: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ResolveApprovalResponse {
+    pub action_id: String,
+    pub decision: String,
+    pub operator: Option<String>,
+    pub decided_at: String,
+}
+
 // ── Coordination bus (S13-B-2) ───────────────────────────────────────────
 
 /// Request body of `POST /api/brains/:brain_id/queues/:topic`.

@@ -430,6 +430,7 @@ mod tests {
                 scheme: AuthScheme::None,
             },
             topology: None,
+            queue_endpoints: None,
         };
         let peer_only_accepts = AgentCard {
             capabilities: Capabilities {

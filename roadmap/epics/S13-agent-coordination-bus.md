@@ -92,18 +92,23 @@ S13-B-7 expanded to include the auto-compaction scheduler.
 - [x] `neurogrim queue list | tail | publish | stats` CLI ships *(S13-B-7 partial; `compact | inspect | migrate` deferred until SQLite backend lands in B-3)*
 - [x] 13th explain topic: `neurogrim explain queues` ships *(S13-B-8 — covers two patterns, namespace, write/read paths, storage layout, what's deferred; methodology_drift TOPICS extended)*
 
-**Deferred (load-bearing follow-ons):**
-- [ ] Optional SQLite backend trait + adapter ships; per-topic configuration in `<brain>/.claude/brain/queue-config.yaml` *(S13-B-3 — opt-in for `ack_required: true` topics)*
+**Foundation (shipped, second pass):**
+- [x] Autonomy enforcement wired into MCP dispatch: `Approve` blocks via Pattern 2 round-trip; `Blocked` rejects deterministically; `Notify` collapsed into Allow in v1 (post-execute publish to `_neurogrim/notifications` deferred); `Auto` runs silently *(S13-B-5 — `crate::autonomy` module + `maybe_block` helper + 4 wrapped mutation tools (refresh_sensory, domain_new, record_subagent_outcome, queue_publish) + new `await_approval` MCP polling tool; 10 tests)*
+- [x] Hard gates **default-on** in v4.1 *(B-5 ships unconditionally; `--enforce-autonomy` flag reserved as a future escape-hatch arg, NOT shipped as default-off opt-in)*
+- [x] Approvals UI widget + page *(S13-B-6 — `/brains/:id/approvals` React page joins `_neurogrim/approvals` with `_neurogrim/approval-resolutions`; Approve/Deny buttons hit POST endpoint stamped with `$NEUROGRIM_OPERATOR`; 6 vitest cases)*
+- [x] Default retention: 30 days OR 10k messages per topic *(S13-B-7 expansion — `RetentionPolicy` + `compact()` in core::queue with atomic temp+rename; `neurogrim queue compact <topic>` CLI; 5 tests; daily auto-compaction scheduler still deferred)*
+- [x] `neurogrim queue compact` CLI *(S13-B-7 expansion; `inspect` and `migrate` still deferred until SQLite lands)*
+- [x] Cross-Brain queue subscription via A2A — schema-level *(S13-B-9 — Agent Card gains additive `queue_endpoints` field with base_url + advertised_topics + supports_sse; pre-v4.1 peers tolerate missing field via `#[serde(default)]`; 1 round-trip test)*
+
+**Still deferred (heaviest follow-ons):**
+- [ ] Optional SQLite backend trait + adapter ships; per-topic configuration in `<brain>/.claude/brain/queue-config.yaml` *(S13-B-3 — opt-in for `ack_required: true` topics; the only remaining S13 story)*
 - [ ] `neurogrim queue migrate <topic> <from> <to>` CLI for backend transitions *(depends on B-3)*
-- [ ] Autonomy enforcement wired into MCP dispatch: `Approve` blocks via Pattern 2 round-trip; `Blocked` rejects deterministically; `Notify` runs but emits notification; `Auto` runs silently *(S13-B-5 — the load-bearing change)*
-- [ ] Hard gates **default-on** in v4.1 *(part of B-5)*
-- [ ] Consumer groups: SQLite topics with `ack_required: true` provide exactly-once consumption; JSONL topics ignore the flag *(part of B-3)*
-- [ ] `neurogrim queue inspect <topic>` reads from either backend *(needs B-3 to make either-backend meaningful; today `tail` does the JSONL-only equivalent)*
-- [ ] Cross-Brain queue subscription via A2A *(S13-B-9)*
-- [ ] Default retention: 30 days OR 10k messages per topic; daily auto-compaction *(B-7 expanded scope, follows B-3)*
-- [ ] Approvals UI widget + page *(S13-B-6 — depends on B-5 for the wire-up)*
-- [ ] `neurogrim queue compact | inspect | migrate` CLI *(part of B-3 + B-7 expanded)*
-- [ ] NeuroGrim's own publish gates from S12 use bus events for cross-pipeline visibility *(needs B-5 wire-up)*
+- [ ] Consumer groups: SQLite topics with `ack_required: true` provide exactly-once consumption *(part of B-3)*
+- [ ] `neurogrim queue inspect <topic>` reads from either backend *(needs B-3)*
+- [ ] B-9 population path: dashboard auto-populates Agent Card's `queue_endpoints` from its bus topology; `neurogrim a2a-discover` surfaces queue endpoints in prose; cross-process integration test *(schema is in place — the remaining work is wiring)*
+- [ ] B-5 expansion: `Notify` post-execute publish to `_neurogrim/notifications` *(structurally simple but adds boilerplate to every wrapped tool; v2 carve-out)*
+- [ ] Daily auto-compaction scheduler *(part of B-7 expanded; depends on a long-running task surface in the dashboard)*
+- [ ] NeuroGrim's own publish gates from S12 use bus events for cross-pipeline visibility *(now possible with B-5 + B-6 in place; one-line wiring left)*
 
 ---
 
@@ -188,7 +193,7 @@ Default autonomy levels per tool documented in `tool_action_types.yaml`: all thr
 - [ ] 3 tools registered + ts-rs bindings + 6+ tests
 - [ ] Documentation in `cli.md` (CLI parity) + `queues.md` (new topic)
 
-### S13-B-5: Wire `resolve_autonomy()` into MCP dispatch (4 days, the load-bearing one)
+### S13-B-5: Wire `resolve_autonomy()` into MCP dispatch (4 days, the load-bearing one) — ✅ SHIPPED (read-only tool wrapping + Notify-publish deferred)
 
 **What:** Middleware in `crates/neurogrim-mcp/src/server.rs` wraps every tool call:
 
@@ -210,7 +215,7 @@ Default autonomy levels per tool documented in `tool_action_types.yaml`: all thr
 - [ ] Pattern 2 abstraction on the agent side: `await_approval(action_id) -> ApprovalDecision` rather than raw queue consume
 - [ ] Documentation: CHANGELOG documents the autonomy-block behavior change as a v4.1 feature, not a breaking change
 
-### S13-B-6: Approvals UI widget + page (5 days)
+### S13-B-6: Approvals UI widget + page (5 days) — ✅ SHIPPED (page + buttons; widget for the Overview catalog deferred)
 
 **What:** New widget `approvals-feed` in v3.5 widget catalog. Shows pending approvals with Approve / Deny buttons + payload viewer. New page `/brains/:id/approvals` for full list + history.
 
@@ -222,7 +227,7 @@ Approving emits on `_neurogrim/approval-resolutions` queue with operator handle 
 - [ ] Operator handle threaded through approval emission
 - [ ] vitest coverage for the approval flow
 
-### S13-B-7: CLI inspection (3 days) — 🟡 PARTIAL (list/tail/publish/stats shipped; compact/migrate/inspect + auto-compaction deferred)
+### S13-B-7: CLI inspection (3 days) — 🟡 PARTIAL (list/tail/publish/stats/compact shipped; migrate/inspect deferred until B-3; auto-compaction scheduler deferred)
 
 **What:** `neurogrim queue` subcommand:
 
@@ -237,7 +242,7 @@ Approving emits on `_neurogrim/approval-resolutions` queue with operator handle 
 - [ ] All 6 subcommands + tests
 - [ ] CLI parity with HTTP endpoints documented
 
-### S13-B-9: Cross-Brain queue subscription via A2A (4 days, post-refinement)
+### S13-B-9: Cross-Brain queue subscription via A2A (4 days, post-refinement) — 🟡 PARTIAL (schema additive field shipped; population + a2a-discover prose + cross-process test deferred)
 
 **What:** Surface each Brain's pubsub endpoint as a discoverable A2A capability. Add `queue_endpoints` to the Agent Card schema (additive; older peers ignore it). Cross-Brain consumers connect via A2A transport with bearer auth (reuses existing token store).
 

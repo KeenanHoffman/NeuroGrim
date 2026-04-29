@@ -89,6 +89,7 @@ fn agent_card_with_capabilities(id: &str, accepts_emits_fp: bool) -> AgentCard {
             scheme: AuthScheme::None,
         },
         topology: None,
+        queue_endpoints: None,
     }
 }
 

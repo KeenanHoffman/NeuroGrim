@@ -625,6 +625,7 @@ fn build_local_card(brain_id: &str) -> AgentCard {
             scheme: AuthScheme::None,
         },
         topology: None,
+        queue_endpoints: None,
     }
 }
 
@@ -654,6 +655,7 @@ fn build_peer_card(peer_brain_id: &str) -> AgentCard {
             scheme: AuthScheme::None,
         },
         topology: None,
+        queue_endpoints: None,
     }
 }
 

@@ -48,7 +48,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -335,6 +335,224 @@ impl JsonlQueueReader {
     }
 }
 
+// ── Retention / compaction (S13-B-7 expansion) ───────────────────────
+
+/// Per-topic retention policy. Default values match the v4.1 epic
+/// (refinement #7): 30 days OR 10k messages, whichever fires first.
+/// Either field set to None disables that limit.
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionPolicy {
+    pub max_days: Option<u32>,
+    pub max_messages: Option<u32>,
+}
+
+impl Default for RetentionPolicy {
+    fn default() -> Self {
+        Self {
+            max_days: Some(30),
+            max_messages: Some(10_000),
+        }
+    }
+}
+
+/// Result of a `compact` invocation. Surfaces what got moved/dropped
+/// so the CLI can print a useful summary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompactReport {
+    pub topic_path: PathBuf,
+    pub archive_path: PathBuf,
+    pub kept: usize,
+    pub archived: usize,
+    pub dropped_expired: usize,
+}
+
+/// Compact a topic file in place: rotate older entries beyond the
+/// retention policy to `<topic>.archive.jsonl` next to the live file,
+/// drop expired messages entirely (they can't be useful to consumers
+/// past their TTL), atomic-write the trimmed live file.
+///
+/// Atomicity: writes the trimmed file via a temp + rename so a
+/// concurrent reader either sees the old full file or the new
+/// trimmed file — never a torn write.
+///
+/// Returns a [`CompactReport`] with counts for the operator-facing
+/// summary.
+pub fn compact(path: &Path, policy: RetentionPolicy) -> Result<CompactReport> {
+    let archive_path = {
+        // <name>.jsonl → <name>.archive.jsonl (next to the live file)
+        let mut p = PathBuf::from(path);
+        let stem = p
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "queue".to_string());
+        p.set_file_name(format!("{stem}.archive.jsonl"));
+        p
+    };
+
+    let report_skeleton = CompactReport {
+        topic_path: path.to_path_buf(),
+        archive_path: archive_path.clone(),
+        kept: 0,
+        archived: 0,
+        dropped_expired: 0,
+    };
+
+    let raw = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(report_skeleton),
+        Err(e) => {
+            return Err(anyhow::Error::from(e)
+                .context(format!("queue: read {} for compact", path.display())));
+        }
+    };
+
+    // Parse all entries (line-by-line). Carry the original line text
+    // alongside the parsed message so we don't re-serialize on
+    // archive-write — that would mutate field ordering / formatting
+    // gratuitously.
+    let mut entries: Vec<(String, QueueMessage)> = Vec::new();
+    let mut malformed: Vec<String> = Vec::new();
+    for (idx, line) in raw.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<QueueMessage>(line) {
+            Ok(m) => entries.push((line.to_string(), m)),
+            Err(e) => {
+                tracing::warn!(
+                    "queue compact: malformed line {} skipped: {}",
+                    idx + 1,
+                    e
+                );
+                malformed.push(line.to_string());
+            }
+        }
+    }
+
+    let now = Utc::now();
+
+    // Step 1: drop expired.
+    let pre_count = entries.len();
+    entries.retain(|(_, m)| !m.is_expired(now));
+    let dropped_expired = pre_count - entries.len();
+
+    // Step 2: max_days windowing.
+    if let Some(days) = policy.max_days {
+        let cutoff = now - chrono::Duration::days(days as i64);
+        let (old, fresh): (Vec<_>, Vec<_>) =
+            entries.into_iter().partition(|(_, m)| m.produced_at < cutoff);
+        // Archive the old.
+        if !old.is_empty() {
+            append_lines_to_archive(&archive_path, old.iter().map(|(l, _)| l.as_str()))?;
+        }
+        let archived_now = old.len();
+        entries = fresh;
+        // Step 3: max_messages cap.
+        let archived_more = if let Some(max) = policy.max_messages {
+            cap_to_max(&mut entries, max as usize, &archive_path)?
+        } else {
+            0
+        };
+        let archived = archived_now + archived_more;
+        write_trimmed(path, &entries, &malformed)?;
+        return Ok(CompactReport {
+            topic_path: path.to_path_buf(),
+            archive_path,
+            kept: entries.len(),
+            archived,
+            dropped_expired,
+        });
+    }
+
+    // Only max_messages.
+    let archived = if let Some(max) = policy.max_messages {
+        cap_to_max(&mut entries, max as usize, &archive_path)?
+    } else {
+        0
+    };
+    write_trimmed(path, &entries, &malformed)?;
+    Ok(CompactReport {
+        topic_path: path.to_path_buf(),
+        archive_path,
+        kept: entries.len(),
+        archived,
+        dropped_expired,
+    })
+}
+
+/// If `entries.len() > max`, move the oldest excess to the archive.
+/// Returns the count moved.
+fn cap_to_max(
+    entries: &mut Vec<(String, QueueMessage)>,
+    max: usize,
+    archive_path: &Path,
+) -> Result<usize> {
+    if entries.len() <= max {
+        return Ok(0);
+    }
+    let drop_count = entries.len() - max;
+    let to_archive: Vec<_> = entries.drain(..drop_count).collect();
+    append_lines_to_archive(archive_path, to_archive.iter().map(|(l, _)| l.as_str()))?;
+    Ok(drop_count)
+}
+
+fn append_lines_to_archive<'a, I>(archive_path: &Path, lines: I) -> Result<()>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    if let Some(parent) = archive_path.parent() {
+        std::fs::create_dir_all(parent).context("queue compact: create archive parent")?;
+    }
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(archive_path)
+        .with_context(|| format!("queue compact: open archive {}", archive_path.display()))?;
+    for line in lines {
+        writeln!(f, "{line}").context("queue compact: write archive line")?;
+    }
+    f.flush().context("queue compact: flush archive")?;
+    Ok(())
+}
+
+/// Atomically rewrite the live topic file with `kept` entries plus
+/// any malformed lines we preserve in place (best-effort — we'd
+/// rather keep operator-curated debug data than silently drop it).
+fn write_trimmed(
+    path: &Path,
+    kept: &[(String, QueueMessage)],
+    preserved_malformed: &[String],
+) -> Result<()> {
+    let mut tmp_path = path.to_path_buf();
+    let mut tmp_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "queue.jsonl".to_string());
+    tmp_name.push_str(".tmp");
+    tmp_path.set_file_name(tmp_name);
+
+    {
+        let mut f = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path)
+            .with_context(|| format!("queue compact: open temp {}", tmp_path.display()))?;
+        for line in preserved_malformed {
+            writeln!(f, "{line}").context("queue compact: write malformed-preserve")?;
+        }
+        for (line, _) in kept {
+            writeln!(f, "{line}").context("queue compact: write kept")?;
+        }
+        f.flush().context("queue compact: flush temp")?;
+    }
+
+    std::fs::rename(&tmp_path, path).with_context(|| {
+        format!("queue compact: rename {} → {}", tmp_path.display(), path.display())
+    })?;
+    Ok(())
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -587,5 +805,99 @@ mod tests {
         let size = m.serialized_size();
         assert!(size > 100, "size too small: {size}"); // uuid + ts alone are >100
         assert!(size < 4096, "typical message must fit under PIPE_BUF: {size}");
+    }
+
+    // ── Compact / retention tests (S13-B-7 expansion) ───────────────
+
+    #[test]
+    fn compact_no_op_when_under_thresholds() {
+        let dir = TempDir::new().unwrap();
+        let path = p(&dir, "ng.jsonl");
+        for i in 0..3 {
+            append(&path, &QueueMessage::new("ng/t", json!({"i": i}))).unwrap();
+        }
+        let report = compact(&path, RetentionPolicy::default()).unwrap();
+        assert_eq!(report.kept, 3);
+        assert_eq!(report.archived, 0);
+        assert_eq!(report.dropped_expired, 0);
+        assert!(!report.archive_path.exists());
+    }
+
+    #[test]
+    fn compact_drops_expired_messages() {
+        let dir = TempDir::new().unwrap();
+        let path = p(&dir, "ng.jsonl");
+        let now = Utc::now();
+        append(&path, &QueueMessage::new("ng/t", json!({"k":"live"}))).unwrap();
+        append(
+            &path,
+            &QueueMessage::new("ng/t", json!({"k":"expired"}))
+                .with_expires_at(now - Duration::seconds(60)),
+        )
+        .unwrap();
+        let report = compact(&path, RetentionPolicy::default()).unwrap();
+        assert_eq!(report.kept, 1);
+        assert_eq!(report.dropped_expired, 1);
+        let r = JsonlQueueReader::open(&path).unwrap();
+        assert_eq!(r.len(), 1);
+    }
+
+    #[test]
+    fn compact_max_messages_archives_oldest() {
+        let dir = TempDir::new().unwrap();
+        let path = p(&dir, "ng.jsonl");
+        for i in 0..10 {
+            append(&path, &QueueMessage::new("ng/t", json!({"i": i}))).unwrap();
+        }
+        let policy = RetentionPolicy {
+            max_days: None,
+            max_messages: Some(4),
+        };
+        let report = compact(&path, policy).unwrap();
+        assert_eq!(report.kept, 4);
+        assert_eq!(report.archived, 6);
+        // Live file has the most recent 4 (i=6..9).
+        let live = JsonlQueueReader::open(&path).unwrap();
+        let live_msgs = live.into_messages();
+        assert_eq!(live_msgs.len(), 4);
+        assert_eq!(live_msgs[0].payload["i"], 6);
+        assert_eq!(live_msgs[3].payload["i"], 9);
+        // Archive file holds i=0..5.
+        let arch = JsonlQueueReader::open(&report.archive_path).unwrap();
+        let arch_msgs = arch.into_messages();
+        assert_eq!(arch_msgs.len(), 6);
+        assert_eq!(arch_msgs[0].payload["i"], 0);
+        assert_eq!(arch_msgs[5].payload["i"], 5);
+    }
+
+    #[test]
+    fn compact_returns_empty_report_for_missing_topic() {
+        let dir = TempDir::new().unwrap();
+        let report = compact(&p(&dir, "never-existed.jsonl"), RetentionPolicy::default())
+            .unwrap();
+        assert_eq!(report.kept, 0);
+        assert_eq!(report.archived, 0);
+        assert_eq!(report.dropped_expired, 0);
+    }
+
+    #[test]
+    fn compact_preserves_malformed_lines_in_place() {
+        // Operator-curated debug data shouldn't disappear silently
+        // when compact runs.
+        let dir = TempDir::new().unwrap();
+        let path = p(&dir, "ng.jsonl");
+        let valid = QueueMessage::new("ng/t", json!({"ok": true}));
+        let valid_line = serde_json::to_string(&valid).unwrap();
+        std::fs::write(&path, format!("{valid_line}\nnot-json\n{valid_line}\n")).unwrap();
+        let policy = RetentionPolicy {
+            max_days: None,
+            max_messages: Some(100),
+        };
+        compact(&path, policy).unwrap();
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("not-json"), "malformed line must be preserved");
+        // Still has both valid lines.
+        let r = JsonlQueueReader::open(&path).unwrap();
+        assert_eq!(r.len(), 2);
     }
 }

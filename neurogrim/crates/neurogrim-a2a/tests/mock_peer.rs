@@ -36,6 +36,7 @@ fn mock_card() -> AgentCard {
         },
         authentication: Authentication::default(),
         topology: None,
+        queue_endpoints: None,
     }
 }
 

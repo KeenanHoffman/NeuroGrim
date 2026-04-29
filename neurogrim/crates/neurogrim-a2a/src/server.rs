@@ -441,6 +441,7 @@ mod tests {
             },
             authentication: Authentication::default(),
             topology: None,
+            queue_endpoints: None,
         }
     }
 

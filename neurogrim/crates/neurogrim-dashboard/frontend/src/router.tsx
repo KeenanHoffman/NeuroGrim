@@ -12,6 +12,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { OverviewPage } from "@/components/overview/OverviewPage";
 import { DomainsPage } from "@/components/domains/DomainsPage";
 import { DomainDetailPage } from "@/components/domains/DomainDetailPage";
+import { ApprovalsPage } from "@/components/approvals/ApprovalsPage";
 import { FederationPage } from "@/components/federation/FederationPage";
 import { PublishGatesPage } from "@/components/publish-gates/PublishGatesPage";
 import { SkillsPage } from "@/components/skills/SkillsPage";
@@ -97,6 +98,15 @@ const brainPublishGatesRoute = createRoute({
   component: PublishGatesPage,
 });
 
+/** v4.1 S13-B-6 — autonomy approvals page. Joins
+ * `_neurogrim/approvals` with `_neurogrim/approval-resolutions` so
+ * operators can resolve pending mutation tools' Approve gates. */
+const brainApprovalsRoute = createRoute({
+  getParentRoute: () => brainsLayoutRoute,
+  path: "approvals",
+  component: ApprovalsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   brainsLayoutRoute.addChildren([
@@ -106,6 +116,7 @@ const routeTree = rootRoute.addChildren([
     brainFederationRoute,
     brainSkillsRoute,
     brainPublishGatesRoute,
+    brainApprovalsRoute,
   ]),
 ]);
 

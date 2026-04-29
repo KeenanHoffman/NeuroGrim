@@ -229,6 +229,7 @@ fn agent_card(brain_id: &str, endpoint: &Url, with_federated_pattern: bool) -> A
             scheme: AuthScheme::None,
         },
         topology: None,
+        queue_endpoints: None,
     }
 }
 

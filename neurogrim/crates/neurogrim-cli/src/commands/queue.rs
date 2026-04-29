@@ -24,7 +24,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{Args as ClapArgs, Subcommand};
 use neurogrim_core::queue::{
-    self, JsonlQueueReader, Priority, QueueMessage, Topic,
+    self, JsonlQueueReader, Priority, QueueMessage, RetentionPolicy, Topic,
 };
 use std::path::{Path, PathBuf};
 
@@ -44,6 +44,11 @@ pub enum QueueCommand {
     Publish(PublishArgs),
     /// Print per-topic stats as JSON.
     Stats(StatsArgs),
+    /// v4.1 S13-B-7 expansion — rotate older entries to the
+    /// archive file, drop expired messages. JSONL backend only in
+    /// v1; SQLite topics will gain an analogous compact path with
+    /// B-3.
+    Compact(CompactArgs),
 }
 
 #[derive(ClapArgs, Debug)]
@@ -92,12 +97,35 @@ pub struct StatsArgs {
     pub project_root: String,
 }
 
+#[derive(ClapArgs, Debug)]
+pub struct CompactArgs {
+    pub topic: String,
+    /// Keep messages newer than N days; older entries move to the
+    /// archive. Default 30 (the v4.1 epic's refinement #7).
+    #[arg(long, default_value_t = 30)]
+    pub max_days: u32,
+    /// Cap live-file message count at N; oldest excess moves to
+    /// the archive. Default 10000 (refinement #7).
+    #[arg(long, default_value_t = 10000)]
+    pub max_messages: u32,
+    /// Disable the days-based retention (keep messages indefinitely
+    /// — only the message-count cap fires).
+    #[arg(long)]
+    pub no_max_days: bool,
+    /// Disable the count-based retention (only the days cap fires).
+    #[arg(long)]
+    pub no_max_messages: bool,
+    #[arg(long, default_value = ".")]
+    pub project_root: String,
+}
+
 pub async fn run(args: Args) -> Result<()> {
     match args.command {
         QueueCommand::List(a) => list(a).await,
         QueueCommand::Tail(a) => tail(a).await,
         QueueCommand::Publish(a) => publish(a).await,
         QueueCommand::Stats(a) => stats(a).await,
+        QueueCommand::Compact(a) => compact(a).await,
     }
 }
 
@@ -214,6 +242,44 @@ async fn publish(args: PublishArgs) -> Result<()> {
             "topic": msg.topic,
             "produced_at": msg.produced_at.to_rfc3339(),
             "path": path.display().to_string(),
+        })
+    );
+    Ok(())
+}
+
+async fn compact(args: CompactArgs) -> Result<()> {
+    if !Topic::is_valid(&args.topic) {
+        return Err(anyhow!("invalid topic name '{}'", args.topic));
+    }
+    let root = Path::new(&args.project_root);
+    let path = topic_path(root, &args.topic);
+    let policy = RetentionPolicy {
+        max_days: if args.no_max_days {
+            None
+        } else {
+            Some(args.max_days)
+        },
+        max_messages: if args.no_max_messages {
+            None
+        } else {
+            Some(args.max_messages)
+        },
+    };
+    let report = queue::compact(&path, policy)
+        .with_context(|| format!("compact failed for topic '{}'", args.topic))?;
+    println!(
+        "{}",
+        serde_json::json!({
+            "topic": args.topic,
+            "topic_path": report.topic_path.display().to_string(),
+            "archive_path": report.archive_path.display().to_string(),
+            "kept": report.kept,
+            "archived": report.archived,
+            "dropped_expired": report.dropped_expired,
+            "policy": {
+                "max_days": policy.max_days,
+                "max_messages": policy.max_messages,
+            },
         })
     );
     Ok(())

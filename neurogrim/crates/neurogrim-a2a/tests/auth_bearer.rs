@@ -49,6 +49,7 @@ fn bearer_card() -> AgentCard {
             scheme: AuthScheme::Bearer,
         },
         topology: None,
+        queue_endpoints: None,
     }
 }
 
