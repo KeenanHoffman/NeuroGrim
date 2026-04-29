@@ -34,6 +34,101 @@ didn't launch (instead of letting `webbrowser` hang). Inside
 WSL it routes through `cmd.exe /c start` so the URL opens in
 the Windows host browser.
 
+## Multi-Brain navigation
+
+The dashboard is federation-aware. The host registry's transitive
+children (read from `config.children`, recursively) are all
+reachable from a single server. The sidebar's Brain switcher lists
+every Brain in the tree, indented by depth (host → ↳ children →
+↳↳ grandchildren); selecting one navigates to `/brains/<id>/`
+and re-scopes every page to that Brain's data.
+
+The five pages live under `/brains/$brainId/...`. The index `/`
+redirects to `/brains/<host_id>/`. This means one bookmark, one
+process, full federation tree — the ecosystem brain's homepage
+becomes a launching point into the children with substantive
+weighted scores.
+
+## Customizable homepage
+
+The Overview page is composed from a per-Brain widget layout
+rather than a hard-coded template. Each Brain renders from
+either a hand-authored `<brain>/.claude/brain/dashboard-layout.json`,
+or a posture-aware default the dashboard generates from the
+registry's domain weights:
+
+- **Weighted Brain** (any domain has weight > 0): the default
+  layout puts the gauge front and center — identity card,
+  third-width gauge / strongest-signals / top-recommendations.
+  Mirrors the Phase 1.1 default.
+- **All-advisory Brain with declared `child-*` domains**: the
+  default lifts the child Brains to first-class cards —
+  identity, observe-only framing note, four child cards as
+  quarters, strongest-signals + top-recs as halves. Solves the
+  "all-advisory N/A is honest but unhelpful as a homepage"
+  problem by surfacing the children's substantive data on the
+  host's homepage.
+- **All-advisory with no children**: falls back to the gauge
+  layout (which renders "N/A" honestly).
+
+### Widget types (v3.4 catalog)
+
+- **`identity`** — the Brain identity card with project label,
+  domain count, weighted/advisory split, federation peer count.
+- **`score-gauge`** — the radial gauge + trajectory badge.
+- **`strongest-signals`** — top N domains by effective_score.
+  Config: `count`.
+- **`top-recommendations`** — top N gates / calls to action.
+  Config: `count`.
+- **`domain-card`** — single-domain stat card (score, weight,
+  confidence, trajectory). Click drills into the domain detail
+  page. Self-fetches its data so a slow A2A pull doesn't stall
+  the whole layout. Config: `domain` (id).
+- **`markdown-note`** — free-text card with safe inline
+  rendering of `**bold**`, `*italic*`, and `` `code` ``.
+  HTML-escapes input first; no XSS surface. Config: `content`.
+
+### Size hints
+
+`size` is one of:
+
+- `full` → spans 12/12 columns
+- `half` → 6/12
+- `third` → 4/12
+- `quarter` → 3/12
+
+Widgets autoflow left-to-right; rows wrap at width 1.0.
+Operators control layout by ordering + sizes; no x/y grid math.
+
+### Authoring a layout
+
+Drop a JSON file at `<brain>/.claude/brain/dashboard-layout.json`:
+
+```json
+{
+  "schema_version": "1",
+  "widgets": [
+    { "id": "ident",  "widget_type": "identity",     "size": "full",    "config": {} },
+    { "id": "intro",  "widget_type": "markdown-note","size": "full",
+      "title": "What this Brain measures",
+      "config": { "content": "Brief framing for operators..." } },
+    { "id": "gauge",  "widget_type": "score-gauge",  "size": "third",   "config": {} },
+    { "id": "strong", "widget_type": "strongest-signals", "size": "third",
+      "config": { "count": 5 } },
+    { "id": "recs",   "widget_type": "top-recommendations", "size": "third",
+      "config": { "count": 5 } }
+  ]
+}
+```
+
+Unknown `widget_type` values render an `[unknown widget]`
+placeholder card rather than blanking the page — forward-
+compatible if a future bundle invents new widget types.
+
+A "Showing the default layout" banner appears when the layout
+came from the synthesized default (no file on disk) so
+operators know customization is a thing they can do.
+
 ## What you see — the five pages
 
 ### Overview (`/`)

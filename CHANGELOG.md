@@ -4,11 +4,12 @@ All notable changes to NeuroGrim + the LSP Brains specification live
 here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.4.0] - 2026-04-28
+## [3.4.0] - 2026-04-29
 
 *The third audience surface — a self-contained HTTP + React
 dashboard (`neurogrim ui`) that gives humans a visual companion
-to the CLI and MCP server. Five pages, SSE-driven live updates,
+to the CLI and MCP server. Multi-Brain navigation, customizable
+homepages with a widget system, SSE-driven live updates,
 hat-lens picker, dark/light theme. New crate
 `neurogrim-dashboard` (the seventh in the workspace).*
 
@@ -141,6 +142,174 @@ on existing primitives instead.
   esbuild moderate findings (GHSA-67mh-4wv8-2f99) accepted
   as dev-only.
 
+### Added — multi-Brain navigation (Path 2)
+
+The dashboard learns to route between every Brain reachable
+from the host. One bookmark, one server, full federation tree.
+
+- `BrainTree::discover()` walks `config.children` transitively
+  from the host registry. Each Brain has a stable kebab-case id
+  derived from `meta.project` (or project_root basename); cycle-
+  guarded via canonicalized-path visited set; missing child
+  registries are recorded as declared entries (declared
+  display_name) but not walked further.
+- New routes mirror every existing page under `/brains/$brainId`:
+  `/api/brains` lists every Brain; `/api/brains/:id/{overview,
+  domains, domains/:name, federation, skills, hats,
+  dashboard-layout}` are per-Brain scoped. Legacy single-Brain
+  routes preserved for backward compatibility.
+- Frontend: TanStack Router restructured with a `/brains/$brainId`
+  parent layout route. The index `/` redirects to
+  `/brains/<self_id>/`. New `BrainSelector` in the AppShell
+  sidebar lists every reachable Brain with tree-style indent
+  (host → ↳ children → ↳↳ grandchildren). Selecting one
+  navigates to that Brain's Overview.
+- Page queries gain a `brainId` segment in their queryKey so
+  TanStack Query's cache no longer bleeds across Brains.
+- Solves the user-flagged problem with all-advisory hosts:
+  the ecosystem Brain's "N/A · observe-only" is correct, but
+  the *substantive* score data lives in the children. Now the
+  operator can navigate from the all-advisory host directly
+  into a child's full opinionated dashboard.
+
+### Added — customizable homepage (Phase B slice 1)
+
+The Overview page is no longer hard-coded. Each Brain renders
+from a per-Brain widget layout, with posture-aware defaults so
+every Brain auto-gets a useful first layout without anyone
+authoring JSON.
+
+- Per-Brain layout file at `<brain>/.claude/brain/dashboard-layout.json`.
+  Schema: `{ schema_version, brain_id, is_default, widgets: [
+  { id, widget_type, size, title, config } ] }`. Sizes are
+  `full | half | third | quarter` — list-with-size-hints, not a
+  true x/y grid; widgets autoflow.
+- 6 initial widget types: `identity`, `score-gauge`,
+  `strongest-signals`, `top-recommendations`, `domain-card`
+  (single-domain stat with click-through), `markdown-note`
+  (free-text card with safe inline rendering of bold/italic/
+  code).
+- Posture-aware defaults: weighted Brains get the gauge-centric
+  layout (identity → gauge / strongest / recs, all third-width).
+  All-advisory Brains with declared `child-*` domains get the
+  child-card-first layout (identity → observe-only note →
+  4 child cards as quarters → strongest + recs as halves) so
+  the ecosystem Brain's homepage actually shows substance,
+  not "N/A". All-advisory Brains without children fall back
+  to the gauge layout (which renders "N/A" honestly).
+- "Showing the default layout" banner with a hint about
+  `.claude/brain/dashboard-layout.json` so operators know
+  custom layouts are a thing they can author.
+- Unknown widget types render an `UnknownWidget` placeholder
+  instead of breaking the page — forward-compatible if a
+  future bundle invents new widget types.
+- Layout fetch failure also non-fatal: a hard-coded
+  `FALLBACK_WIDGETS` set keeps the page useful even if
+  `/api/brains` is misbehaving.
+
+### Added — child-scoring infrastructure (A2A scoring source)
+
+The `scoring_source.type: "a2a"` mechanism (already wired in
+v3.3 via `mcp/context.rs::load_a2a_domain` and the
+`three_way_brain.rs` integration test) gets first-class
+dashboard treatment in v3.4. A Brain can declare a domain
+whose raw score IS another Brain's unified score, pulled live
+at score time per spec §9 fractal composition. Failure modes
+(peer offline, timeout, malformed response) fall through to
+`no_file_score` cleanly.
+
+The dashboard's Domains page now renders these as regular
+domain rows with the live A2A score; click-through navigates
+to the child's full dashboard via Path 2. The all-advisory
+ecosystem case becomes substantive: the dashboard shows each
+child Brain's score with click-in to drill down.
+
+### Added — soft/hard skill invocation tracking
+
+Caught during user vetting that the invocation ledger
+systematically under-counted skill usage by an order of
+magnitude — agents follow skills primarily by *reading* the
+SKILL.md file via the Read tool, not by invoking the explicit
+`Skill` tool that the original PostToolUse hook matched.
+
+- `scripts/record-skill-invocation.sh` rewritten to branch on
+  `tool_name`: `Skill` → `subtype: "hard"`, `Read` matching a
+  SKILL.md path → `subtype: "soft"`. Path matcher rejects
+  nested files (`/.claude/skills/foo/REFERENCE.md`) and
+  excluded names (README*, archived, dotfiles).
+- Ledger schema bumped from `1` to `2`; existing schema-1
+  entries (no `subtype` field) default to `hard` for backward
+  compat — the dashboard parser handles both.
+- `SkillDto` gains `hard_invocations`, `soft_invocations`,
+  `recent_hard_invocations`, `recent_soft_invocations` fields.
+  The Skills page renders `5 (2h / 3s)` — total + per-subtype
+  breakdown, with tooltip explaining the distinction.
+- Each Brain's `.claude/settings.local.json` adds a `Read`
+  matcher pointing at the same script (ecosystem, NeuroGrim,
+  LSP-Brains, python-starter all updated).
+
+### Added — two-stage federation probe
+
+Federation page peer-status was previously a single Agent Card
+fetch with everything-collapsed-to-`unreachable`. The two-stage
+probe replaces this with specific outcomes that match the
+questions an operator asks.
+
+- **Stage 1 — TCP precheck.** `tokio::net::TcpStream::connect`
+  with a 1s timeout. Connection refused → `not-running`. Other
+  IO errors → `not-running` (OS-level rejection). Localhost
+  timeout → `not-running` (Windows takes seconds to surface
+  ConnectionRefused on closed loopback ports due to SYN retry;
+  there's no realistic firewall scenario for 127.0.0.1).
+  Remote timeout → `unreachable`.
+- **Stage 2 — Agent Card fetch.** Only runs when TCP succeeded.
+  Failure or timeout → `unhealthy` (process is up but the
+  well-known endpoint isn't responding cleanly). Success →
+  `alive`.
+- **Dual-stack-aware connect.** A separate fix landed during
+  user vetting: registries declare endpoints as
+  `http://localhost:<port>/...`, and on Windows `localhost`
+  resolves to both `::1` and `127.0.0.1`. `tokio::TcpStream::connect`
+  takes only the first resolved address; if `::1` sorts first
+  and the daemon binds to `127.0.0.1` (the `a2a-serve`
+  default), the connect just times out. The probe now calls
+  `lookup_host()` and iterates every candidate address until
+  one connects, matching curl/browser behavior.
+
+### Added — Radix-based custom Select (UX polish)
+
+Native `<select>` dropdowns on Chromium ignore `option:hover`
+styling and use the OS-default highlight (bright blue on
+Windows). After several CSS-layer attempts that worked for the
+selected state but not the hover state, the BrainSelector and
+HatPicker were rewritten on `@radix-ui/react-select` (the
+canonical primitive shadcn/ui's Select wraps).
+
+- New dep: `@radix-ui/react-select@^2.2.6` (MIT, WorkOS-
+  maintained, 21 internal Radix sub-primitives, no new findings
+  in `npm audit` after install).
+- New `components/ui/select.tsx` (shadcn-style wrapper),
+  reusable for any future dropdowns. Subtle hover highlight
+  via `data-[highlighted]:bg-secondary` matches the muted
+  dashboard palette.
+- New CSS variables `--popover` / `--popover-foreground` for
+  the Radix portal panel styling.
+
+### Added — `neurogrim ui` browser-launch hardening
+
+Browser open is now a testable decision pipeline that
+distinguishes the *reason* it skipped:
+
+- `--no-browser` always wins (operator intent).
+- `CI=true` / `GITHUB_ACTIONS=true` → "CI environment detected".
+- Linux without `DISPLAY`/`WAYLAND_DISPLAY` → "no graphical
+  session" (or "remote SSH session without DISPLAY" if
+  `SSH_CONNECTION` is set).
+- WSL detected via `/proc/version` (more reliable than
+  `WSL_DISTRO_NAME`); routes through `cmd.exe /c start` so
+  the URL opens in the host Windows browser.
+- 10 unit tests cover the full decision matrix.
+
 ### Changed
 - **Workspace `version` 3.3.0 → 3.4.0** across all 7 crates +
   `[workspace.dependencies]`. Frontend `package.json` synced.
@@ -149,16 +318,32 @@ on existing primitives instead.
   `neurogrim-mcp` (Phase 0.1) so both the CLI and the
   dashboard server share a single source of truth for
   registry + scoring pipeline loading.
+- The Skills page invocation column renders the hard/soft
+  split (`5 (2h / 3s)`) instead of the prior raw total. Total
+  count is preserved as the bold leading number; the
+  parenthetical adds the breakdown.
 
 ### Test surface delta
-- 51 Rust dashboard tests (events classification, watcher
-  integration, route smoke, skills scanner with YAML
-  block-scalar fix, hats endpoint, ScoreQuery normalization)
-- 10 ui-cmd tests (browser-launch decision matrix)
-- 104 vitest tests across 14 files (component rendering,
-  routing, theme persistence, SSE hook lifecycle, hat-picker
-  Context wiring)
-- 1 new explain regression test (`ui_topic_describes_the_five_pages_and_sse`)
+- 73 Rust dashboard tests covering events classification,
+  watcher integration, route smoke for all endpoints
+  (overview, domains, federation, skills, hats, layout,
+  events), the BrainTree discovery walk (host-only,
+  direct children, grandchildren, missing registry,
+  collision resolution), the skills scanner with YAML
+  block-scalar handling and soft/hard subtype split,
+  the layout module (default-layout dispatch, file
+  read/parse/missing/malformed paths, is_default
+  override), the two-stage federation probe (closed
+  port → not-running, open-but-unhealthy → unhealthy),
+  and the ScoreQuery hat normalization
+- 10 ui-cmd tests (browser-launch decision matrix —
+  --no-browser / CI / Linux-no-display / SSH / WSL / etc)
+- 104 vitest tests across 14 files covering component
+  rendering, theme persistence, SSE hook lifecycle,
+  hat-picker context wiring, the multi-Brain
+  router-helper, and (slice 1's gap that the publish-prep
+  cycle is closing) the layout-driven Overview rendering
+- 1 explain regression test (`ui_topic_describes_the_five_pages_and_sse`)
 
 ### Breaking changes
 None. The CLI surface is unchanged; the new `ui` subcommand is

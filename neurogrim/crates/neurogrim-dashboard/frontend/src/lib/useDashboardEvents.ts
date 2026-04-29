@@ -16,7 +16,8 @@ export type ConnectionStatus = "connecting" | "live" | "offline" | "disabled";
 export type DashboardEvent =
   | { kind: "registry_changed" }
   | { kind: "score_changed"; domain?: string | null }
-  | { kind: "skill_invoked" };
+  | { kind: "skill_invoked" }
+  | { kind: "layout_changed" };
 
 /**
  * Wire the dashboard to its live-update channel.
@@ -112,8 +113,12 @@ export function useDashboardEvents(): ConnectionStatus {
 
 function normalize(raw: unknown): DashboardEvent | null {
   if (typeof raw === "string") {
-    // Unit variants: "registry_changed", "skill_invoked".
-    if (raw === "registry_changed" || raw === "skill_invoked") {
+    // Unit variants: "registry_changed", "skill_invoked", "layout_changed".
+    if (
+      raw === "registry_changed" ||
+      raw === "skill_invoked" ||
+      raw === "layout_changed"
+    ) {
       return { kind: raw };
     }
     return null;
@@ -157,6 +162,12 @@ function invalidate(
       break;
     case "skill_invoked":
       qc.invalidateQueries({ queryKey: ["skills"] });
+      break;
+    case "layout_changed":
+      // Operator (or agent) edited the per-Brain dashboard
+      // layout JSON. Frontend invalidates so the Overview page
+      // picks up the change without a manual refresh.
+      qc.invalidateQueries({ queryKey: ["dashboard-layout"] });
       break;
   }
 }

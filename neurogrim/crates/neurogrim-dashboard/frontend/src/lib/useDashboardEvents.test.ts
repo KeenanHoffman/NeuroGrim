@@ -138,6 +138,17 @@ describe("useDashboardEvents", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["skills"] });
   });
 
+  it("invalidates dashboard-layout on layout_changed", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const customWrapper = ({ children }: { children: ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+    renderHook(() => useDashboardEvents(), { wrapper: customWrapper });
+    act(() => FakeEventSource.last!.emitOpen());
+    act(() => FakeEventSource.last!.emitMessage('"layout_changed"'));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["dashboard-layout"] });
+  });
+
   it("ignores malformed messages without crashing", () => {
     const { result } = renderHook(() => useDashboardEvents(), { wrapper });
     act(() => FakeEventSource.last!.emitOpen());

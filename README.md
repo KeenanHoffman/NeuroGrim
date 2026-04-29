@@ -123,11 +123,46 @@ per-domain detail, Federation, Skills — backed by an embedded
 React app. Live updates flow over SSE: edit a CMDB, watch the
 score and sparkline refresh in ~250 ms without a manual reload.
 
+**Multi-Brain navigation.** From any one server, switch the brain
+via the sidebar to navigate the whole federation tree
+(`/brains/<id>/...`). The ecosystem brain hosts → drill into
+NeuroGrim → see python-starter as a grandchild — one URL, one
+process. Useful when you want the ecosystem's "all-advisory ·
+N/A" homepage to jump straight into a child's opinionated
+weighted score.
+
+**Customizable homepage.** Each Brain's Overview is composed
+from a per-Brain widget layout. Posture-aware defaults render a
+useful first layout for any Brain (gauge-centric for weighted,
+child-card-centric for all-advisory hosts), and operators can
+override by writing JSON to
+`<brain>/.claude/brain/dashboard-layout.json`:
+
+```json
+{
+  "schema_version": "1",
+  "widgets": [
+    { "id": "ident", "widget_type": "identity", "size": "full", "config": {} },
+    { "id": "g",     "widget_type": "score-gauge", "size": "third", "config": {} },
+    { "id": "ng",    "widget_type": "domain-card", "size": "third",
+      "title": "Test health (0.40×)",
+      "config": { "domain": "test-health" } }
+  ]
+}
+```
+
+Six widget types in the v3.4 catalog: `identity`, `score-gauge`,
+`strongest-signals`, `top-recommendations`, `domain-card`,
+`markdown-note`. Sizes: `full | half | third | quarter`. Layouts
+become part of each Brain's checked-in state, so adopters
+inherit the methodology's ergonomic choices.
+
 The dashboard is **read-only** in v3.4 (mutation endpoints are
-v3.5+ work). Useful flags: `--port`, `--bind`, `--no-browser`,
-`--registry`. Browser launch is self-skipping in CI / no-DISPLAY
-/ headless-SSH environments and uses `cmd.exe /c start` inside
-WSL. Full surface tour: `neurogrim explain ui`.
+v3.5+ work; layout edits via UI come in v3.4.x). Useful flags:
+`--port`, `--bind`, `--no-browser`, `--registry`. Browser launch
+is self-skipping in CI / no-DISPLAY / headless-SSH environments
+and uses `cmd.exe /c start` inside WSL. Full surface tour:
+`neurogrim explain ui`.
 
 ### Run Tests
 

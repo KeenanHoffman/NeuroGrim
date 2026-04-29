@@ -20,6 +20,7 @@
 //! | `.claude/*-cmdb.json`                          | ScoreChanged    |
 //! | `.claude/brain/score-history.json`             | ScoreChanged    |
 //! | `.claude/brain/invocation-ledger.jsonl`        | SkillInvoked    |
+//! | `.claude/brain/dashboard-layout.json`          | LayoutChanged   |
 //!
 //! Anything else is ignored. We filter at the source so the broadcast
 //! channel stays small and the frontend only invalidates queries that
@@ -50,6 +51,11 @@ pub enum DashboardEvent {
     /// The invocation ledger was appended — skill hygiene or recency
     /// may have shifted.
     SkillInvoked,
+    /// `<brain>/.claude/brain/dashboard-layout.json` was modified —
+    /// the operator (or an agent) edited the per-Brain widget
+    /// layout. Frontend invalidates the dashboard-layout query so
+    /// the Overview page picks up the change without a manual refresh.
+    LayoutChanged,
 }
 
 /// Classify a filesystem path into a `DashboardEvent`. Paths are
@@ -71,6 +77,9 @@ pub fn classify_event(path: &Path, project_root: &Path) -> Option<DashboardEvent
     }
     if rel_str == ".claude/brain/invocation-ledger.jsonl" {
         return Some(DashboardEvent::SkillInvoked);
+    }
+    if rel_str == ".claude/brain/dashboard-layout.json" {
+        return Some(DashboardEvent::LayoutChanged);
     }
     if let Some(file_name) = rel.file_name().and_then(|n| n.to_str()) {
         // `.claude/<domain>-cmdb.json` lives directly under
@@ -203,6 +212,16 @@ mod tests {
         assert_eq!(
             classify_event(&path, &root),
             Some(DashboardEvent::SkillInvoked)
+        );
+    }
+
+    #[test]
+    fn classifies_dashboard_layout_change() {
+        let root = PathBuf::from("/proj");
+        let path = PathBuf::from("/proj/.claude/brain/dashboard-layout.json");
+        assert_eq!(
+            classify_event(&path, &root),
+            Some(DashboardEvent::LayoutChanged)
         );
     }
 
