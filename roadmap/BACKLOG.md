@@ -1649,6 +1649,77 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
+### B-28: Coverage-aware test selection — CANDIDATE (v4.x-deferred)
+
+**Problem.** When working on one crate, running the full workspace test suite is wasteful. A coverage-driven test selector could map changed files → affected tests via cargo-llvm-cov data and run only the blast-radius set.
+
+**Plan when:**
+1. AND: The S12 baseline (`#[ignore]` on slow benchmarks; ~45s integration suite) is genuinely insufficient for a real workflow problem.
+2. AND: Operators have measured the actual cost of "run too many tests" vs. risk of "run too few tests."
+3. NOT BEFORE: at least one developer hits the pain point post-S12.
+
+**Dependencies.** Stage 12 ships first (slow-benchmark surgery + `neurogrim test`). cargo-llvm-cov as a tool dep.
+
+**Adversarial note.** Coverage maps go stale; cross-crate edges are fragile; "what tests does my change affect" is harder than it sounds because integration tests touch filesystem + spawn subprocesses. Per AskUserQuestion 2026-04-29, deferred in favor of marking slow benchmarks `#[ignore]` first. Revisit only when the simple intervention proves insufficient.
+
+---
+
+### B-29: Cloud secret backends (Azure KV, GCP Secret Manager, AWS) — CANDIDATE (v4.x-deferred)
+
+**Problem.** S14 ships OS-native + encrypted-file backends. Adopters on Azure / GCP / AWS would benefit from native cloud KV adapters with cross-machine secret sharing + audit trails.
+
+**Plan when:**
+1. AND: A real adopter Brain (likely the user's PC-state pilot or a future enterprise adopter) needs cross-machine secret sharing.
+2. AND: The S14 `SecretBackend` trait has stabilized through real use.
+
+**Dependencies.** S14 ships first; the trait must already exist + have stable semantics.
+
+**Adversarial note.** Each cloud KV adds operational complexity (auth chains, network failures, rate limits). Don't ship adapters for clouds we don't actually use. v4.x posture: trait is pluggable; adapters land as separate crates when needed.
+
+---
+
+### B-30: Drag-and-drop layout editor — CANDIDATE (UX polish)
+
+**Problem.** v3.5 LayoutEditor uses ↑/↓ buttons for reordering. DnD is more intuitive but requires `react-dnd` or `@dnd-kit/core` dep + accessibility care.
+
+**Plan when:**
+1. AND: Operator feedback specifically asks for it (no current request).
+2. AND: a11y story is clear (keyboard reorder must remain available).
+
+**Dependencies.** Layout state shape is stable through S15.
+
+**Adversarial note.** Don't ship without keyboard-equivalent flow. ↑/↓ buttons stay; DnD is additive.
+
+---
+
+### B-31: Multi-user / network-exposed dashboard with RBAC — CANDIDATE (Stage 16+)
+
+**Problem.** v4.x dashboard is 127.0.0.1-only with implicit single-operator trust. Multi-operator scenarios need authentication, authorization, per-field RBAC on settings, and audit logs that distinguish operators.
+
+**Plan when:**
+1. AND: A real adopter has multiple humans editing the same Brain.
+2. AND: S14 + S15 are stable enough to add an authn layer without re-architecting.
+
+**Dependencies.** S14 (encrypted secrets, since auth requires session keys), S15 (settings UI surfaces field-level RBAC).
+
+**Adversarial note.** This is its own Stage (16+). Don't bolt onto S15 reactively. AuthN choices: OAuth vs SAML vs simple passphrase + WebAuthn. Decide explicitly.
+
+---
+
+### B-32: Undo/redo + audit-timeline view — CANDIDATE (v4.4+)
+
+**Problem.** S15's `_neurogrim/config-changes` queue records every operator + agent edit. With minimal additional work, a "what changed" timeline view + undo/redo for the last N edits becomes possible.
+
+**Plan when:**
+1. AND: S15 is stable for ≥1 release.
+2. AND: An operator has accidentally clobbered something and asked "can I undo?"
+
+**Dependencies.** S13 (config-changes queue), S15 (UI to surface the timeline).
+
+**Adversarial note.** Undo for some operations is dangerous (e.g., undo a secret revocation). Per-`action_type` "undoable: bool" classification needed before implementation. Audit timeline can ship independently of undo and is lower-risk.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

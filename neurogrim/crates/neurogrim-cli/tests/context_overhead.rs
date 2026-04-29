@@ -382,7 +382,22 @@ fn extract_outline(body: &str) -> String {
 /// `roadmap/BACKLOG.md`. Preserved for historical record —
 /// DO NOT act on the numbers as if they measured per-session
 /// context cost.
+///
+/// Slow benchmark — tokenizes every skill across 4 Brains'
+/// content (~60-90s wall-clock). Excluded from the default test
+/// suite via `#[ignore]` so `cargo test --workspace` stays under
+/// 90s for the v4.0 publish-gate baseline (S12-G-1). Run on
+/// demand with:
+///
+/// ```bash
+/// cargo test -p neurogrim-cli --test context_overhead --ignored b10_phase1
+/// ```
+///
+/// Stage 12 publish gates (S12-G-1) treat ignored tests as
+/// out-of-band measurements, runnable via `neurogrim test --slow`
+/// when that wrapper ships in S12-G-2.
 #[test]
+#[ignore = "slow benchmark — ~60s; run with --ignored or `neurogrim test --slow`"]
 fn b10_phase1_four_brain_sweep() {
     let brains = four_brains();
     let mut per_brain = serde_json::Map::new();
@@ -557,7 +572,14 @@ fn b10_phase1_four_brain_sweep() {
 /// banner on `roadmap/data/b10-phase1p5-analysis.md`. Preserved
 /// for historical record — DO NOT act on the "reduction_pct"
 /// numbers.
+///
+/// Slow benchmark — paired with `b10_phase1_four_brain_sweep` to
+/// measure description-only-stack token cost across 4 Brains.
+/// Excluded from default `cargo test` for the same reason as
+/// Phase 1 above; runs on demand with `--ignored` or `neurogrim
+/// test --slow`.
 #[test]
+#[ignore = "slow benchmark — ~60s; run with --ignored or `neurogrim test --slow`"]
 fn b10_phase1p5_description_only_measurement() {
     let brains = four_brains();
     let mut per_brain_report = serde_json::Map::new();

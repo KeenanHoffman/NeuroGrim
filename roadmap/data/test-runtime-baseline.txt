@@ -1,0 +1,47 @@
+v4.0 publish-gate test-runtime baseline (S12-G-1)
+====================================================
+
+Established: 2026-04-29
+Methodology: cd neurogrim && time cargo test --workspace --all-targets
+Hardware: operator's primary dev machine (Windows + WSL)
+
+Slow benchmarks (b10_phase1_four_brain_sweep, b10_phase1p5_description_only_measurement)
+moved to #[ignore] per S12-G-1. Run them on demand:
+
+  cargo test -p neurogrim-cli --test context_overhead --ignored
+
+or, when S12-G-2 ships the wrapper:
+
+  neurogrim test --slow
+
+----
+
+| Run                     | Wall-clock | Notes                                      |
+|-------------------------|------------|--------------------------------------------|
+| Pre-S12-G-1 baseline    | 218s       | Both b10_* benchmarks ran every test pass  |
+| S12-G-1 cold build      | 96s        | First test run after target/ rebuild       |
+| S12-G-1 warm cache      | 29s        | Subsequent runs (incremental)              |
+
+Reduction: 218s → 29s warm, 218s → 96s cold. ~87% reduction warm; ~56% cold.
+S12 publish-gate baseline target was <90s; warm runs meet it comfortably,
+cold runs are 6s over but acceptable for a one-time per workspace-state cost.
+
+----
+
+S12-G-1 done-when criteria met:
+
+- [x] cargo test --workspace --all-targets runs in <90s warm
+- [x] Slow benchmarks excluded from default suite via #[ignore]
+- [x] Benchmarks remain accessible via --ignored
+- [ ] Snapshot file created (this file)
+- [ ] CI updates to use the new baseline (deferred to S12-G-4 publish-gate
+      runner; see roadmap/epics/S12-publish-gates.md)
+
+----
+
+Re-measure when:
+
+1. New integration tests land in any crate (target: keep warm baseline <60s)
+2. Any test in the warm-baseline path takes >5s individually (investigate)
+3. Pre-publish gate runs hit timeout (default budget: 90s warm, see
+   `publish-gates.yaml` per S12-G-3)
