@@ -67,4 +67,17 @@
   html.dark {
     color-scheme: dark;
   }
+
+  /* Belt-and-suspenders for Chromium on Windows. `color-scheme:
+     dark` *should* be enough for Chrome to theme the <select>
+     dropdown panel — and on macOS/Linux it usually is — but the
+     Windows native combobox renderer ignores it in older Chrome
+     builds. Explicit color + background on `<option>` is the
+     reliable cross-platform fallback. The values reference the
+     same CSS variables shadcn/ui uses, so they track the dark/
+     light toggle automatically. */
+  select option {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
 }
