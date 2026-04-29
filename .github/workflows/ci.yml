@@ -61,6 +61,91 @@ jobs:
         working-directory: neurogrim
         run: cargo test --workspace --all-targets
 
+  frontend:
+    name: dashboard frontend (vitest + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: neurogrim/crates/neurogrim-dashboard/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: neurogrim/crates/neurogrim-dashboard/frontend/package-lock.json
+
+      # Locked install. The `dependency-discipline` skill (bundled in
+      # init-skills/) plus xtask sca-check are the policy layer; CI
+      # enforces the technical lock.
+      - name: npm ci
+        run: npm ci
+
+      # Vitest gate — every component test, every hook test, the
+      # router-helper smoke. Phase 1-2 currently sits at ~104 tests
+      # across 14 files.
+      - name: vitest
+        run: npx vitest run
+
+      # Build gate — produces `dist/` artifacts that the Rust crate
+      # embeds at compile time via rust-embed.
+      - name: build
+        run: npm run build
+
+      # Drift gate — `dist/` is committed and ships in the published
+      # cargo tarball. A contributor who edits src/ without rebuilding
+      # would silently ship stale assets to crates.io. Fail loudly if
+      # the rebuilt dist/ differs from what's in git.
+      #
+      # Vite's content-hashed filenames are deterministic given
+      # identical inputs (npm ci provides that), so a clean build
+      # against the same source should byte-match the committed
+      # output.
+      - name: dist freshness check
+        run: |
+          if ! git diff --exit-code dist/; then
+            echo "::error::neurogrim-dashboard frontend dist/ is stale relative to source."
+            echo "Run 'npm run build' in neurogrim/crates/neurogrim-dashboard/frontend/"
+            echo "and commit the regenerated dist/ files."
+            exit 1
+          fi
+
+  bindings-drift:
+    name: ts-rs bindings drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: neurogrim
+
+      # ts-rs generates TypeScript types from #[derive(TS)] structs at
+      # `cargo test` time. The generated `.ts` files in
+      # `crates/neurogrim-dashboard/bindings/` are committed to git
+      # and consumed by the frontend's tsc typechecking. If a
+      # contributor adds/changes a #[derive(TS)] struct without
+      # regenerating, the frontend build still works (it doesn't see
+      # the new field) — but the wire format silently drifts.
+      #
+      # This gate is the canonical drift-catcher: regenerate the
+      # bindings, fail if they differ from what's committed.
+      - name: regenerate ts-rs bindings
+        working-directory: neurogrim
+        run: cargo test --quiet -p neurogrim-dashboard --lib export_bindings_marker
+
+      - name: fail if bindings drifted
+        run: |
+          if ! git diff --exit-code neurogrim/crates/neurogrim-dashboard/bindings/; then
+            echo "::error::ts-rs bindings drifted from what's committed."
+            echo "Run 'cargo test -p neurogrim-dashboard --lib export_bindings_marker'"
+            echo "locally and commit the regenerated bindings/*.ts files."
+            exit 1
+          fi
+
   python-sdk:
     name: python SDK pytest
     runs-on: ubuntu-latest
