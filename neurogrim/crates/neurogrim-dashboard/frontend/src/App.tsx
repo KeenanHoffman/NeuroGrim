@@ -2,12 +2,13 @@ import { OverviewPage } from "@/components/overview/OverviewPage";
 import { DomainsPage } from "@/components/domains/DomainsPage";
 import { DomainDetailPage } from "@/components/domains/DomainDetailPage";
 import { FederationPage } from "@/components/federation/FederationPage";
+import { SkillsPage } from "@/components/skills/SkillsPage";
 import { matchDomainDetail, useRoute } from "@/lib/useRoute";
 
 /**
- * Phase 1.3: route between Overview / Domains / Domain detail /
- * Federation via the in-house `useRoute` hook. Phase 1.5 swaps this
- * match statement for TanStack Router with typed routes.
+ * Phase 1.4: route between Overview / Domains / Domain detail /
+ * Federation / Skills via the in-house `useRoute` hook. Phase 1.5
+ * swaps this match statement for TanStack Router with typed routes.
  */
 export default function App() {
   const { pathname, navigate } = useRoute();
@@ -16,6 +17,7 @@ export default function App() {
     if (pathname === "/" || pathname === "") return <OverviewPage />;
     if (pathname === "/domains") return <DomainsPage />;
     if (pathname === "/federation") return <FederationPage />;
+    if (pathname === "/skills") return <SkillsPage />;
     const detail = matchDomainDetail(pathname);
     if (detail) return <DomainDetailPage name={detail.name} />;
     return <NotFound />;
@@ -54,9 +56,16 @@ export default function App() {
               >
                 Federation
               </NavLink>
+              <NavLink
+                href="/skills"
+                active={pathname === "/skills"}
+                onClick={() => navigate("/skills")}
+              >
+                Skills
+              </NavLink>
             </nav>
           </div>
-          <span className="text-xs text-muted-foreground">v3.4 Phase 1.3</span>
+          <span className="text-xs text-muted-foreground">v3.4 Phase 1.4</span>
         </div>
       </header>
       <main className="container max-w-7xl mx-auto px-6 py-8">{page}</main>

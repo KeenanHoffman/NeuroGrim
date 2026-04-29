@@ -28,6 +28,7 @@
 //! the full plan.
 
 pub mod routes;
+pub mod skills;
 pub mod state;
 pub mod types;
 

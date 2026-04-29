@@ -24,11 +24,12 @@ use std::time::Duration;
 use tokio::time::timeout;
 use url::Url;
 
+use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
 use crate::types::{
     AgentCardExcerptDto, DomainDetailResponse, DomainListItemDto, DomainSignalDto,
     DomainsListResponse, FederationResponse, FindingDto, HealthResponse, HistoryPointDto,
-    OverviewResponse, PeerDto, PeerStatusDto, RecommendationDto, SelfBrainDto,
+    OverviewResponse, PeerDto, PeerStatusDto, RecommendationDto, SelfBrainDto, SkillsResponse,
 };
 
 /// Frontend bundle embedded at compile time. Built by `npm run build`
@@ -46,6 +47,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/domains", get(domains_list))
         .route("/api/domains/:name", get(domain_detail))
         .route("/api/federation", get(federation))
+        .route("/api/skills", get(skills))
         .fallback(static_handler)
         .with_state(state)
 }
@@ -710,6 +712,37 @@ fn excerpt_from(card: &AgentCard) -> AgentCardExcerptDto {
     }
 }
 
+// =================================================================
+// Phase 1.4 — Skills page
+// =================================================================
+
+/// `GET /api/skills` — inventory + hygiene of every skill the Brain
+/// can route to under `.claude/skills/`. Pairs each skill with its
+/// invocation-ledger stats (count, last-invoked, alive/dead/new).
+async fn skills(State(state): State<AppState>) -> Response {
+    // Resolve project_root from the registry path (registry lives at
+    // `<project>/.claude/brain-registry.json`). We avoid loading a
+    // full BrainContext here because the skills view is independent
+    // of scoring — and BrainContext::load is the heavy path.
+    let registry_path = std::path::Path::new(state.registry_path.as_str());
+    let project_root = registry_path
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let now = chrono::Utc::now();
+    let scan = scan_skills(&project_root, now);
+
+    Json(SkillsResponse {
+        skills: scan.skills,
+        ledger_present: scan.ledger_present,
+        total_invocations: scan.total_invocations,
+        alive_window_days: ALIVE_WINDOW_DAYS as u32,
+    })
+    .into_response()
+}
+
 /// Serve embedded frontend assets; fall back to `index.html` for
 /// client-side routing (TanStack Router uses pushState; refreshing
 /// `/domains/foo` should serve `index.html` and let the frontend
@@ -833,6 +866,35 @@ mod tests {
         assert_eq!(guess_mime("assets/index.css"), "text/css; charset=utf-8");
         assert_eq!(guess_mime("favicon.svg"), "image/svg+xml");
         assert_eq!(guess_mime("font.woff2"), "font/woff2");
+    }
+
+    #[tokio::test]
+    async fn skills_returns_empty_when_no_skills_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let registry_dir = tmp.path().join(".claude");
+        std::fs::create_dir_all(&registry_dir).unwrap();
+        let registry_path = registry_dir.join("brain-registry.json");
+        // Skills route doesn't load BrainContext, but it derives
+        // project_root from the registry path's parent's parent. The
+        // file doesn't have to be valid for the skills route — but
+        // we write a placeholder so the path resolution lands in a
+        // real directory.
+        std::fs::write(&registry_path, "{}").unwrap();
+
+        let state = AppState::new(registry_path.to_string_lossy().to_string());
+        let app = router(state);
+        let req = Request::builder()
+            .uri("/api/skills")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["skills"], serde_json::json!([]));
+        assert_eq!(v["ledger_present"], false);
+        assert_eq!(v["total_invocations"], 0);
+        assert_eq!(v["alive_window_days"], 30);
     }
 
     #[tokio::test]

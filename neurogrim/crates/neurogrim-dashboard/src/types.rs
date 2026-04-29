@@ -307,6 +307,69 @@ pub struct AgentCardExcerptDto {
     pub topology_parent_id: Option<String>,
 }
 
+// =================================================================
+// Phase 1.4 — Skills page
+// =================================================================
+
+/// Response body of `GET /api/skills` — inventory + hygiene of every
+/// skill the Brain can route to under `.claude/skills/`.
+///
+/// The dashboard renders this as a filterable table grouped by
+/// hygiene status (alive / dead / new), with click-to-expand for the
+/// frontmatter description.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct SkillsResponse {
+    pub skills: Vec<SkillDto>,
+    /// True when `.claude/brain/invocation-ledger.jsonl` exists. When
+    /// false, all skills will have hygiene_status = "no-ledger" — the
+    /// page surfaces a banner explaining that the PostToolUse hook
+    /// hasn't been wired up yet.
+    pub ledger_present: bool,
+    /// Total skill-typed entries in the ledger (any age). Useful as a
+    /// "ledger isn't empty, just has no recent activity" sanity signal.
+    pub total_invocations: u32,
+    /// Window (in days) used to classify alive/dead. Surfaced so the
+    /// page can label the legend ("alive = invoked in last 30 days").
+    pub alive_window_days: u32,
+}
+
+/// One row in the Skills table.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct SkillDto {
+    /// Skill id — kebab-case folder/file name. Matches the `name`
+    /// field in invocation-ledger entries (Claude Code's per-skill
+    /// surface name).
+    pub name: String,
+    /// Filesystem path relative to project root, e.g.
+    /// `.claude/skills/rubber-duck/SKILL.md` or `.claude/skills/foo.md`.
+    pub path: String,
+    /// One of "plugin" (folder + SKILL.md) | "legacy" (single .md
+    /// file directly under .claude/skills/).
+    pub format: String,
+    /// First-paragraph description. Pulled from YAML frontmatter
+    /// (`description:`) for plugin skills, from the lead paragraph
+    /// for legacy. May be empty if the file lacks both.
+    pub description: String,
+    /// Most-recent invocation timestamp from the ledger (RFC 3339).
+    /// None when never invoked or no ledger.
+    pub last_invoked_at: Option<String>,
+    /// Total invocation count from the ledger (all time, not windowed).
+    pub invocation_count: u32,
+    /// Invocations in the alive_window. Used to drive the
+    /// alive/dead/new classification and shown in the table for
+    /// at-a-glance freshness.
+    pub recent_invocation_count: u32,
+    /// One of "alive" | "dead" | "new" | "no-ledger".
+    /// - alive: at least one invocation in the alive_window
+    /// - dead: invocations exist but none in the alive_window
+    /// - new: never invoked
+    /// - no-ledger: ledger file is missing entirely (PostToolUse
+    ///   hook hasn't been wired up)
+    pub hygiene_status: String,
+}
+
 #[cfg(test)]
 mod tests {
     /// Compile-time-style check: all #[derive(TS)] types in this
