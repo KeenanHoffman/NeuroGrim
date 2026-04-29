@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DomainsPage } from "./DomainsPage";
 import type { DomainListItemDto } from "@bindings/DomainListItemDto";
 import type { DomainsListResponse } from "@bindings/DomainsListResponse";
+import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 
 const dom = (overrides: Partial<DomainListItemDto> = {}): DomainListItemDto => ({
   name: "test-health",
@@ -30,11 +31,15 @@ function renderWithQuery() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={qc}>
-      <DomainsPage />
-    </QueryClientProvider>
-  );
+  const router = makeTestRouter(<DomainsPage />);
+  return {
+    router,
+    ...render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    ),
+  };
 }
 
 describe("DomainsPage", () => {
@@ -78,10 +83,12 @@ describe("DomainsPage", () => {
     mockFetch({
       domains: [dom({ name: "test-health", display_name: "Test Health" })],
     });
-    renderWithQuery();
+    const { router } = renderWithQuery();
     const row = await screen.findByTestId("row-test-health");
     fireEvent.click(row);
-    expect(window.location.pathname).toBe("/domains/test-health");
+    // Wait for the router to settle on the new location.
+    await screen.findByTestId("route-/domains/test-health");
+    expect(router.state.location.pathname).toBe("/domains/test-health");
   });
 
   it("colors high effective scores green, mid amber, low red", async () => {

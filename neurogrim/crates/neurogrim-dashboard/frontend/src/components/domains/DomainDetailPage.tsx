@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useRoute } from "@/lib/useRoute";
+import { useNavigate } from "@tanstack/react-router";
 
 interface DomainDetailPageProps {
   /** Domain name (kebab-case) parsed from the URL `/domains/<name>`. */
@@ -45,7 +45,7 @@ async function fetchDomainDetail(name: string): Promise<DomainDetailResponse> {
 }
 
 export function DomainDetailPage({ name }: DomainDetailPageProps) {
-  const { navigate } = useRoute();
+  const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
     queryKey: ["domain-detail", name],
     queryFn: () => fetchDomainDetail(name),
@@ -55,7 +55,7 @@ export function DomainDetailPage({ name }: DomainDetailPageProps) {
   if (error || !data) {
     return (
       <div className="space-y-4">
-        <BackButton onClick={() => navigate("/domains")} />
+        <BackButton onClick={() => navigate({ to: "/domains" })} />
         <Card className="border-destructive">
           <CardHeader>
             <CardTitle className="text-destructive">Failed to load domain</CardTitle>
@@ -70,7 +70,7 @@ export function DomainDetailPage({ name }: DomainDetailPageProps) {
 
   return (
     <div className="space-y-6">
-      <BackButton onClick={() => navigate("/domains")} />
+      <BackButton onClick={() => navigate({ to: "/domains" })} />
 
       <Card>
         <CardHeader>

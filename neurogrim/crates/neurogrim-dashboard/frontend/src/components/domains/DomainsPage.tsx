@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useRoute } from "@/lib/useRoute";
+import { useNavigate } from "@tanstack/react-router";
 
 type SortKey =
   | "name"
@@ -32,7 +32,7 @@ async function fetchDomains(): Promise<DomainsListResponse> {
 }
 
 export function DomainsPage() {
-  const { navigate } = useRoute();
+  const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
     queryKey: ["domains"],
     queryFn: fetchDomains,
@@ -156,7 +156,12 @@ export function DomainsPage() {
                 <TableRow
                   key={row.name}
                   className="cursor-pointer"
-                  onClick={() => navigate(`/domains/${encodeURIComponent(row.name)}`)}
+                  onClick={() =>
+                    navigate({
+                      to: "/domains/$name",
+                      params: { name: row.name },
+                    })
+                  }
                   data-testid={`row-${row.name}`}
                 >
                   <TableCell className="font-medium">{row.display_name}</TableCell>

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DomainDetailPage } from "./DomainDetailPage";
 import type { DomainDetailResponse } from "@bindings/DomainDetailResponse";
+import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 
 const detail = (
   overrides: Partial<DomainDetailResponse> = {}
@@ -36,9 +37,10 @@ function renderWithQuery(name = "test-health") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const router = makeTestRouter(<DomainDetailPage name={name} />);
   return render(
     <QueryClientProvider client={qc}>
-      <DomainDetailPage name={name} />
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }
