@@ -5,6 +5,7 @@ import { DomainsPage } from "./DomainsPage";
 import type { DomainListItemDto } from "@bindings/DomainListItemDto";
 import type { DomainsListResponse } from "@bindings/DomainsListResponse";
 import { makeTestRouter, RouterProvider } from "@/test/router-helper";
+import { HatProvider } from "@/lib/useHat";
 
 const dom = (overrides: Partial<DomainListItemDto> = {}): DomainListItemDto => ({
   name: "test-health",
@@ -36,7 +37,9 @@ function renderWithQuery() {
     router,
     ...render(
       <QueryClientProvider client={qc}>
-        <RouterProvider router={router} />
+        <HatProvider>
+          <RouterProvider router={router} />
+        </HatProvider>
       </QueryClientProvider>
     ),
   };

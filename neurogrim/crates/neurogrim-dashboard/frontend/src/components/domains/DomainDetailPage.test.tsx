@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DomainDetailPage } from "./DomainDetailPage";
 import type { DomainDetailResponse } from "@bindings/DomainDetailResponse";
 import { makeTestRouter, RouterProvider } from "@/test/router-helper";
+import { HatProvider } from "@/lib/useHat";
 
 const detail = (
   overrides: Partial<DomainDetailResponse> = {}
@@ -40,7 +41,9 @@ function renderWithQuery(name = "test-health") {
   const router = makeTestRouter(<DomainDetailPage name={name} />);
   return render(
     <QueryClientProvider client={qc}>
-      <RouterProvider router={router} />
+      <HatProvider>
+        <RouterProvider router={router} />
+      </HatProvider>
     </QueryClientProvider>
   );
 }

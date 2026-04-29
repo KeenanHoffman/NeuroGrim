@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "@tanstack/react-router";
+import { hatToQuery, useHat } from "@/lib/useHat";
 
 type SortKey =
   | "name"
@@ -25,17 +26,22 @@ type SortKey =
   | "last_updated";
 type SortDir = "asc" | "desc";
 
-async function fetchDomains(): Promise<DomainsListResponse> {
-  const res = await fetch("/api/domains");
-  if (!res.ok) throw new Error(`/api/domains returned ${res.status}`);
+async function fetchDomains(hat: string | null): Promise<DomainsListResponse> {
+  const url = hat
+    ? `/api/domains?hat=${encodeURIComponent(hat)}`
+    : "/api/domains";
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as DomainsListResponse;
 }
 
 export function DomainsPage() {
   const navigate = useNavigate();
+  const { hat } = useHat();
+  const queryHat = hatToQuery(hat);
   const { data, isLoading, error } = useQuery({
-    queryKey: ["domains"],
-    queryFn: fetchDomains,
+    queryKey: ["domains", queryHat],
+    queryFn: () => fetchDomains(queryHat),
   });
 
   const [sortKey, setSortKey] = useState<SortKey>("name");

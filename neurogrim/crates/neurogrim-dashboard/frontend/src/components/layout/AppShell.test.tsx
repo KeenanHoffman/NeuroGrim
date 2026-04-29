@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "./AppShell";
 import { makeTestRouter, RouterProvider } from "@/test/router-helper";
+import { HatProvider } from "@/lib/useHat";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -68,7 +69,9 @@ function renderShell(initialPath: string = "/") {
     router,
     ...render(
       <QueryClientProvider client={qc}>
-        <RouterProvider router={router} />
+        <HatProvider>
+          <RouterProvider router={router} />
+        </HatProvider>
       </QueryClientProvider>
     ),
   };

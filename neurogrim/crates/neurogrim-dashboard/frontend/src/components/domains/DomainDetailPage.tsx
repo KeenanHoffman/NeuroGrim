@@ -27,28 +27,37 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "@tanstack/react-router";
+import { hatToQuery, useHat } from "@/lib/useHat";
 
 interface DomainDetailPageProps {
   /** Domain name (kebab-case) parsed from the URL `/domains/<name>`. */
   name: string;
 }
 
-async function fetchDomainDetail(name: string): Promise<DomainDetailResponse> {
-  const res = await fetch(`/api/domains/${encodeURIComponent(name)}`);
+async function fetchDomainDetail(
+  name: string,
+  hat: string | null
+): Promise<DomainDetailResponse> {
+  const url = hat
+    ? `/api/domains/${encodeURIComponent(name)}?hat=${encodeURIComponent(hat)}`
+    : `/api/domains/${encodeURIComponent(name)}`;
+  const res = await fetch(url);
   if (res.status === 404) {
     throw new Error(`Domain '${name}' not found in the registry.`);
   }
   if (!res.ok) {
-    throw new Error(`/api/domains/${name} returned ${res.status}`);
+    throw new Error(`${url} returned ${res.status}`);
   }
   return (await res.json()) as DomainDetailResponse;
 }
 
 export function DomainDetailPage({ name }: DomainDetailPageProps) {
   const navigate = useNavigate();
+  const { hat } = useHat();
+  const queryHat = hatToQuery(hat);
   const { data, isLoading, error } = useQuery({
-    queryKey: ["domain-detail", name],
-    queryFn: () => fetchDomainDetail(name),
+    queryKey: ["domain-detail", name, queryHat],
+    queryFn: () => fetchDomainDetail(name, queryHat),
   });
 
   if (isLoading) return <DetailSkeleton />;

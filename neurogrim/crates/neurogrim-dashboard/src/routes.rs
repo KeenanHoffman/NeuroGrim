@@ -6,7 +6,7 @@
 //! Phase 2: `/api/events` (SSE live updates).
 
 use axum::{
-    extract::{Path as AxumPath, State},
+    extract::{Path as AxumPath, Query, State},
     http::{header, StatusCode, Uri},
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -15,6 +15,7 @@ use axum::{
     routing::get,
     Router,
 };
+use serde::Deserialize;
 use futures::stream::{Stream, StreamExt};
 use neurogrim_a2a::agent_card::{AgentCard, TransportProtocol};
 use neurogrim_a2a::TaskClient;
@@ -34,9 +35,35 @@ use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
 use crate::types::{
     AgentCardExcerptDto, DomainDetailResponse, DomainListItemDto, DomainSignalDto,
-    DomainsListResponse, FederationResponse, FindingDto, HealthResponse, HistoryPointDto,
-    OverviewResponse, PeerDto, PeerStatusDto, RecommendationDto, SelfBrainDto, SkillsResponse,
+    DomainsListResponse, FederationResponse, FindingDto, HatDto, HatsResponse, HealthResponse,
+    HistoryPointDto, OverviewResponse, PeerDto, PeerStatusDto, RecommendationDto, SelfBrainDto,
+    SkillsResponse,
 };
+
+/// Query params accepted by score-aware routes (overview, domains
+/// list, domain detail). The `hat` field surfaces the AppShell's
+/// hat-picker selection so the Brain output is filtered through
+/// that hat's `domain_multipliers`. None / empty / "default" all
+/// mean "no hat" — collapsed into Option<String> at the boundary.
+#[derive(Debug, Deserialize, Default)]
+pub struct ScoreQuery {
+    #[serde(default)]
+    pub hat: Option<String>,
+}
+
+impl ScoreQuery {
+    /// Normalize the hat: trim whitespace, treat "default" / empty
+    /// as no hat. The Brain's BrainContext::load takes
+    /// `Option<String>` where `None` is the un-hatted lens.
+    pub fn resolved_hat(&self) -> Option<String> {
+        let raw = self.hat.as_deref()?.trim();
+        if raw.is_empty() || raw.eq_ignore_ascii_case("default") {
+            None
+        } else {
+            Some(raw.to_string())
+        }
+    }
+}
 
 /// Frontend bundle embedded at compile time. Built by `npm run build`
 /// in `frontend/`. Empty during Phase 0 setup until the frontend has
@@ -54,6 +81,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/domains/:name", get(domain_detail))
         .route("/api/federation", get(federation))
         .route("/api/skills", get(skills))
+        .route("/api/hats", get(hats))
         .route("/api/events", get(events_sse))
         .fallback(static_handler)
         .with_state(state)
@@ -69,10 +97,18 @@ async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
 
 /// `GET /api/overview` — landing-page summary for the Phase 1.1
 /// Overview page. Loads a fresh `BrainContext` (registry + scoring
-/// pipeline run) on every call; Phase 2.1 will add caching with
-/// SSE-driven invalidation.
-async fn overview(State(state): State<AppState>) -> Response {
-    let ctx = match BrainContext::load(&state.registry_path, None, None).await {
+/// pipeline run) on every call.
+async fn overview(
+    State(state): State<AppState>,
+    Query(query): Query<ScoreQuery>,
+) -> Response {
+    let ctx = match BrainContext::load(
+        &state.registry_path,
+        query.resolved_hat(),
+        None,
+    )
+    .await
+    {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -227,8 +263,17 @@ fn classification_string(c: &TrajectoryClassification) -> &'static str {
 /// `GET /api/domains` — flat list of every declared domain with
 /// per-domain score / confidence / weight / trajectory. Powers the
 /// Domains-page sortable table.
-async fn domains_list(State(state): State<AppState>) -> Response {
-    let ctx = match BrainContext::load(&state.registry_path, None, None).await {
+async fn domains_list(
+    State(state): State<AppState>,
+    Query(query): Query<ScoreQuery>,
+) -> Response {
+    let ctx = match BrainContext::load(
+        &state.registry_path,
+        query.resolved_hat(),
+        None,
+    )
+    .await
+    {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -341,8 +386,15 @@ fn build_domains_list(ctx: &BrainContext) -> DomainsListResponse {
 async fn domain_detail(
     State(state): State<AppState>,
     AxumPath(name): AxumPath<String>,
+    Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let ctx = match BrainContext::load(&state.registry_path, None, None).await {
+    let ctx = match BrainContext::load(
+        &state.registry_path,
+        query.resolved_hat(),
+        None,
+    )
+    .await
+    {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -751,6 +803,78 @@ async fn skills(State(state): State<AppState>) -> Response {
 }
 
 // =================================================================
+// Phase 2.2 — Hat lens
+// =================================================================
+
+/// `GET /api/hats` — list every hat declared in the registry plus
+/// a synthetic "default" entry the picker uses to represent the
+/// un-hatted lens.
+///
+/// Reads only the registry — no scoring pipeline needed — so this
+/// is one of the cheapest routes in the dashboard and never depends
+/// on the hat itself.
+async fn hats(State(state): State<AppState>) -> Response {
+    let registry_text = match tokio::fs::read_to_string(state.registry_path.as_str()).await {
+        Ok(t) => t,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to read registry: {e}"),
+                })),
+            )
+                .into_response();
+        }
+    };
+    let registry: serde_json::Value = match serde_json::from_str(&registry_text) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("registry is not valid JSON: {e}"),
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let mut hats: Vec<HatDto> = vec![HatDto {
+        name: "default".to_string(),
+        description:
+            "No hat — every domain weighted at 1.0× (the registry's authored weights apply unchanged)."
+                .to_string(),
+        is_default: true,
+    }];
+
+    if let Some(map) = registry
+        .get("config")
+        .and_then(|c| c.get("hats"))
+        .and_then(|h| h.as_object())
+    {
+        let mut declared: Vec<HatDto> = map
+            .iter()
+            .map(|(name, body)| {
+                let description = body
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                HatDto {
+                    name: name.clone(),
+                    description,
+                    is_default: false,
+                }
+            })
+            .collect();
+        declared.sort_by(|a, b| a.name.cmp(&b.name));
+        hats.extend(declared);
+    }
+
+    Json(HatsResponse { hats }).into_response()
+}
+
+// =================================================================
 // Phase 2.1 — SSE live updates
 // =================================================================
 
@@ -912,6 +1036,121 @@ mod tests {
         assert_eq!(guess_mime("assets/index.css"), "text/css; charset=utf-8");
         assert_eq!(guess_mime("favicon.svg"), "image/svg+xml");
         assert_eq!(guess_mime("font.woff2"), "font/woff2");
+    }
+
+    #[test]
+    fn score_query_resolves_default_and_empty_to_none() {
+        assert_eq!(ScoreQuery { hat: None }.resolved_hat(), None);
+        assert_eq!(ScoreQuery { hat: Some("".to_string()) }.resolved_hat(), None);
+        assert_eq!(
+            ScoreQuery { hat: Some("   ".to_string()) }.resolved_hat(),
+            None
+        );
+        assert_eq!(
+            ScoreQuery { hat: Some("default".to_string()) }.resolved_hat(),
+            None
+        );
+        assert_eq!(
+            ScoreQuery { hat: Some("DEFAULT".to_string()) }.resolved_hat(),
+            None
+        );
+    }
+
+    #[test]
+    fn score_query_passes_through_explicit_hat() {
+        assert_eq!(
+            ScoreQuery {
+                hat: Some("engineer".to_string())
+            }
+            .resolved_hat(),
+            Some("engineer".to_string())
+        );
+        // Whitespace tolerance — pickers can submit values that
+        // came from a select element with surrounding whitespace.
+        assert_eq!(
+            ScoreQuery {
+                hat: Some("  reviewer ".to_string())
+            }
+            .resolved_hat(),
+            Some("reviewer".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn hats_route_returns_default_plus_declared_hats() {
+        let tmp = tempfile::tempdir().unwrap();
+        let registry_dir = tmp.path().join(".claude");
+        std::fs::create_dir_all(&registry_dir).unwrap();
+        let registry_path = registry_dir.join("brain-registry.json");
+        let registry = serde_json::json!({
+            "meta": {
+                "schema_version": "2",
+                "description": "test",
+                "updated_by": "test"
+            },
+            "tools": {},
+            "data_sources": {},
+            "config": {
+                "domain_weights": {"d": 1.0},
+                "domain_definitions": {
+                    "d": { "principle": "x", "scoring_source": null, "exported_variables": {} }
+                },
+                "hats": {
+                    "engineer": { "description": "Active dev work" },
+                    "reviewer": { "description": "Code review" }
+                }
+            }
+        });
+        std::fs::write(&registry_path, registry.to_string()).unwrap();
+
+        let state = AppState::new(registry_path.to_string_lossy().to_string());
+        let app = router(state);
+        let req = Request::builder()
+            .uri("/api/hats")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let hats = v["hats"].as_array().unwrap();
+        // 1 default + 2 declared, sorted alphabetically: default,
+        // engineer, reviewer.
+        assert_eq!(hats.len(), 3);
+        assert_eq!(hats[0]["name"], "default");
+        assert_eq!(hats[0]["is_default"], true);
+        assert_eq!(hats[1]["name"], "engineer");
+        assert_eq!(hats[1]["description"], "Active dev work");
+        assert_eq!(hats[2]["name"], "reviewer");
+    }
+
+    #[tokio::test]
+    async fn hats_route_returns_default_only_when_registry_has_no_hats() {
+        let tmp = tempfile::tempdir().unwrap();
+        let registry_dir = tmp.path().join(".claude");
+        std::fs::create_dir_all(&registry_dir).unwrap();
+        let registry_path = registry_dir.join("brain-registry.json");
+        std::fs::write(
+            &registry_path,
+            r#"{"meta":{"schema_version":"2","description":"t","updated_by":"t"},
+                "tools":{},"data_sources":{},
+                "config":{"domain_weights":{"d":1.0},
+                  "domain_definitions":{"d":{"principle":"x","scoring_source":null,"exported_variables":{}}}}}"#,
+        )
+        .unwrap();
+
+        let state = AppState::new(registry_path.to_string_lossy().to_string());
+        let app = router(state);
+        let req = Request::builder()
+            .uri("/api/hats")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let hats = v["hats"].as_array().unwrap();
+        assert_eq!(hats.len(), 1);
+        assert_eq!(hats[0]["name"], "default");
     }
 
     #[tokio::test]

@@ -11,17 +11,23 @@ import { ScoreGauge } from "./ScoreGauge";
 import { TrajectoryBadge } from "./TrajectoryBadge";
 import { StrongestSignals } from "./StrongestSignals";
 import { TopRecommendations } from "./TopRecommendations";
+import { hatToQuery, useHat } from "@/lib/useHat";
 
-async function fetchOverview(): Promise<OverviewResponse> {
-  const res = await fetch("/api/overview");
-  if (!res.ok) throw new Error(`/api/overview returned ${res.status}`);
+async function fetchOverview(hat: string | null): Promise<OverviewResponse> {
+  const url = hat
+    ? `/api/overview?hat=${encodeURIComponent(hat)}`
+    : "/api/overview";
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as OverviewResponse;
 }
 
 export function OverviewPage() {
+  const { hat } = useHat();
+  const queryHat = hatToQuery(hat);
   const { data, isLoading, error } = useQuery({
-    queryKey: ["overview"],
-    queryFn: fetchOverview,
+    queryKey: ["overview", queryHat],
+    queryFn: () => fetchOverview(queryHat),
   });
 
   if (isLoading) {

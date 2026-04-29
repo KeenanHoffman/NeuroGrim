@@ -334,6 +334,41 @@ pub struct SkillsResponse {
     pub alive_window_days: u32,
 }
 
+// =================================================================
+// Phase 2.2 — Hat lens
+// =================================================================
+
+/// Response body of `GET /api/hats` — every hat declared in the
+/// registry, plus a synthetic "default" entry the picker uses to
+/// surface the un-hatted lens.
+///
+/// The dashboard renders this as a dropdown in the AppShell. When
+/// the user picks a hat, every score-aware query re-fetches with
+/// `?hat=<name>` so the Brain output is filtered through that
+/// hat's `domain_multipliers`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct HatsResponse {
+    pub hats: Vec<HatDto>,
+}
+
+/// One hat declaration. Mirrors registry's `config.hats.<name>`
+/// minus the scoring internals (`domain_multipliers`, `suggest_when`)
+/// — the dashboard only needs the picker-facing surface.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct HatDto {
+    /// Hat id (kebab-case, e.g. "engineer", "reviewer"). The
+    /// synthetic "default" entry uses the literal string `"default"`.
+    pub name: String,
+    /// Human-readable description from the registry (or a built-in
+    /// description for the synthetic default entry).
+    pub description: String,
+    /// True for the synthetic "default" entry — operators see it
+    /// at the top of the picker as a way to clear the lens.
+    pub is_default: bool,
+}
+
 /// One row in the Skills table.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../bindings/")]

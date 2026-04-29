@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/lib/useTheme";
 import { useDashboardEvents, type ConnectionStatus } from "@/lib/useDashboardEvents";
+import { HatPicker } from "@/components/layout/HatPicker";
 
 interface NavItem {
   to: string;
@@ -140,6 +141,10 @@ function SidebarContent({
         >
           <X className="h-4 w-4" />
         </button>
+      </div>
+
+      <div className="px-3 pb-3">
+        <HatPicker />
       </div>
 
       <nav className="flex-1 px-2 space-y-1" aria-label="Primary">
