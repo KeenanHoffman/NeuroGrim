@@ -2,7 +2,7 @@
 //! neurogrim-cli to neurogrim-mcp in v3.2.1 so both the CLI and the
 //! MCP server can expose `explain` from a single source of truth).
 //!
-//! Ten self-contained topic files ship inside the binary via
+//! Eleven self-contained topic files ship inside the binary via
 //! `include_str!`. Source: `neurogrim-mcp/data/explain/<topic>.md`.
 //!
 //! Each topic carries a version-stamped HTML comment header
@@ -19,6 +19,7 @@ const TOPIC_CLI: &str = include_str!("../data/explain/cli.md");
 const TOPIC_CULTURE: &str = include_str!("../data/explain/culture.md");
 const TOPIC_AUTONOMY: &str = include_str!("../data/explain/autonomy.md");
 const TOPIC_UI: &str = include_str!("../data/explain/ui.md");
+const TOPIC_DASHBOARD_LAYOUTS: &str = include_str!("../data/explain/dashboard-layouts.md");
 
 /// Spec/methodology version this bundle was compiled against. Matches
 /// the version header in each `data/explain/*.md`. Bumped manually
@@ -86,6 +87,11 @@ pub fn topics() -> &'static [(&'static str, &'static str, &'static str)] {
             "Dashboard surface: 5 pages, SSE live updates, hat lens, theme (v3.4)",
             TOPIC_UI,
         ),
+        (
+            "dashboard-layouts",
+            "Authoring per-Brain widget layouts: catalog, sizes, common patterns, edit mode (v3.4)",
+            TOPIC_DASHBOARD_LAYOUTS,
+        ),
     ]
 }
 
@@ -106,8 +112,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn topic_count_is_10() {
-        assert_eq!(topics().len(), 10);
+    fn topic_count_is_11() {
+        assert_eq!(topics().len(), 11);
     }
 
     #[test]
@@ -166,6 +172,43 @@ mod tests {
     fn lookup_finds_known_topic() {
         assert!(lookup("methodology").is_some());
         assert!(lookup("nonexistent").is_none());
+    }
+
+    #[test]
+    fn dashboard_layouts_topic_lists_widget_catalog_and_patterns() {
+        // Regression guard: agents authoring layouts pull this
+        // topic for the widget catalog + size hints + common
+        // patterns. If a future edit drops the catalog table or
+        // the pattern walkthroughs, the topic becomes a stub.
+        // Spot-check the load-bearing sections.
+        for widget_type in [
+            "identity",
+            "score-gauge",
+            "strongest-signals",
+            "top-recommendations",
+            "domain-card",
+            "markdown-note",
+        ] {
+            assert!(
+                TOPIC_DASHBOARD_LAYOUTS.contains(widget_type),
+                "dashboard-layouts topic missing widget type {widget_type}"
+            );
+        }
+        for size in ["full", "half", "third", "quarter"] {
+            assert!(
+                TOPIC_DASHBOARD_LAYOUTS.contains(size),
+                "dashboard-layouts topic missing size {size}"
+            );
+        }
+        assert!(
+            TOPIC_DASHBOARD_LAYOUTS.contains("Common patterns")
+                || TOPIC_DASHBOARD_LAYOUTS.contains("common patterns"),
+            "dashboard-layouts topic must walk through common patterns"
+        );
+        assert!(
+            TOPIC_DASHBOARD_LAYOUTS.contains("Edit mode") || TOPIC_DASHBOARD_LAYOUTS.contains("edit mode"),
+            "dashboard-layouts topic must describe edit mode"
+        );
     }
 
     #[test]

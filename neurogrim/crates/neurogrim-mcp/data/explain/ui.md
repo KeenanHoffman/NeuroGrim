@@ -102,7 +102,11 @@ Operators control layout by ordering + sizes; no x/y grid math.
 
 ### Authoring a layout
 
-Drop a JSON file at `<brain>/.claude/brain/dashboard-layout.json`:
+For the full authoring guide — widget catalog as a reference
+table, common patterns by Brain posture, edit-mode workflow,
+and tips for agents writing layouts on behalf of operators —
+run `neurogrim explain dashboard-layouts`. Quick example for
+operators who just want the JSON shape:
 
 ```json
 {
