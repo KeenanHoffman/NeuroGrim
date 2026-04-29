@@ -4,6 +4,13 @@ import type { HatsResponse } from "@bindings/HatsResponse";
 import type { HatDto } from "@bindings/HatDto";
 import { useHat } from "@/lib/useHat";
 import { brainApi, useBrainId } from "@/lib/useBrain";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 async function fetchHats(brainId: string): Promise<HatsResponse> {
   const url = brainApi(brainId, "hats");
@@ -65,26 +72,30 @@ export function HatPicker() {
     data.hats.find((h) => h.is_default)!;
 
   return (
-    <label
-      className="inline-flex items-center gap-2 text-xs"
+    <div
+      className="text-xs space-y-1"
       data-testid="hat-picker"
       title={selected.description || "Hat lens"}
     >
-      <Glasses className="h-3.5 w-3.5 text-muted-foreground" />
-      <select
-        value={hat}
-        onChange={(e) => setHat(e.target.value)}
-        data-testid="hat-picker-select"
-        // See BrainSelector.tsx for why this inline style is here.
-        style={{ colorScheme: "dark light" }}
-        className="bg-transparent border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:border-foreground/40"
-      >
-        {data.hats.map((h: HatDto) => (
-          <option key={h.name} value={h.name}>
-            {h.is_default ? "default" : h.name}
-          </option>
-        ))}
-      </select>
-    </label>
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Glasses className="h-3.5 w-3.5" />
+        Hat
+      </div>
+      <Select value={hat} onValueChange={setHat}>
+        <SelectTrigger
+          className="w-full text-sm"
+          data-testid="hat-picker-select"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {data.hats.map((h: HatDto) => (
+            <SelectItem key={h.name} value={h.name}>
+              {h.is_default ? "default" : h.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

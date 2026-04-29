@@ -1,8 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { Brain, ChevronDown } from "lucide-react";
+import { Brain } from "lucide-react";
 import type { BrainsListResponse } from "@bindings/BrainsListResponse";
 import type { BrainListItemDto } from "@bindings/BrainListItemDto";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 async function fetchBrains(): Promise<BrainsListResponse> {
   const res = await fetch("/api/brains");
@@ -17,8 +24,11 @@ async function fetchBrains(): Promise<BrainsListResponse> {
  * navigates to `/brains/<id>/` so the user lands on that Brain's
  * Overview.
  *
- * Renders a static label until the brain list resolves; this avoids
- * a flash of "no Brain" before the index redirect lands.
+ * Built on the Radix-based Select primitive (components/ui/select)
+ * rather than a native `<select>`: Chromium's native combobox
+ * panel ignores option:hover styling and uses a bright OS-default
+ * highlight that fights the dashboard's muted palette. The Radix
+ * portal renders as plain DOM so every state honors our CSS.
  */
 export function BrainSelector() {
   const navigate = useNavigate();
@@ -42,51 +52,45 @@ export function BrainSelector() {
     );
   }
 
-  // Group entries by parent so we can render a depth-aware indent.
-  // The list is already sorted self-first then by depth + id.
+  const handleChange = (id: string) => {
+    navigate({ to: "/brains/$brainId", params: { brainId: id } });
+  };
+
   return (
-    <label
-      className="block text-xs"
-      data-testid="brain-selector"
-      title="Switch the dashboard to view a different Brain in the federation tree."
-    >
-      <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+    <div className="text-xs space-y-1" data-testid="brain-selector">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
         <Brain className="h-3.5 w-3.5" />
         Brain
-        <ChevronDown className="h-3 w-3 opacity-60" />
       </div>
-      <select
-        value={currentId ?? data.self_id}
-        onChange={(e) =>
-          navigate({
-            to: "/brains/$brainId",
-            params: { brainId: e.target.value },
-          })
-        }
-        data-testid="brain-selector-select"
-        // Belt-and-suspenders: inline `color-scheme: dark light` lets
-        // the browser's native dropdown panel match either theme, so
-        // option text stays readable even if the page-level CSS rule
-        // hasn't been applied yet (e.g., a stale cached bundle from
-        // an older build).
-        style={{ colorScheme: "dark light" }}
-        className="w-full bg-transparent border border-border rounded px-2 py-1 text-foreground text-sm focus:outline-none focus:border-foreground/40"
-      >
-        {data.brains.map((b: BrainListItemDto) => (
-          <option key={b.id} value={b.id}>
-            {indent(b.depth)}
-            {b.display_name}
-            {b.id === data.self_id ? " (host)" : ""}
-          </option>
-        ))}
-      </select>
-    </label>
+      <Select value={currentId ?? data.self_id} onValueChange={handleChange}>
+        <SelectTrigger
+          className="w-full text-sm"
+          data-testid="brain-selector-select"
+          title="Switch the dashboard to view a different Brain in the federation tree."
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {data.brains.map((b: BrainListItemDto) => (
+            <SelectItem key={b.id} value={b.id}>
+              <span className="font-mono text-muted-foreground/70">
+                {indent(b.depth)}
+              </span>
+              {b.display_name}
+              {b.id === data.self_id && (
+                <span className="ml-1.5 text-muted-foreground/70">(host)</span>
+              )}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
 function indent(depth: number): string {
   if (depth === 0) return "";
-  // Use NBSPs so the indent survives in <option>'s text rendering;
-  // a regular space gets collapsed by the browser.
+  // Use NBSPs so the indent is preserved verbatim in the rendered
+  // text (browsers collapse normal spaces).
   return "  ".repeat(depth) + "↳ ";
 }
