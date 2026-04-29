@@ -18,6 +18,22 @@ function mockConfigFetch(map: Record<string, ConfigFileResponse>) {
         } as Response;
       }
     }
+    // Registry GET returns a minimal valid response so the
+    // RegistryTab renders without errors when other tabs are
+    // exercised.
+    if (url.includes("/registry") && !url.includes("registry/")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          brain_id: "test-brain",
+          path: "/proj/.claude/brain-registry.json",
+          etag: "abc",
+          registry: { config: { domain_weights: {} } },
+        }),
+        text: async () => "",
+      } as Response;
+    }
     return {
       ok: true,
       status: 200,
@@ -142,5 +158,124 @@ describe("SettingsPage", () => {
     expect(
       await screen.findByText(/C:\\proj\\.claude\\culture\.yaml/),
     ).toBeInTheDocument();
+  });
+
+  // S15-C-4 v1 — Registry editor tab tests.
+  describe("Registry tab (C-4 v1)", () => {
+    function mockRegistryFetch(
+      registry: Record<string, unknown>,
+      etag = "abc123",
+    ) {
+      global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url.includes("/registry") && !url.includes("/config-file/")) {
+          if (init?.method === "PUT") {
+            const body = JSON.parse(init.body as string) as {
+              expected_etag: string;
+            };
+            if (body.expected_etag !== etag) {
+              return {
+                ok: false,
+                status: 409,
+                json: async () => ({
+                  error: "etag mismatch",
+                  code: "etag-conflict",
+                }),
+                text: async () => "",
+              } as Response;
+            }
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({ ok: true, etag: "new-etag" }),
+              text: async () => "",
+            } as Response;
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              brain_id: "test-brain",
+              path: "/proj/.claude/brain-registry.json",
+              etag,
+              registry,
+            }),
+            text: async () => "",
+          } as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            name: "unknown",
+            present: false,
+            path: "/x",
+            text: null,
+            error: null,
+          }),
+          text: async () => "",
+        } as Response;
+      });
+    }
+
+    it("renders one slider per declared domain weight", async () => {
+      mockRegistryFetch({
+        config: {
+          domain_weights: {
+            "test-health": 0.5,
+            "code-quality": 0.5,
+          },
+        },
+      });
+      renderPage();
+      await screen.findByTestId("settings-page");
+      fireEvent.click(screen.getByTestId("tab-registry"));
+      expect(
+        await screen.findByTestId("registry-domain-row-test-health"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("registry-domain-row-code-quality"),
+      ).toBeInTheDocument();
+    });
+
+    it("shows weight sum + valid hint when sum is 1.0", async () => {
+      mockRegistryFetch({
+        config: { domain_weights: { a: 0.6, b: 0.4 } },
+      });
+      renderPage();
+      await screen.findByTestId("settings-page");
+      fireEvent.click(screen.getByTestId("tab-registry"));
+      const sum = await screen.findByTestId("registry-weight-sum");
+      expect(sum.textContent).toContain("1.000");
+      expect(sum.textContent?.toLowerCase()).toContain("valid");
+    });
+
+    it("disables Save button when sum is invalid", async () => {
+      mockRegistryFetch({
+        config: { domain_weights: { a: 0.6, b: 0.4 } },
+      });
+      renderPage();
+      await screen.findByTestId("settings-page");
+      fireEvent.click(screen.getByTestId("tab-registry"));
+      // Adjust slider for `a` to break the 1.0 sum.
+      const slider = await screen.findByTestId("registry-slider-a");
+      fireEvent.change(slider, { target: { value: "0.9" } });
+      const saveBtn = screen.getByTestId(
+        "registry-save-button",
+      ) as HTMLButtonElement;
+      expect(saveBtn.disabled).toBe(true);
+      expect(
+        screen.getByText(/must be 1\.0/i),
+      ).toBeInTheDocument();
+    });
+
+    it("renders empty-state message when no domain weights declared", async () => {
+      mockRegistryFetch({ config: { domain_weights: {} } });
+      renderPage();
+      await screen.findByTestId("settings-page");
+      fireEvent.click(screen.getByTestId("tab-registry"));
+      expect(
+        await screen.findByText(/no domain weights declared/i),
+      ).toBeInTheDocument();
+    });
   });
 });

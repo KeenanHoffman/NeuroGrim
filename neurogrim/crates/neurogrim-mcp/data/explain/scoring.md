@@ -9,6 +9,7 @@ let a single critical domain cap the unified score.
 This document explains how scoring works so agents know what the
 number means (and what it doesn't).
 
+<!-- anchor: domain-weights -->
 ## The aggregation
 
 ```
@@ -30,6 +31,7 @@ model is also supported (raw scores, no confidence multiplier) but
 rarely chosen — confidence-weighting is the spec default for
 reasons documented in METHODOLOGY-EVOLUTION §4.
 
+<!-- anchor: confidence -->
 ## Confidence
 
 Confidence is the load-bearing concept. Without it, scoring would

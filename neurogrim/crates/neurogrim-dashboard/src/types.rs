@@ -477,6 +477,82 @@ pub struct SkillDto {
     pub hygiene_status: String,
 }
 
+// ── Explain content for inline help (S15-C-8 v1) ─────────────────────────
+
+/// Response body of `GET /api/explain/:topic` — the markdown text of
+/// a bundled `neurogrim explain` topic, returned verbatim. Used by
+/// the Settings page's `?` HelpIcon to render the relevant topic
+/// in a modal.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ExplainTopicResponse {
+    pub name: String,
+    pub content: String,
+}
+
+// ── Custom pages CRUD (S15-C-6 v1) ───────────────────────────────────────
+
+/// Request body of `POST /api/brains/:brain_id/dashboard-pages/:name`.
+/// v1 is name-only — operator picks an icon + adds widgets later via
+/// the Add Widget flow (deferred).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct CreateCustomPageRequest {
+    /// Optional title shown in the sidebar; defaults to the page id.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub title: Option<String>,
+}
+
+/// Response body of the `POST` + `DELETE` page endpoints.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct CustomPageMutationResponse {
+    pub ok: bool,
+    pub name: String,
+}
+
+// ── Registry editor (S15-C-4 v1) ─────────────────────────────────────────
+
+/// Response body of `GET /api/brains/:brain_id/registry` — full
+/// registry JSON + ETag fingerprint for conflict detection.
+///
+/// **v1 scope:** the response is the raw registry JSON (as
+/// `serde_json::Value`) plus an ETag derived from the file's bytes.
+/// Curated forms on the frontend extract specific sections; the
+/// schemars-driven full form generator + 3-way merge UI are
+/// deferred until adopters need them.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct RegistryResponse {
+    pub brain_id: String,
+    pub path: String,
+    /// SHA-256 of the file bytes at read-time, hex-encoded. The
+    /// frontend echoes this back on PUT; the server rejects with
+    /// 409 Conflict when the on-disk fingerprint differs (someone
+    /// else edited the file in the interim). v1 conflict mitigation;
+    /// 3-way merge UI is C-4 v2.
+    pub etag: String,
+    /// Parsed registry JSON. Operator's curated forms extract
+    /// specific sections; the textarea-fallback editor renders the
+    /// raw object.
+    #[ts(type = "Record<string, unknown>")]
+    pub registry: serde_json::Value,
+}
+
+/// Request body of `PUT /api/brains/:brain_id/registry`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct RegistryUpdateRequest {
+    /// ETag the client received on the GET. Server rejects with
+    /// 409 Conflict when the on-disk fingerprint differs.
+    pub expected_etag: String,
+    /// Replacement registry JSON. Server validates via
+    /// `BrainRegistry::from_json` + `registry.validate()` before
+    /// writing.
+    #[ts(type = "Record<string, unknown>")]
+    pub registry: serde_json::Value,
+}
+
 // ── Settings page config-file viewer (S15-C-5) ───────────────────────────
 
 /// Response body of `GET /api/brains/:brain_id/config-file/:name` —

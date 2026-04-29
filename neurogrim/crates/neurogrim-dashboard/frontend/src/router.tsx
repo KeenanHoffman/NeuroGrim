@@ -13,6 +13,7 @@ import { OverviewPage } from "@/components/overview/OverviewPage";
 import { DomainsPage } from "@/components/domains/DomainsPage";
 import { DomainDetailPage } from "@/components/domains/DomainDetailPage";
 import { ApprovalsPage } from "@/components/approvals/ApprovalsPage";
+import { CustomPageRenderer } from "@/components/custom-pages/CustomPageRenderer";
 import { FederationPage } from "@/components/federation/FederationPage";
 import { LogsPage } from "@/components/logs/LogsPage";
 import { PublishGatesPage } from "@/components/publish-gates/PublishGatesPage";
@@ -131,6 +132,18 @@ const brainSettingsRoute = createRoute({
   component: SettingsPage,
 });
 
+/** v4.3 S15-C-6 — catchall route for operator-defined custom pages.
+ * URL shape `/brains/$brainId/p/$pageName` — the `p/` prefix
+ * disambiguates from built-in routes so adopters can name custom
+ * pages without colliding with future built-ins. The page name is
+ * validated against the same kebab-case rules + reserved-id list
+ * that the create-page API enforces. */
+const brainCustomPageRoute = createRoute({
+  getParentRoute: () => brainsLayoutRoute,
+  path: "p/$pageName",
+  component: CustomPageRenderer,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   brainsLayoutRoute.addChildren([
@@ -144,6 +157,7 @@ const routeTree = rootRoute.addChildren([
     brainServicesRoute,
     brainLogsRoute,
     brainSettingsRoute,
+    brainCustomPageRoute,
   ]),
 ]);
 

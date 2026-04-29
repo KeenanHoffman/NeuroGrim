@@ -58,6 +58,9 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 # `futures::Stream` trait + adapters (StreamExt::map). Used by the
 # SSE handler to convert broadcast events into `axum::sse::Event`.
 futures = "0.3"
+# v4.3 S15-C-4 — SHA-256 for registry-editor ETag computation.
+# Same crate already used by neurogrim-secrets + neurogrim-sensory.
+sha2 = "0.10"
 
 # Internal deps
 neurogrim-core = { workspace = true }

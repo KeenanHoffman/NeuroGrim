@@ -117,6 +117,56 @@ pub fn pages_file_path(project_root: &Path) -> PathBuf {
         .join("dashboard-pages.json")
 }
 
+/// Atomically write the v2 config. Temp file + rename so concurrent
+/// readers see either the old or the new file, never partial.
+pub fn save_dashboard_pages(
+    project_root: &Path,
+    config: &DashboardPagesConfig,
+) -> std::io::Result<()> {
+    let path = pages_file_path(project_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let json = serde_json::to_string_pretty(config)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    std::fs::write(&tmp, json)?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
+/// Validate that a page name is acceptable for custom pages:
+/// - kebab-case (lowercase + digits + hyphens; must start with a letter)
+/// - max 64 chars
+/// - NOT a reserved built-in id
+pub fn is_valid_custom_page_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    if DashboardPagesConfig::is_builtin(name) {
+        return false;
+    }
+    let bytes = name.as_bytes();
+    if !bytes[0].is_ascii_lowercase() {
+        return false;
+    }
+    let mut prev = b' ';
+    for &b in bytes {
+        let ok = matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'-');
+        if !ok {
+            return false;
+        }
+        if b == b'-' && prev == b'-' {
+            return false;
+        }
+        prev = b;
+    }
+    if bytes.last() == Some(&b'-') {
+        return false;
+    }
+    true
+}
+
 /// Read the multi-page config. Three branches:
 ///
 /// 1. v2 file exists → parse + return.
@@ -278,5 +328,63 @@ mod tests {
             p,
             Path::new("/proj/.claude/brain/dashboard-pages.json")
         );
+    }
+
+    // ── Custom-page-name validation tests (S15-C-6) ─────────────
+
+    #[test]
+    fn is_valid_custom_page_name_accepts_kebab() {
+        assert!(is_valid_custom_page_name("custom-pc-state"));
+        assert!(is_valid_custom_page_name("a"));
+        assert!(is_valid_custom_page_name("alpha-beta-gamma"));
+        assert!(is_valid_custom_page_name("page1"));
+    }
+
+    #[test]
+    fn is_valid_custom_page_name_rejects_reserved_builtins() {
+        for builtin in BUILTIN_PAGE_IDS {
+            assert!(
+                !is_valid_custom_page_name(builtin),
+                "should reject builtin: {builtin}"
+            );
+        }
+    }
+
+    #[test]
+    fn is_valid_custom_page_name_rejects_malformed() {
+        assert!(!is_valid_custom_page_name(""));
+        assert!(!is_valid_custom_page_name("UPPER"));
+        assert!(!is_valid_custom_page_name("Has-Caps"));
+        assert!(!is_valid_custom_page_name("1starts-with-digit"));
+        assert!(!is_valid_custom_page_name("-leads-with-dash"));
+        assert!(!is_valid_custom_page_name("trails-dash-"));
+        assert!(!is_valid_custom_page_name("double--dash"));
+        assert!(!is_valid_custom_page_name("has space"));
+        assert!(!is_valid_custom_page_name("has_underscore"));
+        assert!(!is_valid_custom_page_name("has.dot"));
+        assert!(!is_valid_custom_page_name(&"x".repeat(65)));
+    }
+
+    #[test]
+    fn save_dashboard_pages_writes_atomically() {
+        let dir = TempDir::new().unwrap();
+        let cfg = DashboardPagesConfig {
+            schema_version: "2".into(),
+            brain_id: "alpha".into(),
+            pages: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "custom-page".to_string(),
+                    vec![make_widget("test")],
+                );
+                m
+            },
+            page_order: vec!["overview".into(), "custom-page".into()],
+        };
+        save_dashboard_pages(dir.path(), &cfg).unwrap();
+        // Re-read and verify.
+        let read = read_dashboard_pages(dir.path(), "alpha");
+        assert_eq!(read.pages.len(), 1);
+        assert!(read.pages.contains_key("custom-page"));
     }
 }

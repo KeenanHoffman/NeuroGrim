@@ -45,13 +45,15 @@ use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
 use crate::types::{
     AgentCardExcerptDto, ApprovalRequestView, ApprovalResolutionView, ApprovalsPageResponse,
-    BrainListItemDto, BrainsListResponse, ConfigFileResponse, DomainDetailResponse,
+    BrainListItemDto, BrainsListResponse, ConfigFileResponse, CreateCustomPageRequest,
+    CustomPageMutationResponse, DomainDetailResponse,
     DomainListItemDto, DomainSignalDto, DomainsListResponse, FederationResponse, FindingDto,
     HatDto, HatsResponse, HealthResponse, HistoryPointDto, OverviewResponse, PeerDto,
     PeerStatusDto, PublishGateLedgerView, PublishGateView, PublishGatesPageResponse,
-    QueueMessageDto, QueuePublishRequest, QueuePublishResponse, QueueReadResponse,
-    QueueTopicStatsDto, QueuesListResponse, RecommendationDto, ResolveApprovalRequest,
-    ResolveApprovalResponse, SelfBrainDto, SkillsResponse,
+    ExplainTopicResponse, QueueMessageDto, QueuePublishRequest, QueuePublishResponse,
+    QueueReadResponse, QueueTopicStatsDto, QueuesListResponse, RecommendationDto,
+    RegistryResponse, RegistryUpdateRequest, ResolveApprovalRequest, ResolveApprovalResponse,
+    SelfBrainDto, SkillsResponse,
 };
 
 /// Query params accepted by score-aware routes (overview, domains
@@ -161,6 +163,32 @@ pub fn router(state: AppState) -> Router {
             "/api/brains/:brain_id/config-file/:name",
             get(brain_config_file),
         )
+        // v4.3 S15-C-4 v1: registry editor. GET returns the full
+        // registry JSON + ETag; PUT validates + atomically writes
+        // the replacement (rejects with 409 on ETag mismatch).
+        // Gated by --allow-mutations.
+        .route(
+            "/api/brains/:brain_id/registry",
+            get(brain_registry_get).put(brain_registry_put),
+        )
+        // v4.3 S15-C-6 v1: custom-pages CRUD. GET returns the full
+        // multi-page config (with v3.4 backward-compat read).
+        // POST creates a new custom page (kebab-case validated;
+        // collisions rejected). DELETE removes a custom page.
+        // Both gated by --allow-mutations.
+        .route(
+            "/api/brains/:brain_id/dashboard-pages",
+            get(brain_dashboard_pages_get),
+        )
+        .route(
+            "/api/brains/:brain_id/dashboard-pages/:name",
+            axum::routing::post(brain_dashboard_pages_create)
+                .delete(brain_dashboard_pages_delete),
+        )
+        // v4.3 S15-C-8 v1: explain topic content for the inline-help
+        // HelpIcon. Brain-agnostic (the topics ship with the binary,
+        // not per-brain), so the route doesn't carry a brain_id.
+        .route("/api/explain/:topic", get(explain_topic))
         .route(
             "/api/brains/:brain_id/approvals/:action_id/resolve",
             axum::routing::post(brain_approvals_resolve),
@@ -1446,6 +1474,7 @@ async fn brain_save_dashboard_layout(
         Ok(b) => b,
         Err(r) => return r,
     };
+    let widget_count = body.widgets.len();
     if let Err(e) = save_layout(&brain.project_root, body.widgets) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1458,6 +1487,15 @@ async fn brain_save_dashboard_layout(
     if let Some(tx) = &state.events {
         let _ = tx.send(crate::events::DashboardEvent::LayoutChanged);
     }
+    // S15-C-7: emit on the config-changes queue.
+    emit_config_change(
+        &state,
+        &brain_id,
+        "layout_change",
+        format!("dashboard-layout saved with {widget_count} widget(s)"),
+        &brain.project_root,
+    )
+    .await;
     (StatusCode::OK, Json(serde_json::json!({ "ok": true }))).into_response()
 }
 
@@ -1488,6 +1526,15 @@ async fn brain_reset_dashboard_layout(
         if let Some(tx) = &state.events {
             let _ = tx.send(crate::events::DashboardEvent::LayoutChanged);
         }
+        // S15-C-7: emit on the config-changes queue.
+        emit_config_change(
+            &state,
+            &brain_id,
+            "layout_change",
+            "dashboard-layout reset to posture-aware default",
+            &brain.project_root,
+        )
+        .await;
     }
     (
         StatusCode::OK,
@@ -2352,6 +2399,59 @@ fn qm_to_dto(m: &neurogrim_core::queue::QueueMessage) -> QueueMessageDto {
     }
 }
 
+// ── S15-C-7: edit-via-bus emitter ──────────────────────────────────────
+
+/// Reserved system topic that every UI mutation publishes to. Agents
+/// (and the dashboard's own widgets in future stories) subscribe to
+/// observe operator activity in real-time.
+pub const CONFIG_CHANGES_TOPIC: &str = "_neurogrim/config-changes";
+
+/// Emit a `_neurogrim/config-changes` event. Best-effort — if the bus
+/// publish fails (zero subscribers, disk write transient error), the
+/// caller's mutation still succeeds. Failure to record observation is
+/// strictly less bad than failure to apply the mutation.
+///
+/// **v1 payload shape (deliberately minimal):**
+///
+/// ```json
+/// {
+///   "action_type": "<one of `layout_change`, `registry_edit`, ...>",
+///   "operator": "<from $NEUROGRIM_OPERATOR; null when unset>",
+///   "timestamp": "<RFC3339>",
+///   "brain_id": "<…>",
+///   "summary": "<one-line operator-facing description>"
+/// }
+/// ```
+///
+/// Detailed `before` / `after` diffs are a v2 enhancement — for v1,
+/// adopters subscribed to the queue see WHAT changed (action_type) +
+/// WHO (operator) + WHEN (timestamp), and can read the file from disk
+/// to see the new state. Sensitive sections (autonomy safety
+/// invariants, secrets) won't have plaintext diffs in any version;
+/// the keypath-only diff is the v2 design (S15-C-7 expansion).
+pub async fn emit_config_change(
+    state: &AppState,
+    brain_id: &str,
+    action_type: &str,
+    summary: impl Into<String>,
+    project_root: &std::path::Path,
+) {
+    let payload = serde_json::json!({
+        "action_type": action_type,
+        "operator": std::env::var("NEUROGRIM_OPERATOR").ok(),
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "brain_id": brain_id,
+        "summary": summary.into(),
+    });
+    let msg = neurogrim_core::queue::QueueMessage::new(CONFIG_CHANGES_TOPIC, payload);
+    if let Err(e) = state.bus.publish(project_root, msg).await {
+        // Best-effort — log but don't propagate.
+        tracing::warn!(
+            "edit-via-bus emit failed for action_type={action_type}: {e}"
+        );
+    }
+}
+
 // ── S15-C-5: config-file read-only viewer ───────────────────────────────
 
 /// `GET /api/brains/:brain_id/config-file/:name` — return the
@@ -2414,6 +2514,370 @@ async fn brain_config_file(
         })
         .into_response(),
     }
+}
+
+// ── S15-C-8 v1: explain topic content ───────────────────────────────────
+
+/// `GET /api/explain/:topic` — return the markdown text of a
+/// bundled `neurogrim explain` topic. Used by the inline-help
+/// HelpIcon to render relevant content in a modal.
+async fn explain_topic(AxumPath(topic): AxumPath<String>) -> Response {
+    match neurogrim_mcp::explain::lookup(&topic) {
+        Some(content) => Json(ExplainTopicResponse {
+            name: topic,
+            content: content.to_string(),
+        })
+        .into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "unknown topic",
+                "got": topic,
+                "hint": "list of valid topics: run `neurogrim explain` (no args)",
+            })),
+        )
+            .into_response(),
+    }
+}
+
+// ── S15-C-6 v1: custom-pages CRUD ───────────────────────────────────────
+
+/// `GET /api/brains/:brain_id/dashboard-pages` — return the v2
+/// multi-page config (with v3.4 backward-compat read).
+async fn brain_dashboard_pages_get(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let cfg = crate::pages::read_dashboard_pages(&brain.project_root, &brain_id);
+    Json(cfg).into_response()
+}
+
+/// `POST /api/brains/:brain_id/dashboard-pages/:name` — create a new
+/// custom page. Validates the name + collisions; appends to
+/// `page_order` so the sidebar surfaces it; persists atomically.
+async fn brain_dashboard_pages_create(
+    State(state): State<AppState>,
+    AxumPath((brain_id, name)): AxumPath<(String, String)>,
+    Json(_body): Json<CreateCustomPageRequest>,
+) -> Response {
+    if !state.mutations_allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "mutations-disabled",
+                "code": "mutations-disabled",
+                "hint": "start the dashboard with --allow-mutations to enable custom-page CRUD",
+            })),
+        )
+            .into_response();
+    }
+    if !crate::pages::is_valid_custom_page_name(&name) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "invalid page name",
+                "code": "invalid-name",
+                "hint": "kebab-case starting with a letter, max 64 chars, not a reserved built-in id",
+                "got": name,
+            })),
+        )
+            .into_response();
+    }
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let mut cfg = crate::pages::read_dashboard_pages(&brain.project_root, &brain_id);
+    if cfg.pages.contains_key(&name) {
+        return (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": "page already exists",
+                "code": "name-collision",
+                "got": name,
+            })),
+        )
+            .into_response();
+    }
+    cfg.pages.insert(name.clone(), Vec::new());
+    if !cfg.page_order.contains(&name) {
+        cfg.page_order.push(name.clone());
+    }
+    if let Err(e) = crate::pages::save_dashboard_pages(&brain.project_root, &cfg) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("save failed: {e}")
+            })),
+        )
+            .into_response();
+    }
+    // S15-C-7: emit on the config-changes queue.
+    emit_config_change(
+        &state,
+        &brain_id,
+        "page_added",
+        format!("custom page '{}' created", name),
+        &brain.project_root,
+    )
+    .await;
+    Json(CustomPageMutationResponse { ok: true, name }).into_response()
+}
+
+/// `DELETE /api/brains/:brain_id/dashboard-pages/:name` — remove a
+/// custom page. Built-ins can't be deleted (rejected with 400).
+/// Idempotent for unknown names — returns 200 OK.
+async fn brain_dashboard_pages_delete(
+    State(state): State<AppState>,
+    AxumPath((brain_id, name)): AxumPath<(String, String)>,
+) -> Response {
+    if !state.mutations_allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "mutations-disabled",
+                "code": "mutations-disabled",
+            })),
+        )
+            .into_response();
+    }
+    if crate::pages::DashboardPagesConfig::is_builtin(&name) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "cannot delete built-in pages",
+                "code": "builtin-protected",
+                "got": name,
+            })),
+        )
+            .into_response();
+    }
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let mut cfg = crate::pages::read_dashboard_pages(&brain.project_root, &brain_id);
+    let removed = cfg.pages.remove(&name).is_some();
+    cfg.page_order.retain(|n| n != &name);
+    if removed {
+        if let Err(e) = crate::pages::save_dashboard_pages(&brain.project_root, &cfg) {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("save failed: {e}")
+                })),
+            )
+                .into_response();
+        }
+        // S15-C-7: emit on the config-changes queue.
+        emit_config_change(
+            &state,
+            &brain_id,
+            "page_removed",
+            format!("custom page '{}' removed", name),
+            &brain.project_root,
+        )
+        .await;
+    }
+    Json(CustomPageMutationResponse { ok: true, name }).into_response()
+}
+
+// ── S15-C-4 v1: registry editor ─────────────────────────────────────────
+
+/// `GET /api/brains/:brain_id/registry` — return the parsed
+/// registry JSON + ETag fingerprint. Read-only.
+async fn brain_registry_get(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let registry_path = brain.registry_path.as_path();
+    let raw = match std::fs::read_to_string(registry_path) {
+        Ok(s) => s,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("read {}: {e}", registry_path.display())
+                })),
+            )
+                .into_response();
+        }
+    };
+    let parsed: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("parse {}: {e}", registry_path.display())
+                })),
+            )
+                .into_response();
+        }
+    };
+    let etag = compute_etag(&raw);
+    Json(RegistryResponse {
+        brain_id,
+        path: registry_path.display().to_string(),
+        etag,
+        registry: parsed,
+    })
+    .into_response()
+}
+
+/// `PUT /api/brains/:brain_id/registry` — replace the registry
+/// with the request body. Three-step validation:
+///
+/// 1. **ETag check** — reject with 409 Conflict if `expected_etag`
+///    doesn't match the current file's fingerprint (someone else
+///    edited the file in the interim).
+/// 2. **Schema validation** — `BrainRegistry::from_json` parses the
+///    new JSON; `registry.validate()` checks invariants. Rejects
+///    with 400 Bad Request on either failure.
+/// 3. **Atomic write** — temp file + rename so concurrent readers
+///    see either the old or the new file, never a partial write.
+///
+/// Gated by `--allow-mutations`.
+async fn brain_registry_put(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+    Json(body): Json<RegistryUpdateRequest>,
+) -> Response {
+    if !state.mutations_allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "mutations-disabled",
+                "code": "mutations-disabled",
+                "hint": "start the dashboard with --allow-mutations to enable registry editing",
+            })),
+        )
+            .into_response();
+    }
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let registry_path = brain.registry_path.as_path();
+    let current_raw = match std::fs::read_to_string(registry_path) {
+        Ok(s) => s,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("read {}: {e}", registry_path.display())
+                })),
+            )
+                .into_response();
+        }
+    };
+    let current_etag = compute_etag(&current_raw);
+    if current_etag != body.expected_etag {
+        return (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": "etag mismatch — registry was edited externally between your read and save",
+                "code": "etag-conflict",
+                "current_etag": current_etag,
+                "expected_etag": body.expected_etag,
+                "hint": "reload the page; manual 3-way merge UI ships with C-4 v2",
+            })),
+        )
+            .into_response();
+    }
+    let new_text = match serde_json::to_string_pretty(&body.registry) {
+        Ok(s) => s,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("serialize: {e}")
+                })),
+            )
+                .into_response();
+        }
+    };
+    // Schema validation via existing core path.
+    let registry = match neurogrim_core::registry::BrainRegistry::from_json(&new_text) {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("parse: {e}"),
+                    "code": "parse-failed",
+                })),
+            )
+                .into_response();
+        }
+    };
+    if let Err(e) = registry.validate() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": format!("registry validation failed: {e}"),
+                "code": "validate-failed",
+            })),
+        )
+            .into_response();
+    }
+    // Atomic write: temp + rename.
+    let tmp_path = registry_path.with_extension("json.tmp");
+    if let Err(e) = std::fs::write(&tmp_path, &new_text) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("write temp: {e}")
+            })),
+        )
+            .into_response();
+    }
+    if let Err(e) = std::fs::rename(&tmp_path, registry_path) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("rename: {e}")
+            })),
+        )
+            .into_response();
+    }
+    if let Some(tx) = &state.events {
+        let _ = tx.send(crate::events::DashboardEvent::RegistryChanged);
+    }
+    let new_etag = compute_etag(&new_text);
+    // S15-C-7: emit on the config-changes queue.
+    emit_config_change(
+        &state,
+        &brain_id,
+        "registry_edit",
+        "brain-registry.json saved via dashboard editor",
+        &brain.project_root,
+    )
+    .await;
+    Json(serde_json::json!({
+        "ok": true,
+        "etag": new_etag,
+    }))
+    .into_response()
+}
+
+/// SHA-256 of `text`, hex-encoded. Used as the registry editor's
+/// ETag fingerprint. Recomputed on every read; the frontend echoes
+/// it back on save to catch concurrent edits.
+fn compute_etag(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(text.as_bytes());
+    let result = hasher.finalize();
+    result.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 // ── S13-B-6: autonomy approvals handlers ────────────────────────────────
@@ -2505,6 +2969,16 @@ async fn brain_approvals_resolve(
         )
             .into_response();
     }
+
+    // S15-C-7: emit on the config-changes queue.
+    emit_config_change(
+        &state,
+        &brain_id,
+        "approval_resolved",
+        format!("approval {action_id} resolved as {decision}"),
+        &brain.project_root,
+    )
+    .await;
 
     Json(ResolveApprovalResponse {
         action_id,

@@ -29,20 +29,26 @@
 - [x] CLI parity preserved: every UI surface today is read-only; no CLI deprecation
 - [x] 15th explain topic: `neurogrim explain command-post` *(`crates/neurogrim-mcp/data/explain/command-post.md`; methodology_drift TOPICS extended; CLAUDE.md "all 12" → "all 13")*
 
-**Heavy follow-ons (session 2):**
-- [ ] Multi-page dashboard infrastructure: full sidebar/router auto-population from declared pages *(C-6 — runtime route derivation when custom pages are operator-creatable)*
-- [ ] Built-in Services page: log tail (5s poll OR SSE), manual re-probe, sensor refresh *(C-2 expansion; needs new API endpoints for per-service log streams)*
-- [ ] Built-in Logs page: invocation-ledger + score-history + services.jsonl + `_neurogrim/notifications` sources *(C-3 expansion; mostly client-side aggregation work)*
-- [ ] Built-in Settings page: curated forms for `brain-registry.json` (domains, autonomy, hats, federation), `secret-refs.yaml`, `publish-gates.yaml`, `queue-config.yaml` *(C-4 + C-5 expansion — depends on `schemars` form generator)*
-- [ ] Schema → form generator handles 80% case (object/array/string/number/boolean/enum); textarea fallback for complex shapes *(C-4 — load-bearing 8-day story)*
-- [ ] Edit conflicts detected via ETag-style versioning; 3-way merge UI when concurrent edits collide *(C-4 expansion)*
-- [ ] Edits emit on `_neurogrim/config-changes` queue with standard `{action_type, before, after, operator, timestamp}` payload *(C-7; depends on C-4's editor surface to have something to emit)*
-- [ ] Operator can create custom named pages from widget gallery; sidebar treats built-ins + custom identically *(C-6)*
-- [ ] Custom page limit (default 8 per Brain) + folder grouping when exceeded *(C-6 expansion)*
-- [ ] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights *(C-6 + C-8)*
-- [ ] Inline help: every settings field has `?` icon linking to relevant `neurogrim explain` topic at section anchor *(C-8 — depends on C-4's form generator to have fields to attach `?` icons to; also adds anchors to all 15 topics)*
-- [ ] Mobile-responsive at 375px viewport; no horizontal scroll on any page *(C-9 — final-polish pass)*
-- [ ] Adopter walkthrough doc: first custom-page authoring, edit-via-bus subscription, conflict-resolution flow *(documentation pass after C-4/C-6/C-7)*
+**Foundation (shipped, session 2):**
+- [x] Edits emit on `_neurogrim/config-changes` queue with standard payload *(C-7 v1 — `emit_config_change` helper decorates layout-save / layout-reset / approval-resolve / registry-edit / page-add / page-delete handlers; v1 payload is `{action_type, operator, timestamp, brain_id, summary}` — keypath-level diffs are a v2 enhancement)*
+- [x] Edit conflicts detected via ETag-style versioning *(C-4 v1 — SHA-256 fingerprint on the registry file; PUT rejects with 409 Conflict on mismatch; 3-way merge UI deferred to C-4 v2)*
+- [x] Built-in Settings: registry editor surface (domain weights only) *(C-4 v1 — slider per declared domain weight + sum-validity hint + Save/Discard with ETag-protected PUT; full schemars form generator + autonomy/hats/federation editors are C-4 v2)*
+- [x] Operator can create custom named pages *(C-6 v1 — Add Page form on Settings page; `POST /api/brains/:id/dashboard-pages/:name` validates kebab-case + reserved-id collisions; `DELETE` removes; reachable at `/brains/$brainId/p/$pageName`)*
+- [x] Inline help infrastructure *(C-8 v1 — `HelpIcon` component + modal that fetches `GET /api/explain/:topic`; anchor convention `<!-- anchor: <id> -->` documented + sample anchors added to scoring.md; rolling out across all 13 topics is gradual)*
+
+**Heavy follow-ons (still deferred):**
+- [ ] Schema → form generator handles 80% case (object/array/string/number/boolean/enum); textarea fallback for complex shapes *(C-4 v2 — full registry editor for autonomy / hats / federation / domain_definitions sections; the `schemars` integration + curated forms per section are the load-bearing piece)*
+- [ ] 3-way merge UI when concurrent edits collide *(C-4 v2; current behavior is reload-on-conflict)*
+- [ ] Built-in Services page: log tail, manual re-probe, sensor refresh *(C-2 expansion; needs new API endpoints for per-service log streams)*
+- [ ] Built-in Logs page: invocation-ledger + score-history + services.jsonl + `_neurogrim/notifications` sources *(C-3 expansion)*
+- [ ] Custom page widget gallery: operator picks widgets from the v3.4 catalog *(C-6 v2; v1 only supports name + delete)*
+- [ ] Custom page limit (default 8 per Brain) + folder grouping when exceeded *(C-6 v2)*
+- [ ] Page icon picker + per-page title *(C-6 v2)*
+- [ ] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights *(C-6 v2 + C-8 v2)*
+- [ ] Inline help anchors rolled out across all 13 explain topics *(C-8 v2 — convention is established; mechanical work)*
+- [ ] Markdown renderer in HelpIcon modal (currently preformatted text) *(C-8 v2)*
+- [ ] Mobile-responsive at 375px viewport; no horizontal scroll on any page *(C-9 — final-polish pass; best paired with operator visual review)*
+- [ ] Adopter walkthrough doc: first custom-page authoring, edit-via-bus subscription, conflict-resolution flow *(documentation pass)*
 
 ---
 
@@ -103,7 +109,7 @@ Filter chips per source. Click a row → drill into the originating widget. Toas
 - [ ] Toast system uses the v3.6 backlog item brought forward
 - [ ] vitest covers the integration
 
-### S15-C-4: Built-in Settings page — registry editor (8 days, the load-bearing one)
+### S15-C-4: Built-in Settings page — registry editor (8 days, the load-bearing one) — 🟡 PARTIAL (domain-weights editor + ETag conflict detection shipped; full schemars form generator + autonomy/hats/federation editors + 3-way merge UI deferred to v2)
 
 **What:** Curated forms for each section of `brain-registry.json`:
 
@@ -138,7 +144,7 @@ Schema source: Rust struct → JSON Schema (auto-generate via `schemars` crate, 
 - [ ] Read-only culture viewer with link to `neurogrim explain culture`
 - [ ] Secrets editor handoff to S14 fetch flow tested
 
-### S15-C-6: Operator-defined custom pages (4 days)
+### S15-C-6: Operator-defined custom pages (4 days) — 🟡 PARTIAL (CRUD endpoints + Add Page form + catchall route + CustomPageRenderer shipped; widget gallery + icon picker + folder grouping deferred to v2)
 
 **What:** "Add page" flow: operator names a page (kebab-case validated), picks an icon (lucide-react set), adds widgets via the v3.4 catalog. Custom pages persist alongside built-ins; sidebar rendering treats them identically.
 
@@ -152,7 +158,7 @@ Limit: 8 custom pages per Brain by default (configurable). Group into folders if
 - [ ] vitest covers the flow
 - [ ] Folder grouping when limit exceeded
 
-### S15-C-7: Edit-via-bus integration (3 days)
+### S15-C-7: Edit-via-bus integration (3 days) — ✅ SHIPPED (v1 minimal payload; keypath-level before/after diffs deferred to v2)
 
 **What:** Every UI mutation emits on `_neurogrim/config-changes` queue.
 
@@ -175,7 +181,7 @@ Documented as the way for agents to observe operator activity. Sample agent: PC-
 - [ ] vitest covers emission for each mutation type
 - [ ] Adopter doc: how to write an agent that subscribes
 
-### S15-C-8: Inline help integration (2 days)
+### S15-C-8: Inline help integration (2 days) — 🟡 PARTIAL (HelpIcon component + modal + `GET /api/explain/:topic` endpoint + anchor convention with proof anchors in scoring.md; rolling anchors out across all 13 topics + markdown renderer deferred)
 
 **What:** Each settings field has a `?` icon. Click → modal or sidebar pulls from relevant `neurogrim explain` topic at section anchor. Anchor format: `<brain>/explain/scoring#weighted-mean`.
 
@@ -186,7 +192,7 @@ This requires the explain topics to have stable section anchors. Audit existing 
 - [ ] `?` icon implementation + modal
 - [ ] vitest covers anchor resolution
 
-### S15-C-9: Mobile-responsive breakpoints (3 days)
+### S15-C-9: Mobile-responsive breakpoints (3 days) — ⏳ DEFERRED (mobile breakpoints best audited with operator visual review at real 375px viewport; pairs with operator feedback in a polish session)
 
 **What:** v3.4-v3.5 dashboard works on desktop + tablet; mobile is broken. Audit each page against 375px viewport; fix layout overflow; collapse sidebar at <768px.
 
