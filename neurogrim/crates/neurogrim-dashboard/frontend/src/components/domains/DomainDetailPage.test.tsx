@@ -5,6 +5,7 @@ import { DomainDetailPage } from "./DomainDetailPage";
 import type { DomainDetailResponse } from "@bindings/DomainDetailResponse";
 import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 import { HatProvider } from "@/lib/useHat";
+import { BrainProvider } from "@/lib/useBrain";
 
 const detail = (
   overrides: Partial<DomainDetailResponse> = {}
@@ -38,7 +39,11 @@ function renderWithQuery(name = "test-health") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const router = makeTestRouter(<DomainDetailPage name={name} />);
+  const router = makeTestRouter(
+    <BrainProvider brainId="test-brain">
+      <DomainDetailPage name={name} />
+    </BrainProvider>
+  );
   return render(
     <QueryClientProvider client={qc}>
       <HatProvider>

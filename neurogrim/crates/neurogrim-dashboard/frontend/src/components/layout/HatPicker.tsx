@@ -3,10 +3,12 @@ import { Glasses } from "lucide-react";
 import type { HatsResponse } from "@bindings/HatsResponse";
 import type { HatDto } from "@bindings/HatDto";
 import { useHat } from "@/lib/useHat";
+import { brainApi, useBrainId } from "@/lib/useBrain";
 
-async function fetchHats(): Promise<HatsResponse> {
-  const res = await fetch("/api/hats");
-  if (!res.ok) throw new Error(`/api/hats returned ${res.status}`);
+async function fetchHats(brainId: string): Promise<HatsResponse> {
+  const url = brainApi(brainId, "hats");
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as HatsResponse;
 }
 
@@ -22,10 +24,11 @@ async function fetchHats(): Promise<HatsResponse> {
  * nothing.
  */
 export function HatPicker() {
+  const brainId = useBrainId();
   const { hat, setHat } = useHat();
   const { data, isLoading } = useQuery({
-    queryKey: ["hats"],
-    queryFn: fetchHats,
+    queryKey: ["hats", brainId],
+    queryFn: () => fetchHats(brainId),
     staleTime: 5 * 60_000,
   });
 

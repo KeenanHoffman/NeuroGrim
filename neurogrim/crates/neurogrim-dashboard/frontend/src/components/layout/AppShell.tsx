@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useParams } from "@tanstack/react-router";
 import {
   Brain,
   LayoutDashboard,
@@ -14,26 +14,48 @@ import {
 import { useTheme } from "@/lib/useTheme";
 import { useDashboardEvents, type ConnectionStatus } from "@/lib/useDashboardEvents";
 import { HatPicker } from "@/components/layout/HatPicker";
+import { BrainSelector } from "@/components/layout/BrainSelector";
 
 interface NavItem {
-  to: string;
+  /** Literal route path the Link component accepts. TanStack
+   *  Router's typed routes require a static `to` string. */
+  to:
+    | "/brains/$brainId"
+    | "/brains/$brainId/domains"
+    | "/brains/$brainId/federation"
+    | "/brains/$brainId/skills";
+  /** Path suffix used by `isActive` to compare against the
+   *  currently-rendered pathname (`""` for the brain root). */
+  suffix: string;
   label: string;
   icon: ReactNode;
-  /** Subroutes that should also light up this nav item (e.g.
-   *  /domains lights up for /domains/foo too). */
-  matchPrefix?: string;
 }
 
 const NAV: NavItem[] = [
-  { to: "/", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
   {
-    to: "/domains",
+    to: "/brains/$brainId",
+    suffix: "",
+    label: "Overview",
+    icon: <LayoutDashboard className="h-4 w-4" />,
+  },
+  {
+    to: "/brains/$brainId/domains",
+    suffix: "/domains",
     label: "Domains",
     icon: <Layers className="h-4 w-4" />,
-    matchPrefix: "/domains",
   },
-  { to: "/federation", label: "Federation", icon: <Network className="h-4 w-4" /> },
-  { to: "/skills", label: "Skills", icon: <BookOpen className="h-4 w-4" /> },
+  {
+    to: "/brains/$brainId/federation",
+    suffix: "/federation",
+    label: "Federation",
+    icon: <Network className="h-4 w-4" />,
+  },
+  {
+    to: "/brains/$brainId/skills",
+    suffix: "/skills",
+    label: "Skills",
+    icon: <BookOpen className="h-4 w-4" />,
+  },
 ];
 
 /**
@@ -50,12 +72,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   // whole session — pages mount/unmount, but the SSE socket persists.
   const liveStatus = useDashboardEvents();
 
+  // Read brainId from URL params when we're inside `/brains/$brainId/`;
+  // strict: false because the index route `/` has no brainId. The
+  // sidebar Brain selector handles that case (renders "no brain
+  // selected" briefly while the index redirect is in flight).
+  const params = useParams({ strict: false }) as { brainId?: string };
+  const brainId = params.brainId;
+
   const isActive = (item: NavItem): boolean => {
-    if (item.matchPrefix) {
-      if (pathname === item.matchPrefix) return true;
-      return pathname.startsWith(`${item.matchPrefix}/`);
+    if (!brainId) return false;
+    const target = `/brains/${brainId}${item.suffix}`;
+    if (item.suffix === "") {
+      // Overview is active for the bare brain root and anything under
+      // /domains/<name> (the detail page) — keep Domains active for
+      // those, but Overview only for the literal root.
+      return pathname === target || pathname === `${target}/`;
     }
-    return pathname === item.to;
+    return pathname === target || pathname.startsWith(`${target}/`);
   };
 
   return (
@@ -66,6 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           isActive={isActive}
           onItemClick={() => setMobileOpen(false)}
           liveStatus={liveStatus}
+          brainId={brainId}
         />
       </aside>
 
@@ -84,6 +118,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               isActive={isActive}
               onItemClick={() => setMobileOpen(false)}
               liveStatus={liveStatus}
+              brainId={brainId}
             />
           </aside>
         </div>
@@ -114,10 +149,12 @@ function SidebarContent({
   isActive,
   onItemClick,
   liveStatus,
+  brainId,
 }: {
   isActive: (n: NavItem) => boolean;
   onItemClick: () => void;
   liveStatus: ConnectionStatus;
+  brainId: string | undefined;
 }) {
   const { theme, toggleTheme } = useTheme();
 
@@ -143,27 +180,30 @@ function SidebarContent({
         </button>
       </div>
 
-      <div className="px-3 pb-3">
-        <HatPicker />
+      <div className="px-3 pb-3 space-y-2">
+        <BrainSelector />
+        {brainId && <HatPicker />}
       </div>
 
       <nav className="flex-1 px-2 space-y-1" aria-label="Primary">
-        {NAV.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            onClick={onItemClick}
-            data-testid={`nav-${item.label.toLowerCase()}`}
-            className={
-              isActive(item)
-                ? "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium bg-secondary text-foreground"
-                : "flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            }
-          >
-            {item.icon}
-            {item.label}
-          </Link>
-        ))}
+        {brainId &&
+          NAV.map((item) => (
+            <Link
+              key={item.suffix}
+              to={item.to}
+              params={{ brainId }}
+              onClick={onItemClick}
+              data-testid={`nav-${item.label.toLowerCase()}`}
+              className={
+                isActive(item)
+                  ? "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium bg-secondary text-foreground"
+                  : "flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              }
+            >
+              {item.icon}
+              {item.label}
+            </Link>
+          ))}
       </nav>
 
       <div className="border-t border-border px-3 py-3 flex items-center justify-between gap-2">

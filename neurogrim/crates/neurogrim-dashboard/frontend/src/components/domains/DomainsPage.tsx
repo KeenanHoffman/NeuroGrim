@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "@tanstack/react-router";
 import { hatToQuery, useHat } from "@/lib/useHat";
+import { brainApi, useBrainId } from "@/lib/useBrain";
 
 type SortKey =
   | "name"
@@ -26,10 +27,12 @@ type SortKey =
   | "last_updated";
 type SortDir = "asc" | "desc";
 
-async function fetchDomains(hat: string | null): Promise<DomainsListResponse> {
-  const url = hat
-    ? `/api/domains?hat=${encodeURIComponent(hat)}`
-    : "/api/domains";
+async function fetchDomains(
+  brainId: string,
+  hat: string | null
+): Promise<DomainsListResponse> {
+  const base = brainApi(brainId, "domains");
+  const url = hat ? `${base}?hat=${encodeURIComponent(hat)}` : base;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as DomainsListResponse;
@@ -37,11 +40,12 @@ async function fetchDomains(hat: string | null): Promise<DomainsListResponse> {
 
 export function DomainsPage() {
   const navigate = useNavigate();
+  const brainId = useBrainId();
   const { hat } = useHat();
   const queryHat = hatToQuery(hat);
   const { data, isLoading, error } = useQuery({
-    queryKey: ["domains", queryHat],
-    queryFn: () => fetchDomains(queryHat),
+    queryKey: ["domains", brainId, queryHat],
+    queryFn: () => fetchDomains(brainId, queryHat),
   });
 
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -164,8 +168,8 @@ export function DomainsPage() {
                   className="cursor-pointer"
                   onClick={() =>
                     navigate({
-                      to: "/domains/$name",
-                      params: { name: row.name },
+                      to: "/brains/$brainId/domains/$name",
+                      params: { brainId, name: row.name },
                     })
                   }
                   data-testid={`row-${row.name}`}

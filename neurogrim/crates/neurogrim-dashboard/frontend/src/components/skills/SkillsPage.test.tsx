@@ -2,6 +2,8 @@ import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SkillsPage } from "./SkillsPage";
+import { BrainProvider } from "@/lib/useBrain";
+import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 import type { SkillsResponse } from "@bindings/SkillsResponse";
 import type { SkillDto } from "@bindings/SkillDto";
 
@@ -37,9 +39,14 @@ function renderWithQuery() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const router = makeTestRouter(
+    <BrainProvider brainId="test-brain">
+      <SkillsPage />
+    </BrainProvider>
+  );
   return render(
     <QueryClientProvider client={qc}>
-      <SkillsPage />
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }

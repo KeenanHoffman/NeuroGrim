@@ -28,6 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "@tanstack/react-router";
 import { hatToQuery, useHat } from "@/lib/useHat";
+import { brainApi, useBrainId } from "@/lib/useBrain";
 
 interface DomainDetailPageProps {
   /** Domain name (kebab-case) parsed from the URL `/domains/<name>`. */
@@ -35,12 +36,12 @@ interface DomainDetailPageProps {
 }
 
 async function fetchDomainDetail(
+  brainId: string,
   name: string,
   hat: string | null
 ): Promise<DomainDetailResponse> {
-  const url = hat
-    ? `/api/domains/${encodeURIComponent(name)}?hat=${encodeURIComponent(hat)}`
-    : `/api/domains/${encodeURIComponent(name)}`;
+  const base = brainApi(brainId, `domains/${encodeURIComponent(name)}`);
+  const url = hat ? `${base}?hat=${encodeURIComponent(hat)}` : base;
   const res = await fetch(url);
   if (res.status === 404) {
     throw new Error(`Domain '${name}' not found in the registry.`);
@@ -53,18 +54,19 @@ async function fetchDomainDetail(
 
 export function DomainDetailPage({ name }: DomainDetailPageProps) {
   const navigate = useNavigate();
+  const brainId = useBrainId();
   const { hat } = useHat();
   const queryHat = hatToQuery(hat);
   const { data, isLoading, error } = useQuery({
-    queryKey: ["domain-detail", name, queryHat],
-    queryFn: () => fetchDomainDetail(name, queryHat),
+    queryKey: ["domain-detail", brainId, name, queryHat],
+    queryFn: () => fetchDomainDetail(brainId, name, queryHat),
   });
 
   if (isLoading) return <DetailSkeleton />;
   if (error || !data) {
     return (
       <div className="space-y-4">
-        <BackButton onClick={() => navigate({ to: "/domains" })} />
+        <BackButton onClick={() => navigate({ to: "/brains/$brainId/domains", params: { brainId } })} />
         <Card className="border-destructive">
           <CardHeader>
             <CardTitle className="text-destructive">Failed to load domain</CardTitle>
@@ -79,7 +81,7 @@ export function DomainDetailPage({ name }: DomainDetailPageProps) {
 
   return (
     <div className="space-y-6">
-      <BackButton onClick={() => navigate({ to: "/domains" })} />
+      <BackButton onClick={() => navigate({ to: "/brains/$brainId/domains", params: { brainId } })} />
 
       <Card>
         <CardHeader>

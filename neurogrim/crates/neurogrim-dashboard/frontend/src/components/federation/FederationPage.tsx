@@ -19,17 +19,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { brainApi, useBrainId } from "@/lib/useBrain";
 
-async function fetchFederation(): Promise<FederationResponse> {
-  const res = await fetch("/api/federation");
-  if (!res.ok) throw new Error(`/api/federation returned ${res.status}`);
+async function fetchFederation(brainId: string): Promise<FederationResponse> {
+  const url = brainApi(brainId, "federation");
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as FederationResponse;
 }
 
 export function FederationPage() {
+  const brainId = useBrainId();
   const { data, isLoading, error } = useQuery({
-    queryKey: ["federation"],
-    queryFn: fetchFederation,
+    queryKey: ["federation", brainId],
+    queryFn: () => fetchFederation(brainId),
     refetchInterval: 30_000,
   });
 

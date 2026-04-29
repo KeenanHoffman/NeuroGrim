@@ -12,22 +12,26 @@ import { TrajectoryBadge } from "./TrajectoryBadge";
 import { StrongestSignals } from "./StrongestSignals";
 import { TopRecommendations } from "./TopRecommendations";
 import { hatToQuery, useHat } from "@/lib/useHat";
+import { brainApi, useBrainId } from "@/lib/useBrain";
 
-async function fetchOverview(hat: string | null): Promise<OverviewResponse> {
-  const url = hat
-    ? `/api/overview?hat=${encodeURIComponent(hat)}`
-    : "/api/overview";
+async function fetchOverview(
+  brainId: string,
+  hat: string | null
+): Promise<OverviewResponse> {
+  const base = brainApi(brainId, "overview");
+  const url = hat ? `${base}?hat=${encodeURIComponent(hat)}` : base;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as OverviewResponse;
 }
 
 export function OverviewPage() {
+  const brainId = useBrainId();
   const { hat } = useHat();
   const queryHat = hatToQuery(hat);
   const { data, isLoading, error } = useQuery({
-    queryKey: ["overview", queryHat],
-    queryFn: () => fetchOverview(queryHat),
+    queryKey: ["overview", brainId, queryHat],
+    queryFn: () => fetchOverview(brainId, queryHat),
   });
 
   if (isLoading) {

@@ -2,6 +2,8 @@ import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FederationPage } from "./FederationPage";
+import { BrainProvider } from "@/lib/useBrain";
+import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 import type { FederationResponse } from "@bindings/FederationResponse";
 import type { PeerDto } from "@bindings/PeerDto";
 
@@ -51,9 +53,14 @@ function renderWithQuery() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const router = makeTestRouter(
+    <BrainProvider brainId="test-brain">
+      <FederationPage />
+    </BrainProvider>
+  );
   return render(
     <QueryClientProvider client={qc}>
-      <FederationPage />
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }

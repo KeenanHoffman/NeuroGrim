@@ -6,6 +6,7 @@ import type { DomainListItemDto } from "@bindings/DomainListItemDto";
 import type { DomainsListResponse } from "@bindings/DomainsListResponse";
 import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 import { HatProvider } from "@/lib/useHat";
+import { BrainProvider } from "@/lib/useBrain";
 
 const dom = (overrides: Partial<DomainListItemDto> = {}): DomainListItemDto => ({
   name: "test-health",
@@ -32,7 +33,11 @@ function renderWithQuery() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const router = makeTestRouter(<DomainsPage />);
+  const router = makeTestRouter(
+    <BrainProvider brainId="test-brain">
+      <DomainsPage />
+    </BrainProvider>
+  );
   return {
     router,
     ...render(
@@ -89,9 +94,12 @@ describe("DomainsPage", () => {
     const { router } = renderWithQuery();
     const row = await screen.findByTestId("row-test-health");
     fireEvent.click(row);
-    // Wait for the router to settle on the new location.
-    await screen.findByTestId("route-/domains/test-health");
-    expect(router.state.location.pathname).toBe("/domains/test-health");
+    // Wait for the router to settle on the new location. The
+    // navigation target now includes the brain-id prefix.
+    await screen.findByTestId("route-/brains/test-brain/domains/test-health");
+    expect(router.state.location.pathname).toBe(
+      "/brains/test-brain/domains/test-health"
+    );
   });
 
   it("colors high effective scores green, mid amber, low red", async () => {

@@ -19,21 +19,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { brainApi, useBrainId } from "@/lib/useBrain";
 
 type SortKey = "name" | "format" | "invocation_count" | "last_invoked_at" | "hygiene_status";
 type SortDir = "asc" | "desc";
 type StatusFilter = "all" | "alive" | "dead" | "new" | "no-ledger";
 
-async function fetchSkills(): Promise<SkillsResponse> {
-  const res = await fetch("/api/skills");
-  if (!res.ok) throw new Error(`/api/skills returned ${res.status}`);
+async function fetchSkills(brainId: string): Promise<SkillsResponse> {
+  const url = brainApi(brainId, "skills");
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as SkillsResponse;
 }
 
 export function SkillsPage() {
+  const brainId = useBrainId();
   const { data, isLoading, error } = useQuery({
-    queryKey: ["skills"],
-    queryFn: fetchSkills,
+    queryKey: ["skills", brainId],
+    queryFn: () => fetchSkills(brainId),
     refetchInterval: 60_000,
   });
 

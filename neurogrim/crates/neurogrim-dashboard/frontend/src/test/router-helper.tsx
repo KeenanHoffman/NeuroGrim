@@ -54,11 +54,47 @@ export function makeTestRouter(
       return <div data-testid={`route-/domains/${params.name}`} />;
     },
   });
+  // Path 2 multi-Brain routes — components under /brains/$brainId/...
+  // navigate among these. Stubbed minimally so tests can observe the
+  // post-navigation pathname.
+  const brainOverviewRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/brains/$brainId",
+    component: () => {
+      const params = brainOverviewRoute.useParams();
+      return <div data-testid={`route-/brains/${params.brainId}`} />;
+    },
+  });
+  const brainDomainsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/brains/$brainId/domains",
+    component: () => {
+      const params = brainDomainsRoute.useParams();
+      return (
+        <div data-testid={`route-/brains/${params.brainId}/domains`} />
+      );
+    },
+  });
+  const brainDomainDetailRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/brains/$brainId/domains/$name",
+    component: () => {
+      const params = brainDomainDetailRoute.useParams();
+      return (
+        <div
+          data-testid={`route-/brains/${params.brainId}/domains/${params.name}`}
+        />
+      );
+    },
+  });
 
   const routeTree = rootRoute.addChildren([
     indexRoute,
     domainsRoute,
     domainDetailRoute,
+    brainOverviewRoute,
+    brainDomainsRoute,
+    brainDomainDetailRoute,
   ]);
 
   return createRouter({

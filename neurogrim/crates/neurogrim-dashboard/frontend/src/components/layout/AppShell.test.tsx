@@ -12,7 +12,7 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 
-function renderShell(initialPath: string = "/") {
+function renderShell(initialPath: string = "/brains/test-brain") {
   // The AppShell uses Tanstack `<Link>` + `useLocation`, so we need
   // a real router around it (not just the makeTestRouter helper —
   // we want the AppShell to render as the root, not as a child page).
@@ -28,32 +28,41 @@ function renderShell(initialPath: string = "/") {
     path: "/",
     component: () => <div data-testid="page-root">Index</div>,
   });
-  const domainsRoute = createRoute({
+  // Path 2: routes nested under /brains/$brainId. AppShell reads
+  // brainId via useParams and toggles nav visibility/active state on
+  // it. The test routes mirror the production structure.
+  const brainOverviewRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: "/domains",
+    path: "/brains/$brainId",
+    component: () => <div data-testid="page-overview">Overview</div>,
+  });
+  const brainDomainsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/brains/$brainId/domains",
     component: () => <div data-testid="page-domains">Domains</div>,
   });
-  const domainDetailRoute = createRoute({
+  const brainDomainDetailRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: "/domains/$name",
+    path: "/brains/$brainId/domains/$name",
     component: () => <div data-testid="page-domain-detail">Detail</div>,
   });
-  const federationRoute = createRoute({
+  const brainFederationRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: "/federation",
+    path: "/brains/$brainId/federation",
     component: () => <div data-testid="page-federation">Federation</div>,
   });
-  const skillsRoute = createRoute({
+  const brainSkillsRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: "/skills",
+    path: "/brains/$brainId/skills",
     component: () => <div data-testid="page-skills">Skills</div>,
   });
   const tree = rootRoute.addChildren([
     indexRoute,
-    domainsRoute,
-    domainDetailRoute,
-    federationRoute,
-    skillsRoute,
+    brainOverviewRoute,
+    brainDomainsRoute,
+    brainDomainDetailRoute,
+    brainFederationRoute,
+    brainSkillsRoute,
   ]);
   const router = createRouter({
     routeTree: tree,
@@ -95,7 +104,7 @@ describe("AppShell", () => {
   });
 
   it("renders all four primary nav links", async () => {
-    renderShell("/");
+    renderShell();
     expect(await screen.findByTestId("nav-overview")).toBeInTheDocument();
     expect(screen.getByTestId("nav-domains")).toBeInTheDocument();
     expect(screen.getByTestId("nav-federation")).toBeInTheDocument();
@@ -103,30 +112,30 @@ describe("AppShell", () => {
   });
 
   it("highlights the current section in the sidebar", async () => {
-    const { router } = renderShell("/domains");
+    const { router } = renderShell("/brains/test-brain/domains");
     await screen.findByTestId("nav-domains");
     // bg-secondary class is part of the active styling.
     expect(screen.getByTestId("nav-domains").className).toMatch(/bg-secondary/);
     expect(screen.getByTestId("nav-overview").className).not.toMatch(/bg-secondary/);
-    expect(router.state.location.pathname).toBe("/domains");
+    expect(router.state.location.pathname).toBe("/brains/test-brain/domains");
   });
 
   it("treats /domains/<name> as 'Domains' active", async () => {
-    renderShell("/domains/test-health");
+    renderShell("/brains/test-brain/domains/test-health");
     await screen.findByTestId("nav-domains");
     expect(screen.getByTestId("nav-domains").className).toMatch(/bg-secondary/);
   });
 
   it("clicking a nav link navigates to that route", async () => {
-    const { router } = renderShell("/");
+    const { router } = renderShell();
     fireEvent.click(await screen.findByTestId("nav-skills"));
     await screen.findByTestId("page-skills");
-    expect(router.state.location.pathname).toBe("/skills");
+    expect(router.state.location.pathname).toBe("/brains/test-brain/skills");
   });
 
   it("theme toggle flips the html `dark` class", async () => {
     document.documentElement.classList.add("dark");
-    renderShell("/");
+    renderShell();
     const toggle = await screen.findByTestId("theme-toggle");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     fireEvent.click(toggle);
@@ -137,7 +146,7 @@ describe("AppShell", () => {
   });
 
   it("mobile menu button opens and closes the overlay sidebar", async () => {
-    renderShell("/");
+    renderShell();
     const menuButton = await screen.findByTestId("mobile-menu-button");
     expect(screen.queryByTestId("mobile-sidebar-overlay")).not.toBeInTheDocument();
     fireEvent.click(menuButton);
@@ -152,7 +161,7 @@ describe("AppShell", () => {
   });
 
   it("clicking the overlay backdrop closes the sidebar", async () => {
-    renderShell("/");
+    renderShell();
     fireEvent.click(await screen.findByTestId("mobile-menu-button"));
     const overlay = screen.getByTestId("mobile-sidebar-overlay");
     fireEvent.click(overlay);
