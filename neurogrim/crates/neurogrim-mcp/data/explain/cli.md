@@ -51,6 +51,10 @@ output pointing at follow-on commands.
 | `neurogrim test` (v4.0+) | Quiet test wrapper with persisted failure ledger; mirrors cargo's exit code; supports `--keep-last`, `--show-only-new`, `--retry-failed`, `--slow`, `--verbose` |
 | `neurogrim publish-gate run` (v4.0+) | Execute gates from `<brain>/.claude/brain/publish-gates.yaml` (S12-G-3 schema); emits per-gate JSONL to `publish-gate-ledger.jsonl`. Exit: 0 all blocking passed, 1 any blocking failed, 2 any blocking pending. Flags: `--gate <id>`, `--mode {pre-commit,pre-publish,full}`, `-v` |
 | `neurogrim publish-gate ack` (v4.0+) | Mark a manual gate's most recent pending entry as passed by an operator. Requires `--gate <id>`; operator from `--operator` or `$NEUROGRIM_OPERATOR` |
+| `neurogrim queue list` (v4.1+) | List every topic with a JSONL file under `.claude/brain/queues/` plus per-topic stats |
+| `neurogrim queue tail <topic>` (v4.1+) | Print the last N messages on a topic (default 20). Pure file read; no dashboard required |
+| `neurogrim queue publish <topic> <payload>` (v4.1+) | Manually publish a JSON payload to a topic. Operator-driven flow; agents use the MCP `queue_publish` tool |
+| `neurogrim queue stats <topic>` (v4.1+) | Single-topic stats (count, size, oldest/newest timestamps) as JSON |
 
 Sensor invocation pattern: `neurogrim sensory <name> --project-root . > .claude/<name>-cmdb.json`.
 This is how CMDBs are refreshed in CI or pre-commit hooks.

@@ -27,6 +27,7 @@ const TOPICS: &[&str] = &[
     "culture",
     "autonomy",
     "publish-gates",
+    "queues",
 ];
 
 fn data_explain_dir() -> PathBuf {
@@ -142,6 +143,7 @@ fn no_topic_references_unknown_command() {
         "a2a-token",
         "test",
         "publish-gate",
+        "queue",
         "disposition",
         "domain-calibration",
         "federated-pattern",

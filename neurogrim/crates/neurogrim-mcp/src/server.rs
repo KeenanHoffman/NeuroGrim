@@ -284,6 +284,39 @@ pub struct ExplainParams {
     pub topic: Option<String>,
 }
 
+// v4.1 S13-B-4: coordination bus MCP-tool params.
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct QueuePublishParams {
+    /// Topic name. `_neurogrim/<name>` is reserved for system topics;
+    /// adopters use `<scope>/<name>` (lowercase kebab).
+    pub topic: String,
+    /// Free-form payload; the bus is payload-agnostic.
+    pub payload: serde_json::Value,
+    /// "low" | "normal" | "high". Defaults to normal.
+    pub priority: Option<String>,
+    /// Time-to-live in milliseconds. Default: never expires.
+    pub expires_in_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct QueueConsumeParams {
+    pub topic: String,
+    /// 0-indexed line offset to resume from. Consumers persist this
+    /// themselves; the bus is stateless w.r.t. who's read what.
+    /// Default: 0 (read from start of topic).
+    pub since_offset: Option<u64>,
+    /// Cap on returned messages. Default 100; max 1000.
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct QueuePeekParams {
+    pub topic: String,
+    /// How many messages to return from the tail. Default 10; max 100.
+    pub count: Option<u32>,
+}
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct DomainNewParams {
     /// Domain name (kebab-case). Must match `^[a-z][a-z0-9-]*$`.
@@ -687,6 +720,157 @@ impl BrainServer {
         })
         .to_string()
     }
+
+    // ── v4.1 S13-B-4: coordination bus tools ────────────────────────
+
+    #[tool(
+        description = "v4.1 — Publish a message to the agent coordination bus. \
+        Topic must follow the v4.1 namespace convention: `_neurogrim/<name>` for \
+        system topics (reserved; adopters MUST NOT publish here) or \
+        `<scope>/<name>` for adopter topics (lowercase kebab). The bus persists \
+        the message at <project>/.claude/brain/queues/<topic>.jsonl and fans it \
+        out to live SSE subscribers. Returns {message_id, topic, produced_at}. \
+        Default autonomy: notify (cheap, low-blast)."
+    )]
+    async fn queue_publish(
+        &self,
+        Parameters(p): Parameters<QueuePublishParams>,
+    ) -> String {
+        if !neurogrim_core::queue::Topic::is_valid(&p.topic) {
+            return serde_json::json!({
+                "error": "invalid topic name",
+                "topic": p.topic,
+                "hint": "use `_neurogrim/<name>` for reserved or `<scope>/<name>` lowercase kebab",
+            })
+            .to_string();
+        }
+        let mut msg = neurogrim_core::queue::QueueMessage::new(p.topic.clone(), p.payload);
+        if let Some(prio) = p.priority {
+            match prio.as_str() {
+                "low" => msg.priority = neurogrim_core::queue::Priority::Low,
+                "normal" => msg.priority = neurogrim_core::queue::Priority::Normal,
+                "high" => msg.priority = neurogrim_core::queue::Priority::High,
+                other => {
+                    return serde_json::json!({
+                        "error": "invalid priority",
+                        "expected": ["low", "normal", "high"],
+                        "got": other,
+                    })
+                    .to_string();
+                }
+            }
+        }
+        if let Some(ttl_ms) = p.expires_in_ms {
+            let when = msg.produced_at + chrono::Duration::milliseconds(ttl_ms as i64);
+            msg = msg.with_expires_at(when);
+        }
+        let path = self
+            .project_root
+            .join(".claude")
+            .join("brain")
+            .join("queues");
+        // Mirror BusState::publish on-disk layout: subdirs for slash
+        // segments, leaf gets `.jsonl` extension.
+        let mut full = path;
+        for seg in p.topic.split('/') {
+            if !seg.is_empty() {
+                full.push(seg);
+            }
+        }
+        full.set_extension("jsonl");
+        match neurogrim_core::queue::append(&full, &msg) {
+            Ok(()) => serde_json::json!({
+                "message_id": msg.id.to_string(),
+                "topic": msg.topic,
+                "produced_at": msg.produced_at.to_rfc3339(),
+            })
+            .to_string(),
+            Err(e) => serde_json::json!({"error": format!("publish failed: {e}")}).to_string(),
+        }
+    }
+
+    #[tool(
+        description = "v4.1 — Read messages from a topic since the given offset. \
+        Offset-based; the tool does NOT mark messages as consumed (the consumer \
+        persists its own offset). Returns {topic, messages, next_offset} where \
+        next_offset is the cursor for the next call. Maximum 1000 messages per \
+        call. Default autonomy: notify."
+    )]
+    async fn queue_consume(
+        &self,
+        Parameters(p): Parameters<QueueConsumeParams>,
+    ) -> String {
+        if !neurogrim_core::queue::Topic::is_valid(&p.topic) {
+            return serde_json::json!({"error": "invalid topic name", "topic": p.topic})
+                .to_string();
+        }
+        let path = topic_disk_path(&self.project_root, &p.topic);
+        let reader = match neurogrim_core::queue::JsonlQueueReader::open(&path) {
+            Ok(r) => r,
+            Err(e) => {
+                return serde_json::json!({"error": format!("read failed: {e}")}).to_string();
+            }
+        };
+        let since = p.since_offset.unwrap_or(0);
+        let limit = p.limit.unwrap_or(100).min(1000) as usize;
+        let messages: Vec<serde_json::Value> = reader
+            .iter_from(since as usize)
+            .take(limit)
+            .map(|m| serde_json::to_value(m).unwrap_or(serde_json::Value::Null))
+            .collect();
+        let returned = messages.len() as u64;
+        serde_json::json!({
+            "topic": p.topic,
+            "messages": messages,
+            "next_offset": since + returned,
+        })
+        .to_string()
+    }
+
+    #[tool(
+        description = "v4.1 — Peek at the most recent N messages in a topic \
+        without advancing any offset. Useful for the 'what just happened' \
+        quick-glance pattern. Maximum 100 per call. Default autonomy: notify."
+    )]
+    async fn queue_peek(
+        &self,
+        Parameters(p): Parameters<QueuePeekParams>,
+    ) -> String {
+        if !neurogrim_core::queue::Topic::is_valid(&p.topic) {
+            return serde_json::json!({"error": "invalid topic name", "topic": p.topic})
+                .to_string();
+        }
+        let path = topic_disk_path(&self.project_root, &p.topic);
+        let reader = match neurogrim_core::queue::JsonlQueueReader::open(&path) {
+            Ok(r) => r,
+            Err(e) => {
+                return serde_json::json!({"error": format!("read failed: {e}")}).to_string();
+            }
+        };
+        let count = p.count.unwrap_or(10).min(100) as usize;
+        let tail = reader.tail(count);
+        let messages: Vec<serde_json::Value> = tail
+            .iter()
+            .map(|m| serde_json::to_value(m).unwrap_or(serde_json::Value::Null))
+            .collect();
+        serde_json::json!({"topic": p.topic, "messages": messages}).to_string()
+    }
+}
+
+/// Mirror `BusState::topic_path` from the dashboard crate: subdirs
+/// for slash segments + `.jsonl` extension on the leaf.
+fn topic_disk_path(project_root: &std::path::Path, topic: &str) -> std::path::PathBuf {
+    let mut p = project_root
+        .join(".claude")
+        .join("brain")
+        .join("queues");
+    for seg in topic.split('/') {
+        if !seg.is_empty() {
+            p.push(seg);
+        }
+    }
+    p.set_extension("jsonl");
+    p
 }
 
 /// Build the "next steps" hint text for an MCP `domain_new` response.

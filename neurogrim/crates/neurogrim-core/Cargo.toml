@@ -31,6 +31,10 @@ tracing = { workspace = true }
 # v3.5.0 ports module — random pick from IANA dynamic range with
 # deterministic-seeded test path. 0.8.x for SeedableRng::from_entropy.
 rand = { workspace = true }
+# v4.1 S13-B-1 — `queue` module's `QueueMessage::id` is a uuid v4.
+# Same crate version as neurogrim-cli's run_id generators for
+# consistency. Serde feature for `#[derive(Serialize, Deserialize)]`.
+uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
 proptest = { workspace = true }

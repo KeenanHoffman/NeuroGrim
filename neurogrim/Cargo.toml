@@ -74,7 +74,7 @@ rand = "0.8"
 axum = { version = "0.7", features = ["macros"] }
 tower-http = { version = "0.5", features = ["fs", "trace"] }
 rust-embed = { version = "8", features = ["interpolate-folder-path"] }
-ts-rs = { version = "10", features = ["chrono-impl", "no-serde-warnings"] }
+ts-rs = { version = "10", features = ["chrono-impl", "no-serde-warnings", "serde-json-impl"] }
 notify = "6"
 webbrowser = "1"
 

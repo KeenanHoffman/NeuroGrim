@@ -477,6 +477,84 @@ pub struct SkillDto {
     pub hygiene_status: String,
 }
 
+// ── Coordination bus (S13-B-2) ───────────────────────────────────────────
+
+/// Request body of `POST /api/brains/:brain_id/queues/:topic`.
+/// `payload` is required; `priority` and `expires_in_ms` are
+/// optional. The bus generates `id` + `produced_at`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct QueuePublishRequest {
+    pub payload: serde_json::Value,
+    /// "low" | "normal" | "high". Defaults to normal.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub priority: Option<String>,
+    /// Time-to-live in milliseconds; the bus computes
+    /// `expires_at = produced_at + expires_in_ms`. Default: never.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub expires_in_ms: Option<u64>,
+}
+
+/// Response body of `POST /api/brains/:brain_id/queues/:topic` — the
+/// freshly-produced message's identifiers. Body of the published
+/// message is NOT echoed back; consumers fetch via the read endpoint
+/// or subscribe to the SSE stream.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct QueuePublishResponse {
+    pub id: String,
+    pub topic: String,
+    pub produced_at: String,
+}
+
+/// One message in the wire format the dashboard returns. Mirrors
+/// `neurogrim_core::queue::QueueMessage` but uses string typed fields
+/// so the TS-side schema is stable across uuid / chrono crate version
+/// drift.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct QueueMessageDto {
+    pub id: String,
+    pub topic: String,
+    pub payload: serde_json::Value,
+    pub produced_at: String,
+    pub priority: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub expires_at: Option<String>,
+}
+
+/// Response body of `GET /api/brains/:brain_id/queues/:topic` — a
+/// page of messages with the `next_offset` cursor for resume.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct QueueReadResponse {
+    pub topic: String,
+    pub messages: Vec<QueueMessageDto>,
+    /// Offset to pass as `since` on the next read to resume after
+    /// the last message in this page. Equals `since + messages.len()`.
+    pub next_offset: u64,
+}
+
+/// Response body of `GET /api/brains/:brain_id/queues` — every
+/// topic with a JSONL file on disk, plus per-topic stats.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct QueuesListResponse {
+    pub topics: Vec<QueueTopicStatsDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct QueueTopicStatsDto {
+    pub topic: String,
+    pub message_count: u32,
+    pub size_bytes: u64,
+    /// `produced_at` of the oldest message, RFC3339. None when empty.
+    pub oldest: Option<String>,
+    /// `produced_at` of the newest message, RFC3339. None when empty.
+    pub newest: Option<String>,
+}
+
 // ── Publish-gates page (S12-G-6) ─────────────────────────────────────────
 
 /// Response body of `GET /api/brains/:brain_id/publish-gates` —

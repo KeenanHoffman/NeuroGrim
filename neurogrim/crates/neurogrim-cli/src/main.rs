@@ -417,6 +417,16 @@ enum Commands {
     #[command(name = "publish-gate")]
     PublishGate(commands::publish_gate::Args),
 
+    /// v4.1 (S13-B-7) — agent coordination bus CLI. Sub-commands:
+    /// `list` (every topic on disk + stats), `tail <topic>` (last N
+    /// messages), `publish <topic> <json>` (manual produce; agents
+    /// use the MCP `queue_publish` tool), `stats <topic>` (single-
+    /// topic stats as JSON). Reads/writes
+    /// `<project>/.claude/brain/queues/<topic>.jsonl`. v1 ships
+    /// JSONL-backed only; `compact`, `migrate`, and `inspect`
+    /// sub-commands land with the SQLite backend in S13-B-3.
+    Queue(commands::queue::Args),
+
     /// Domain workflow commands. v3.2: `neurogrim domain new <name>`
     /// scaffolds a new domain (registry mutation + stub CMDB +
     /// optional Python sensor skeleton).
@@ -546,6 +556,7 @@ async fn main() -> Result<()> {
         Commands::Skill(args) => commands::skill::run(args).await,
         Commands::Test(args) => commands::test::run(args).await,
         Commands::PublishGate(args) => commands::publish_gate::run(args).await,
+        Commands::Queue(args) => commands::queue::run(args).await,
         Commands::Domain(args) => commands::domain::run(args).await,
         Commands::Federation(args) => commands::federation::run(args).await,
     }

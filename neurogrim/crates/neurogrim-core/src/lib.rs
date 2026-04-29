@@ -30,6 +30,11 @@
 //! - **[`ports`]** — v3.5.0 per-project random port allocator. Picks two
 //!   ports (dashboard + a2a) from the IANA dynamic range, persists the
 //!   choice to `.claude/brain/ports.json`, idempotent on subsequent reads.
+//! - **[`queue`]** — v4.1 S13-B-1 append-only event-log substrate.
+//!   `QueueMessage`, `Priority`, `Topic`, `append`, `JsonlQueueReader`.
+//!   Pattern 1 (fan-out, multi-consumer, no-ack); Pattern 2
+//!   (request/response coordination — `await_approval`) ships in S13-B-5
+//!   on top of this primitive.
 //! - **[`ecosystem`]** — `ChildEntry`, `EcosystemRegistry`, topological
 //!   ordering for fractal-composition score aggregation (spec §9).
 //! - **[`awareness`]** — `LocalAwareness`: per-machine fact store (tool
@@ -61,6 +66,7 @@ pub mod ecosystem;
 pub mod governance;
 pub mod learning;
 pub mod ports;
+pub mod queue;
 pub mod registry;
 pub mod scoring;
 pub mod trajectory;

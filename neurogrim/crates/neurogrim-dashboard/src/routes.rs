@@ -48,7 +48,8 @@ use crate::types::{
     DomainListItemDto, DomainSignalDto, DomainsListResponse, FederationResponse, FindingDto,
     HatDto, HatsResponse, HealthResponse, HistoryPointDto, OverviewResponse, PeerDto,
     PeerStatusDto, PublishGateLedgerView, PublishGateView, PublishGatesPageResponse,
-    RecommendationDto, SelfBrainDto, SkillsResponse,
+    QueueMessageDto, QueuePublishRequest, QueuePublishResponse, QueueReadResponse,
+    QueueTopicStatsDto, QueuesListResponse, RecommendationDto, SelfBrainDto, SkillsResponse,
 };
 
 /// Query params accepted by score-aware routes (overview, domains
@@ -134,6 +135,15 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/brains/:brain_id/publish-gates",
             get(brain_publish_gates),
+        )
+        // v4.1 S13-B-2: agent coordination bus. Topic-aware
+        // wildcard suffix (`/*topic`) so path segments can carry
+        // slashes (e.g. `_neurogrim/approvals` topic). The list
+        // endpoint at `/queues` (no trailing path) is distinct.
+        .route("/api/brains/:brain_id/queues", get(brain_queues_list))
+        .route(
+            "/api/brains/:brain_id/queues/*rest",
+            get(brain_queue_read_or_events).post(brain_queue_publish),
         )
         // ---- Live updates ----
         .route("/api/events", get(events_sse))
@@ -2106,6 +2116,219 @@ fn guess_mime(path: &str) -> &'static str {
         "application/json; charset=utf-8"
     } else {
         "application/octet-stream"
+    }
+}
+
+// ── S13-B-2: coordination bus handlers ──────────────────────────────────
+
+#[derive(Debug, Deserialize, Default)]
+struct QueueReadQuery {
+    /// Offset (0-indexed line number) to resume from. Defaults to 0
+    /// — the consumer reads from the start of the topic. Consumers
+    /// persist this themselves; the bus is stateless w.r.t. who's
+    /// read what.
+    #[serde(default)]
+    pub since: u64,
+    /// Cap on the number of messages returned per call. Defaults to
+    /// 100; capped server-side at 1000 to prevent runaway responses.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+const DEFAULT_QUEUE_READ_LIMIT: u32 = 100;
+const MAX_QUEUE_READ_LIMIT: u32 = 1000;
+
+/// `GET /api/brains/:brain_id/queues` — list topics + stats.
+async fn brain_queues_list(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let topics = crate::bus::list_topics(&brain.project_root);
+    let stats: Vec<QueueTopicStatsDto> = topics
+        .iter()
+        .map(|t| {
+            let path = crate::bus::topic_path(&brain.project_root, t);
+            let s = crate::bus::TopicStats::from_path(t, &path);
+            QueueTopicStatsDto {
+                topic: s.topic,
+                message_count: s.message_count.min(u32::MAX as usize) as u32,
+                size_bytes: s.size_bytes,
+                oldest: s.oldest,
+                newest: s.newest,
+            }
+        })
+        .collect();
+    Json(QueuesListResponse { topics: stats }).into_response()
+}
+
+/// `GET /api/brains/:brain_id/queues/*rest`. Dispatches by suffix:
+/// - `rest` ending in `/events` → SSE subscription on the topic
+///   (everything before the suffix).
+/// - Otherwise → read messages from `since` cursor up to `limit`.
+async fn brain_queue_read_or_events(
+    State(state): State<AppState>,
+    AxumPath((brain_id, rest)): AxumPath<(String, String)>,
+    Query(q): Query<QueueReadQuery>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    if let Some(topic) = rest.strip_suffix("/events") {
+        return brain_queue_sse(state.bus.clone(), topic.to_string()).await;
+    }
+    if !neurogrim_core::queue::Topic::is_valid(&rest) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "invalid topic name", "topic": rest})),
+        )
+            .into_response();
+    }
+    let path = crate::bus::topic_path(&brain.project_root, &rest);
+    let reader = match neurogrim_core::queue::JsonlQueueReader::open(&path) {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("read failed: {e}"),
+                    "topic": rest,
+                })),
+            )
+                .into_response();
+        }
+    };
+    let limit = q
+        .limit
+        .unwrap_or(DEFAULT_QUEUE_READ_LIMIT)
+        .min(MAX_QUEUE_READ_LIMIT) as usize;
+    let messages: Vec<QueueMessageDto> = reader
+        .iter_from(q.since as usize)
+        .take(limit)
+        .map(qm_to_dto)
+        .collect();
+    let returned = messages.len() as u64;
+    Json(QueueReadResponse {
+        topic: rest,
+        messages,
+        next_offset: q.since + returned,
+    })
+    .into_response()
+}
+
+/// SSE stream of new messages on `topic`. One subscription per
+/// connection. Subscribers join AFTER any backlog is consumed via
+/// the read endpoint — this stream only carries newly-published
+/// messages.
+async fn brain_queue_sse(bus: crate::bus::BusState, topic: String) -> Response {
+    if !neurogrim_core::queue::Topic::is_valid(&topic) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "invalid topic name", "topic": topic})),
+        )
+            .into_response();
+    }
+    let rx = bus.subscribe(&topic).await;
+    let stream: futures::stream::BoxStream<'static, Result<Event, Infallible>> =
+        BroadcastStream::new(rx)
+            .filter_map(|res| async move {
+                let qm = res.ok()?;
+                let dto = qm_to_dto(&qm);
+                let json = serde_json::to_string(&dto).ok()?;
+                Some(Ok(Event::default().data(json)))
+            })
+            .boxed();
+    Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
+}
+
+/// `POST /api/brains/:brain_id/queues/*rest` — publish to topic.
+/// Gated by `--allow-mutations` (returns 403 when disabled). Body
+/// is [`QueuePublishRequest`]; bus generates id + produced_at.
+async fn brain_queue_publish(
+    State(state): State<AppState>,
+    AxumPath((brain_id, rest)): AxumPath<(String, String)>,
+    Json(body): Json<QueuePublishRequest>,
+) -> Response {
+    if !state.mutations_allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "mutations-disabled",
+                "code": "mutations-disabled",
+                "hint": "start the dashboard with --allow-mutations to enable bus publishes",
+            })),
+        )
+            .into_response();
+    }
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    if !neurogrim_core::queue::Topic::is_valid(&rest) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "invalid topic name", "topic": rest})),
+        )
+            .into_response();
+    }
+    let mut msg = neurogrim_core::queue::QueueMessage::new(rest.clone(), body.payload);
+    if let Some(p) = body.priority {
+        match p.as_str() {
+            "low" => msg.priority = neurogrim_core::queue::Priority::Low,
+            "normal" => msg.priority = neurogrim_core::queue::Priority::Normal,
+            "high" => msg.priority = neurogrim_core::queue::Priority::High,
+            other => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": "invalid priority",
+                        "expected": ["low", "normal", "high"],
+                        "got": other,
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
+    if let Some(ttl_ms) = body.expires_in_ms {
+        let when = msg.produced_at + chrono::Duration::milliseconds(ttl_ms as i64);
+        msg = msg.with_expires_at(when);
+    }
+    let written = match state.bus.publish(&brain.project_root, msg).await {
+        Ok(m) => m,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("publish failed: {e}")})),
+            )
+                .into_response();
+        }
+    };
+    Json(QueuePublishResponse {
+        id: written.id.to_string(),
+        topic: written.topic,
+        produced_at: written.produced_at.to_rfc3339(),
+    })
+    .into_response()
+}
+
+fn qm_to_dto(m: &neurogrim_core::queue::QueueMessage) -> QueueMessageDto {
+    let priority = match m.priority {
+        neurogrim_core::queue::Priority::Low => "low",
+        neurogrim_core::queue::Priority::Normal => "normal",
+        neurogrim_core::queue::Priority::High => "high",
+    };
+    QueueMessageDto {
+        id: m.id.to_string(),
+        topic: m.topic.clone(),
+        payload: m.payload.clone(),
+        produced_at: m.produced_at.to_rfc3339(),
+        priority: priority.to_string(),
+        expires_at: m.expires_at.map(|x| x.to_rfc3339()),
     }
 }
 

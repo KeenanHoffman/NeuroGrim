@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::brains::BrainTree;
+use crate::bus::BusState;
 use crate::cache::BrainContextCache;
 use crate::events::DashboardEvent;
 use crate::services::ServiceRegistry;
@@ -54,6 +55,10 @@ pub struct AppState {
     /// instance has spawned. Cleared on dashboard restart; spawned
     /// children survive (kill_on_drop is intentionally NOT set).
     pub service_registry: Arc<ServiceRegistry>,
+    /// v4.1 S13-B-2 — agent coordination bus state. Per-topic
+    /// broadcast channels for SSE pubsub; persistent storage lives
+    /// on disk under `<project>/.claude/brain/queues/<topic>.jsonl`.
+    pub bus: BusState,
 }
 
 impl AppState {
@@ -76,6 +81,7 @@ impl AppState {
             events: None,
             mutations_allowed: false,
             service_registry: Arc::new(ServiceRegistry::new()),
+            bus: BusState::new(),
         }
     }
 
@@ -97,6 +103,7 @@ impl AppState {
             events: Some(events),
             mutations_allowed,
             service_registry: Arc::new(ServiceRegistry::new()),
+            bus: BusState::new(),
         }
     }
 }

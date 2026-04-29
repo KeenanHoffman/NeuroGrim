@@ -82,30 +82,34 @@ S13-B-7 expanded to include the auto-compaction scheduler.
 
 ## Stage 13 Is Done When
 
-- [ ] `crates/neurogrim-core/src/queue.rs` module ships with `QueueMessage`, `JsonlQueueWriter`, `JsonlQueueReader` + 10+ unit tests
-- [ ] `crates/neurogrim-dashboard/src/bus.rs` module wraps queue I/O behind HTTP endpoints
-- [ ] `POST /api/brains/:id/queues/:topic`, `GET /api/brains/:id/queues/:topic?since=N&limit=M`, SSE pubsub at `/queues/:topic/events` all green
-- [ ] Optional SQLite backend trait + adapter ships; per-topic configuration in `<brain>/.claude/brain/queue-config.yaml`
-- [ ] `neurogrim queue migrate <topic> <from> <to>` CLI for backend transitions
-- [ ] 3 new MCP tools: `queue_publish`, `queue_consume`, `queue_peek`
-- [ ] Autonomy enforcement wired into MCP dispatch: `Approve` blocks via Pattern 2 round-trip; `Blocked` rejects deterministically; `Notify` runs but emits notification; `Auto` runs silently
-- [ ] Hard gates **default-on** in v4.1 (no `--enforce-autonomy` flag — see refinement #1)
-- [ ] Pattern 1 (event log) and Pattern 2 (request/response coordination) APIs distinct on the agent side (see refinement #2)
-- [ ] Reserved `_neurogrim/<name>` namespace validated by `neurogrim doctor`
-- [ ] Consumer groups: SQLite topics with `ack_required: true` provide exactly-once consumption; JSONL topics ignore the flag (fan-out only)
-- [ ] `neurogrim queue inspect <topic>` reads from either backend and emits JSONL on stdout — preserves "everything inspectable as files" methodology
-- [ ] Cross-Brain queue subscription via A2A: peer's Agent Card advertises queue endpoints; ecosystem Brain can subscribe to children's topics (S13-B-9)
-- [ ] Default retention: 30 days OR 10k messages per topic; daily auto-compaction; per-topic override via `queue-config.yaml`
-- [ ] Approvals UI widget (`approvals-feed`) + page (`/brains/:id/approvals`) render pending requests with Approve/Deny
-- [ ] `neurogrim queue list | tail | publish | stats | compact | inspect | migrate` CLI ships
-- [ ] 13th explain topic: `neurogrim explain queues` ships, documenting both patterns + namespace + retention
-- [ ] NeuroGrim's own publish gates from S12 use bus events for cross-pipeline visibility
+**Foundation (shipped):**
+- [x] `crates/neurogrim-core/src/queue.rs` module ships with `QueueMessage`, `JsonlQueueWriter`, `JsonlQueueReader` + 10+ unit tests *(S13-B-1 — actually 20 tests covering append, read, since-offset resume, malformed-line skip, expires_at filtering, tail, topic-namespace validation)*
+- [x] `crates/neurogrim-dashboard/src/bus.rs` module wraps queue I/O behind HTTP endpoints *(S13-B-2 — `BusState` with per-topic broadcast channels, lazy-init on first publish/subscribe; capacity 64 same as v3.4 events.rs; subdirs-on-disk preserves cat-inspectability)*
+- [x] `POST /api/brains/:id/queues/:topic`, `GET /api/brains/:id/queues/:topic?since=N&limit=M`, SSE pubsub at `/queues/:topic/events` all green *(S13-B-2 — wildcard `*rest` route segment lets topics carry slashes; POST gated by `--allow-mutations`; GET dispatches to read-or-events by suffix)*
+- [x] 3 new MCP tools: `queue_publish`, `queue_consume`, `queue_peek` *(S13-B-4 — registered on `BrainServer` via the `#[tool]` macro; offset-based consume; mirrors HTTP wire format)*
+- [x] Pattern 1 (event log) and Pattern 2 (request/response coordination) APIs distinct on the agent side *(refinement #2 — Pattern 1 ships as `queue_*` MCP tools + HTTP; Pattern 2 reserved for S13-B-5 with the `await_approval` abstraction)*
+- [x] Reserved `_neurogrim/<name>` namespace validated *(`Topic::is_valid_adopter_topic` + `append()` rejection; `neurogrim doctor` validation against `queue-config.yaml` is the next-story extension)*
+- [x] `neurogrim queue list | tail | publish | stats` CLI ships *(S13-B-7 partial; `compact | inspect | migrate` deferred until SQLite backend lands in B-3)*
+- [x] 13th explain topic: `neurogrim explain queues` ships *(S13-B-8 — covers two patterns, namespace, write/read paths, storage layout, what's deferred; methodology_drift TOPICS extended)*
+
+**Deferred (load-bearing follow-ons):**
+- [ ] Optional SQLite backend trait + adapter ships; per-topic configuration in `<brain>/.claude/brain/queue-config.yaml` *(S13-B-3 — opt-in for `ack_required: true` topics)*
+- [ ] `neurogrim queue migrate <topic> <from> <to>` CLI for backend transitions *(depends on B-3)*
+- [ ] Autonomy enforcement wired into MCP dispatch: `Approve` blocks via Pattern 2 round-trip; `Blocked` rejects deterministically; `Notify` runs but emits notification; `Auto` runs silently *(S13-B-5 — the load-bearing change)*
+- [ ] Hard gates **default-on** in v4.1 *(part of B-5)*
+- [ ] Consumer groups: SQLite topics with `ack_required: true` provide exactly-once consumption; JSONL topics ignore the flag *(part of B-3)*
+- [ ] `neurogrim queue inspect <topic>` reads from either backend *(needs B-3 to make either-backend meaningful; today `tail` does the JSONL-only equivalent)*
+- [ ] Cross-Brain queue subscription via A2A *(S13-B-9)*
+- [ ] Default retention: 30 days OR 10k messages per topic; daily auto-compaction *(B-7 expanded scope, follows B-3)*
+- [ ] Approvals UI widget + page *(S13-B-6 — depends on B-5 for the wire-up)*
+- [ ] `neurogrim queue compact | inspect | migrate` CLI *(part of B-3 + B-7 expanded)*
+- [ ] NeuroGrim's own publish gates from S12 use bus events for cross-pipeline visibility *(needs B-5 wire-up)*
 
 ---
 
 ## Stories
 
-### S13-B-1: Queue module in `neurogrim-core` (5 days)
+### S13-B-1: Queue module in `neurogrim-core` (5 days) — ✅ SHIPPED
 
 **What:** New module `crates/neurogrim-core/src/queue.rs` (sync, no I/O dependency creep into core).
 
@@ -130,7 +134,7 @@ Mirrors the existing `disposition.rs:48` and `calibration_ledger.rs:306` writer 
 - [ ] 10+ unit tests: append + iterate, malformed-line skip, since_offset resume, expires_at filtering
 - [ ] Documentation in `core/src/lib.rs` module map
 
-### S13-B-2: Bus service in `neurogrim-dashboard` (4 days)
+### S13-B-2: Bus service in `neurogrim-dashboard` (4 days) — ✅ SHIPPED (compact endpoint deferred)
 
 **What:** `crates/neurogrim-dashboard/src/bus.rs` exposes queue I/O over HTTP. Reuses v3.4 SSE plumbing for pubsub.
 
@@ -170,7 +174,7 @@ topics:
 - [ ] `neurogrim queue migrate <topic> jsonl sqlite` works both directions
 - [ ] 8+ tests across both backends with same property-suite
 
-### S13-B-4: MCP queue tools (3 days)
+### S13-B-4: MCP queue tools (3 days) — ✅ SHIPPED
 
 **What:** Three new MCP tools registered in `crates/neurogrim-mcp/src/server.rs`:
 
@@ -218,7 +222,7 @@ Approving emits on `_neurogrim/approval-resolutions` queue with operator handle 
 - [ ] Operator handle threaded through approval emission
 - [ ] vitest coverage for the approval flow
 
-### S13-B-7: CLI inspection (3 days)
+### S13-B-7: CLI inspection (3 days) — 🟡 PARTIAL (list/tail/publish/stats shipped; compact/migrate/inspect + auto-compaction deferred)
 
 **What:** `neurogrim queue` subcommand:
 
@@ -245,7 +249,7 @@ Approving emits on `_neurogrim/approval-resolutions` queue with operator handle 
 - [ ] Cross-process integration test: ecosystem Brain subscribes to NeuroGrim Brain's `_neurogrim/notifications` over A2A; consumes 3 messages successfully
 - [ ] Documentation: federation explain topic gains a "queue subscription" subsection
 
-### S13-B-8: Documentation (3 days)
+### S13-B-8: Documentation (3 days) — ✅ SHIPPED
 
 **What:**
 - 13th explain topic: `neurogrim explain queues`
