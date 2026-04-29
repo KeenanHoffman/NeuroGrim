@@ -27,7 +27,7 @@
 - [x] Gate-result ledger at `<brain>/.claude/brain/publish-gate-ledger.jsonl` with append-only writer + read helpers *(S12-G-4 — `LedgerEntry` schema with run_id, gate_id, gate_type, mode, started_at, completed_at, status, blocking, operator, exit_code, stdout/stderr truncation; `append_ledger_entries` + `read_most_recent_pending` exported)*
 - [x] Playwright foundation: `crates/neurogrim-dashboard/frontend/e2e/`, headless Chromium, total run time enforced <3 minutes *(S12-G-5 — `playwright.config.ts` shipped with `globalTimeout: 180_000`; chromium-only project; sequential workers; webServer block spawns the prebuilt `target/debug/neurogrim.exe` on port 17345)*
 - [x] Three smoke specs ship green: `overview-loads.spec.ts`, `federation-page.spec.ts`, `layout-edit.spec.ts` *(S12-G-5 — all three pass in 9.6s wall-clock; targets are `data-testid` markers + accessible button names; `pageerror` + `console.error` listeners catch React #310-class crashes)*
-- [ ] Manual gate UI: `/brains/:id/publish-gates` page renders pending checklist + per-item verify URL/command
+- [x] Manual gate UI: `/brains/:id/publish-gates` page renders pending checklist + per-item verify URL/command *(S12-G-6 — read-only React page at `frontend/src/components/publish-gates/`; backed by `GET /api/brains/:brain_id/publish-gates` joining manifest + ledger; nav link in AppShell; ack still happens via the CLI `ack` sub-command but inline `--interactive` y/N prompt also added to `run` for TTY operators)*
 - [ ] NeuroGrim's own `publish-gates.yaml` authored; v4.0 itself publishes through the gate pipeline as the first dogfood pass
 - [x] 12th explain topic ships: `neurogrim explain publish-gates` *(S12-G-5 — `crates/neurogrim-mcp/data/explain/publish-gates.md`; covers gate types, manifest schema, runner CLI, ledger, mode filter, ack flow, e2e setup, adopter onboarding; methodology_drift `TOPICS` extended)*
 - [ ] Adopter walkthrough doc: how to set up gates in a fresh adopter Brain
@@ -136,17 +136,19 @@ gates:
 
 **Status:** Complete. Bonus wire-up: G-4's `execute_e2e_deferred` was replaced by `execute_e2e_playwright` — `e2e` gate types in `publish-gates.yaml` now actually run Playwright through the runner, capture stdout/stderr to the ledger (truncated to 4 KB head + 4 KB tail), and respect `timeout_seconds`. End-to-end smoke against a single-gate manifest passed cleanly with the e2e gate landing as `passed` in the ledger.
 
-### S12-G-6: Manual gate UI surface (3 days)
+### S12-G-6: Manual gate UI surface (3 days) — ✅ SHIPPED
 
 **What:** When `publish-gate run` encounters a manual gate, it prints a numbered checklist + per-item URL or CLI command. Each operator-checked item logs to ledger with `$NEUROGRIM_OPERATOR`. Read-only UI surface in dashboard: `/brains/:id/publish-gates` page.
 
 **Why:** Manual gates can't be automated, but the operator's clicks need recording for audit. UI page makes "what's pending" visible at a glance.
 
 **Done when:**
-- [ ] CLI prints checklist, accepts y/n input per item
-- [ ] Operator handle from `$NEUROGRIM_OPERATOR` env var (matches existing convention)
-- [ ] `/brains/:id/publish-gates` page lists pending + completed gates from ledger
-- [ ] Dashboard test added covering page render + state transitions
+- [x] CLI prints checklist, accepts y/n input per item *(via `--interactive`; auto-detect via `IsTerminal` when neither `--interactive` nor `--no-interactive` is passed; inline 'y' marks the gate `passed` with operator handle and writes the ledger entry directly; 'n' / blank / unresolvable operator falls through to async pending)*
+- [x] Operator handle from `$NEUROGRIM_OPERATOR` env var (matches existing convention) *(`--operator` flag on `run` overrides; falls back to env; missing handle interactively → falls through to pending with a clear warning instead of ack'ing under "unknown")*
+- [x] `/brains/:id/publish-gates` page lists pending + completed gates from ledger *(read-only React page at `frontend/src/components/publish-gates/PublishGatesPage.tsx`; renders 4 branches: empty / malformed-manifest banner / gate table with status badges / recent-ledger timeline; backed by new `GET /api/brains/:brain_id/publish-gates` Rust endpoint that joins manifest + ledger; AppShell nav link with `GitMerge` icon)*
+- [x] Dashboard test added covering page render + state transitions *(7 vitest cases covering empty state, malformed banner, gate-table render, all 7 status-badge variants, recent-ledger timeline, operator-handle display, fetch-error state; plus 1 Playwright spec — `publish-gates-page.spec.ts` — covering nav-link click + page render + no console errors)*
+
+**Status:** Complete. The dashboard surface is read-only; ack happens via the CLI (`ack` sub-command or `--interactive` flag on `run`). A future story can add ack buttons to the page once the audit-trail discipline for dashboard-side mutations is settled (the same conversation that gated `--allow-mutations` in v3.5).
 
 ### S12-G-7: Self-hosting milestone (2 days)
 

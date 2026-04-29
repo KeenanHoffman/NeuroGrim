@@ -6,6 +6,7 @@ import {
   Layers,
   Network,
   BookOpen,
+  GitMerge,
   Moon,
   Sun,
   Menu,
@@ -23,7 +24,8 @@ interface NavItem {
     | "/brains/$brainId"
     | "/brains/$brainId/domains"
     | "/brains/$brainId/federation"
-    | "/brains/$brainId/skills";
+    | "/brains/$brainId/skills"
+    | "/brains/$brainId/publish-gates";
   /** Path suffix used by `isActive` to compare against the
    *  currently-rendered pathname (`""` for the brain root). */
   suffix: string;
@@ -55,6 +57,12 @@ const NAV: NavItem[] = [
     suffix: "/skills",
     label: "Skills",
     icon: <BookOpen className="h-4 w-4" />,
+  },
+  {
+    to: "/brains/$brainId/publish-gates",
+    suffix: "/publish-gates",
+    label: "Publish gates",
+    icon: <GitMerge className="h-4 w-4" />,
   },
 ];
 

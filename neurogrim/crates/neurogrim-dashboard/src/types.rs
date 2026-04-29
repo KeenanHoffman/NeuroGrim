@@ -477,6 +477,88 @@ pub struct SkillDto {
     pub hygiene_status: String,
 }
 
+// ── Publish-gates page (S12-G-6) ─────────────────────────────────────────
+
+/// Response body of `GET /api/brains/:brain_id/publish-gates` —
+/// renders the manual-gate UI surface (`/brains/:id/publish-gates`).
+///
+/// Combines the manifest (gate declarations) with the ledger (run
+/// history) so the page can render "current state per gate" + a
+/// recent-activity timeline in one fetch.
+///
+/// Empty state: `manifest_present: false`, `gates: []`,
+/// `recent_ledger: []`. Page renders an explainer pointing at
+/// `neurogrim explain publish-gates`.
+///
+/// Schema-corrupt state: `manifest_present: true`, `manifest_error:
+/// Some(<schema-validation message>)`. Page surfaces a banner and
+/// suggests `neurogrim doctor`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct PublishGatesPageResponse {
+    /// True when `<brain>/.claude/brain/publish-gates.yaml` exists
+    /// on disk (regardless of whether it parses).
+    pub manifest_present: bool,
+    /// Schema-validation or YAML-syntax error if the manifest is
+    /// present but malformed. None when the manifest is absent or
+    /// valid.
+    pub manifest_error: Option<String>,
+    /// One entry per gate in the manifest, joined with the most
+    /// recent ledger entry for that gate. Order matches the
+    /// manifest's declared order (preserves operator intent).
+    pub gates: Vec<PublishGateView>,
+    /// Most recent N ledger entries, newest first. Capped at 50 in
+    /// v1 to keep the response payload tight; the page can offer a
+    /// "load more" affordance later if N=50 proves too small.
+    pub recent_ledger: Vec<PublishGateLedgerView>,
+}
+
+/// A gate as it appears in the dashboard's table — manifest fields
+/// + the latest ledger entry's outcome (or `no_runs` for never-run
+/// gates).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct PublishGateView {
+    pub id: String,
+    pub gate_type: String,
+    pub description: String,
+    pub blocking: bool,
+    pub timeout_seconds: Option<u32>,
+    /// Latest ledger entry's status, or `"no_runs"` if no ledger
+    /// entry exists yet for this gate. One of:
+    /// `passed | failed | pending | timed_out | deferred | error | no_runs`.
+    pub current_status: String,
+    /// `started_at` of the latest ledger entry (RFC3339). None if
+    /// no ledger entry.
+    pub last_run_at: Option<String>,
+    /// `run_id` of the latest ledger entry. Lets the page link
+    /// related ledger rows together.
+    pub last_run_id: Option<String>,
+    /// Operator handle from the latest ledger entry, when present
+    /// (manual-gate `ack` or future `--operator` flag on automated).
+    pub operator: Option<String>,
+}
+
+/// A ledger entry as the dashboard surfaces it. Mirrors
+/// `LedgerEntry` from `neurogrim-cli::commands::publish_gate` but
+/// omits `stdout_truncated` / `stderr_truncated` (the page doesn't
+/// render full output; operators inspect the JSONL directly).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct PublishGateLedgerView {
+    pub run_id: String,
+    pub gate_id: String,
+    pub gate_type: String,
+    pub mode: String,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub status: String,
+    pub blocking: bool,
+    pub operator: Option<String>,
+    pub exit_code: Option<i32>,
+    pub error_detail: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     /// Compile-time-style check: all #[derive(TS)] types in this

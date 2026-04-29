@@ -47,7 +47,8 @@ use crate::types::{
     AgentCardExcerptDto, BrainListItemDto, BrainsListResponse, DomainDetailResponse,
     DomainListItemDto, DomainSignalDto, DomainsListResponse, FederationResponse, FindingDto,
     HatDto, HatsResponse, HealthResponse, HistoryPointDto, OverviewResponse, PeerDto,
-    PeerStatusDto, RecommendationDto, SelfBrainDto, SkillsResponse,
+    PeerStatusDto, PublishGateLedgerView, PublishGateView, PublishGatesPageResponse,
+    RecommendationDto, SelfBrainDto, SkillsResponse,
 };
 
 /// Query params accepted by score-aware routes (overview, domains
@@ -127,6 +128,13 @@ pub fn router(state: AppState) -> Router {
         // Read-only: surface the project's port allocation for the
         // v3.5.0 ports-panel widget.
         .route("/api/brains/:brain_id/ports", get(brain_ports))
+        // v4.0 S12-G-6: read-only publish-gates page. Joins the
+        // manifest with the ledger so the page renders current state
+        // per gate + a recent-activity timeline in one fetch.
+        .route(
+            "/api/brains/:brain_id/publish-gates",
+            get(brain_publish_gates),
+        )
         // ---- Live updates ----
         .route("/api/events", get(events_sse))
         .fallback(static_handler)
@@ -2099,6 +2107,148 @@ fn guess_mime(path: &str) -> &'static str {
     } else {
         "application/octet-stream"
     }
+}
+
+// ── S12-G-6: publish-gates page handler ─────────────────────────────────
+
+/// `GET /api/brains/:brain_id/publish-gates` — read-only view of the
+/// brain's publish-gates manifest joined with its ledger. Backs the
+/// `/brains/:id/publish-gates` dashboard page (S12-G-6).
+///
+/// Three response shapes:
+/// - **No manifest**: `manifest_present: false`, gates empty,
+///   recent_ledger may still be non-empty (a deleted manifest doesn't
+///   wipe historical ledger entries).
+/// - **Malformed manifest**: `manifest_present: true`,
+///   `manifest_error: Some(...)`. Page surfaces a banner.
+/// - **Valid manifest**: `manifest_present: true`,
+///   `manifest_error: None`, gates populated by joining each gate
+///   with its most recent ledger entry.
+async fn brain_publish_gates(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let manifest_path = brain
+        .project_root
+        .join(".claude")
+        .join("brain")
+        .join("publish-gates.yaml");
+    let ledger_path = brain
+        .project_root
+        .join(".claude")
+        .join("brain")
+        .join("publish-gate-ledger.jsonl");
+
+    // Read the ledger first (it's needed regardless of manifest
+    // state — the page can show historical activity even if the
+    // manifest was deleted).
+    let recent_ledger = read_publish_gate_ledger(&ledger_path);
+
+    // Try to load the manifest. Three branches.
+    let (manifest_present, manifest_error, gates) =
+        match neurogrim_mcp::publish_gates::load_publish_gates(&manifest_path) {
+            Ok(cfg) => {
+                // Build a current-state view per gate by joining with
+                // the ledger.
+                let gates: Vec<PublishGateView> = cfg
+                    .gates
+                    .iter()
+                    .map(|g| {
+                        let latest =
+                            recent_ledger.iter().find(|e| e.gate_id == g.id);
+                        PublishGateView {
+                            id: g.id.clone(),
+                            gate_type: gate_type_str(g.gate_type).to_string(),
+                            description: g.description.clone(),
+                            blocking: g.blocking.unwrap_or(true),
+                            timeout_seconds: g.timeout_seconds,
+                            current_status: latest
+                                .map(|e| e.status.clone())
+                                .unwrap_or_else(|| "no_runs".to_string()),
+                            last_run_at: latest.map(|e| e.started_at.clone()),
+                            last_run_id: latest.map(|e| e.run_id.clone()),
+                            operator: latest.and_then(|e| e.operator.clone()),
+                        }
+                    })
+                    .collect();
+                (true, None, gates)
+            }
+            Err(neurogrim_mcp::publish_gates::PublishGatesError::NotFound) => {
+                (false, None, Vec::new())
+            }
+            Err(other) => (true, Some(format!("{other}")), Vec::new()),
+        };
+
+    Json(PublishGatesPageResponse {
+        manifest_present,
+        manifest_error,
+        gates,
+        recent_ledger,
+    })
+    .into_response()
+}
+
+/// Map `GateType` enum → wire string. Mirrors the publish_gate.rs
+/// helper of the same name; we can't share that one because it lives
+/// in the cli crate (and the dashboard shouldn't depend on cli).
+fn gate_type_str(gt: neurogrim_mcp::publish_gates::GateType) -> &'static str {
+    match gt {
+        neurogrim_mcp::publish_gates::GateType::Automated => "automated",
+        neurogrim_mcp::publish_gates::GateType::Manual => "manual",
+        neurogrim_mcp::publish_gates::GateType::E2e => "e2e",
+    }
+}
+
+/// Read the ledger and return the most recent N entries, newest
+/// first. Cap at 50 to keep the API response tight; future stories
+/// can paginate.
+fn read_publish_gate_ledger(path: &Path) -> Vec<PublishGateLedgerView> {
+    const MAX_ENTRIES: usize = 50;
+    let raw = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    // Lines are appended chronologically; iterate forwards, keep the
+    // last MAX_ENTRIES, then reverse to put newest first.
+    let mut all: Vec<PublishGateLedgerView> = raw
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| {
+            let v: serde_json::Value = serde_json::from_str(l).ok()?;
+            Some(PublishGateLedgerView {
+                run_id: v.get("run_id")?.as_str()?.to_string(),
+                gate_id: v.get("gate_id")?.as_str()?.to_string(),
+                gate_type: v.get("gate_type")?.as_str()?.to_string(),
+                mode: v.get("mode")?.as_str()?.to_string(),
+                started_at: v.get("started_at")?.as_str()?.to_string(),
+                completed_at: v
+                    .get("completed_at")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
+                status: v.get("status")?.as_str()?.to_string(),
+                blocking: v.get("blocking")?.as_bool().unwrap_or(true),
+                operator: v
+                    .get("operator")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
+                exit_code: v.get("exit_code").and_then(|x| x.as_i64()).map(|n| n as i32),
+                error_detail: v
+                    .get("error_detail")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
+            })
+        })
+        .collect();
+    if all.len() > MAX_ENTRIES {
+        let drop = all.len() - MAX_ENTRIES;
+        all.drain(..drop);
+    }
+    all.reverse();
+    all
 }
 
 #[cfg(test)]

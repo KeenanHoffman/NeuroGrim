@@ -13,6 +13,7 @@ import { OverviewPage } from "@/components/overview/OverviewPage";
 import { DomainsPage } from "@/components/domains/DomainsPage";
 import { DomainDetailPage } from "@/components/domains/DomainDetailPage";
 import { FederationPage } from "@/components/federation/FederationPage";
+import { PublishGatesPage } from "@/components/publish-gates/PublishGatesPage";
 import { SkillsPage } from "@/components/skills/SkillsPage";
 import { BrainProvider } from "@/lib/useBrain";
 
@@ -86,6 +87,16 @@ const brainSkillsRoute = createRoute({
   component: SkillsPage,
 });
 
+/** v4.0 S12-G-6 — manual-gate UI surface. Read-only view of the
+ * brain's `publish-gates.yaml` joined with the
+ * `publish-gate-ledger.jsonl` so operators can see "what's pending"
+ * at a glance. */
+const brainPublishGatesRoute = createRoute({
+  getParentRoute: () => brainsLayoutRoute,
+  path: "publish-gates",
+  component: PublishGatesPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   brainsLayoutRoute.addChildren([
@@ -94,6 +105,7 @@ const routeTree = rootRoute.addChildren([
     brainDomainDetailRoute,
     brainFederationRoute,
     brainSkillsRoute,
+    brainPublishGatesRoute,
   ]),
 ]);
 

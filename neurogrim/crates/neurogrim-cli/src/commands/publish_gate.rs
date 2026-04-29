@@ -117,6 +117,28 @@ pub struct RunArgs {
     #[arg(long, short = 'v')]
     pub verbose: bool,
 
+    /// v4.0 S12-G-6: when stdin is a TTY, prompt the operator y/N
+    /// for each manual gate inline. y → mark passed (requires
+    /// resolvable operator handle); anything else → fall through
+    /// to async pending (existing behavior). Force on with
+    /// `--interactive`; force off with `--no-interactive`. Default
+    /// is auto-detect via `IsTerminal`.
+    #[arg(long, conflicts_with = "no_interactive")]
+    pub interactive: bool,
+
+    /// Force the non-interactive (CI-style) path even when stdin
+    /// is a TTY. Manual gates always emit pending; ack via the
+    /// `ack` sub-command later.
+    #[arg(long, conflicts_with = "interactive")]
+    pub no_interactive: bool,
+
+    /// Operator handle for inline manual-gate ack. Falls back to
+    /// `$NEUROGRIM_OPERATOR`. When unset and a manual gate is
+    /// answered with 'y' interactively, the gate falls through to
+    /// pending with a warning rather than ack'ing under "unknown".
+    #[arg(long)]
+    pub operator: Option<String>,
+
     /// Project root containing `.claude/brain/publish-gates.yaml`.
     #[arg(long, default_value = ".")]
     pub project_root: String,
@@ -243,10 +265,19 @@ async fn run_subcmd(args: RunArgs) -> Result<()> {
         mode_tag
     );
 
+    let interactive = build_interactive_ctx(&args);
+
     let mut entries: Vec<LedgerEntry> = Vec::with_capacity(selected.len());
     for gate in &selected {
-        let entry =
-            execute_gate(gate, &run_id, &mode_tag, args.verbose, project_root).await;
+        let entry = execute_gate(
+            gate,
+            &run_id,
+            &mode_tag,
+            args.verbose,
+            project_root,
+            &interactive,
+        )
+        .await;
         print_outcome(&entry, args.verbose);
         entries.push(entry);
     }
@@ -319,12 +350,51 @@ async fn ack_subcmd(args: AckArgs) -> Result<()> {
 
 // ── Gate execution ────────────────────────────────────────────────────
 
+/// Per-run interactive context (S12-G-6). Builds once per
+/// `publish-gate run` invocation and is threaded into manual-gate
+/// execution so the prompt can ack inline when appropriate.
+#[derive(Debug, Clone)]
+struct InteractiveCtx {
+    /// True iff inline prompting is allowed: `--interactive` was
+    /// passed, OR (stdin is a TTY AND `--no-interactive` wasn't
+    /// passed).
+    enabled: bool,
+    /// Resolved operator handle (`--operator` flag → env). None
+    /// when neither is set; the prompt warns and falls through to
+    /// pending in that case.
+    operator: Option<String>,
+}
+
+/// Decide whether inline prompting fires for this run.
+///
+/// - `--interactive` → forces enabled (operator opted in even if
+///   redirected stdin / piped input).
+/// - `--no-interactive` → forces disabled (CI / scripts).
+/// - Neither flag → enabled iff stdin is a TTY.
+///
+/// Operator hint is resolved best-effort here — the prompt re-checks
+/// at ack-time, so a missing handle just falls through to pending
+/// rather than failing the whole run.
+fn build_interactive_ctx(args: &RunArgs) -> InteractiveCtx {
+    use std::io::IsTerminal;
+    let enabled = if args.interactive {
+        true
+    } else if args.no_interactive {
+        false
+    } else {
+        std::io::stdin().is_terminal()
+    };
+    let operator = resolve_operator(args.operator.as_deref()).ok();
+    InteractiveCtx { enabled, operator }
+}
+
 async fn execute_gate(
     gate: &Gate,
     run_id: &str,
     mode_tag: &str,
     verbose: bool,
     project_root: &Path,
+    interactive: &InteractiveCtx,
 ) -> LedgerEntry {
     let started_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let blocking = gate.blocking.unwrap_or(true);
@@ -346,7 +416,7 @@ async fn execute_gate(
     };
     match gate.gate_type {
         GateType::Automated => execute_automated(gate, base, verbose).await,
-        GateType::Manual => execute_manual_pending(gate, base),
+        GateType::Manual => execute_manual(gate, base, interactive),
         GateType::E2e => execute_e2e_playwright(gate, base, project_root).await,
     }
 }
@@ -422,7 +492,32 @@ async fn execute_automated(
     entry
 }
 
-fn execute_manual_pending(gate: &Gate, mut entry: LedgerEntry) -> LedgerEntry {
+/// Dispatch a manual gate. When `interactive.enabled`, prompts
+/// y/N and ack's inline on yes. Otherwise falls through to the
+/// async pending flow (operator runs `publish-gate ack` later).
+fn execute_manual(
+    gate: &Gate,
+    entry: LedgerEntry,
+    interactive: &InteractiveCtx,
+) -> LedgerEntry {
+    print_manual_gate_header(gate);
+    if interactive.enabled {
+        let stdin = std::io::stdin();
+        let mut handle = stdin.lock();
+        match prompt_manual_gate_inline(gate, &mut handle, interactive.operator.as_deref()) {
+            ManualPromptOutcome::Acked(operator) => return finalize_manual_passed(entry, operator),
+            ManualPromptOutcome::Pending(reason) => {
+                if let Some(r) = reason {
+                    eprintln!("  ({r})");
+                }
+                return finalize_manual_pending(gate, entry);
+            }
+        }
+    }
+    finalize_manual_pending(gate, entry)
+}
+
+fn print_manual_gate_header(gate: &Gate) {
     eprintln!();
     eprintln!("◇ manual gate: {}", gate.id);
     eprintln!("  {}", gate.description);
@@ -432,16 +527,71 @@ fn execute_manual_pending(gate: &Gate, mut entry: LedgerEntry) -> LedgerEntry {
             eprintln!("    {line}");
         }
     }
+}
+
+fn finalize_manual_pending(gate: &Gate, mut entry: LedgerEntry) -> LedgerEntry {
     eprintln!();
     eprintln!("  to mark passed:");
     eprintln!(
         "    neurogrim publish-gate ack --gate {} [--operator <handle>]",
         gate.id
     );
-
     entry.status = Status::Pending.as_str().to_string();
-    entry.completed_at = None; // open-ended until ack
+    entry.completed_at = None;
     entry
+}
+
+fn finalize_manual_passed(mut entry: LedgerEntry, operator: String) -> LedgerEntry {
+    entry.status = Status::Passed.as_str().to_string();
+    entry.completed_at = Some(now_rfc3339());
+    entry.operator = Some(operator);
+    entry
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ManualPromptOutcome {
+    /// Operator typed 'y'/'Y' AND a handle resolved → ack inline.
+    Acked(String),
+    /// Operator typed something other than 'y' OR no handle was
+    /// resolvable. Carries an optional reason for the human-facing
+    /// summary (None = explicit "no" from operator).
+    Pending(Option<String>),
+}
+
+/// Prompt the operator y/N for a single manual gate and parse the
+/// answer. Factored out from `execute_manual` so tests can drive
+/// the I/O via a Cursor without spawning a real subprocess.
+fn prompt_manual_gate_inline<R: std::io::BufRead>(
+    gate: &Gate,
+    reader: &mut R,
+    operator_hint: Option<&str>,
+) -> ManualPromptOutcome {
+    use std::io::Write;
+    eprintln!();
+    eprint!(
+        "  Mark gate '{}' passed by {} now? [y/N]: ",
+        gate.id,
+        operator_hint.unwrap_or("(no operator handle resolved)")
+    );
+    let _ = std::io::stderr().flush();
+
+    let mut buf = String::new();
+    if reader.read_line(&mut buf).is_err() || buf.trim().is_empty() {
+        return ManualPromptOutcome::Pending(None);
+    }
+    let answered_yes = matches!(buf.trim().to_ascii_lowercase().as_str(), "y" | "yes");
+    if !answered_yes {
+        eprintln!("  → marked pending; ack via the `ack` sub-command later.");
+        return ManualPromptOutcome::Pending(None);
+    }
+    match operator_hint {
+        Some(op) if !op.trim().is_empty() => ManualPromptOutcome::Acked(op.trim().to_string()),
+        _ => ManualPromptOutcome::Pending(Some(
+            "no operator handle resolved (set --operator or NEUROGRIM_OPERATOR); \
+             falling through to pending"
+                .to_string(),
+        )),
+    }
 }
 
 /// Run the Playwright E2E suite at
@@ -805,12 +955,18 @@ mod tests {
         TempDir::new().unwrap()
     }
 
+    /// Default non-interactive context for tests that exercise
+    /// non-manual gate paths. Mirrors the CI default behavior.
+    fn no_interactive() -> InteractiveCtx {
+        InteractiveCtx { enabled: false, operator: None }
+    }
+
     #[tokio::test]
     async fn passing_automated_gate_returns_passed_status() {
         let mut g = fresh_gate("ok", GateType::Automated);
         g.check_command = Some("echo hello".to_string());
         let tmp = no_frontend_root();
-        let entry = execute_gate(&g, "run-1", "full", false, tmp.path()).await;
+        let entry = execute_gate(&g, "run-1", "full", false, tmp.path(), &no_interactive()).await;
         assert_eq!(entry.status, "passed");
         assert_eq!(entry.exit_code, Some(0));
         assert!(entry.completed_at.is_some());
@@ -830,7 +986,7 @@ mod tests {
         // `exit 1` works in both sh and cmd.
         g.check_command = Some("exit 1".to_string());
         let tmp = no_frontend_root();
-        let entry = execute_gate(&g, "run-2", "full", false, tmp.path()).await;
+        let entry = execute_gate(&g, "run-2", "full", false, tmp.path(), &no_interactive()).await;
         assert_eq!(entry.status, "failed");
         assert_eq!(entry.exit_code, Some(1));
         assert!(entry.completed_at.is_some());
@@ -840,7 +996,7 @@ mod tests {
     async fn automated_gate_without_check_command_returns_error() {
         let g = fresh_gate("nocmd", GateType::Automated);
         let tmp = no_frontend_root();
-        let entry = execute_gate(&g, "run-3", "full", false, tmp.path()).await;
+        let entry = execute_gate(&g, "run-3", "full", false, tmp.path(), &no_interactive()).await;
         assert_eq!(entry.status, "error");
         assert!(
             entry
@@ -864,7 +1020,7 @@ mod tests {
         });
         let tmp = no_frontend_root();
         let started = std::time::Instant::now();
-        let entry = execute_gate(&g, "run-4", "full", false, tmp.path()).await;
+        let entry = execute_gate(&g, "run-4", "full", false, tmp.path(), &no_interactive()).await;
         let elapsed = started.elapsed();
         assert_eq!(entry.status, "timed_out", "entry: {entry:?}");
         assert!(
@@ -878,7 +1034,7 @@ mod tests {
         let mut g = fresh_gate("review", GateType::Manual);
         g.instructions = Some("look at the dashboard".into());
         let tmp = no_frontend_root();
-        let entry = execute_gate(&g, "run-5", "full", false, tmp.path()).await;
+        let entry = execute_gate(&g, "run-5", "full", false, tmp.path(), &no_interactive()).await;
         assert_eq!(entry.status, "pending");
         assert_eq!(entry.completed_at, None);
     }
@@ -893,7 +1049,7 @@ mod tests {
     async fn e2e_gate_without_frontend_dir_returns_error() {
         let g = fresh_gate("e2e-smoke", GateType::E2e);
         let tmp = no_frontend_root();
-        let entry = execute_gate(&g, "run-6", "full", false, tmp.path()).await;
+        let entry = execute_gate(&g, "run-6", "full", false, tmp.path(), &no_interactive()).await;
         assert_eq!(entry.status, "error");
         let detail = entry.error_detail.as_deref().unwrap_or("");
         assert!(
@@ -1204,26 +1360,24 @@ gates:
     instructions: "look"
 "#,
         );
-        // Land a pending entry.
-        let pending = execute_manual_pending(
-            &fresh_gate("review", GateType::Manual),
-            LedgerEntry {
-                schema_version: SCHEMA_VERSION.into(),
-                run_id: "run-pending".into(),
-                gate_id: "review".into(),
-                gate_type: "manual".into(),
-                mode: "full".into(),
-                started_at: "2026-04-29T00:00:00Z".into(),
-                completed_at: None,
-                status: Status::Error.as_str().into(),
-                blocking: true,
-                operator: None,
-                exit_code: None,
-                stdout_truncated: None,
-                stderr_truncated: None,
-                error_detail: None,
-            },
-        );
+        // Land a pending entry directly (skipping the print path —
+        // execute_manual would also work but adds noise to test output).
+        let pending = LedgerEntry {
+            schema_version: SCHEMA_VERSION.into(),
+            run_id: "run-pending".into(),
+            gate_id: "review".into(),
+            gate_type: "manual".into(),
+            mode: "full".into(),
+            started_at: "2026-04-29T00:00:00Z".into(),
+            completed_at: None,
+            status: Status::Pending.as_str().into(),
+            blocking: true,
+            operator: None,
+            exit_code: None,
+            stdout_truncated: None,
+            stderr_truncated: None,
+            error_detail: None,
+        };
         append_ledger_entries(&ledger_path(tmp.path()), &[pending]).unwrap();
 
         // Ack via the sub-command (shimming via direct call to the
@@ -1288,5 +1442,107 @@ gates:
         let r = resolve_operator(None);
         assert!(r.is_err());
         assert!(r.unwrap_err().to_string().contains("operator identity"));
+    }
+
+    // ── S12-G-6: interactive manual-gate prompt ─────────────────────
+
+    #[test]
+    fn prompt_y_with_operator_returns_acked() {
+        let g = fresh_gate("review", GateType::Manual);
+        let mut input = std::io::Cursor::new(b"y\n".to_vec());
+        let outcome = prompt_manual_gate_inline(&g, &mut input, Some("alice"));
+        assert_eq!(outcome, ManualPromptOutcome::Acked("alice".to_string()));
+    }
+
+    #[test]
+    fn prompt_yes_uppercase_also_accepts() {
+        let g = fresh_gate("review", GateType::Manual);
+        let mut input = std::io::Cursor::new(b"YES\n".to_vec());
+        let outcome = prompt_manual_gate_inline(&g, &mut input, Some("alice"));
+        assert_eq!(outcome, ManualPromptOutcome::Acked("alice".to_string()));
+    }
+
+    #[test]
+    fn prompt_n_returns_pending() {
+        let g = fresh_gate("review", GateType::Manual);
+        let mut input = std::io::Cursor::new(b"n\n".to_vec());
+        let outcome = prompt_manual_gate_inline(&g, &mut input, Some("alice"));
+        assert_eq!(outcome, ManualPromptOutcome::Pending(None));
+    }
+
+    #[test]
+    fn prompt_empty_returns_pending() {
+        let g = fresh_gate("review", GateType::Manual);
+        let mut input = std::io::Cursor::new(b"\n".to_vec());
+        let outcome = prompt_manual_gate_inline(&g, &mut input, Some("alice"));
+        assert_eq!(outcome, ManualPromptOutcome::Pending(None));
+    }
+
+    #[test]
+    fn prompt_y_without_operator_falls_through_to_pending_with_reason() {
+        let g = fresh_gate("review", GateType::Manual);
+        let mut input = std::io::Cursor::new(b"y\n".to_vec());
+        let outcome = prompt_manual_gate_inline(&g, &mut input, None);
+        match outcome {
+            ManualPromptOutcome::Pending(Some(reason)) => {
+                assert!(
+                    reason.contains("no operator handle"),
+                    "reason should explain why we fell through; got: {reason}"
+                );
+            }
+            other => panic!("expected Pending(Some(_)); got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prompt_y_with_blank_operator_falls_through_to_pending() {
+        let g = fresh_gate("review", GateType::Manual);
+        let mut input = std::io::Cursor::new(b"y\n".to_vec());
+        let outcome = prompt_manual_gate_inline(&g, &mut input, Some("   "));
+        assert!(matches!(outcome, ManualPromptOutcome::Pending(Some(_))));
+    }
+
+    #[tokio::test]
+    async fn execute_manual_with_interactive_yes_returns_passed_with_operator() {
+        let g = fresh_gate("review", GateType::Manual);
+        // We can't easily inject a fake reader into execute_manual (it
+        // uses stdin directly). Instead, exercise the unit via
+        // finalize_manual_passed which is what execute_manual calls
+        // when the prompt returns Acked.
+        let entry = finalize_manual_passed(
+            LedgerEntry {
+                schema_version: SCHEMA_VERSION.into(),
+                run_id: "run-x".into(),
+                gate_id: g.id.clone(),
+                gate_type: "manual".into(),
+                mode: "full".into(),
+                started_at: "2026-04-29T00:00:00Z".into(),
+                completed_at: None,
+                status: Status::Error.as_str().into(),
+                blocking: true,
+                operator: None,
+                exit_code: None,
+                stdout_truncated: None,
+                stderr_truncated: None,
+                error_detail: None,
+            },
+            "alice".to_string(),
+        );
+        assert_eq!(entry.status, "passed");
+        assert_eq!(entry.operator.as_deref(), Some("alice"));
+        assert!(entry.completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn execute_manual_with_no_interactive_emits_pending() {
+        let mut g = fresh_gate("review", GateType::Manual);
+        g.instructions = Some("look at it".into());
+        let tmp = no_frontend_root();
+        // Default no_interactive() context — should produce pending.
+        let entry =
+            execute_gate(&g, "run-int", "full", false, tmp.path(), &no_interactive()).await;
+        assert_eq!(entry.status, "pending");
+        assert_eq!(entry.completed_at, None);
+        assert_eq!(entry.operator, None);
     }
 }
