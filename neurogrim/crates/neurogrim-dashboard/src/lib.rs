@@ -27,6 +27,7 @@
 //! See `audit/v3.4-CHARTER.md` and the workspace `CHANGELOG.md` for
 //! the full plan.
 
+pub mod events;
 pub mod routes;
 pub mod skills;
 pub mod state;
@@ -37,14 +38,37 @@ pub use state::AppState;
 
 use anyhow::Result;
 use std::net::SocketAddr;
+use std::path::Path;
 
 /// Spin up the dashboard HTTP server on the given socket address.
 /// Blocks until the server exits (Ctrl+C, kill, or fatal error).
 ///
-/// Phase 0.3: minimal — just `/api/health` + static-asset fallback.
-/// Phase 1 expands the route table.
+/// Phase 2.1: also spawns the filesystem watcher so SSE clients
+/// connected to `/api/events` receive live updates when CMDBs,
+/// the registry, or the invocation ledger change.
 pub async fn serve(addr: SocketAddr, registry_path: String) -> Result<()> {
-    let state = AppState::new(registry_path);
+    // Derive project_root from the registry path
+    // (`<project>/.claude/brain-registry.json`). Canonicalize so
+    // notify's absolute event paths can be `strip_prefix`'d cleanly.
+    // PathBuf::parent returns `""` (empty path) — not None — when
+    // the path has only one component, so we also treat empty paths
+    // as cwd before canonicalizing.
+    let registry_path_buf = std::path::PathBuf::from(&registry_path);
+    let project_root_raw = registry_path_buf
+        .parent()
+        .and_then(Path::parent)
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let project_root_normalized = if project_root_raw.as_os_str().is_empty() {
+        std::path::PathBuf::from(".")
+    } else {
+        project_root_raw
+    };
+    let project_root = std::fs::canonicalize(&project_root_normalized)
+        .unwrap_or(project_root_normalized);
+
+    let events_tx = events::spawn_watcher(project_root);
+    let state = AppState::with_events(registry_path, events_tx);
     let app = routes::router(state);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("neurogrim dashboard listening on http://{}", addr);

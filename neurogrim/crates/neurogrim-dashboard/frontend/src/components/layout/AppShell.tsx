@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useTheme } from "@/lib/useTheme";
+import { useDashboardEvents, type ConnectionStatus } from "@/lib/useDashboardEvents";
 
 interface NavItem {
   to: string;
@@ -44,6 +45,9 @@ const NAV: NavItem[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Subscribe at the shell level so the connection lives for the
+  // whole session — pages mount/unmount, but the SSE socket persists.
+  const liveStatus = useDashboardEvents();
 
   const isActive = (item: NavItem): boolean => {
     if (item.matchPrefix) {
@@ -60,6 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SidebarContent
           isActive={isActive}
           onItemClick={() => setMobileOpen(false)}
+          liveStatus={liveStatus}
         />
       </aside>
 
@@ -77,6 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SidebarContent
               isActive={isActive}
               onItemClick={() => setMobileOpen(false)}
+              liveStatus={liveStatus}
             />
           </aside>
         </div>
@@ -106,9 +112,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 function SidebarContent({
   isActive,
   onItemClick,
+  liveStatus,
 }: {
   isActive: (n: NavItem) => boolean;
   onItemClick: () => void;
+  liveStatus: ConnectionStatus;
 }) {
   const { theme, toggleTheme } = useTheme();
 
@@ -153,8 +161,9 @@ function SidebarContent({
         ))}
       </nav>
 
-      <div className="border-t border-border px-3 py-3 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground font-mono">v3.4 Phase 1.5</span>
+      <div className="border-t border-border px-3 py-3 flex items-center justify-between gap-2">
+        <LiveIndicator status={liveStatus} />
+        <span className="text-xs text-muted-foreground font-mono">v3.4 Phase 2.1</span>
         <button
           onClick={toggleTheme}
           aria-label={
@@ -171,5 +180,40 @@ function SidebarContent({
         </button>
       </div>
     </>
+  );
+}
+
+function LiveIndicator({ status }: { status: ConnectionStatus }) {
+  const dot =
+    status === "live"
+      ? "bg-emerald-400"
+      : status === "connecting"
+        ? "bg-amber-400 animate-pulse"
+        : status === "offline"
+          ? "bg-red-400"
+          : "bg-muted-foreground/40";
+  const label = {
+    live: "live",
+    connecting: "...",
+    offline: "offline",
+    disabled: "static",
+  }[status];
+  const tooltip = {
+    live: "Connected to /api/events — pages refresh as the Brain changes.",
+    connecting: "Connecting to /api/events…",
+    offline: "Disconnected from /api/events. Pages fall back to polling.",
+    disabled:
+      "File watcher not available — live updates disabled. Pages refresh on load only.",
+  }[status];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+      title={tooltip}
+      data-testid="live-indicator"
+      data-status={status}
+    >
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      {label}
+    </span>
   );
 }

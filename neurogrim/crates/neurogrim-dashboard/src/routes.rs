@@ -8,10 +8,14 @@
 use axum::{
     extract::{Path as AxumPath, State},
     http::{header, StatusCode, Uri},
-    response::{IntoResponse, Json, Response},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse, Json, Response,
+    },
     routing::get,
     Router,
 };
+use futures::stream::{Stream, StreamExt};
 use neurogrim_a2a::agent_card::{AgentCard, TransportProtocol};
 use neurogrim_a2a::TaskClient;
 use neurogrim_core::trajectory::compute_trajectory;
@@ -19,9 +23,11 @@ use neurogrim_core::types::{ScoreSnapshot, TrajectoryClassification};
 use neurogrim_mcp::context::BrainContext;
 use neurogrim_mcp::prose::first_sentence;
 use rust_embed::RustEmbed;
+use std::convert::Infallible;
 use std::path::Path;
 use std::time::Duration;
 use tokio::time::timeout;
+use tokio_stream::wrappers::BroadcastStream;
 use url::Url;
 
 use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
@@ -48,6 +54,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/domains/:name", get(domain_detail))
         .route("/api/federation", get(federation))
         .route("/api/skills", get(skills))
+        .route("/api/events", get(events_sse))
         .fallback(static_handler)
         .with_state(state)
 }
@@ -743,6 +750,45 @@ async fn skills(State(state): State<AppState>) -> Response {
     .into_response()
 }
 
+// =================================================================
+// Phase 2.1 — SSE live updates
+// =================================================================
+
+/// `GET /api/events` — Server-Sent Events stream of dashboard events.
+///
+/// One subscription per connection. Events are JSON-encoded into the
+/// SSE `data:` field; clients parse with `JSON.parse(event.data)` and
+/// invalidate the relevant TanStack Query keys.
+///
+/// When the watcher failed to start (or the `AppState` was built
+/// without events), the endpoint returns a single `data: disabled`
+/// keepalive and stays open — clients fall back to polling but their
+/// EventSource doesn't reconnect-loop.
+async fn events_sse(
+    State(state): State<AppState>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let stream: futures::stream::BoxStream<'static, Result<Event, Infallible>> =
+        match state.events {
+            Some(tx) => {
+                let rx = tx.subscribe();
+                BroadcastStream::new(rx)
+                    .filter_map(|res| async move {
+                        let de = res.ok()?;
+                        let json = serde_json::to_string(&de).ok()?;
+                        Some(Ok(Event::default().data(json)))
+                    })
+                    .boxed()
+            }
+            None => futures::stream::once(async {
+                Ok(Event::default().data("\"disabled\""))
+            })
+            .chain(futures::stream::pending::<Result<Event, Infallible>>())
+            .boxed(),
+        };
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
 /// Serve embedded frontend assets; fall back to `index.html` for
 /// client-side routing (TanStack Router uses pushState; refreshing
 /// `/domains/foo` should serve `index.html` and let the frontend
@@ -866,6 +912,33 @@ mod tests {
         assert_eq!(guess_mime("assets/index.css"), "text/css; charset=utf-8");
         assert_eq!(guess_mime("favicon.svg"), "image/svg+xml");
         assert_eq!(guess_mime("font.woff2"), "font/woff2");
+    }
+
+    #[tokio::test]
+    async fn events_endpoint_returns_event_stream_content_type() {
+        // Smoke-check that /api/events responds with the SSE
+        // content-type. We don't pull an event off the stream here —
+        // the response body is open-ended by design and there's no
+        // sender feeding it in this test setup. The classification
+        // + watcher behavior is exercised in the events.rs unit
+        // tests.
+        let state = AppState::new(".claude/brain-registry.json".to_string());
+        let app = router(state);
+        let req = Request::builder()
+            .uri("/api/events")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        assert!(
+            ct.starts_with("text/event-stream"),
+            "got content-type: {ct}"
+        );
     }
 
     #[tokio::test]

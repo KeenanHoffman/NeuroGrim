@@ -52,6 +52,12 @@ axum = { workspace = true }
 tower-http = { workspace = true }
 rust-embed = { workspace = true }
 notify = { workspace = true }
+# Phase 2.1: SSE bridge from `tokio::sync::broadcast::Receiver` into
+# axum's `Sse` response. The `sync` feature enables BroadcastStream.
+tokio-stream = { version = "0.1", features = ["sync"] }
+# `futures::Stream` trait + adapters (StreamExt::map). Used by the
+# SSE handler to convert broadcast events into `axum::sse::Event`.
+futures = "0.3"
 
 # Internal deps
 neurogrim-core = { workspace = true }

@@ -1599,6 +1599,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "futures",
  "http-body-util",
  "neurogrim-a2a",
  "neurogrim-core",
@@ -1609,6 +1610,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "tower",
  "tower-http 0.5.2",
  "tracing",
@@ -3083,6 +3085,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

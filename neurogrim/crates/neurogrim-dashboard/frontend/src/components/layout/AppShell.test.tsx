@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "./AppShell";
 import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 import {
@@ -57,9 +58,19 @@ function renderShell(initialPath: string = "/") {
     routeTree: tree,
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   });
+  // AppShell now uses TanStack Query (via useDashboardEvents); a
+  // provider is required even though no actual queries fire in this
+  // test.
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return {
     router,
-    ...render(<RouterProvider router={router} />),
+    ...render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    ),
   };
 }
 
