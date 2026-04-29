@@ -1,0 +1,125 @@
+{
+  "schema_version": "1",
+  "brain_id": "neurogrim",
+  "is_default": false,
+  "widgets": [
+    {
+      "id": "identity",
+      "widget_type": "identity",
+      "size": "full",
+      "title": null,
+      "config": {}
+    },
+    {
+      "id": "meta-framing",
+      "widget_type": "markdown-note",
+      "size": "full",
+      "title": "Dogfooding the methodology",
+      "config": {
+        "content": "**Meta Brain — NeuroGrim scoring itself.** Three weighted domains drive the unified score: `test-health` (0.40), `code-quality` (0.35), `deploy-readiness` (0.25). The remaining sixteen are advisory while their sensors are calibrated against real-world behavior. NeuroGrim is also a parent in the federation tree — its child `python-starter` is reachable via the brain switcher in the sidebar."
+      }
+    },
+    {
+      "id": "score-gauge",
+      "widget_type": "score-gauge",
+      "size": "third",
+      "title": null,
+      "config": {}
+    },
+    {
+      "id": "strongest-signals",
+      "widget_type": "strongest-signals",
+      "size": "third",
+      "title": null,
+      "config": { "count": 5 }
+    },
+    {
+      "id": "top-recommendations",
+      "widget_type": "top-recommendations",
+      "size": "third",
+      "title": null,
+      "config": { "count": 5 }
+    },
+    {
+      "id": "weighted-section-note",
+      "widget_type": "markdown-note",
+      "size": "full",
+      "title": "Weighted domains driving the score",
+      "config": {
+        "content": "These three carry weight in the unified score. Promoting more advisory domains to weighted is operator-driven — see `domain-calibration` for the calibration substrate."
+      }
+    },
+    {
+      "id": "test-health",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": "Test health (0.40×)",
+      "config": { "domain": "test-health" }
+    },
+    {
+      "id": "code-quality",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": "Code quality (0.35×)",
+      "config": { "domain": "code-quality" }
+    },
+    {
+      "id": "deploy-readiness",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": "Deploy readiness (0.25×)",
+      "config": { "domain": "deploy-readiness" }
+    },
+    {
+      "id": "cross-cutting-note",
+      "widget_type": "markdown-note",
+      "size": "full",
+      "title": "Cross-cutting advisory signals",
+      "config": {
+        "content": "Six advisory domains worth tracking even though they don't feed the unified score yet. Trajectory + confidence on each is the calibration evidence used to decide if any is ready for promotion."
+      }
+    },
+    {
+      "id": "rust-health",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": null,
+      "config": { "domain": "rust-health" }
+    },
+    {
+      "id": "security-standards",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": null,
+      "config": { "domain": "security-standards" }
+    },
+    {
+      "id": "supply-chain-vigilance",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": null,
+      "config": { "domain": "supply-chain-vigilance" }
+    },
+    {
+      "id": "agent-behavior",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": null,
+      "config": { "domain": "agent-behavior" }
+    },
+    {
+      "id": "capability-hygiene",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": null,
+      "config": { "domain": "capability-hygiene" }
+    },
+    {
+      "id": "skill-coherence",
+      "widget_type": "domain-card",
+      "size": "third",
+      "title": null,
+      "config": { "domain": "skill-coherence" }
+    }
+  ]
+}
