@@ -12,17 +12,23 @@ use axum::{
     routing::get,
     Router,
 };
+use neurogrim_a2a::agent_card::{AgentCard, TransportProtocol};
+use neurogrim_a2a::TaskClient;
 use neurogrim_core::trajectory::compute_trajectory;
 use neurogrim_core::types::{ScoreSnapshot, TrajectoryClassification};
 use neurogrim_mcp::context::BrainContext;
 use neurogrim_mcp::prose::first_sentence;
 use rust_embed::RustEmbed;
 use std::path::Path;
+use std::time::Duration;
+use tokio::time::timeout;
+use url::Url;
 
 use crate::state::AppState;
 use crate::types::{
-    DomainDetailResponse, DomainListItemDto, DomainSignalDto, DomainsListResponse,
-    FindingDto, HealthResponse, HistoryPointDto, OverviewResponse, RecommendationDto,
+    AgentCardExcerptDto, DomainDetailResponse, DomainListItemDto, DomainSignalDto,
+    DomainsListResponse, FederationResponse, FindingDto, HealthResponse, HistoryPointDto,
+    OverviewResponse, PeerDto, PeerStatusDto, RecommendationDto, SelfBrainDto,
 };
 
 /// Frontend bundle embedded at compile time. Built by `npm run build`
@@ -39,6 +45,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/overview", get(overview))
         .route("/api/domains", get(domains_list))
         .route("/api/domains/:name", get(domain_detail))
+        .route("/api/federation", get(federation))
         .fallback(static_handler)
         .with_state(state)
 }
@@ -486,6 +493,223 @@ fn build_domain_detail(ctx: &BrainContext, name: &str) -> Option<DomainDetailRes
     })
 }
 
+// =================================================================
+// Phase 1.3 — Federation page
+// =================================================================
+
+/// Per-peer Agent Card discovery timeout. 1.5s is short enough to keep
+/// the page responsive when a peer is offline, long enough to tolerate
+/// a single TCP retry on a real LAN. Picked empirically against the
+/// ecosystem Brain hitting NeuroGrim and LSP-Brains.
+const PEER_PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
+
+/// `GET /api/federation` — the Brain's view of itself + its declared
+/// A2A / subprocess peers, with a freshness probe for each enabled
+/// A2A peer.
+///
+/// Probes are sequential to keep the implementation small (with the
+/// realistic peer count of 1-3 the worst-case latency is < 5 s); the
+/// frontend can show a loading state during that window. If concurrency
+/// becomes a real issue we'd switch to `tokio::spawn` + `join_all`,
+/// but introducing `futures` here for 1-3 calls would be premature.
+async fn federation(State(state): State<AppState>) -> Response {
+    let ctx = match BrainContext::load(&state.registry_path, None, None).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext: {e:#}")
+                })),
+            )
+                .into_response();
+        }
+    };
+    Json(build_federation(&ctx).await).into_response()
+}
+
+async fn build_federation(ctx: &BrainContext) -> FederationResponse {
+    let registry = &ctx.registry;
+
+    let label = if !registry.meta.description.is_empty() {
+        first_sentence(&registry.meta.description, 80)
+    } else {
+        Path::new(&*ctx.project_root.to_string_lossy())
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("(unnamed)")
+            .to_string()
+    };
+
+    let self_brain = SelfBrainDto {
+        label,
+        project_root: ctx.project_root.to_string_lossy().to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    };
+
+    let registry_schema_version = registry.meta.schema_version.clone();
+
+    let raw_peers: Vec<(String, serde_json::Value)> = registry
+        .config
+        .extra
+        .get("children")
+        .and_then(|v| v.as_object())
+        .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
+
+    let client = TaskClient::new_http();
+
+    let mut peers: Vec<PeerDto> = Vec::with_capacity(raw_peers.len());
+    for (name, body) in raw_peers {
+        let display_name = body
+            .get("display_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&name)
+            .to_string();
+        let weight = body.get("weight").and_then(|v| v.as_f64()).unwrap_or(1.0);
+        let read_only = body
+            .get("read_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let enabled = body.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+        let brain_path = body
+            .get("brain_path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let endpoint_str = body
+            .get("a2a_endpoint")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let agent_card_url = body
+            .get("agent_card_url")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Url::parse(s).ok());
+
+        let transport = if endpoint_str.is_some() {
+            "a2a"
+        } else if brain_path.is_some() {
+            "subprocess"
+        } else {
+            "unknown"
+        }
+        .to_string();
+
+        let (status, agent_card) = if !enabled {
+            (
+                PeerStatusDto {
+                    kind: "disabled".to_string(),
+                    message: "peer marked enabled=false in registry".to_string(),
+                },
+                None,
+            )
+        } else if transport == "a2a" {
+            // Best-effort probe. Failures are reported as
+            // `unreachable` with a short message; they never break
+            // the page render.
+            match endpoint_str.as_deref().and_then(|s| Url::parse(s).ok()) {
+                Some(endpoint) => {
+                    probe_peer(&client, &endpoint, agent_card_url.as_ref()).await
+                }
+                None => (
+                    PeerStatusDto {
+                        kind: "unreachable".to_string(),
+                        message: "registry's a2a_endpoint is not a valid URL".to_string(),
+                    },
+                    None,
+                ),
+            }
+        } else {
+            (
+                PeerStatusDto {
+                    kind: "unprobed".to_string(),
+                    message: format!("transport={transport} (not probed)"),
+                },
+                None,
+            )
+        };
+
+        peers.push(PeerDto {
+            name,
+            display_name,
+            transport,
+            a2a_endpoint: endpoint_str,
+            brain_path,
+            weight,
+            read_only,
+            enabled,
+            status,
+            agent_card,
+        });
+    }
+
+    // Stable order: name asc.
+    peers.sort_by(|a, b| a.name.cmp(&b.name));
+
+    FederationResponse {
+        self_brain,
+        peers,
+        registry_schema_version,
+    }
+}
+
+/// Run a single Agent Card probe with the standard timeout. Maps any
+/// failure to a `unreachable` status with a short operator-facing
+/// message; never panics.
+async fn probe_peer(
+    client: &TaskClient<neurogrim_a2a::transport::HttpSseTransport>,
+    endpoint: &Url,
+    override_url: Option<&Url>,
+) -> (PeerStatusDto, Option<AgentCardExcerptDto>) {
+    let probe = client.discover_at(endpoint, override_url);
+    match timeout(PEER_PROBE_TIMEOUT, probe).await {
+        Ok(Ok(card)) => (
+            PeerStatusDto {
+                kind: "alive".to_string(),
+                message: String::new(),
+            },
+            Some(excerpt_from(&card)),
+        ),
+        Ok(Err(e)) => (
+            PeerStatusDto {
+                kind: "unreachable".to_string(),
+                message: format!("{e}"),
+            },
+            None,
+        ),
+        Err(_) => (
+            PeerStatusDto {
+                kind: "unreachable".to_string(),
+                message: format!("timeout after {} ms", PEER_PROBE_TIMEOUT.as_millis()),
+            },
+            None,
+        ),
+    }
+}
+
+fn excerpt_from(card: &AgentCard) -> AgentCardExcerptDto {
+    let transport_protocol = match card.transport.protocol {
+        TransportProtocol::HttpSse => "http+sse".to_string(),
+        TransportProtocol::JsonRpc => "json-rpc".to_string(),
+    };
+    let (topology_role, topology_parent_id) = match card.topology.as_ref() {
+        Some(t) => (
+            t.role.map(|r| format!("{r:?}").to_lowercase()),
+            t.parent_id.clone(),
+        ),
+        None => (None, None),
+    };
+    AgentCardExcerptDto {
+        id: card.id.clone(),
+        name: card.name.clone(),
+        version: card.version.clone(),
+        interface_version: card.interface_version.clone(),
+        schema_version: card.schema_version.clone(),
+        transport_protocol,
+        topology_role,
+        topology_parent_id,
+    }
+}
+
 /// Serve embedded frontend assets; fall back to `index.html` for
 /// client-side routing (TanStack Router uses pushState; refreshing
 /// `/domains/foo` should serve `index.html` and let the frontend
@@ -609,5 +833,53 @@ mod tests {
         assert_eq!(guess_mime("assets/index.css"), "text/css; charset=utf-8");
         assert_eq!(guess_mime("favicon.svg"), "image/svg+xml");
         assert_eq!(guess_mime("font.woff2"), "font/woff2");
+    }
+
+    #[tokio::test]
+    async fn federation_returns_self_with_empty_peers_when_no_children_block() {
+        // Build a minimal valid registry on disk that has no
+        // `config.children` block — exercises the empty-federation
+        // path without needing to spin up live peer servers.
+        let tmp = tempfile::tempdir().unwrap();
+        let registry_path = tmp.path().join("brain-registry.json");
+        // Registry must declare at least one domain to satisfy
+        // BrainRegistry::validate(). One stub-domain is enough; the
+        // route doesn't read scores in the empty-peers branch.
+        let registry = serde_json::json!({
+            "meta": {
+                "schema_version": "2",
+                "description": "smoke test registry",
+                "updated_by": "test"
+            },
+            "tools": {},
+            "data_sources": {},
+            "config": {
+                "domain_weights": {"placeholder": 0.0},
+                "domain_definitions": {
+                    "placeholder": {
+                        "principle": "Placeholder domain for testing",
+                        "scoring_source": null,
+                        "exported_variables": {}
+                    }
+                }
+            }
+        });
+        std::fs::write(&registry_path, registry.to_string()).unwrap();
+
+        let state = AppState::new(registry_path.to_string_lossy().to_string());
+        let app = router(state);
+        let req = Request::builder()
+            .uri("/api/federation")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let body_text = String::from_utf8_lossy(&body);
+        assert_eq!(status, StatusCode::OK, "body was: {body_text}");
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(v["self_brain"]["label"].is_string());
+        assert_eq!(v["peers"], serde_json::json!([]));
+        assert_eq!(v["registry_schema_version"], "2");
     }
 }

@@ -56,6 +56,10 @@ notify = { workspace = true }
 # Internal deps
 neurogrim-core = { workspace = true }
 neurogrim-mcp = { workspace = true }
+# Phase 1.3 — Agent Card discovery for federation peer probes.
+# Reuses the same TaskClient the CLI's `a2a-discover` uses, so the
+# dashboard inherits any future protocol fixes for free.
+neurogrim-a2a = { workspace = true }
 
 # ts-rs generates TypeScript bindings from #[derive(TS)] structs.
 # Generation happens via `cargo test` (the bindings/ directory is the

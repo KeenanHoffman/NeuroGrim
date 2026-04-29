@@ -206,6 +206,107 @@ pub struct HistoryPointDto {
     pub confidence: u8,
 }
 
+// =================================================================
+// Phase 1.3 — Federation page
+// =================================================================
+
+/// Response body of `GET /api/federation` — the Brain's view of its
+/// federation: who it is, who its A2A peers are, and whether each
+/// peer is currently reachable.
+///
+/// The dashboard renders this as a topology diagram (self in center,
+/// peers around) plus a per-peer detail panel.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct FederationResponse {
+    pub self_brain: SelfBrainDto,
+    pub peers: Vec<PeerDto>,
+    /// Schema version of the registry — surfaced so the page can
+    /// warn if the operator's registry predates `read_only` support
+    /// (anything before 2.1).
+    pub registry_schema_version: String,
+}
+
+/// "Self" — what the Brain says about itself when describing the
+/// federation. Mirrors the small subset of identity the operator
+/// usually wants to confirm at a glance.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct SelfBrainDto {
+    /// Display label for this Brain (registry.meta.description first
+    /// sentence; falls back to project_root basename).
+    pub label: String,
+    /// Filesystem path to the project root.
+    pub project_root: String,
+    /// Server version (CARGO_PKG_VERSION).
+    pub version: String,
+}
+
+/// One declared A2A / subprocess peer in the registry's
+/// `config.children` block, augmented with a freshness probe for A2A
+/// peers (best-effort, capped timeout).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct PeerDto {
+    /// kebab-case peer id (key under `config.children`).
+    pub name: String,
+    pub display_name: String,
+    /// Either "a2a" or "subprocess" — selects how the parent reaches
+    /// this peer. Subprocess peers are NOT probed; their status is
+    /// always `unprobed`.
+    pub transport: String,
+    /// A2A endpoint URL when transport == "a2a"; `None` otherwise.
+    pub a2a_endpoint: Option<String>,
+    /// Filesystem path to the child Brain (subprocess transport) or
+    /// the relative path declared alongside the A2A endpoint. May be
+    /// absent for purely-remote peers.
+    pub brain_path: Option<String>,
+    pub weight: f64,
+    /// Read-only sibling per LSP-Brains v2.1+ (does not influence the
+    /// parent's score; observation only).
+    pub read_only: bool,
+    pub enabled: bool,
+    /// Freshness probe outcome. `unprobed` for disabled or non-A2A
+    /// peers; `alive` / `unreachable` for A2A peers we tried to reach.
+    pub status: PeerStatusDto,
+    /// When status == "alive", the relevant fields from the peer's
+    /// Agent Card. None on probe failure or non-A2A transports.
+    pub agent_card: Option<AgentCardExcerptDto>,
+}
+
+/// Status taxonomy for federation peers. Stringly-typed at the wire
+/// (matches the rest of this module's stringly-typed enums) and
+/// re-narrowed in TS via a discriminated union.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct PeerStatusDto {
+    /// One of "alive" | "unreachable" | "unprobed" | "disabled".
+    pub kind: String,
+    /// Operator-facing detail (error message, "subprocess transport",
+    /// etc.). Empty when the status is self-explanatory.
+    pub message: String,
+}
+
+/// Subset of the peer's Agent Card that's interesting to show in the
+/// dashboard. The full card is intentionally not surfaced — operators
+/// who need it can run `neurogrim a2a-discover <url>`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct AgentCardExcerptDto {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub interface_version: String,
+    pub schema_version: String,
+    /// "http+sse" | "json-rpc" — peer's declared transport protocol.
+    pub transport_protocol: String,
+    /// Topology role from the Agent Card (`project` | `ecosystem` |
+    /// `local` | `external`). None when the peer didn't declare one.
+    pub topology_role: Option<String>,
+    /// Topology parent id when declared (typical for child Brains).
+    pub topology_parent_id: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     /// Compile-time-style check: all #[derive(TS)] types in this
