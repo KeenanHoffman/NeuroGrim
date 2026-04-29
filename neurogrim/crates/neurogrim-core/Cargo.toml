@@ -28,6 +28,9 @@ anyhow = { workspace = true }
 # ledger reader (parse-failure on a bad line should never block
 # the sensor, but the operator should see the warning).
 tracing = { workspace = true }
+# v3.5.0 ports module — random pick from IANA dynamic range with
+# deterministic-seeded test path. 0.8.x for SeedableRng::from_entropy.
+rand = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

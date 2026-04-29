@@ -25,7 +25,7 @@ const TOPIC_DASHBOARD_LAYOUTS: &str = include_str!("../data/explain/dashboard-la
 /// the version header in each `data/explain/*.md`. Bumped manually
 /// when methodology evolves enough to invalidate prior agent
 /// guidance. The `--version` surface in CLI + MCP both read this.
-pub const BUNDLED_VERSION: &str = "v3.4";
+pub const BUNDLED_VERSION: &str = "v3.5";
 
 /// Canonical-source path relative to the workspace root, surfaced via
 /// `neurogrim explain --version` and the MCP `explain --topic

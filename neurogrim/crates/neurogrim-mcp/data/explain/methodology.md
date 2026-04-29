@@ -1,4 +1,4 @@
-<!-- topic: methodology — bundled in neurogrim-cli v3.4 -->
+<!-- topic: methodology — bundled in neurogrim-cli v3.5 -->
 # LSP Brains methodology — the 5-minute primer
 
 LSP Brains is **a declared overlay of project-shaped commitments on a

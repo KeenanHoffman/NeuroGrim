@@ -56,6 +56,34 @@ pub enum DashboardEvent {
     /// layout. Frontend invalidates the dashboard-layout query so
     /// the Overview page picks up the change without a manual refresh.
     LayoutChanged,
+    /// v3.5.0 — a service start request was accepted; spawn is in
+    /// flight. Frontend flips the row to a spinner state.
+    ServiceStarting {
+        peer_name: String,
+        pid: u32,
+        port: u16,
+    },
+    /// v3.5.0 — readiness watcher confirmed the service is bound
+    /// to its port. Frontend invalidates the federation query so
+    /// the next probe shows it as `alive`.
+    ServiceStarted {
+        peer_name: String,
+        pid: u32,
+        port: u16,
+    },
+    /// v3.5.0 — service kill succeeded; child reaped, registry
+    /// entry removed. Frontend flips the row to `not-running`.
+    ServiceStopped {
+        peer_name: String,
+        pid: u32,
+    },
+    /// v3.5.0 — service start failed (spawn error, readiness
+    /// timeout, or unexpected child exit during startup).
+    /// Frontend surfaces a toast.
+    ServiceFailed {
+        peer_name: String,
+        reason: String,
+    },
 }
 
 /// Classify a filesystem path into a `DashboardEvent`. Paths are

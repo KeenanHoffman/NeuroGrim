@@ -1,4 +1,4 @@
-<!-- topic: ui — bundled in neurogrim-cli v3.4 -->
+<!-- topic: ui — bundled in neurogrim-cli v3.5 -->
 # The dashboard — a visual surface for the Brain
 
 NeuroGrim ships a self-contained HTTP + React dashboard alongside

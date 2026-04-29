@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "3.4.0"
+version = "3.5.0"
 edition = "2021"
 authors = ["Keenan Hoffman"]
 license = "MIT"
@@ -59,6 +59,10 @@ tiktoken-rs = "0.6"
 
 # URL parsing / validation (shared across a2a + ecosystem)
 url = { version = "2", features = ["serde"] }
+
+# v3.5.0: per-project random port allocator (`neurogrim-core::ports`).
+# Pinned to 0.8.x for `SeedableRng::from_entropy` (renamed in 0.9).
+rand = "0.8"
 
 # v3.4 dashboard (neurogrim-dashboard crate):
 # - `axum` for HTTP server (already used in a2a + cli dev-deps; promoting to runtime)
@@ -115,9 +119,9 @@ flate2 = "1"
 # Both `path` and `version` are required for `cargo publish` to resolve
 # intra-workspace deps from crates.io. Keep versions in lock-step with
 # `workspace.package.version` above.
-neurogrim-core = { path = "crates/neurogrim-core", version = "3.4.0" }
-neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "3.4.0" }
-neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "3.4.0" }
-neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "3.4.0" }
-neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "3.4.0" }
-neurogrim-dashboard = { path = "crates/neurogrim-dashboard", version = "3.4.0" }
+neurogrim-core = { path = "crates/neurogrim-core", version = "3.5.0" }
+neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "3.5.0" }
+neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "3.5.0" }
+neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "3.5.0" }
+neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "3.5.0" }
+neurogrim-dashboard = { path = "crates/neurogrim-dashboard", version = "3.5.0" }

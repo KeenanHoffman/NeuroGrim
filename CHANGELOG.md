@@ -4,6 +4,156 @@ All notable changes to NeuroGrim + the LSP Brains specification live
 here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-04-29
+
+*Bind & Run — per-project random port allocation + dashboard service
+lifecycle. Solves the recurring port-conflict pain when running
+multiple Brains side-by-side, and lets power users start/stop A2A
+services from the dashboard UI on demand instead of always-on.
+Plus anchor-based deep links into the Overview page and a
+`ports-panel` widget for surfacing the new port allocation.*
+
+### Added — per-project port allocation (`neurogrim-core::ports`)
+
+New module in `neurogrim-core` that picks two ports (dashboard +
+a2a) from the IANA dynamic range (49152-65535) on first run,
+persists them to `<project>/.claude/brain/ports.json`, and reuses
+them on every subsequent invocation. Same atomic-write pattern as
+`dashboard-layout.json` (temp file + rename — concurrent readers
+never see a partial write). Idempotent via `read_ports → allocate`
+fallthrough; ports are sticky across restarts unless the file is
+deleted or the operator passes an explicit `--port` (which
+deliberately does NOT touch `ports.json`, preserving v3.4-era
+bookmarks at `:8420`).
+
+The `try_bind` precheck filters candidates against actual OS bind
+feasibility before persisting; deterministic-seeded RNG is exposed
+for tests. Failure mode: when every candidate in the range is
+already bound, `AllocateError::Exhausted` carries the attempt
+count + range bounds for forensics.
+
+### Added — `neurogrim federation rewire` CLI subcommand
+
+Operator-explicit migration tool for parent registries that
+hardcode pre-v3.5 child ports. Reads the child's
+`<brain_path>/.claude/brain/ports.json::a2a_port` and rewrites
+the parent's `config.children[name].a2a_endpoint` +
+`agent_card_url` to match. With `--probe-only`, prints the diff
+and exits 0 without modifying anything. No silent registry
+mutations on parent's start — the operator runs `rewire` once
+per affected child after a v3.5 upgrade.
+
+### Added — `--allow-mutations` flag + service start/stop endpoints
+
+The dashboard advertised `--allow-mutations` as planned-for-v3.5 in
+its v3.4 doc-comments; this release wires it through. When set,
+three new mutation endpoints become reachable (otherwise they
+return 403 `code: "mutations-disabled"`):
+
+- `POST /api/brains/:id/peers/:peer/start` — spawns
+  `<current_exe> a2a-serve --port <port> --project-root
+  <peer_brain_path>` as a child process, sets up a per-service log
+  at `<peer_root>/.claude/brain/logs/<peer-name>.log`, and broadcasts
+  `ServiceStarting` immediately + `ServiceStarted` (or
+  `ServiceFailed`) within ~5 s once the readiness watcher confirms
+  the port is bound.
+- `POST /api/brains/:id/peers/:peer/stop` — kills the tracked child
+  (`tokio::process::Child::kill` → SIGKILL on Unix,
+  `TerminateProcess` on Windows). 409 when not running under this
+  dashboard. Broadcasts `ServiceStopped`.
+- `GET /api/brains/:id/services` — read-only inventory of services
+  this dashboard instance currently supervises.
+
+`tokio::process::Child::kill_on_drop` is intentionally NOT set:
+spawned services survive a dashboard restart (matches the user
+preference for "leave running"). On dashboard restart, services
+from a previous session probe as `alive` via the regular
+federation probe but the Stop button stays hidden — we don't
+adopt PIDs from prior runs in v3.5.
+
+Four new SSE event variants drive the frontend:
+`ServiceStarting{peer_name, pid, port}`,
+`ServiceStarted{...}`, `ServiceStopped{peer_name, pid}`,
+`ServiceFailed{peer_name, reason}`.
+
+### Added — frontend `PeerActions` component
+
+Slotted into the Federation page's `PeerDetailCard` between the
+detail grid and the Agent Card excerpt. Visible only when
+`mutations_allowed` is true (read from `/api/health` once on
+mount) and the peer's transport is `"a2a"`. Optimistic UI via
+`useMutation`: clicking Start flips local state to a spinner;
+the SSE feed invalidates the federation query so the
+StatusBadge refreshes within ~5 s. Errors from synchronous
+spawn failures (422 `port-conflict`, 409 `already-running`,
+etc.) are surfaced inline with a 6 s auto-clear.
+
+### Added — anchor-based deep links
+
+Each Overview-page widget now renders with
+`id="widget-<spec.id>"`. The new helper
+`@/lib/anchors.widgetAnchorUrl(brainId, widgetId)` returns
+`/brains/<brain>/#widget-<id>` so agents (and humans) can link
+deep into a specific widget. On page mount + on every
+`hashchange`, `applyHashAnchor` smooth-scrolls the matching
+widget into view and applies a 1.5 s pulse highlight via the
+new `widget-pulse` CSS animation.
+
+### Added — `ports-panel` widget
+
+New widget type in the dashboard catalog. Self-fetches
+`/api/brains/:id/ports` and surfaces:
+
+- Dashboard port + bound/free indicator
+- A2A port + bound/free indicator
+- Path to `ports.json`, its `created_at`, and the
+  `generated_by` software-version stamp
+
+Useful diagnostic for power users running multiple Brains
+side-by-side. When `ports.json` is missing on disk, the widget
+explains how to allocate via `neurogrim ui` or `neurogrim
+a2a-serve`.
+
+### Changed — `--port` becomes optional on `neurogrim ui` + `neurogrim a2a-serve`
+
+Both commands now take `Option<u16>` instead of `u16` with a
+hardcoded default. Precedence rule:
+
+1. CLI `--port <n>` explicit → use it, do NOT touch `ports.json`.
+2. `ports.json` exists → use the persisted value for the relevant
+   role (`dashboard_port` for `ui`, `a2a_port` for `a2a-serve`).
+3. Neither → allocate fresh from the dynamic range, persist,
+   announce loudly.
+
+The previous defaults (8420 for `ui`, 8421 for `a2a-serve`) are
+gone. Existing users with bookmarks at `:8420` keep working with
+`neurogrim ui --port 8420`; the explicit-port path is opt-in
+preservation, not a silent fallback.
+
+### Bindings + tests
+
+Five new ts-rs bindings exported to `crates/neurogrim-dashboard/
+bindings/`: `StartPeerResponse`, `StopPeerResponse`,
+`ServiceErrorDto`, `ServiceSnapshot`, `ServicesListResponse`. The
+existing `HealthResponse` gained a `mutations_allowed` field.
+
+Test count: 11 new ports tests in `neurogrim-core::ports::tests`,
+4 new `federation rewire` tests in
+`neurogrim-cli::commands::federation::tests`, 3 services-registry
+tests in `neurogrim-dashboard::services::tests`. All passing.
+
+### Migration notes for v3.4 adopters
+
+- **Bookmarks at `:8420`**: pass `--port 8420` to `neurogrim ui`
+  to keep them working, OR delete the project's existing
+  expectations and let v3.5 allocate fresh.
+- **Parent registries with hardcoded `:8421` child endpoints**:
+  run `neurogrim federation rewire --child <name>` once per
+  child after upgrading. `--probe-only` prints the diff first.
+- **Custom dashboard layouts** (v3.4 `dashboard-layout.json`)
+  continue to work unchanged. Add a `ports-panel` widget if you
+  want the new port-allocation visibility.
+
 ## [3.4.0] - 2026-04-29
 
 *The third audience surface — a self-contained HTTP + React

@@ -97,10 +97,16 @@ impl BrainContextCache {
                             inner_clone.write().await.clear();
                             tracing::debug!("BrainContext cache cleared via SSE event");
                         }
-                        // Skill / layout changes don't affect any
-                        // BrainContext field.
+                        // Skill / layout / service-lifecycle changes
+                        // don't affect any BrainContext field — those
+                        // are surfaced via separate routes that don't
+                        // share the cache.
                         DashboardEvent::SkillInvoked
-                        | DashboardEvent::LayoutChanged => {}
+                        | DashboardEvent::LayoutChanged
+                        | DashboardEvent::ServiceStarting { .. }
+                        | DashboardEvent::ServiceStarted { .. }
+                        | DashboardEvent::ServiceStopped { .. }
+                        | DashboardEvent::ServiceFailed { .. } => {}
                     }
                 }
             });

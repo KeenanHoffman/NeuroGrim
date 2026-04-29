@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* v3.5.0 anchor-link pulse: brief highlight when a `#widget-<id>`
+   hash is in the URL. Class added/removed by `lib/anchors.ts`. */
+@keyframes widget-pulse-anim {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.6);
+  }
+  60% {
+    box-shadow: 0 0 0 10px hsl(var(--primary) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
+}
+.widget-pulse {
+  animation: widget-pulse-anim 1.5s ease-out;
+  border-radius: var(--radius);
+}
+
 /* shadcn/ui CSS variables — dark theme is the default. Operators can
    toggle to light via the theme switcher (Phase 1.5). */
 @layer base {

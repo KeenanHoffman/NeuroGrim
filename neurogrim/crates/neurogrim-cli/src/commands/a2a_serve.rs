@@ -34,13 +34,10 @@ use neurogrim_a2a::envelope::{A2aEnvelope, MessageType};
 use neurogrim_a2a::error::A2aError;
 use neurogrim_a2a::token_store::TokenStore;
 use neurogrim_a2a::{AgentCard, TaskServer};
+use neurogrim_core::ports;
 use neurogrim_core::registry::BrainRegistry;
 use std::net::SocketAddr;
 use std::path::Path;
-
-/// Default port for the Brain A2A server. Picked to sit above well-known
-/// port ranges and the MCP default; adopters can override with `--port`.
-pub const DEFAULT_PORT: u16 = 8421;
 
 /// Truncate a registry description for use as the Agent Card `name`. The
 /// schema imposes no limit, but UI surfaces usually do — keep it reasonable.
@@ -158,7 +155,7 @@ async fn load_agent_output_payload(registry_path: &str) -> Result<serde_json::Va
 /// reference Docker deployment from working — but we log a warning when
 /// `bind` is not `127.0.0.1` so operators see the reminder in the logs.
 pub async fn run(
-    port: u16,
+    port: Option<u16>,
     bind: String,
     project_root: String,
     _agent_card_path: Option<String>,
@@ -173,6 +170,31 @@ pub async fn run(
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
         .try_init();
+
+    // v3.5.0 port-precedence rule:
+    // 1. CLI --port wins (Some) — don't touch ports.json
+    // 2. ports.json exists → use persisted a2a_port
+    // 3. Neither → allocate fresh, persist, announce
+    let project_root_path = Path::new(&project_root);
+    let port: u16 = match port {
+        Some(p) => p,
+        None => match ports::read_ports(project_root_path) {
+            Some(cfg) => cfg.a2a_port,
+            None => {
+                let alloc = ports::PortAllocator::default();
+                let (cfg, fresh) = ports::allocate(project_root_path, &alloc)
+                    .with_context(|| {
+                        format!(
+                            "failed to allocate a2a port for project root {project_root}"
+                        )
+                    })?;
+                if fresh {
+                    crate::commands::ui::announce_fresh_ports(project_root_path, &cfg);
+                }
+                cfg.a2a_port
+            }
+        },
+    };
 
     let registry_path = Path::new(&project_root).join(".claude/brain-registry.json");
     let registry_text = tokio::fs::read_to_string(&registry_path)

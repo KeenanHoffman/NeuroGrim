@@ -1,4 +1,4 @@
-<!-- topic: dashboard-layouts — bundled in neurogrim-cli v3.4 -->
+<!-- topic: dashboard-layouts — bundled in neurogrim-cli v3.5 -->
 # Dashboard layouts — authoring guide for agents
 
 The v3.4 dashboard's Overview page is composed from a per-Brain
@@ -75,6 +75,7 @@ Each widget has:
 | `top-recommendations` | overview | — | Top N gates / calls to action. Optional `count` (default 3). |
 | `domain-card` | self-fetches /domains/:name | `domain` (string) | Single-domain stat card: score, weight, confidence, trajectory. Click drills into the domain detail page. Self-fetches so a slow A2A pull doesn't stall the layout. |
 | `markdown-note` | none | `content` (string) | Free-text card. Inline `**bold**`, `*italic*`, `` `code` `` rendered safely (HTML-escaped first; no XSS surface). Use for framing notes, posture explanations, or short directives. |
+| `ports-panel` (v3.5+) | self-fetches /brains/:id/ports | — | Surfaces this project's persisted port allocation (`<root>/.claude/brain/ports.json`) plus a live "is this port currently bound?" probe. Useful for power users running multiple Brains side-by-side; complements the `--allow-mutations` service-lifecycle controls on the Federation page. Optional `title`. |
 
 ## Size guidance
 
@@ -198,6 +199,21 @@ through the edit-mode UI.
   readability; auto-generated ids are fine if you're scripting
   layouts.
 
+## Anchor-based deep links (v3.5+)
+
+Every widget in the rendered Overview gets an
+`id="widget-<spec.id>"` attribute. URL anchors of the form
+`/brains/<brain-id>/#widget-<widget-id>` smooth-scroll directly
+to the matching widget on page load and apply a 1.5 s
+highlight pulse. Useful for agents that want to point a human
+at a specific dashboard element (e.g. "see your
+`pipeline-health` widget at /brains/job-hunt/#widget-pipeline-health").
+
+The frontend exposes a URL builder at `@/lib/anchors`:
+`widgetAnchorUrl(brainId, widgetId)` returns the canonical
+shape so MCP agents can construct deep links programmatically
+(v3.6 MCP work will surface this as a tool).
+
 ## Cross-references
 
 - `neurogrim explain ui` — the dashboard's overall surface
@@ -206,4 +222,4 @@ through the edit-mode UI.
   peers, which underpins the child-card patterns
 - `neurogrim explain domain` — what a domain is (so layouts
   reference real things)
-- README "The dashboard (v3.4)" — quickstart for operators
+- README "The dashboard" — quickstart for operators

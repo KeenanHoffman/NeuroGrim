@@ -27,6 +27,9 @@
 //!   feedback loop (principle #4).
 //! - **[`calibration_ledger`]** — Brains-2.0 §17 per-domain calibration
 //!   meta-observer plumbing.
+//! - **[`ports`]** — v3.5.0 per-project random port allocator. Picks two
+//!   ports (dashboard + a2a) from the IANA dynamic range, persists the
+//!   choice to `.claude/brain/ports.json`, idempotent on subsequent reads.
 //! - **[`ecosystem`]** — `ChildEntry`, `EcosystemRegistry`, topological
 //!   ordering for fractal-composition score aggregation (spec §9).
 //! - **[`awareness`]** — `LocalAwareness`: per-machine fact store (tool
@@ -57,6 +60,7 @@ pub mod correlation;
 pub mod ecosystem;
 pub mod governance;
 pub mod learning;
+pub mod ports;
 pub mod registry;
 pub mod scoring;
 pub mod trajectory;

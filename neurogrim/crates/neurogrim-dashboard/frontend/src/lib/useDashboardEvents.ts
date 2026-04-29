@@ -17,7 +17,12 @@ export type DashboardEvent =
   | { kind: "registry_changed" }
   | { kind: "score_changed"; domain?: string | null }
   | { kind: "skill_invoked" }
-  | { kind: "layout_changed" };
+  | { kind: "layout_changed" }
+  // v3.5.0 service lifecycle events.
+  | { kind: "service_starting"; peer_name: string; pid: number; port: number }
+  | { kind: "service_started"; peer_name: string; pid: number; port: number }
+  | { kind: "service_stopped"; peer_name: string; pid: number }
+  | { kind: "service_failed"; peer_name: string; reason: string };
 
 /**
  * Wire the dashboard to its live-update channel.
@@ -132,6 +137,36 @@ function normalize(raw: unknown): DashboardEvent | null {
         domain: inner?.domain ?? null,
       };
     }
+    if ("service_starting" in obj) {
+      const inner = obj.service_starting as {
+        peer_name: string;
+        pid: number;
+        port: number;
+      };
+      return { kind: "service_starting", ...inner };
+    }
+    if ("service_started" in obj) {
+      const inner = obj.service_started as {
+        peer_name: string;
+        pid: number;
+        port: number;
+      };
+      return { kind: "service_started", ...inner };
+    }
+    if ("service_stopped" in obj) {
+      const inner = obj.service_stopped as {
+        peer_name: string;
+        pid: number;
+      };
+      return { kind: "service_stopped", ...inner };
+    }
+    if ("service_failed" in obj) {
+      const inner = obj.service_failed as {
+        peer_name: string;
+        reason: string;
+      };
+      return { kind: "service_failed", ...inner };
+    }
   }
   return null;
 }
@@ -168,6 +203,17 @@ function invalidate(
       // layout JSON. Frontend invalidates so the Overview page
       // picks up the change without a manual refresh.
       qc.invalidateQueries({ queryKey: ["dashboard-layout"] });
+      break;
+    case "service_starting":
+    case "service_started":
+    case "service_stopped":
+    case "service_failed":
+      // Service-lifecycle events bubble to anyone watching the
+      // federation page or the services list. Invalidating both
+      // keys means the next render reflects the new state without
+      // waiting for the 30s refetchInterval.
+      qc.invalidateQueries({ queryKey: ["federation"] });
+      qc.invalidateQueries({ queryKey: ["services"] });
       break;
   }
 }

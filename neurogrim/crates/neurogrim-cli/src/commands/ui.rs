@@ -1,11 +1,15 @@
-//! `neurogrim ui` — launch the v3.4 dashboard server.
+//! `neurogrim ui` — launch the dashboard server.
 //!
-//! Spawns an HTTP server (axum) on `127.0.0.1:<port>` (default 8420)
-//! that serves the embedded React frontend + JSON API. When
-//! `--no-browser` is omitted the dashboard tries to open the URL in
-//! the user's default browser; the URL is always printed to stderr
-//! as a fallback (works on WSL, headless Linux, BROWSER=foo
-//! overrides).
+//! Spawns an HTTP server (axum) on `127.0.0.1:<port>` that serves
+//! the embedded React frontend + JSON API. The port is auto-allocated
+//! from the IANA dynamic range (49152-65535) on first run and
+//! persisted to `<project>/.claude/brain/ports.json`; subsequent
+//! invocations reuse the persisted value. Pass `--port <n>`
+//! explicitly to override (e.g. `--port 8420` for v3.4-era bookmarks)
+//! without disturbing the persisted allocation. When `--no-browser`
+//! is omitted the dashboard tries to open the URL in the user's
+//! default browser; the URL is always printed to stderr as a
+//! fallback (works on WSL, headless Linux, BROWSER=foo overrides).
 //!
 //! Phase 2.3 hardens this path:
 //!
@@ -20,23 +24,34 @@
 //!   them deterministically.
 
 use anyhow::{Context, Result};
+use neurogrim_core::ports;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 
 pub async fn run(
     registry_path: String,
-    port: u16,
+    port: Option<u16>,
     bind: String,
     no_browser: bool,
+    allow_mutations: bool,
 ) -> Result<()> {
-    let addr: SocketAddr = format!("{bind}:{port}")
+    let project_root = derive_project_root(&registry_path);
+    let resolved_port = resolve_dashboard_port(port, &project_root)?;
+
+    let addr: SocketAddr = format!("{bind}:{resolved_port}")
         .parse()
-        .with_context(|| format!("invalid bind/port: {bind}:{port}"))?;
-    let url = format!("http://{bind}:{port}/");
+        .with_context(|| format!("invalid bind/port: {bind}:{resolved_port}"))?;
+    let url = format!("http://{bind}:{resolved_port}/");
 
     eprintln!("✦ NeuroGrim Dashboard");
     eprintln!("  Registry:  {}", registry_path);
     eprintln!("  Listening: {}", url);
+    if allow_mutations {
+        eprintln!("  Mutations: ENABLED (--allow-mutations) — service start/stop available");
+    } else {
+        eprintln!("  Mutations: disabled (read-only) — pass --allow-mutations to enable lifecycle controls");
+    }
     eprintln!();
 
     let env = current_env_view();
@@ -55,7 +70,71 @@ pub async fn run(
     eprintln!();
     eprintln!("Press Ctrl+C to stop the server.");
 
-    neurogrim_dashboard::serve(addr, registry_path).await
+    neurogrim_dashboard::serve(addr, registry_path, allow_mutations).await
+}
+
+/// Derive the project root from the registry path. Mirrors the
+/// dashboard server's `serve()` helper at
+/// `crates/neurogrim-dashboard/src/lib.rs` so the precedence-rule
+/// applies consistently across both entry points.
+fn derive_project_root(registry_path: &str) -> PathBuf {
+    let registry_pb = PathBuf::from(registry_path);
+    let raw = registry_pb
+        .parent()
+        .and_then(Path::parent)
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    if raw.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        raw
+    }
+}
+
+/// Apply the v3.5.0 port-precedence rule:
+/// 1. CLI `--port <n>` explicit → use it, do NOT touch ports.json.
+/// 2. `ports.json` exists → use the persisted dashboard_port.
+/// 3. Neither → allocate fresh, persist, use.
+///
+/// On first-time allocation the function prints a one-time
+/// "Note: ports auto-allocated…" message to stderr so operators
+/// see the chosen ports without needing to read the file.
+fn resolve_dashboard_port(cli_port: Option<u16>, project_root: &Path) -> Result<u16> {
+    if let Some(p) = cli_port {
+        return Ok(p);
+    }
+    if let Some(cfg) = ports::read_ports(project_root) {
+        return Ok(cfg.dashboard_port);
+    }
+    let alloc = ports::PortAllocator::default();
+    let (cfg, fresh) = ports::allocate(project_root, &alloc).with_context(|| {
+        format!(
+            "failed to allocate dashboard port for project root {}",
+            project_root.display()
+        )
+    })?;
+    if fresh {
+        announce_fresh_ports(project_root, &cfg);
+    }
+    Ok(cfg.dashboard_port)
+}
+
+/// One-time stderr announcement when ports.json was just generated.
+/// Pulled out so the a2a-serve command can emit the same banner.
+pub(crate) fn announce_fresh_ports(project_root: &Path, cfg: &ports::PortConfig) {
+    eprintln!(
+        "✦ Note: ports auto-allocated for {} (dashboard: {}, a2a: {})",
+        project_root.display(),
+        cfg.dashboard_port,
+        cfg.a2a_port,
+    );
+    eprintln!(
+        "  Persisted to {}/.claude/brain/ports.json — these ports stay sticky across restarts.",
+        project_root.display(),
+    );
+    eprintln!(
+        "  Pass --port <n> explicitly to override (e.g. --port 8420 for v3.4-era bookmarks)."
+    );
 }
 
 /// Outcome of the browser-launch decision. Distinct variants so the

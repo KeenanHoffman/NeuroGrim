@@ -32,6 +32,7 @@ pub mod cache;
 pub mod events;
 pub mod layout;
 pub mod routes;
+pub mod services;
 pub mod skills;
 pub mod state;
 pub mod types;
@@ -46,10 +47,19 @@ use std::path::Path;
 /// Spin up the dashboard HTTP server on the given socket address.
 /// Blocks until the server exits (Ctrl+C, kill, or fatal error).
 ///
-/// Phase 2.1: also spawns the filesystem watcher so SSE clients
-/// connected to `/api/events` receive live updates when CMDBs,
-/// the registry, or the invocation ledger change.
-pub async fn serve(addr: SocketAddr, registry_path: String) -> Result<()> {
+/// `allow_mutations` controls whether v3.5+ mutation endpoints
+/// (service start/stop, sensor refresh) are reachable. When false,
+/// those endpoints return 403 with `code: "mutations-disabled"` and
+/// the frontend hides their action buttons.
+///
+/// Spawns the filesystem watcher so SSE clients connected to
+/// `/api/events` receive live updates when CMDBs, the registry,
+/// the invocation ledger, or the dashboard layout change.
+pub async fn serve(
+    addr: SocketAddr,
+    registry_path: String,
+    allow_mutations: bool,
+) -> Result<()> {
     // Derive project_root from the registry path
     // (`<project>/.claude/brain-registry.json`). Canonicalize so
     // notify's absolute event paths can be `strip_prefix`'d cleanly.
@@ -71,7 +81,7 @@ pub async fn serve(addr: SocketAddr, registry_path: String) -> Result<()> {
         .unwrap_or(project_root_normalized);
 
     let events_tx = events::spawn_watcher(project_root);
-    let state = AppState::with_events(registry_path, events_tx);
+    let state = AppState::with_events(registry_path, events_tx, allow_mutations);
     let app = routes::router(state);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("neurogrim dashboard listening on http://{}", addr);

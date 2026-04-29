@@ -1,4 +1,4 @@
-<!-- topic: hat — bundled in neurogrim-cli v3.4 -->
+<!-- topic: hat — bundled in neurogrim-cli v3.5 -->
 # Hats — declared decision-making lenses
 
 A **hat** is a declared lens an agent or operator wears to filter

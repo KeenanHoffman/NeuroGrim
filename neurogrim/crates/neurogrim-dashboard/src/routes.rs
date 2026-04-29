@@ -32,9 +32,14 @@ use tokio_stream::wrappers::BroadcastStream;
 use url::Url;
 
 use crate::brains::BrainEntry;
+use crate::events::DashboardEvent;
 use crate::layout::{
     default_layout_for, read_layout, reset_layout, save_layout, DashboardLayoutRequest,
     DashboardLayoutResponse,
+};
+use crate::services::{
+    broadcast_event as broadcast_service_event, ServiceErrorDto, ServiceHandle,
+    ServicesListResponse, StartPeerResponse, StopPeerResponse,
 };
 use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
@@ -108,6 +113,20 @@ pub fn router(state: AppState) -> Router {
                 .put(brain_save_dashboard_layout)
                 .delete(brain_reset_dashboard_layout),
         )
+        // ---- v3.5.0 service lifecycle (gated by --allow-mutations) ----
+        .route(
+            "/api/brains/:brain_id/peers/:peer/start",
+            axum::routing::post(brain_peer_start),
+        )
+        .route(
+            "/api/brains/:brain_id/peers/:peer/stop",
+            axum::routing::post(brain_peer_stop),
+        )
+        // Read-only: list services tracked by this dashboard.
+        .route("/api/brains/:brain_id/services", get(brain_services))
+        // Read-only: surface the project's port allocation for the
+        // v3.5.0 ports-panel widget.
+        .route("/api/brains/:brain_id/ports", get(brain_ports))
         // ---- Live updates ----
         .route("/api/events", get(events_sse))
         .fallback(static_handler)
@@ -119,6 +138,7 @@ async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
         ok: true,
         registry_path: state.registry_path.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
+        mutations_allowed: state.mutations_allowed,
     })
 }
 
@@ -1439,6 +1459,538 @@ async fn brain_reset_dashboard_layout(
 }
 
 // =================================================================
+// v3.5.0 — service lifecycle + ports panel
+// =================================================================
+
+/// Returns 403 when mutations are disabled. Mutation handlers call
+/// this at the top so the gate is applied uniformly + the error
+/// shape matches the documented contract.
+fn require_mutations(state: &AppState) -> Result<(), Response> {
+    if state.mutations_allowed {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::FORBIDDEN,
+            Json(ServiceErrorDto::new(
+                "mutations-disabled",
+                "dashboard started without --allow-mutations; restart with the flag to enable",
+            )),
+        )
+            .into_response())
+    }
+}
+
+/// Resolved info about a peer declared in some Brain's
+/// `config.children`. The `brain_path` is absolutized against the
+/// parent's project_root so callers can hand it to `tokio::process::
+/// Command` without further canonicalization.
+struct PeerLookup {
+    peer_name: String,
+    brain_path: std::path::PathBuf,
+}
+
+/// Walk the parent's registry's `config.children` to find a peer
+/// declaration matching `peer_name`, then resolve its brain_path
+/// against the parent's project_root.
+async fn resolve_peer(
+    state: &AppState,
+    brain_id: &str,
+    peer_name: &str,
+) -> Result<PeerLookup, Response> {
+    let brain = resolve_brain(state, brain_id)?;
+    let registry_path = brain.registry_path.to_string_lossy().to_string();
+    let ctx = state
+        .cache
+        .load_or_get(&registry_path, None, None)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
+                })),
+            )
+                .into_response()
+        })?;
+
+    let children = ctx
+        .registry
+        .config
+        .extra
+        .get("children")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ServiceErrorDto::new(
+                    "peer-not-found",
+                    format!("brain '{brain_id}' has no config.children block"),
+                )),
+            )
+                .into_response()
+        })?;
+    let body = children.get(peer_name).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ServiceErrorDto::new(
+                "peer-not-found",
+                format!(
+                    "peer '{peer_name}' not found in '{brain_id}'s config.children"
+                ),
+            )),
+        )
+            .into_response()
+    })?;
+    let brain_path_str = body.get("brain_path").and_then(|v| v.as_str()).ok_or_else(|| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ServiceErrorDto::new(
+                "spawn-failed",
+                format!("peer '{peer_name}' has no brain_path field"),
+            )),
+        )
+            .into_response()
+    })?;
+    let candidate = std::path::PathBuf::from(brain_path_str);
+    let absolute = if candidate.is_absolute() {
+        candidate
+    } else {
+        brain.project_root.join(&candidate)
+    };
+    Ok(PeerLookup {
+        peer_name: peer_name.to_string(),
+        brain_path: absolute,
+    })
+}
+
+/// `POST /api/brains/:id/peers/:peer/start` — spawn the peer's A2A
+/// service as a child process of the dashboard. Returns 202 Accepted
+/// with the optimistic state; the readiness watcher emits
+/// ServiceStarted (or ServiceFailed) within ~5s.
+async fn brain_peer_start(
+    State(state): State<AppState>,
+    AxumPath((brain_id, peer_name)): AxumPath<(String, String)>,
+) -> Response {
+    if let Err(r) = require_mutations(&state) {
+        return r;
+    }
+    let peer = match resolve_peer(&state, &brain_id, &peer_name).await {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+
+    if state.service_registry.contains(&peer.peer_name).await {
+        return (
+            StatusCode::CONFLICT,
+            Json(ServiceErrorDto::new(
+                "already-running",
+                format!("peer '{peer_name}' is already running under this dashboard"),
+            )),
+        )
+            .into_response();
+    }
+
+    // Resolve the target port: read peer's ports.json, or allocate
+    // fresh against the peer's project root.
+    let port = match neurogrim_core::ports::read_ports(&peer.brain_path) {
+        Some(cfg) => cfg.a2a_port,
+        None => {
+            let alloc = neurogrim_core::ports::PortAllocator::default();
+            match neurogrim_core::ports::allocate(&peer.brain_path, &alloc) {
+                Ok((cfg, _fresh)) => cfg.a2a_port,
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ServiceErrorDto::new(
+                            "spawn-failed",
+                            format!(
+                                "failed to allocate a2a port for peer '{peer_name}': {e}"
+                            ),
+                        )),
+                    )
+                        .into_response();
+                }
+            }
+        }
+    };
+
+    // OS bind feasibility precheck — quick filter before we spawn
+    // and watch a child fail at bind. TOCTOU-vulnerable on purpose;
+    // the readiness watcher catches the race.
+    if !neurogrim_core::ports::try_bind(port) {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ServiceErrorDto::new(
+                "port-conflict",
+                format!(
+                    "port {port} is already bound by another process; \
+                     stop the conflicting service or run \
+                     `neurogrim federation rewire --child {peer_name}` \
+                     after re-allocating ports"
+                ),
+            )),
+        )
+            .into_response();
+    }
+
+    // Set up the per-service log file under .claude/brain/logs/.
+    let log_dir = peer.brain_path.join(".claude").join("brain").join("logs");
+    if let Err(e) = std::fs::create_dir_all(&log_dir) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ServiceErrorDto::new(
+                "spawn-failed",
+                format!("failed to create log directory {}: {e}", log_dir.display()),
+            )),
+        )
+            .into_response();
+    }
+    let log_path = log_dir.join(format!("{peer_name}.log"));
+    let log_file = match std::fs::File::create(&log_path) {
+        Ok(f) => f,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ServiceErrorDto::new(
+                    "spawn-failed",
+                    format!("failed to open log file {}: {e}", log_path.display()),
+                )),
+            )
+                .into_response();
+        }
+    };
+    // tokio::process needs separate File handles for stdout vs stderr.
+    let log_file_err = match log_file.try_clone() {
+        Ok(f) => f,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ServiceErrorDto::new(
+                    "spawn-failed",
+                    format!("failed to clone log handle: {e}"),
+                )),
+            )
+                .into_response();
+        }
+    };
+
+    // Resolve the binary to spawn. `current_exe()` returns the binary
+    // the operator ran (works for `cargo install` global, dev builds,
+    // and WSL/Windows boundary) — never spell it as `"neurogrim"`.
+    let binary_path = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ServiceErrorDto::new(
+                    "spawn-failed",
+                    format!("failed to resolve current_exe: {e}"),
+                )),
+            )
+                .into_response();
+        }
+    };
+
+    let mut cmd = tokio::process::Command::new(&binary_path);
+    cmd.arg("a2a-serve")
+        .arg("--port")
+        .arg(port.to_string())
+        .arg("--bind")
+        .arg("127.0.0.1")
+        .arg("--project-root")
+        .arg(&peer.brain_path)
+        .stdout(std::process::Stdio::from(log_file))
+        .stderr(std::process::Stdio::from(log_file_err))
+        .stdin(std::process::Stdio::null());
+    // kill_on_drop intentionally NOT set — orphans survive
+    // dashboard restart per v3.5.0 user contract. See
+    // services.rs module docstring for rationale.
+
+    let child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ServiceErrorDto::new(
+                    "spawn-failed",
+                    format!(
+                        "failed to spawn '{}' a2a-serve for peer '{peer_name}': {e}",
+                        binary_path.display()
+                    ),
+                )),
+            )
+                .into_response();
+        }
+    };
+
+    let pid = child.id().unwrap_or(0);
+    let started_at = chrono::Utc::now();
+
+    // Wrap the child in Arc<Mutex<…>> once and clone the Arc for
+    // the registry vs. the readiness watcher. Both end up pointing
+    // at the same Child; the watcher can `try_wait` while the
+    // registry retains the handle for the eventual stop.
+    let child_arc = std::sync::Arc::new(tokio::sync::Mutex::new(child));
+
+    let handle = ServiceHandle {
+        peer_name: peer.peer_name.clone(),
+        pid,
+        port,
+        started_at,
+        log_path: log_path.clone(),
+        child: child_arc.clone(),
+    };
+    state.service_registry.insert(handle).await;
+
+    broadcast_service_event(
+        &state.events,
+        DashboardEvent::ServiceStarting {
+            peer_name: peer.peer_name.clone(),
+            pid,
+            port,
+        },
+    );
+
+    // Spawn the readiness watcher: poll try_bind until the spawned
+    // child's bind is observable (port becomes unavailable to us),
+    // up to ~5s. Then broadcast ServiceStarted. On timeout or early
+    // child exit, broadcast ServiceFailed and reap the child.
+    let registry_clone = state.service_registry.clone();
+    let events_clone = state.events.clone();
+    let peer_name_clone = peer.peer_name.clone();
+    tokio::spawn(async move {
+        run_readiness_watcher(
+            registry_clone,
+            events_clone,
+            peer_name_clone,
+            pid,
+            port,
+            child_arc,
+        )
+        .await;
+    });
+
+    (
+        StatusCode::ACCEPTED,
+        Json(StartPeerResponse {
+            state: "starting".to_string(),
+            peer_name: peer.peer_name,
+            pid,
+            port,
+        }),
+    )
+        .into_response()
+}
+
+/// Background task: watches a freshly-spawned service for readiness.
+/// Polls `try_bind` every 250ms — first time the port becomes
+/// unavailable to us AND the child is still alive, broadcasts
+/// `ServiceStarted`. On 5s timeout or early child exit, broadcasts
+/// `ServiceFailed` and removes the entry from the registry.
+///
+/// `child` is a clone of the Arc that the registry holds, so this
+/// watcher can `try_wait` without going through the registry's lock.
+async fn run_readiness_watcher(
+    registry: std::sync::Arc<crate::services::ServiceRegistry>,
+    events: Option<tokio::sync::broadcast::Sender<DashboardEvent>>,
+    peer_name: String,
+    pid: u32,
+    port: u16,
+    child: std::sync::Arc<tokio::sync::Mutex<tokio::process::Child>>,
+) {
+    const POLL_INTERVAL: Duration = Duration::from_millis(250);
+    const READINESS_TIMEOUT: Duration = Duration::from_secs(5);
+    let started = std::time::Instant::now();
+
+    loop {
+        // First: did the spawned child exit early? If yes, the
+        // bind() failed inside the child and we'll never see the
+        // port become unavailable.
+        let child_exited = {
+            let mut guard = child.lock().await;
+            matches!(guard.try_wait(), Ok(Some(_)))
+        };
+        if child_exited {
+            // Drop the registry entry (cleanup is idempotent).
+            registry.remove(&peer_name).await;
+            broadcast_service_event(
+                &events,
+                DashboardEvent::ServiceFailed {
+                    peer_name: peer_name.clone(),
+                    reason: format!(
+                        "spawned process for peer '{peer_name}' exited during startup; \
+                         check the log under <peer_root>/.claude/brain/logs/{peer_name}.log"
+                    ),
+                },
+            );
+            return;
+        }
+
+        // Then: has the port become bound? `try_bind` returns false
+        // when something is listening on it — most likely our child.
+        if !neurogrim_core::ports::try_bind(port) {
+            broadcast_service_event(
+                &events,
+                DashboardEvent::ServiceStarted {
+                    peer_name: peer_name.clone(),
+                    pid,
+                    port,
+                },
+            );
+            return;
+        }
+
+        // Timeout check.
+        if started.elapsed() >= READINESS_TIMEOUT {
+            // Reap the child + remove from registry.
+            if let Some(handle) = registry.remove(&peer_name).await {
+                let _ = handle.child.lock().await.start_kill();
+            }
+            broadcast_service_event(
+                &events,
+                DashboardEvent::ServiceFailed {
+                    peer_name: peer_name.clone(),
+                    reason: format!(
+                        "readiness timeout: peer '{peer_name}' did not bind port {port} \
+                         within {}s",
+                        READINESS_TIMEOUT.as_secs()
+                    ),
+                },
+            );
+            return;
+        }
+
+        tokio::time::sleep(POLL_INTERVAL).await;
+    }
+}
+
+/// `POST /api/brains/:id/peers/:peer/stop` — kill the tracked child.
+async fn brain_peer_stop(
+    State(state): State<AppState>,
+    AxumPath((brain_id, peer_name)): AxumPath<(String, String)>,
+) -> Response {
+    if let Err(r) = require_mutations(&state) {
+        return r;
+    }
+    // resolve_brain validates the brain_id; unknown brain → 404.
+    if let Err(r) = resolve_peer(&state, &brain_id, &peer_name).await {
+        return r;
+    }
+
+    let handle = match state.service_registry.remove(&peer_name).await {
+        Some(h) => h,
+        None => {
+            return (
+                StatusCode::CONFLICT,
+                Json(ServiceErrorDto::new(
+                    "not-running",
+                    format!(
+                        "peer '{peer_name}' is not currently tracked by this dashboard \
+                         (it may be running from a previous dashboard run; kill via OS)"
+                    ),
+                )),
+            )
+                .into_response();
+        }
+    };
+
+    let pid = handle.pid;
+    // Kill via the tokio Child. SIGKILL on Unix, TerminateProcess
+    // on Windows. `a2a-serve` has no graceful-shutdown work, so
+    // unconditional kill is fine.
+    if let Err(e) = handle.child.lock().await.kill().await {
+        broadcast_service_event(
+            &state.events,
+            DashboardEvent::ServiceFailed {
+                peer_name: peer_name.clone(),
+                reason: format!("failed to kill child pid={pid}: {e}"),
+            },
+        );
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ServiceErrorDto::new(
+                "spawn-failed",
+                format!("failed to kill child pid={pid}: {e}"),
+            )),
+        )
+            .into_response();
+    }
+
+    broadcast_service_event(
+        &state.events,
+        DashboardEvent::ServiceStopped {
+            peer_name: peer_name.clone(),
+            pid,
+        },
+    );
+
+    (
+        StatusCode::OK,
+        Json(StopPeerResponse {
+            state: "stopped".to_string(),
+            peer_name,
+        }),
+    )
+        .into_response()
+}
+
+/// `GET /api/brains/:id/services` — read-only list of services
+/// tracked by this dashboard instance.
+async fn brain_services(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    if let Err(r) = resolve_brain(&state, &brain_id) {
+        return r;
+    }
+    Json(ServicesListResponse {
+        services: state.service_registry.list().await,
+    })
+    .into_response()
+}
+
+/// `GET /api/brains/:id/ports` — read-only view of the project's
+/// port allocation. Powers the v3.5.0 ports-panel widget.
+async fn brain_ports(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let cfg = neurogrim_core::ports::read_ports(&brain.project_root);
+
+    // Synthesize a wire-friendly payload. We don't define a typed
+    // DTO for this in types.rs — the shape is small and the
+    // frontend's `ports-panel` widget reads it directly.
+    let payload = match cfg {
+        Some(c) => {
+            let dashboard_bound = !neurogrim_core::ports::try_bind(c.dashboard_port);
+            let a2a_bound = !neurogrim_core::ports::try_bind(c.a2a_port);
+            serde_json::json!({
+                "schema_version": c.schema_version,
+                "dashboard_port": c.dashboard_port,
+                "a2a_port": c.a2a_port,
+                "created_at": c.created_at.to_rfc3339(),
+                "generated_by": c.generated_by,
+                "dashboard_port_bound": dashboard_bound,
+                "a2a_port_bound": a2a_bound,
+                "ports_file": neurogrim_core::ports::ports_file_path(&brain.project_root)
+                    .to_string_lossy(),
+                "missing": false,
+            })
+        }
+        None => serde_json::json!({
+            "missing": true,
+            "ports_file": neurogrim_core::ports::ports_file_path(&brain.project_root)
+                .to_string_lossy(),
+        }),
+    };
+    Json(payload).into_response()
+}
+
+// =================================================================
 // Phase 2.1 — SSE live updates
 // =================================================================
 
@@ -1823,6 +2375,145 @@ mod tests {
         assert!(agent_card.is_none());
         // Keep listener alive until after the probe completes.
         drop(listener);
+    }
+
+    /// Helper: build a minimal AppState backed by a registry on
+    /// disk that has a stable `meta.project` so the BrainTree's
+    /// derived id is predictable across tests.
+    fn make_state_with_brain(
+        tmp: &tempfile::TempDir,
+        project: &str,
+        children: serde_json::Value,
+    ) -> (AppState, String) {
+        let claude_dir = tmp.path().join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        let registry_path = claude_dir.join("brain-registry.json");
+        let mut config = serde_json::json!({
+            "domain_weights": {"placeholder": 0.0},
+            "domain_definitions": {
+                "placeholder": {
+                    "principle": "Placeholder domain for testing",
+                    "scoring_source": null,
+                    "exported_variables": {}
+                }
+            }
+        });
+        if !children.is_null() {
+            config["children"] = children;
+        }
+        let registry = serde_json::json!({
+            "meta": {
+                "schema_version": "2.1",
+                "description": "v3.5 routes test",
+                "updated_by": "test",
+                "project": project
+            },
+            "tools": {},
+            "data_sources": {},
+            "config": config
+        });
+        std::fs::write(&registry_path, registry.to_string()).unwrap();
+        let state = AppState::new(registry_path.to_string_lossy().to_string());
+        (state, project.to_string())
+    }
+
+    #[tokio::test]
+    async fn start_endpoint_returns_403_when_mutations_disabled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) = make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        // mutations_allowed defaults to false from AppState::new.
+        let app = router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri(format!("/api/brains/{brain_id}/peers/anything/start"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["code"], "mutations-disabled");
+        assert!(v["error"].as_str().unwrap().contains("--allow-mutations"));
+    }
+
+    #[tokio::test]
+    async fn services_endpoint_returns_empty_list_when_no_services_running() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) = make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        let app = router(state);
+        let req = Request::builder()
+            .uri(format!("/api/brains/{brain_id}/services"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["services"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn ports_endpoint_returns_missing_when_no_ports_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) = make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        let app = router(state);
+        let req = Request::builder()
+            .uri(format!("/api/brains/{brain_id}/ports"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["missing"], true);
+        assert!(v["ports_file"].as_str().unwrap().ends_with("ports.json"));
+    }
+
+    #[tokio::test]
+    async fn ports_endpoint_returns_persisted_config_when_ports_json_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) = make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        // Pre-populate ports.json so the endpoint sees it.
+        let cfg = neurogrim_core::ports::PortConfig {
+            schema_version: "1".into(),
+            dashboard_port: 51234,
+            a2a_port: 51235,
+            created_at: chrono::Utc::now(),
+            generated_by: "test".into(),
+        };
+        // The BrainEntry's project_root for the host is the canonical
+        // form of the tempdir; use the same logic for save_ports.
+        let project_root = std::fs::canonicalize(tmp.path()).unwrap_or_else(|_| tmp.path().to_path_buf());
+        neurogrim_core::ports::save_ports(&project_root, &cfg).unwrap();
+
+        let app = router(state);
+        let req = Request::builder()
+            .uri(format!("/api/brains/{brain_id}/ports"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["missing"], false);
+        assert_eq!(v["dashboard_port"], 51234);
+        assert_eq!(v["a2a_port"], 51235);
+    }
+
+    #[tokio::test]
+    async fn health_response_carries_mutations_allowed_field() {
+        let mut state = test_state();
+        state.mutations_allowed = true;
+        let app = router(state);
+        let req = Request::builder()
+            .uri("/api/health")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["mutations_allowed"], true);
     }
 
     #[tokio::test]

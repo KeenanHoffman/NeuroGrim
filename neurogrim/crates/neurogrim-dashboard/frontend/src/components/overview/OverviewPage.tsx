@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { OverviewResponse } from "@bindings/OverviewResponse";
 import type { WidgetSpec } from "@bindings/WidgetSpec";
+import { applyHashAnchor } from "@/lib/anchors";
 import {
   Card,
   CardContent,
@@ -15,6 +16,8 @@ import { StrongestSignals } from "./StrongestSignals";
 import { TopRecommendations } from "./TopRecommendations";
 import { DomainCardWidget } from "@/components/widgets/DomainCardWidget";
 import { MarkdownNoteWidget } from "@/components/widgets/MarkdownNoteWidget";
+import { PortsPanelWidget } from "@/components/widgets/PortsPanelWidget";
+import { makeWidgetSpec } from "@/lib/widget-catalog";
 import {
   LayoutEditorToolbar,
   WidgetEditControls,
@@ -77,6 +80,28 @@ export function OverviewPage() {
   // Reset edit mode if the brain changes underneath us.
   useEffect(() => {
     setIsEditing(false);
+  }, [brainId]);
+
+  // v3.5.0 anchor links: when a `#widget-<id>` hash is in the URL
+  // on first paint, smooth-scroll to the matching widget and
+  // pulse-highlight it briefly. Re-runs on hashchange so an
+  // operator clicking a deep-link from elsewhere on the same page
+  // also triggers the scroll. The 100ms delay gives the layout
+  // grid a chance to lay out before we measure scroll positions.
+  useEffect(() => {
+    let mounted = true;
+    const trigger = () => {
+      if (!mounted) return;
+      window.setTimeout(() => {
+        if (mounted) applyHashAnchor(window.location.hash);
+      }, 100);
+    };
+    trigger();
+    window.addEventListener("hashchange", trigger);
+    return () => {
+      mounted = false;
+      window.removeEventListener("hashchange", trigger);
+    };
   }, [brainId]);
 
   if (overviewQ.isLoading || layoutQ.isLoading) {
@@ -158,7 +183,11 @@ export function OverviewPage() {
         {widgets.map((w, idx) => (
           <div
             key={w.id}
-            className={`${widgetSpanClass(w.size)} col-span-1`}
+            // v3.5.0 anchor links: id="widget-<spec.id>" lets agents
+            // link directly via /brains/<id>/#widget-<id>. See
+            // `lib/anchors.ts` for the URL builder.
+            id={`widget-${w.id}`}
+            className={`${widgetSpanClass(w.size)} col-span-1 scroll-mt-4`}
             data-widget-type={w.widget_type}
             data-widget-id={w.id}
           >
@@ -170,16 +199,34 @@ export function OverviewPage() {
                 onMove={(delta) => moveAt(idx, delta)}
                 onResize={(size) => updateAt(idx, { ...w, size })}
                 onRemove={() => removeAt(idx)}
+                onReset={() => {
+                  // Replace the widget's size + title + config with
+                  // the type's defaults; preserve `id` so React keys
+                  // and any anchor links pointing at this slot stay
+                  // stable.
+                  const fresh = makeWidgetSpec(w.widget_type, w.id);
+                  updateAt(idx, fresh);
+                }}
                 onConfigChange={(field, value) => {
                   if (field === "title") {
                     updateAt(idx, { ...w, title: value || null });
-                  } else {
-                    const cfg =
-                      typeof w.config === "object" && w.config !== null
-                        ? (w.config as Record<string, unknown>)
-                        : {};
-                    updateAt(idx, { ...w, config: { ...cfg, [field]: value } });
+                    return;
                   }
+                  const cfg =
+                    typeof w.config === "object" && w.config !== null
+                      ? (w.config as Record<string, unknown>)
+                      : {};
+                  if (field === "count") {
+                    const n = parseInt(value, 10);
+                    if (!isNaN(n) && n > 0) {
+                      updateAt(idx, {
+                        ...w,
+                        config: { ...cfg, count: n },
+                      });
+                    }
+                    return;
+                  }
+                  updateAt(idx, { ...w, config: { ...cfg, [field]: value } });
                 }}
               />
             )}
@@ -195,8 +242,12 @@ export function OverviewPage() {
  * Renders the right widget for the given spec. Unknown widget
  * types render as a placeholder so a forward-compatible layout
  * doesn't blank the page.
+ *
+ * Exported so the v3.5+ `WidgetGallery` can render live previews
+ * of every catalog entry against the current Brain's data
+ * without duplicating the dispatch wiring.
  */
-function WidgetDispatch({
+export function WidgetDispatch({
   spec,
   overview,
 }: {
@@ -272,6 +323,8 @@ function WidgetDispatch({
       }
       return <MarkdownNoteWidget title={spec.title} content={cfg.content} />;
     }
+    case "ports-panel":
+      return <PortsPanelWidget title={spec.title} />;
     default:
       return (
         <UnknownWidget

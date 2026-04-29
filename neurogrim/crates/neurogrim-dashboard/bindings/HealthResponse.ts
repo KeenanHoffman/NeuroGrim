@@ -12,4 +12,12 @@ export type HealthResponse = { ok: boolean, registry_path: string,
  * `CARGO_PKG_VERSION`). Frontends bundled at v3.4 connecting
  * to a v3.5 server can warn the operator.
  */
-version: string, };
+version: string, 
+/**
+ * v3.5.0 — true when the dashboard was started with
+ * `--allow-mutations`. The frontend reads this on first load
+ * to decide whether to render mutation-shaped UI (Start/Stop
+ * buttons, sensor refresh, etc.) so we avoid 403 round-trips
+ * for buttons the user can't use.
+ */
+mutations_allowed: boolean, };

@@ -297,6 +297,140 @@ describe("OverviewPage layout dispatch", () => {
     expect(remaining[0].getAttribute("data-widget-id")).toBe("stay");
   });
 
+  it("exposes a Reset button per widget that restores type-defaults", async () => {
+    mockFetch({
+      "/overview": overview(),
+      "/dashboard-layout": layout(
+        [
+          {
+            id: "ss",
+            widget_type: "strongest-signals",
+            size: "full",
+            title: "Custom title",
+            config: { count: 17 },
+          },
+        ],
+        false
+      ),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByTestId("enter-edit-mode"));
+    const resetBtn = screen.getByTestId("reset-ss");
+    expect(resetBtn).toBeInTheDocument();
+    // Confirm the reset; jsdom's window.confirm returns true by
+    // default, but some test envs differ — pin it.
+    const origConfirm = window.confirm;
+    window.confirm = () => true;
+    try {
+      fireEvent.click(resetBtn);
+    } finally {
+      window.confirm = origConfirm;
+    }
+    // Count input now reflects the catalog default (3).
+    const countInput = screen.getByTestId("count-input-ss") as HTMLInputElement;
+    expect(countInput.value).toBe("3");
+    // Size dropdown reflects the catalog default size for
+    // strongest-signals ("third"). The Radix Select renders the
+    // value in its trigger; we just check the value indirectly via
+    // the size testid being present at the new size.
+    expect(screen.getByTestId("size-ss")).toBeInTheDocument();
+  });
+
+  it("count stepper increments and decrements within bounds", async () => {
+    mockFetch({
+      "/overview": overview(),
+      "/dashboard-layout": layout(
+        [
+          {
+            id: "tr",
+            widget_type: "top-recommendations",
+            size: "third",
+            title: null,
+            config: { count: 1 },
+          },
+        ],
+        false
+      ),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByTestId("enter-edit-mode"));
+    const dec = screen.getByTestId("count-decrement-tr");
+    const inc = screen.getByTestId("count-increment-tr");
+    const input = screen.getByTestId("count-input-tr") as HTMLInputElement;
+    // At MIN (1), decrement is disabled.
+    expect(dec).toBeDisabled();
+    expect(input.value).toBe("1");
+    // Increment a few times.
+    fireEvent.click(inc);
+    expect(input.value).toBe("2");
+    fireEvent.click(inc);
+    expect(input.value).toBe("3");
+    // Decrement back.
+    fireEvent.click(dec);
+    expect(input.value).toBe("2");
+  });
+
+  it("markdown-note rich-text helpers wrap the textarea selection in delimiters", async () => {
+    mockFetch({
+      "/overview": overview(),
+      "/dashboard-layout": layout(
+        [
+          {
+            id: "note",
+            widget_type: "markdown-note",
+            size: "full",
+            title: null,
+            config: { content: "hello world" },
+          },
+        ],
+        false
+      ),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByTestId("enter-edit-mode"));
+    const ta = screen.getByTestId("config-content-note") as HTMLTextAreaElement;
+    expect(ta.value).toBe("hello world");
+    // Select "hello" (chars 0..5) and click the Bold button.
+    ta.focus();
+    ta.setSelectionRange(0, 5);
+    fireEvent.click(screen.getByTestId("md-bold-note"));
+    expect(ta.value).toBe("**hello** world");
+  });
+
+  it("opens the WidgetGallery when Browse is clicked and supports Add-from-gallery", async () => {
+    mockFetch({
+      "/overview": overview(),
+      "/dashboard-layout": layout(
+        [
+          {
+            id: "i",
+            widget_type: "identity",
+            size: "full",
+            title: null,
+            config: {},
+          },
+        ],
+        false
+      ),
+      "/domains": { domains: [] },
+    });
+    const { container } = renderPage();
+    fireEvent.click(await screen.findByTestId("enter-edit-mode"));
+    fireEvent.click(screen.getByTestId("open-widget-gallery"));
+    // Modal opens with the dialog and at least the ports-panel card.
+    expect(await screen.findByTestId("widget-gallery")).toBeInTheDocument();
+    expect(screen.getByTestId("gallery-card-ports-panel")).toBeInTheDocument();
+    // Add ports-panel to the layout from the gallery.
+    fireEvent.click(screen.getByTestId("gallery-add-ports-panel"));
+    // Gallery closes after the pick.
+    expect(screen.queryByTestId("widget-gallery")).not.toBeInTheDocument();
+    // The new widget appears in the rendered grid.
+    const widgetIds = Array.from(
+      container.querySelectorAll("[data-widget-id]")
+    ).map((el) => el.getAttribute("data-widget-type"));
+    expect(widgetIds).toContain("ports-panel");
+  });
+
   it("renders multiple widgets in layout order", async () => {
     mockFetch({
       "/overview": overview(),

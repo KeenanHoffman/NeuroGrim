@@ -1,4 +1,4 @@
-<!-- topic: cli — bundled in neurogrim-cli v3.4 -->
+<!-- topic: cli — bundled in neurogrim-cli v3.5 -->
 # CLI surface — what neurogrim can do for you
 
 NeuroGrim ships ~22 top-level commands grouped into four families.
@@ -32,6 +32,7 @@ Default starting point for an unfamiliar Brain:
 | `neurogrim domain new <name>` | Scaffold a new domain (registry + stub CMDB + optional Python sensor) (v3.2) |
 | `neurogrim skill new <name>` | Scaffold a project-specific SKILL.md skeleton |
 | `neurogrim federation register --name <peer> --path <path>` | Add a child Brain to local federation |
+| `neurogrim federation rewire --child <name>` (v3.5+) | Rewrite parent's `a2a_endpoint` to match the child's persisted port (`ports.json::a2a_port`). Operator-explicit migration tool. Pass `--probe-only` to print the diff without modifying the registry. |
 
 Authoring commands are idempotent and follow consistent UX:
 kebab-case validated names, `--force` to overwrite, "next steps"
@@ -82,6 +83,25 @@ muscle memory.
 - `--project-root <path>` — sensor commands take this; defaults to `.`
 - `--plain` — disables ANSI colors (good for piped output)
 - `--hat <name>` — applies hat-bias to scoring + narration
+
+## Ports & service lifecycle (v3.5+)
+
+`neurogrim ui` and `neurogrim a2a-serve` no longer hardcode
+ports. On first run in a project, both commands allocate two
+ports from the IANA dynamic range (49152-65535), persist them to
+`<project>/.claude/brain/ports.json`, and reuse them on every
+subsequent invocation. Pass `--port <n>` explicitly to override
+without disturbing the persisted allocation (useful for keeping
+v3.4-era bookmarks at `:8420` working). When ports.json drifts
+from a parent registry's hardcoded child endpoints, run
+`neurogrim federation rewire --child <name>` to reconcile.
+
+`neurogrim ui --allow-mutations` (v3.5+) enables a small set of
+mutation endpoints — currently service start/stop from the
+Federation page. When the flag is off (default) the dashboard
+remains read-only and the Start/Stop buttons hide entirely.
+Spawned services survive a dashboard restart by design (matches
+the "leave running" power-user preference).
 
 ## Two invocation modes: MCP and CLI
 

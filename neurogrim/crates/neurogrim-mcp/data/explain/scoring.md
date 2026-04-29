@@ -1,4 +1,4 @@
-<!-- topic: scoring — bundled in neurogrim-cli v3.4 -->
+<!-- topic: scoring — bundled in neurogrim-cli v3.5 -->
 # Scoring — from per-domain measurements to unified score
 
 Every Brain produces a single 0–100 unified score that summarizes

@@ -14,6 +14,7 @@ use tokio::sync::broadcast;
 use crate::brains::BrainTree;
 use crate::cache::BrainContextCache;
 use crate::events::DashboardEvent;
+use crate::services::ServiceRegistry;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -26,7 +27,7 @@ pub struct AppState {
     /// Discovered Brain tree — host + transitively-walked children.
     /// Built once at server startup; immutable for the server's
     /// lifetime. A refresh-on-demand endpoint (e.g.,
-    /// `POST /api/brains/refresh`) is queued for v3.5 alongside
+    /// `POST /api/brains/refresh`) is queued for v3.5.1 alongside
     /// the other mutation endpoints.
     pub brains: Arc<BrainTree>,
     /// Process-level BrainContext cache shared across all routes.
@@ -44,6 +45,15 @@ pub struct AppState {
     /// if the watcher fails to start (events stop flowing in that
     /// case but the route stays available).
     pub events: Option<broadcast::Sender<DashboardEvent>>,
+    /// v3.5.0 — when `true`, mutation endpoints (service start/stop,
+    /// sensor refresh) are reachable. When `false`, those endpoints
+    /// return 403 with `code: "mutations-disabled"` and the frontend
+    /// hides their action buttons. Default: `false` (read-only).
+    pub mutations_allowed: bool,
+    /// v3.5.0 — in-memory registry of services this dashboard
+    /// instance has spawned. Cleared on dashboard restart; spawned
+    /// children survive (kill_on_drop is intentionally NOT set).
+    pub service_registry: Arc<ServiceRegistry>,
 }
 
 impl AppState {
@@ -52,6 +62,10 @@ impl AppState {
     /// brain tree from the registry path so the multi-Brain routes
     /// still work in tests. Cache uses TTL-only invalidation in
     /// this mode (no broadcast channel to subscribe to).
+    ///
+    /// Defaults `mutations_allowed: false`. Tests that need mutations
+    /// enabled assign `.mutations_allowed = true` directly (the
+    /// field is `pub`).
     pub fn new(registry_path: String) -> Self {
         let brains = BrainTree::discover(Path::new(&registry_path));
         let cache = BrainContextCache::new(None);
@@ -60,6 +74,8 @@ impl AppState {
             brains: Arc::new(brains),
             cache: Arc::new(cache),
             events: None,
+            mutations_allowed: false,
+            service_registry: Arc::new(ServiceRegistry::new()),
         }
     }
 
@@ -70,6 +86,7 @@ impl AppState {
     pub fn with_events(
         registry_path: String,
         events: broadcast::Sender<DashboardEvent>,
+        mutations_allowed: bool,
     ) -> Self {
         let brains = BrainTree::discover(Path::new(&registry_path));
         let cache = BrainContextCache::new(Some(&events));
@@ -78,6 +95,8 @@ impl AppState {
             brains: Arc::new(brains),
             cache: Arc::new(cache),
             events: Some(events),
+            mutations_allowed,
+            service_registry: Arc::new(ServiceRegistry::new()),
         }
     }
 }

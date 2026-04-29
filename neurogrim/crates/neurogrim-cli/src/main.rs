@@ -138,13 +138,13 @@ enum Commands {
     /// order. Source of truth: `crates/neurogrim-cli/data/explain/`.
     Explain(commands::explain::Args),
 
-    /// Launch the v3.4 dashboard server (HTTP + embedded React UI).
+    /// Launch the dashboard server (HTTP + embedded React UI).
     ///
     /// Opens an interactive browser-based view of this Brain — score
     /// gauge, domain table, trajectory charts, federation graph,
-    /// skills index. Read-only by default; mutation endpoints (sensor
-    /// refresh, registry edits) are gated behind `--allow-mutations`
-    /// (v3.5+; not available in v3.4).
+    /// skills index. Read-only by default; mutation endpoints
+    /// (service start/stop, sensor refresh) are gated behind
+    /// `--allow-mutations` (v3.5+).
     ///
     /// The dashboard binds to 127.0.0.1 only by default. The URL is
     /// always printed to stderr; pass `--no-browser` to skip the
@@ -153,10 +153,14 @@ enum Commands {
         /// Path to the registry to inspect.
         #[arg(short, long, default_value = ".claude/brain-registry.json")]
         registry: String,
-        /// Port to bind on. Default 8420 (one slot below the federation
-        /// range starting at 8421).
-        #[arg(long, default_value_t = 8420)]
-        port: u16,
+        /// Port to bind on. When omitted, the dashboard reads the
+        /// project's `.claude/brain/ports.json` (auto-allocated from
+        /// the IANA dynamic range 49152-65535 on first run). Pass an
+        /// explicit value (e.g. `--port 8420`) to override; this does
+        /// NOT update `ports.json`, so v3.4-era bookmarks keep working
+        /// without disturbing the persisted allocation.
+        #[arg(long)]
+        port: Option<u16>,
         /// Bind address. Default 127.0.0.1 (loopback only). Setting this
         /// to 0.0.0.0 exposes the dashboard on the network — only do this
         /// when you have separate network-layer access controls.
@@ -165,6 +169,14 @@ enum Commands {
         /// Don't auto-open the browser; print the URL and wait.
         #[arg(long)]
         no_browser: bool,
+        /// v3.5.0 — enable mutation endpoints (service start/stop,
+        /// sensor refresh). Off by default; the dashboard remains
+        /// read-only unless this flag is passed. Mutations are
+        /// surfaced in the UI as Start/Stop buttons in the
+        /// Federation page; without `--allow-mutations` the
+        /// frontend hides them entirely.
+        #[arg(long)]
+        allow_mutations: bool,
     },
 
     /// Start the Brain as an MCP server
@@ -312,9 +324,13 @@ enum Commands {
     /// and accepts peer invocations (snapshot.requested, score.updated ack).
     #[command(name = "a2a-serve", visible_alias = "beacon")]
     A2aServe {
-        /// TCP port to bind.
-        #[arg(long, default_value_t = commands::a2a_serve::DEFAULT_PORT)]
-        port: u16,
+        /// TCP port to bind. When omitted, the server reads
+        /// `<project_root>/.claude/brain/ports.json` (auto-allocated
+        /// from the IANA dynamic range 49152-65535 on first run).
+        /// Pass an explicit value (e.g. `--port 8421`) to override
+        /// without disturbing the persisted allocation.
+        #[arg(long)]
+        port: Option<u16>,
         /// Interface to bind on. Defaults to `127.0.0.1` (loopback-only —
         /// the safe default that matches the unit and integration tests).
         /// Container deployments should pass `--bind 0.0.0.0` so the port
@@ -434,7 +450,8 @@ async fn main() -> Result<()> {
             port,
             bind,
             no_browser,
-        } => commands::ui::run(registry, port, bind, no_browser).await,
+            allow_mutations,
+        } => commands::ui::run(registry, port, bind, no_browser, allow_mutations).await,
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
         Commands::Init {

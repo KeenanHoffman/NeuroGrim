@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { brainApi, useBrainId } from "@/lib/useBrain";
+import { PeerActions } from "./PeerActions";
 
 async function fetchFederation(brainId: string): Promise<FederationResponse> {
   const url = brainApi(brainId, "federation");
@@ -456,6 +457,8 @@ function PeerDetailCard({ peer }: { peer: PeerDto }) {
             <Detail label="Status detail" value={peer.status.message} span />
           )}
         </DetailGrid>
+
+        <PeerActions peer={peer} />
 
         {peer.agent_card && (
           <div className="rounded border border-border bg-muted/30 p-4">

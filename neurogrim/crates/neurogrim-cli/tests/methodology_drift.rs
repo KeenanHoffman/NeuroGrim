@@ -134,6 +134,7 @@ fn no_topic_references_unknown_command() {
         "domain",
         "skill",
         "federation",
+        "ui",
         "a2a-serve",
         "a2a-invoke",
         "a2a-discover",
