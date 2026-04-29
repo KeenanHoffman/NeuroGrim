@@ -45,7 +45,7 @@ use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
 use crate::types::{
     AgentCardExcerptDto, ApprovalRequestView, ApprovalResolutionView, ApprovalsPageResponse,
-    BrainListItemDto, BrainsListResponse, DomainDetailResponse,
+    BrainListItemDto, BrainsListResponse, ConfigFileResponse, DomainDetailResponse,
     DomainListItemDto, DomainSignalDto, DomainsListResponse, FederationResponse, FindingDto,
     HatDto, HatsResponse, HealthResponse, HistoryPointDto, OverviewResponse, PeerDto,
     PeerStatusDto, PublishGateLedgerView, PublishGateView, PublishGatesPageResponse,
@@ -153,6 +153,13 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/brains/:brain_id/approvals",
             get(brain_approvals_list),
+        )
+        // v4.3 S15-C-5: read-only config-file viewer for the
+        // Settings page. Hardcoded allowlist (culture.yaml,
+        // queue-config.yaml) keeps the surface tight.
+        .route(
+            "/api/brains/:brain_id/config-file/:name",
+            get(brain_config_file),
         )
         .route(
             "/api/brains/:brain_id/approvals/:action_id/resolve",
@@ -2342,6 +2349,70 @@ fn qm_to_dto(m: &neurogrim_core::queue::QueueMessage) -> QueueMessageDto {
         produced_at: m.produced_at.to_rfc3339(),
         priority: priority.to_string(),
         expires_at: m.expires_at.map(|x| x.to_rfc3339()),
+    }
+}
+
+// ── S15-C-5: config-file read-only viewer ───────────────────────────────
+
+/// `GET /api/brains/:brain_id/config-file/:name` — return the
+/// raw text of a known config file. Hardcoded allowlist:
+///
+/// - `culture.yaml` → `<root>/.claude/culture.yaml`
+/// - `queue-config.yaml` → `<root>/.claude/brain/queue-config.yaml`
+///
+/// Other names return 400. Read-only by design — Settings UI
+/// edits land via separate per-config endpoints (S15-C-4 + S15-C-5
+/// expansion in session 2).
+async fn brain_config_file(
+    State(state): State<AppState>,
+    AxumPath((brain_id, name)): AxumPath<(String, String)>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let relative = match name.as_str() {
+        "culture.yaml" => Path::new(".claude").join("culture.yaml"),
+        "queue-config.yaml" => Path::new(".claude").join("brain").join("queue-config.yaml"),
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "unknown config-file name",
+                    "allowed": ["culture.yaml", "queue-config.yaml"],
+                    "got": name,
+                })),
+            )
+                .into_response();
+        }
+    };
+    let path = brain.project_root.join(&relative);
+    let path_display = path.display().to_string();
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Json(ConfigFileResponse {
+            name,
+            present: true,
+            path: path_display,
+            text: Some(text),
+            error: None,
+        })
+        .into_response(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Json(ConfigFileResponse {
+            name,
+            present: false,
+            path: path_display,
+            text: None,
+            error: None,
+        })
+        .into_response(),
+        Err(e) => Json(ConfigFileResponse {
+            name,
+            present: false,
+            path: path_display,
+            text: None,
+            error: Some(format!("{e}")),
+        })
+        .into_response(),
     }
 }
 

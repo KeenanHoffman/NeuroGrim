@@ -14,7 +14,10 @@ import { DomainsPage } from "@/components/domains/DomainsPage";
 import { DomainDetailPage } from "@/components/domains/DomainDetailPage";
 import { ApprovalsPage } from "@/components/approvals/ApprovalsPage";
 import { FederationPage } from "@/components/federation/FederationPage";
+import { LogsPage } from "@/components/logs/LogsPage";
 import { PublishGatesPage } from "@/components/publish-gates/PublishGatesPage";
+import { ServicesPage } from "@/components/services/ServicesPage";
+import { SettingsPage } from "@/components/settings/SettingsPage";
 import { SkillsPage } from "@/components/skills/SkillsPage";
 import { BrainProvider } from "@/lib/useBrain";
 
@@ -107,6 +110,27 @@ const brainApprovalsRoute = createRoute({
   component: ApprovalsPage,
 });
 
+/** v4.3 S15-C-2 — built-in Services page (read-only fleet view). */
+const brainServicesRoute = createRoute({
+  getParentRoute: () => brainsLayoutRoute,
+  path: "services",
+  component: ServicesPage,
+});
+
+/** v4.3 S15-C-3 — built-in Logs page (filterable timeline). */
+const brainLogsRoute = createRoute({
+  getParentRoute: () => brainsLayoutRoute,
+  path: "logs",
+  component: LogsPage,
+});
+
+/** v4.3 S15-C-5 — built-in Settings page (read-only viewers). */
+const brainSettingsRoute = createRoute({
+  getParentRoute: () => brainsLayoutRoute,
+  path: "settings",
+  component: SettingsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   brainsLayoutRoute.addChildren([
@@ -117,6 +141,9 @@ const routeTree = rootRoute.addChildren([
     brainSkillsRoute,
     brainPublishGatesRoute,
     brainApprovalsRoute,
+    brainServicesRoute,
+    brainLogsRoute,
+    brainSettingsRoute,
   ]),
 ]);
 

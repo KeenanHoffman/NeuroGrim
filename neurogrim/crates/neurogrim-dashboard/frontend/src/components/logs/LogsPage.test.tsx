@@ -1,0 +1,212 @@
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { LogsPage } from "./LogsPage";
+import { BrainProvider } from "@/lib/useBrain";
+import { makeTestRouter, RouterProvider } from "@/test/router-helper";
+
+function mockFetch(map: Record<string, unknown>) {
+  global.fetch = vi.fn().mockImplementation(async (url: string) => {
+    for (const [pattern, payload] of Object.entries(map)) {
+      if (url.includes(pattern)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => payload,
+          text: async () => JSON.stringify(payload),
+        } as Response;
+      }
+    }
+    return {
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+      text: async () => "",
+    } as Response;
+  });
+}
+
+function renderPage() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const router = makeTestRouter(
+    <BrainProvider brainId="test-brain">
+      <LogsPage />
+    </BrainProvider>,
+  );
+  return render(
+    <QueryClientProvider client={qc}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+}
+
+describe("LogsPage", () => {
+  beforeEach(() => {
+    window.history.replaceState({}, "", "/logs");
+  });
+
+  it("renders empty state when no events", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+    });
+    renderPage();
+    expect(await screen.findByTestId("logs-empty")).toBeInTheDocument();
+  });
+
+  it("aggregates publish-gate ledger entries into the timeline", async () => {
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "r1",
+            gate_id: "tests-pass",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-29T18:00:00Z",
+            completed_at: "2026-04-29T18:00:01Z",
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+        ],
+      },
+      approvals: { pending: [], recent_resolutions: [] },
+    });
+    renderPage();
+    expect(await screen.findByTestId("logs-timeline")).toBeInTheDocument();
+    expect(screen.getByText("tests-pass")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-passed")).toBeInTheDocument();
+  });
+
+  it("aggregates approvals into the timeline", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: {
+        pending: [
+          {
+            action_id: "a-1",
+            tool: "queue_publish",
+            action_type: "mutate-state",
+            requested_at: "2026-04-29T19:00:00Z",
+          },
+        ],
+        recent_resolutions: [
+          {
+            action_id: "a-old",
+            decision: "approve",
+            operator: "alice",
+            decided_at: "2026-04-29T18:00:00Z",
+          },
+        ],
+      },
+    });
+    renderPage();
+    expect(await screen.findByTestId("logs-timeline")).toBeInTheDocument();
+    expect(screen.getByText("a-1")).toBeInTheDocument();
+    expect(screen.getByText("a-old")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-pending")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-approve")).toBeInTheDocument();
+  });
+
+  it("filter chips narrow the timeline by source", async () => {
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "r1",
+            gate_id: "tests-pass",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-29T18:00:00Z",
+            completed_at: "2026-04-29T18:00:01Z",
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+        ],
+      },
+      approvals: {
+        pending: [],
+        recent_resolutions: [
+          {
+            action_id: "a-1",
+            decision: "approve",
+            operator: "alice",
+            decided_at: "2026-04-29T17:00:00Z",
+          },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    // Both visible initially.
+    expect(screen.getByText("tests-pass")).toBeInTheDocument();
+    expect(screen.getByText("a-1")).toBeInTheDocument();
+    // Click "Approvals" chip → only approvals remain.
+    fireEvent.click(screen.getByTestId("filter-approvals"));
+    expect(screen.queryByText("tests-pass")).not.toBeInTheDocument();
+    expect(screen.getByText("a-1")).toBeInTheDocument();
+    // Click "Publish gates" chip → only gates.
+    fireEvent.click(screen.getByTestId("filter-publish-gates"));
+    expect(screen.getByText("tests-pass")).toBeInTheDocument();
+    expect(screen.queryByText("a-1")).not.toBeInTheDocument();
+  });
+
+  it("sorts entries newest first", async () => {
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "older",
+            gate_id: "older-gate",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-28T18:00:00Z",
+            completed_at: null,
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+          {
+            run_id: "newer",
+            gate_id: "newer-gate",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-29T18:00:00Z",
+            completed_at: null,
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+        ],
+      },
+      approvals: { pending: [], recent_resolutions: [] },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    const rows = screen.getAllByText(/-gate$/);
+    // The first matched row (top of table) is "newer-gate" — newest first.
+    expect(rows[0].textContent).toBe("newer-gate");
+    expect(rows[1].textContent).toBe("older-gate");
+  });
+});

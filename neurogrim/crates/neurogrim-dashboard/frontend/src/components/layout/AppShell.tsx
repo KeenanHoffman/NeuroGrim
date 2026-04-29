@@ -7,6 +7,9 @@ import {
   Network,
   BookOpen,
   GitMerge,
+  ScrollText,
+  Server,
+  Settings,
   ShieldCheck,
   Moon,
   Sun,
@@ -27,7 +30,10 @@ interface NavItem {
     | "/brains/$brainId/federation"
     | "/brains/$brainId/skills"
     | "/brains/$brainId/publish-gates"
-    | "/brains/$brainId/approvals";
+    | "/brains/$brainId/approvals"
+    | "/brains/$brainId/services"
+    | "/brains/$brainId/logs"
+    | "/brains/$brainId/settings";
   /** Path suffix used by `isActive` to compare against the
    *  currently-rendered pathname (`""` for the brain root). */
   suffix: string;
@@ -71,6 +77,24 @@ const NAV: NavItem[] = [
     suffix: "/approvals",
     label: "Approvals",
     icon: <ShieldCheck className="h-4 w-4" />,
+  },
+  {
+    to: "/brains/$brainId/services",
+    suffix: "/services",
+    label: "Services",
+    icon: <Server className="h-4 w-4" />,
+  },
+  {
+    to: "/brains/$brainId/logs",
+    suffix: "/logs",
+    label: "Logs",
+    icon: <ScrollText className="h-4 w-4" />,
+  },
+  {
+    to: "/brains/$brainId/settings",
+    suffix: "/settings",
+    label: "Settings",
+    icon: <Settings className="h-4 w-4" />,
   },
 ];
 

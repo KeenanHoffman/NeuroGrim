@@ -20,29 +20,35 @@
 
 ## Stage 15 Is Done When
 
-- [ ] Multi-page dashboard infrastructure: 3 built-in pages + operator-defined custom pages share the same routing/layout machinery
-- [ ] `<brain>/.claude/brain/dashboard-pages.json` replaces v3.4 `dashboard-layout.json` with backward-compat read
-- [ ] Built-in **Services** page: per-peer process list, log tail, manual re-probe, sensor refresh
-- [ ] Built-in **Logs** page: filterable timeline reading services.jsonl, invocation-ledger, score-history, publish-gate-ledger; toast notifications
-- [ ] Built-in **Settings** page: curated forms for `brain-registry.json` (domains, autonomy, hats, federation), `secret-refs.yaml`, `publish-gates.yaml`, `queue-config.yaml`
-- [ ] `culture.yaml` rendered read-only (culture is a contract, not a setting)
-- [ ] Schema → form generator handles 80% case (object/array/string/number/boolean/enum); textarea fallback for complex shapes
-- [ ] Edit conflicts detected via ETag-style versioning; 3-way merge UI when concurrent edits collide
-- [ ] Edits emit on `_neurogrim/config-changes` queue with standard `{action_type, before, after, operator, timestamp}` payload
-- [ ] Operator can create custom named pages from widget gallery; sidebar treats built-ins + custom identically
-- [ ] Custom page limit (default 8 per Brain) + folder grouping when exceeded
-- [ ] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights
-- [ ] Inline help: every settings field has `?` icon linking to relevant `neurogrim explain` topic at section anchor
-- [ ] Mobile-responsive at 375px viewport; no horizontal scroll on any page
-- [ ] CLI parity preserved: every UI mutation maps to a documented CLI command; no CLI surface deprecated
-- [ ] 15th explain topic: `neurogrim explain command-post`
-- [ ] Adopter walkthrough doc: first custom-page authoring, edit-via-bus subscription, conflict-resolution flow
+**Foundation (shipped, session 1):**
+- [x] `<brain>/.claude/brain/dashboard-pages.json` schema authored + backward-compat read of v3.4 `dashboard-layout.json` *(C-1 v1; full multi-page wiring lands with C-6 in session 2)*
+- [x] Built-in **Services** page: per-peer process list (peer_name, pid, port, uptime, log_path) reading from `services.jsonl` *(C-2; log tail + re-probe + sensor refresh deferred — those depend on additional API endpoints)*
+- [x] Built-in **Logs** page: filterable timeline aggregating publish-gate-ledger + autonomy approvals *(C-3; invocation-ledger / score-history / services.jsonl / `_neurogrim/notifications` sources are additive — the page is structured to absorb them; toast notifications deferred)*
+- [x] Built-in **Settings** page: read-only viewers for `culture.yaml`, `queue-config.yaml`, plus pointer to Publish gates page *(C-5 v1; editors land with C-4 + later expansion)*
+- [x] `culture.yaml` rendered read-only (culture is a contract, not a setting) *(C-5 v1 with explicit "this is a contract" framing in the viewer)*
+- [x] CLI parity preserved: every UI surface today is read-only; no CLI deprecation
+- [x] 15th explain topic: `neurogrim explain command-post` *(`crates/neurogrim-mcp/data/explain/command-post.md`; methodology_drift TOPICS extended; CLAUDE.md "all 12" → "all 13")*
+
+**Heavy follow-ons (session 2):**
+- [ ] Multi-page dashboard infrastructure: full sidebar/router auto-population from declared pages *(C-6 — runtime route derivation when custom pages are operator-creatable)*
+- [ ] Built-in Services page: log tail (5s poll OR SSE), manual re-probe, sensor refresh *(C-2 expansion; needs new API endpoints for per-service log streams)*
+- [ ] Built-in Logs page: invocation-ledger + score-history + services.jsonl + `_neurogrim/notifications` sources *(C-3 expansion; mostly client-side aggregation work)*
+- [ ] Built-in Settings page: curated forms for `brain-registry.json` (domains, autonomy, hats, federation), `secret-refs.yaml`, `publish-gates.yaml`, `queue-config.yaml` *(C-4 + C-5 expansion — depends on `schemars` form generator)*
+- [ ] Schema → form generator handles 80% case (object/array/string/number/boolean/enum); textarea fallback for complex shapes *(C-4 — load-bearing 8-day story)*
+- [ ] Edit conflicts detected via ETag-style versioning; 3-way merge UI when concurrent edits collide *(C-4 expansion)*
+- [ ] Edits emit on `_neurogrim/config-changes` queue with standard `{action_type, before, after, operator, timestamp}` payload *(C-7; depends on C-4's editor surface to have something to emit)*
+- [ ] Operator can create custom named pages from widget gallery; sidebar treats built-ins + custom identically *(C-6)*
+- [ ] Custom page limit (default 8 per Brain) + folder grouping when exceeded *(C-6 expansion)*
+- [ ] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights *(C-6 + C-8)*
+- [ ] Inline help: every settings field has `?` icon linking to relevant `neurogrim explain` topic at section anchor *(C-8 — depends on C-4's form generator to have fields to attach `?` icons to; also adds anchors to all 15 topics)*
+- [ ] Mobile-responsive at 375px viewport; no horizontal scroll on any page *(C-9 — final-polish pass)*
+- [ ] Adopter walkthrough doc: first custom-page authoring, edit-via-bus subscription, conflict-resolution flow *(documentation pass after C-4/C-6/C-7)*
 
 ---
 
 ## Stories
 
-### S15-C-1: Multi-page dashboard infrastructure (5 days)
+### S15-C-1: Multi-page dashboard infrastructure (5 days) — 🟡 PARTIAL (schema authored + backward-compat read; full router/sidebar auto-population deferred to session 2 with C-6)
 
 **What:** Extend v3.5 widget catalog. A "page" is now a named layout. Brain config has:
 
@@ -70,7 +76,7 @@ Sidebar navigation auto-populates from declared pages. Per-page persistence in `
 - [ ] TanStack Router routes auto-derived from pages map
 - [ ] Migration helper: `neurogrim dashboard-pages migrate` rewrites old → new shape
 
-### S15-C-2: Built-in Services page (5 days)
+### S15-C-2: Built-in Services page (5 days) — 🟡 PARTIAL (read-only fleet view shipped; log tail + re-probe + sensor refresh deferred)
 
 **What:** Extract v3.5 `PeerActions` into a full page. Show per-peer process list (reads from `services.jsonl`), per-service log tail (5-second poll OR SSE-pushed), manual re-probe + sensor refresh actions (carry-over from v3.5.1 backlog).
 
@@ -81,7 +87,7 @@ Sidebar navigation auto-populates from declared pages. Per-page persistence in `
 - [ ] Re-probe + sensor refresh buttons + tests
 - [ ] vitest covers the page
 
-### S15-C-3: Built-in Logs page (3 days)
+### S15-C-3: Built-in Logs page (3 days) — 🟡 PARTIAL (publish-gates + approvals sources shipped; remaining 4 sources + toast notifications deferred)
 
 **What:** Filterable timeline view reading from:
 - `<brain>/.claude/brain/services.jsonl` (S13.7 service runtime ledger)
@@ -119,7 +125,7 @@ Schema source: Rust struct → JSON Schema (auto-generate via `schemars` crate, 
 - [ ] Conflict detection ships with diff UI
 - [ ] vitest covers form behaviors + conflict resolution
 
-### S15-C-5: Built-in Settings page — other configs (4 days)
+### S15-C-5: Built-in Settings page — other configs (4 days) — 🟡 PARTIAL (read-only viewers for culture + queue-config + publish-gates pointer shipped; editors deferred until C-4's form generator + S14-S-6's passphrase flow land)
 
 **What:**
 - `culture.yaml` viewer (read-only — culture changes are a contract, not a setting; explained inline)

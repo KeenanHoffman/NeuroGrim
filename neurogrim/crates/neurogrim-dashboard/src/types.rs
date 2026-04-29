@@ -477,6 +477,32 @@ pub struct SkillDto {
     pub hygiene_status: String,
 }
 
+// ── Settings page config-file viewer (S15-C-5) ───────────────────────────
+
+/// Response body of `GET /api/brains/:brain_id/config-file/:name` —
+/// raw text + presence for the operator-facing read-only Settings
+/// viewers. Hardcoded allowlist (culture.yaml, queue-config.yaml)
+/// keeps the surface tight.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ConfigFileResponse {
+    /// Logical name of the file (matches the URL path segment).
+    pub name: String,
+    /// True when the file exists on disk.
+    pub present: bool,
+    /// Resolved on-disk path (for operator diagnostics).
+    pub path: String,
+    /// File text when `present`. None on absent or read-error.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub text: Option<String>,
+    /// Error message when read failed despite the file existing.
+    /// `present: false` + `error: None` means the file simply
+    /// doesn't exist (the common case for adopters who haven't
+    /// authored the manifest yet).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub error: Option<String>,
+}
+
 // ── Approvals page (S13-B-6) ─────────────────────────────────────────────
 
 /// Response body of `GET /api/brains/:brain_id/approvals` — pending
