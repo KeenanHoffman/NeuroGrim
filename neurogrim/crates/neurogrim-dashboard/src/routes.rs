@@ -32,6 +32,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use url::Url;
 
 use crate::brains::BrainEntry;
+use crate::layout::{default_layout_for, read_layout, DashboardLayoutResponse};
 use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
 use crate::types::{
@@ -98,6 +99,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/brains/:brain_id/federation", get(brain_federation))
         .route("/api/brains/:brain_id/skills", get(brain_skills))
         .route("/api/brains/:brain_id/hats", get(brain_hats))
+        .route(
+            "/api/brains/:brain_id/dashboard-layout",
+            get(brain_dashboard_layout),
+        )
         // ---- Live updates ----
         .route("/api/events", get(events_sse))
         .fallback(static_handler)
@@ -1282,6 +1287,66 @@ async fn brain_hats(
         hats.extend(declared);
     }
     Json(HatsResponse { hats }).into_response()
+}
+
+/// `GET /api/brains/:id/dashboard-layout` — the per-brain custom
+/// homepage layout. Returns the operator's saved
+/// `dashboard-layout.json` when present, otherwise a posture-aware
+/// default (gauge-centric for weighted Brains, child-card-centric
+/// for all-advisory Brains with declared children).
+async fn brain_dashboard_layout(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+
+    // Saved layout takes precedence. The default is computed from
+    // the registry's posture (weighted vs all-advisory).
+    let layout = match read_layout(&brain.project_root) {
+        Some(saved) => DashboardLayoutResponse {
+            // Override brain_id in case the file was hand-copied
+            // from another brain. The URL path is the source of
+            // truth.
+            brain_id: brain_id.clone(),
+            ..saved
+        },
+        None => {
+            // Need the registry to determine posture. Read it
+            // directly rather than load the full BrainContext —
+            // posture detection only needs domain_weights.
+            let registry_text =
+                match tokio::fs::read_to_string(brain.registry_path.as_path()).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(serde_json::json!({
+                                "error": format!("failed to read registry for '{brain_id}': {e}")
+                            })),
+                        )
+                            .into_response();
+                    }
+                };
+            let registry = match neurogrim_core::registry::BrainRegistry::from_json(&registry_text) {
+                Ok(r) => r,
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "error": format!("failed to parse registry for '{brain_id}': {e}")
+                        })),
+                    )
+                        .into_response();
+                }
+            };
+            default_layout_for(&brain_id, &registry)
+        }
+    };
+
+    Json(layout).into_response()
 }
 
 // =================================================================

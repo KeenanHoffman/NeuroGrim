@@ -29,6 +29,7 @@
 
 pub mod brains;
 pub mod events;
+pub mod layout;
 pub mod routes;
 pub mod skills;
 pub mod state;
