@@ -32,6 +32,7 @@ pub mod bus;
 pub mod cache;
 pub mod events;
 pub mod layout;
+pub mod logs;
 pub mod pages;
 pub mod routes;
 pub mod services;

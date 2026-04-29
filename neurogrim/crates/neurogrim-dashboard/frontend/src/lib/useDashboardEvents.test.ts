@@ -138,6 +138,17 @@ describe("useDashboardEvents", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["skills"] });
   });
 
+  it("invalidates the logs invocations query on skill_invoked (S15-C-2 v2)", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const customWrapper = ({ children }: { children: ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+    renderHook(() => useDashboardEvents(), { wrapper: customWrapper });
+    act(() => FakeEventSource.last!.emitOpen());
+    act(() => FakeEventSource.last!.emitMessage('"skill_invoked"'));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["logs-invocations"] });
+  });
+
   it("invalidates dashboard-layout on layout_changed", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidate = vi.spyOn(qc, "invalidateQueries");

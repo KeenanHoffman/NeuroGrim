@@ -197,6 +197,10 @@ function invalidate(
       break;
     case "skill_invoked":
       qc.invalidateQueries({ queryKey: ["skills"] });
+      // S15-C-2 v2: the Logs page surfaces invocation-ledger as a
+      // source. Invalidate so the timeline reflects the new
+      // invocation without waiting for the 30s refetch interval.
+      qc.invalidateQueries({ queryKey: ["logs-invocations"] });
       break;
     case "layout_changed":
       // Operator (or agent) edited the per-Brain dashboard

@@ -51,6 +51,17 @@ describe("LogsPage", () => {
     mockFetch({
       "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
       approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": {
+        ledger_path: "/x",
+        present: false,
+        total_entries: 0,
+        entries: [],
+      },
+      notifications: {
+        topic: "_neurogrim/notifications",
+        messages: [],
+        next_offset: 0,
+      },
     });
     renderPage();
     expect(await screen.findByTestId("logs-empty")).toBeInTheDocument();
@@ -163,6 +174,246 @@ describe("LogsPage", () => {
     fireEvent.click(screen.getByTestId("filter-publish-gates"));
     expect(screen.getByText("tests-pass")).toBeInTheDocument();
     expect(screen.queryByText("a-1")).not.toBeInTheDocument();
+  });
+
+  // ── S15-C-2 v2: invocation-ledger source ─────────────────────
+
+  it("aggregates invocation-ledger entries into the timeline", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": {
+        ledger_path: "/x/invocation-ledger.jsonl",
+        present: true,
+        total_entries: 2,
+        entries: [
+          {
+            ts: "2026-04-29T19:00:00Z",
+            entry_type: "skill",
+            name: "plan-critic",
+            session_id: "s1abc123",
+            invocation_id: "i1",
+          },
+          {
+            ts: "2026-04-29T18:00:00Z",
+            entry_type: "skill",
+            name: "hats",
+            session_id: "s2def456",
+            invocation_id: "i2",
+          },
+        ],
+      },
+      notifications: {
+        topic: "_neurogrim/notifications",
+        messages: [],
+        next_offset: 0,
+      },
+    });
+    renderPage();
+    expect(await screen.findByTestId("logs-timeline")).toBeInTheDocument();
+    expect(screen.getByText("plan-critic")).toBeInTheDocument();
+    expect(screen.getByText("hats")).toBeInTheDocument();
+    // Two "invoked" outcome badges (one per row).
+    expect(screen.getAllByTestId("outcome-invoked")).toHaveLength(2);
+    // Session ids are truncated for display.
+    expect(screen.getByText(/^s1abc123/)).toBeInTheDocument();
+  });
+
+  it("renders (no name) subject when invocation entry lacks name field", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": {
+        ledger_path: "/x",
+        present: true,
+        total_entries: 1,
+        entries: [
+          {
+            ts: "2026-04-29T18:00:00Z",
+            entry_type: "skill",
+            name: null,
+            session_id: null,
+            invocation_id: null,
+          },
+        ],
+      },
+      notifications: { topic: "_neurogrim/notifications", messages: [], next_offset: 0 },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    expect(screen.getByText("(no name)")).toBeInTheDocument();
+  });
+
+  // ── S15-C-2 v2: notifications source ─────────────────────────
+
+  it("aggregates notifications into the timeline using payload.kind", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: {
+        topic: "_neurogrim/notifications",
+        messages: [
+          {
+            id: "m1",
+            topic: "_neurogrim/notifications",
+            payload: { kind: "agent-action-completed", severity: "info" },
+            produced_at: "2026-04-29T20:00:00Z",
+            priority: "normal",
+          },
+          {
+            id: "m2",
+            topic: "_neurogrim/notifications",
+            payload: { event: "disk-space-low", level: "warn", detail: "C: 99%" },
+            produced_at: "2026-04-29T19:30:00Z",
+            priority: "normal",
+          },
+        ],
+        next_offset: 2,
+      },
+    });
+    renderPage();
+    expect(await screen.findByTestId("logs-timeline")).toBeInTheDocument();
+    expect(screen.getByText("agent-action-completed")).toBeInTheDocument();
+    expect(screen.getByText("disk-space-low")).toBeInTheDocument();
+  });
+
+  it("falls back to (see payload) when notification has no recognizable subject", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: {
+        topic: "_neurogrim/notifications",
+        messages: [
+          {
+            id: "weird",
+            topic: "_neurogrim/notifications",
+            payload: { foo: 1, bar: [1, 2, 3] },
+            produced_at: "2026-04-29T20:00:00Z",
+            priority: "normal",
+          },
+        ],
+        next_offset: 1,
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    expect(screen.getByText("(see payload)")).toBeInTheDocument();
+  });
+
+  it("survives notifications endpoint failure with empty fallback", async () => {
+    // notifications endpoint returns 404 (topic file doesn't exist
+    // for fresh brains); the page should still render the other
+    // sources rather than blanking the whole timeline.
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "r1",
+            gate_id: "tests-pass",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-29T18:00:00Z",
+            completed_at: "2026-04-29T18:00:01Z",
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+        ],
+      },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      // No "notifications" key → falls through to 404 → fetchNotifications returns the empty fallback.
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    expect(screen.getByText("tests-pass")).toBeInTheDocument();
+  });
+
+  // ── S15-C-2 v2: filter chip counts ───────────────────────────
+
+  it("renders filter chip counts per source", async () => {
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "r1",
+            gate_id: "g1",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-29T18:00:00Z",
+            completed_at: null,
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+        ],
+      },
+      approvals: {
+        pending: [],
+        recent_resolutions: [
+          {
+            action_id: "a-1",
+            decision: "approve",
+            operator: "alice",
+            decided_at: "2026-04-29T17:00:00Z",
+          },
+          {
+            action_id: "a-2",
+            decision: "deny",
+            operator: "bob",
+            decided_at: "2026-04-29T16:00:00Z",
+          },
+        ],
+      },
+      "invocation-ledger": {
+        ledger_path: "/x",
+        present: true,
+        total_entries: 3,
+        entries: [
+          { ts: "2026-04-29T15:00:00Z", entry_type: "skill", name: "a", session_id: null, invocation_id: null },
+          { ts: "2026-04-29T14:00:00Z", entry_type: "skill", name: "b", session_id: null, invocation_id: null },
+          { ts: "2026-04-29T13:00:00Z", entry_type: "skill", name: "c", session_id: null, invocation_id: null },
+        ],
+      },
+      notifications: {
+        topic: "_neurogrim/notifications",
+        messages: [
+          {
+            id: "n1",
+            topic: "_neurogrim/notifications",
+            payload: { kind: "x" },
+            produced_at: "2026-04-29T12:00:00Z",
+            priority: "normal",
+          },
+        ],
+        next_offset: 1,
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    // Counts shown next to each chip label.
+    const all = screen.getByTestId("filter-all");
+    expect(all.textContent).toContain("(7)"); // 1+2+3+1
+    const gates = screen.getByTestId("filter-publish-gates");
+    expect(gates.textContent).toContain("(1)");
+    const approvals = screen.getByTestId("filter-approvals");
+    expect(approvals.textContent).toContain("(2)");
+    const invocations = screen.getByTestId("filter-invocations");
+    expect(invocations.textContent).toContain("(3)");
+    const notifications = screen.getByTestId("filter-notifications");
+    expect(notifications.textContent).toContain("(1)");
   });
 
   it("sorts entries newest first", async () => {

@@ -2,16 +2,20 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Bell,
   CheckCircle2,
   CircleAlert,
   CircleSlash,
   Filter,
   Layers,
   PauseCircle,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import type { PublishGatesPageResponse } from "@bindings/PublishGatesPageResponse";
 import type { ApprovalsPageResponse } from "@bindings/ApprovalsPageResponse";
+import type { InvocationLedgerResponse } from "@bindings/InvocationLedgerResponse";
+import type { QueueReadResponse } from "@bindings/QueueReadResponse";
 import {
   Card,
   CardContent,
@@ -32,29 +36,36 @@ import { Badge } from "@/components/ui/badge";
 import { brainApi, useBrainId } from "@/lib/useBrain";
 
 /**
- * S15-C-3: built-in Logs page.
+ * S15-C-3: built-in Logs page (v1: publish-gates + approvals).
+ * S15-C-2 v2: extended with invocation-ledger + notifications.
  *
- * Filterable timeline aggregating events from multiple ledgers
- * already exposed via existing API endpoints:
+ * Filterable timeline aggregating events from multiple ledgers:
  *
- * - **Publish gates** (`GET /api/brains/:id/publish-gates`) —
- *   per-gate runs from `publish-gate-ledger.jsonl`.
- * - **Approvals** (`GET /api/brains/:id/approvals`) — autonomy
- *   resolutions from `_neurogrim/approval-resolutions`.
+ * - **Publish gates** — per-gate runs from `publish-gate-ledger.jsonl`
+ * - **Approvals** — autonomy resolutions from `_neurogrim/approval-resolutions`
+ * - **Invocations** — every `Skill` tool call recorded by the
+ *   PostToolUse hook (via `record-skill-invocation.sh`)
+ * - **Notifications** — adopter-facing events on
+ *   `_neurogrim/notifications` (autonomy post-execution emits,
+ *   future: federation discovery, etc.)
  *
- * **v1 scope:** the S15 epic also lists invocation-ledger,
- * score-history, services.jsonl, and `_neurogrim/notifications`
- * as sources. Those land when the corresponding API endpoints
- * exist (some require new endpoints we haven't built yet —
- * `score-history` is consumed via the Overview page's
- * trajectory widget; `invocation-ledger` is exposed via Skills).
- * v1 starts with the two newest sources adopters care about
- * (publish gates + approvals); the page is structured to absorb
- * additional sources without reshuffling.
+ * Each source has its own filter chip; "All" defaults. Newest events
+ * first; refreshes every 30 seconds via TanStack Query, plus
+ * SSE-driven live invalidation when the filesystem watcher detects
+ * changes to the underlying ledgers (`useDashboardEvents` hook
+ * mounted in AppShell).
  *
- * **Filter chips** let the operator narrow by source. Toast
- * notifications for new SSE events are deferred — a follow-up
- * story.
+ * **Deferred (v3 follow-ups):**
+ *
+ * - **score-history** — diff snapshots into per-domain "score
+ *   changed by Δ" entries; needs threshold tuning to avoid noise
+ *   (every snapshot would otherwise produce 17 entries).
+ * - **services.jsonl** — service start/stop events; today's
+ *   `ServiceRegistry` is in-memory only, so this needs a small
+ *   persistence layer first.
+ * - **Per-row drill-down** — click a row → see the full payload
+ *   (publish-gate stdout/stderr, full notification body, etc.)
+ *   in a side sheet.
  */
 export function LogsPage() {
   const brainId = useBrainId();
@@ -70,12 +81,22 @@ export function LogsPage() {
     queryFn: () => fetchApprovals(brainId),
     refetchInterval: 30_000,
   });
+  const { data: invocations } = useQuery({
+    queryKey: ["logs-invocations", brainId],
+    queryFn: () => fetchInvocationLedger(brainId),
+    refetchInterval: 30_000,
+  });
+  const { data: notifications } = useQuery({
+    queryKey: ["logs-notifications", brainId],
+    queryFn: () => fetchNotifications(brainId),
+    refetchInterval: 30_000,
+  });
 
   const entries = useMemo(() => {
-    return aggregate(gates, approvals).filter((e) =>
+    return aggregate(gates, approvals, invocations, notifications).filter((e) =>
       filter === "all" ? true : e.source === filter,
     );
-  }, [gates, approvals, filter]);
+  }, [gates, approvals, invocations, notifications, filter]);
 
   return (
     <div className="space-y-6 p-6" data-testid="logs-page">
@@ -83,7 +104,8 @@ export function LogsPage() {
         <h1 className="text-2xl font-bold">Logs</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Filterable timeline across the brain's append-only ledgers.
-          Newest events first; refreshes every 30 seconds.
+          Newest events first; refreshes every 30 seconds (live updates
+          arrive faster via SSE when ledger files change).
         </p>
       </header>
 
@@ -101,28 +123,45 @@ export function LogsPage() {
           <div className="flex flex-wrap gap-2" data-testid="logs-filter-chips">
             <FilterChip
               label="All"
+              count={entries.length}
               active={filter === "all"}
               onClick={() => setFilter("all")}
               testid="filter-all"
             />
             <FilterChip
               label="Publish gates"
+              count={countSource(entries, "publish-gates")}
               active={filter === "publish-gates"}
               onClick={() => setFilter("publish-gates")}
               testid="filter-publish-gates"
             />
             <FilterChip
               label="Approvals"
+              count={countSource(entries, "approvals")}
               active={filter === "approvals"}
               onClick={() => setFilter("approvals")}
               testid="filter-approvals"
+            />
+            <FilterChip
+              label="Invocations"
+              count={countSource(entries, "invocations")}
+              active={filter === "invocations"}
+              onClick={() => setFilter("invocations")}
+              testid="filter-invocations"
+            />
+            <FilterChip
+              label="Notifications"
+              count={countSource(entries, "notifications")}
+              active={filter === "notifications"}
+              onClick={() => setFilter("notifications")}
+              testid="filter-notifications"
             />
           </div>
         </CardContent>
       </Card>
 
       {entries.length === 0 ? (
-        <EmptyState />
+        <EmptyState filter={filter} />
       ) : (
         <Card>
           <CardHeader>
@@ -155,7 +194,11 @@ export function LogsPage() {
   );
 }
 
-type LogSource = "publish-gates" | "approvals";
+type LogSource =
+  | "publish-gates"
+  | "approvals"
+  | "invocations"
+  | "notifications";
 
 interface LogEntry {
   id: string;
@@ -170,6 +213,8 @@ interface LogEntry {
 function aggregate(
   gates: PublishGatesPageResponse | undefined,
   approvals: ApprovalsPageResponse | undefined,
+  invocations: InvocationLedgerResponse | undefined,
+  notifications: QueueReadResponse | undefined,
 ): LogEntry[] {
   const out: LogEntry[] = [];
   if (gates) {
@@ -206,18 +251,72 @@ function aggregate(
       });
     }
   }
+  if (invocations) {
+    for (const e of invocations.entries) {
+      // Composite id ensures uniqueness even if two invocations
+      // landed in the same second (the ledger's `ts` is second-
+      // granularity).
+      const id = e.invocation_id ?? `${e.ts}-${e.name ?? "unknown"}`;
+      out.push({
+        id: `invocation-${id}`,
+        source: "invocations",
+        when: e.ts,
+        subject: e.name ?? "(no name)",
+        outcome: "invoked",
+        actor: e.session_id ? truncate(e.session_id, 8) : null,
+      });
+    }
+  }
+  if (notifications) {
+    for (const m of notifications.messages) {
+      // Notification payloads are adopter-defined; pull a couple of
+      // common fields for nicer rendering and fall back to "(see
+      // payload)" for the subject. Future v3: clickable row → side
+      // sheet with the full payload.
+      const payload = (m.payload ?? {}) as Record<string, unknown>;
+      const subject =
+        (typeof payload.kind === "string" && payload.kind) ||
+        (typeof payload.event === "string" && payload.event) ||
+        (typeof payload.action_type === "string" && payload.action_type) ||
+        (typeof payload.title === "string" && payload.title) ||
+        "(see payload)";
+      const severity =
+        (typeof payload.severity === "string" && payload.severity) ||
+        (typeof payload.level === "string" && payload.level) ||
+        "info";
+      out.push({
+        id: `notification-${m.id}`,
+        source: "notifications",
+        when: m.produced_at,
+        subject,
+        outcome: severity,
+        actor: null,
+      });
+    }
+  }
   // Newest first.
   out.sort((a, b) => (a.when < b.when ? 1 : -1));
   return out;
 }
 
+function countSource(entries: LogEntry[], source: LogSource): number {
+  return entries.reduce((n, e) => n + (e.source === source ? 1 : 0), 0);
+}
+
+function truncate(s: string, n: number): string {
+  if (s.length <= n) return s;
+  return s.slice(0, n) + "…";
+}
+
 function FilterChip({
   label,
+  count,
   active,
   onClick,
   testid,
 }: {
   label: string;
+  count?: number;
   active: boolean;
   onClick: () => void;
   testid: string;
@@ -230,11 +329,15 @@ function FilterChip({
       data-testid={testid}
     >
       {label}
+      {count !== undefined && (
+        <span className="ml-1.5 text-xs opacity-70">({count})</span>
+      )}
     </Button>
   );
 }
 
-function EmptyState() {
+function EmptyState({ filter }: { filter: LogSource | "all" }) {
+  const filterLabel = filter === "all" ? "across any source" : `for ${filter}`;
   return (
     <Card data-testid="logs-empty">
       <CardHeader>
@@ -243,15 +346,15 @@ function EmptyState() {
           No events yet
         </CardTitle>
         <CardDescription>
-          The brain's ledgers are empty (or no events match the
-          current filter).
+          The brain's ledgers are empty {filterLabel} (or no events match
+          the current filter).
         </CardDescription>
       </CardHeader>
       <CardContent className="text-sm text-muted-foreground">
-        Once publish-gate runs land or operator approvals fire, the
-        timeline will populate. v1 ships publish-gates + approvals
-        sources; future stories add invocation-ledger, score-history,
-        services.jsonl, and _neurogrim/notifications.
+        Once publish-gate runs land, operator approvals fire, the Skill
+        invocation hook records calls, or notifications publish to{" "}
+        <code className="text-xs">_neurogrim/notifications</code>, the
+        timeline will populate.
       </CardContent>
     </Card>
   );
@@ -264,19 +367,39 @@ function LogRow({ entry }: { entry: LogEntry }) {
         {formatTime(entry.when)}
       </TableCell>
       <TableCell>
-        <Badge variant="outline" className="capitalize text-xs">
-          {entry.source.replace("-", " ")}
-        </Badge>
+        <SourceBadge source={entry.source} />
       </TableCell>
       <TableCell className="text-xs font-medium">{entry.subject}</TableCell>
       <TableCell>
         <OutcomeBadge outcome={entry.outcome} />
       </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
+      <TableCell className="text-xs text-muted-foreground font-mono">
         {entry.actor ?? "—"}
       </TableCell>
     </TableRow>
   );
+}
+
+function SourceBadge({ source }: { source: LogSource }) {
+  const Icon = sourceIcon(source);
+  const label = source.replace("-", " ");
+  return (
+    <Badge variant="outline" className="capitalize text-xs gap-1">
+      <Icon className="h-3 w-3" />
+      {label}
+    </Badge>
+  );
+}
+
+function sourceIcon(source: LogSource): typeof CheckCircle2 {
+  switch (source) {
+    case "invocations":
+      return Sparkles;
+    case "notifications":
+      return Bell;
+    default:
+      return Layers;
+  }
 }
 
 function OutcomeBadge({ outcome }: { outcome: string }) {
@@ -307,7 +430,13 @@ function outcomeStyle(outcome: string): {
       return { Icon: CircleSlash, variant: "outline", label: "deferred" };
     case "error":
     case "timed_out":
+    case "warn":
+    case "warning":
       return { Icon: AlertTriangle, variant: "destructive", label: outcome };
+    case "invoked":
+      return { Icon: Sparkles, variant: "secondary", label: "invoked" };
+    case "info":
+      return { Icon: Bell, variant: "outline", label: "info" };
     default:
       return { Icon: CircleAlert, variant: "outline", label: outcome };
   }
@@ -333,4 +462,31 @@ async function fetchApprovals(brainId: string): Promise<ApprovalsPageResponse> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as ApprovalsPageResponse;
+}
+
+async function fetchInvocationLedger(
+  brainId: string,
+): Promise<InvocationLedgerResponse> {
+  const url = `${brainApi(brainId, "logs")}/invocation-ledger?limit=50`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
+  return (await res.json()) as InvocationLedgerResponse;
+}
+
+async function fetchNotifications(
+  brainId: string,
+): Promise<QueueReadResponse> {
+  // The bus endpoint reads from `since` going forward; we ask for
+  // a generous limit (200) so the most recent activity is in the
+  // window even on chatty topics. The Logs aggregation slices to
+  // newest-first naturally via the timestamp sort.
+  const url = `${brainApi(brainId, "queues")}/_neurogrim/notifications?since=0&limit=200`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    // Topic file may not exist yet (no notifications published in
+    // this brain). Return an empty page instead of erroring out so
+    // the page still renders the other sources.
+    return { topic: "_neurogrim/notifications", messages: [], next_offset: 0n };
+  }
+  return (await res.json()) as QueueReadResponse;
 }

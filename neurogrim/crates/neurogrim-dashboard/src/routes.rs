@@ -189,6 +189,13 @@ pub fn router(state: AppState) -> Router {
         // HelpIcon. Brain-agnostic (the topics ship with the binary,
         // not per-brain), so the route doesn't carry a brain_id.
         .route("/api/explain/:topic", get(explain_topic))
+        // v4.3 S15-C-2 v2: invocation-ledger source for the Logs
+        // page. Returns the most recent N entries newest-first;
+        // accepts `?limit=N` (default 50, max 500).
+        .route(
+            "/api/brains/:brain_id/logs/invocation-ledger",
+            get(brain_logs_invocation_ledger),
+        )
         .route(
             "/api/brains/:brain_id/approvals/:action_id/resolve",
             axum::routing::post(brain_approvals_resolve),
@@ -2538,6 +2545,35 @@ async fn explain_topic(AxumPath(topic): AxumPath<String>) -> Response {
         )
             .into_response(),
     }
+}
+
+// ── S15-C-2 v2: invocation-ledger source for the Logs page ─────────────
+
+#[derive(Debug, Deserialize)]
+struct LogsLimitQuery {
+    /// Max entries to return. Clamped server-side to
+    /// `[1, logs::MAX_LIMIT]`.
+    limit: Option<usize>,
+}
+
+/// `GET /api/brains/:brain_id/logs/invocation-ledger?limit=N` —
+/// recent invocation-ledger rows for the Logs page timeline.
+///
+/// Returns newest-first. Defaults to 50 entries. The Logs page
+/// uses this as one of its aggregated sources alongside publish-
+/// gates and approvals.
+async fn brain_logs_invocation_ledger(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+    Query(q): Query<LogsLimitQuery>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let limit = q.limit.unwrap_or(crate::logs::DEFAULT_LIMIT);
+    let resp = crate::logs::read_invocation_ledger(&brain.project_root, limit);
+    Json(resp).into_response()
 }
 
 // ── S15-C-6 v1: custom-pages CRUD ───────────────────────────────────────
