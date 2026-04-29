@@ -79,6 +79,12 @@ pub fn tool_action_type(tool_name: &str) -> &'static str {
         "domain_new" => "mutate-state",
         "record_subagent_outcome" => "mutate-state",
         "queue_publish" => "mutate-state",
+        // v4.2 S14-S-5: secret_fetch defaults to Approve (mutate-state)
+        // even though it doesn't mutate Brain state — the security
+        // model requires explicit operator approval for every secret
+        // access. Adopters can downgrade per-secret to `Notify` for
+        // low-sensitivity public APIs via registry override.
+        "secret_fetch" => "mutate-state",
         // Reads (default Auto). Listed for completeness even though
         // we don't currently wrap them — the override path stays
         // available for adopters who want stricter policy.

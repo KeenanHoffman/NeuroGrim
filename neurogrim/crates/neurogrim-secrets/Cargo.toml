@@ -1,0 +1,48 @@
+[package]
+name = "neurogrim-secrets"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+description = "Encrypted secrets crate for NeuroGrim — OS-native + encrypted-file backends, in-memory encryption, never-plaintext secret values"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+# v4.2 S14-S-1 — overwrites memory on drop. Required by every
+# secret-bearing type in this crate. Subtle: we depend on the
+# `zeroize_derive` feature so consumers can `#[derive(Zeroize)]`.
+zeroize = { version = "1", features = ["derive"] }
+# v4.2 S14-S-1 — ChaCha20Poly1305 powers both the in-memory layer
+# (master session key wraps SecretValue ciphertext) and the
+# encrypted-file backend at-rest format. Same crate, two scopes,
+# different keys.
+chacha20poly1305 = "0.10"
+# v4.2 S14-S-2 — OS-native credential adapter. ~10M downloads,
+# wraps DPAPI / Keychain / libsecret behind a single API.
+keyring = { version = "3", features = ["windows-native", "linux-native-sync-persistent", "apple-native"] }
+# v4.2 S14-S-3 — PBKDF2 master-key derivation for the encrypted-file
+# backend (operator passphrase → 32-byte key with salt).
+pbkdf2 = "0.12"
+# v4.2 S14-S-3 — SHA-256 hash for PBKDF2 + content auth checksums.
+sha2 = "0.10"
+# Random salt + nonce generation. Same workspace version as
+# neurogrim-core uses for the ports allocator.
+rand = { workspace = true }
+# Hex encoding for serializing nonce/salt/ciphertext into the
+# v1 file format.
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3"

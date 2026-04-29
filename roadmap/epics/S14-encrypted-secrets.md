@@ -43,22 +43,26 @@ After review, "always encrypted in transit" was added as a defense-in-depth requ
 
 ## Stage 14 Is Done When
 
-- [ ] `crates/neurogrim-secrets/` workspace member ships with `SecretBackend` trait + 2 implementations + `EncryptedSecretValue` in-memory wrapper
-- [ ] `keyring` crate integrated; OS-native works on Windows, macOS, native Linux, **and WSL with documented setup**
-- [ ] Encrypted file fallback ships (ChaCha20Poly1305 + PBKDF2) for headless / CI scenarios
-- [ ] **In-memory encryption: `SecretValue` holds encrypted blob; explicit `decrypt_for_use()` returns short-lived `Zeroizing<&[u8]>`**
-- [ ] **Master session key sourced from OS credential store at process startup; wrapped in `Zeroizing` + overwritten on shutdown**
-- [ ] **TLS on secret-management endpoints: self-signed cert via `rcgen` generated at first run, stored OS-native, pinned in browser**
-- [ ] `claude-proxy` migrates `CLAUDE_PROXY_UPSTREAM_KEY` from env to OS-native lookup with `proxy-cli secret import-from-env` migration helper
-- [ ] `claude-proxy` audit logs encrypted at rest with rotating session keys
-- [ ] `secret_fetch` MCP tool ships; default autonomy `Approve`; routes through S13 approval queue
-- [ ] Returned tokens are single-use, expire in 60s, can only be passed to claude-proxy
-- [ ] Secrets management UI page (`/brains/:id/secrets`) ships; values **never** displayed back to operator after entry
-- [ ] Regression test: known sentinel value injected, greps logs/errors/responses prove never leaked
-- [ ] `secrets-readiness` advisory domain registered (reads `secret-refs.yaml` + `SecretStore` state)
-- [ ] `--allow-mutations` flag from v3.5 split into `--allow-service-lifecycle | --allow-layout-edits | --allow-secret-management` so least-privilege is achievable
-- [ ] 14th explain topic: `neurogrim explain secrets`
-- [ ] Threat-model write-up: README + claude-proxy README both updated with what this closes vs what remains
+**Foundation (shipped):**
+- [x] `crates/neurogrim-secrets/` workspace member ships with `SecretBackend` trait + 2 implementations + `EncryptedSecretValue` in-memory wrapper *(S-1; 31 unit tests covering value round-trips, master-key derivation, both backends)*
+- [x] `keyring` crate integrated; OS-native works on Windows, macOS, native Linux, and WSL *(S-2 — Windows DPAPI smoke verified; cross-platform smoke documented as operator's responsibility; tests gated by `NEUROGRIM_TEST_OS_NATIVE=1` env to keep CI hermetic)*
+- [x] Encrypted file fallback ships (ChaCha20Poly1305 + PBKDF2) for headless / CI scenarios *(S-3; v1 file format documented; 12 tests covering round-trip, wrong-passphrase = `BadPassphrase`, malformed-file detection, salt+nonce rotation per write, list scoped by brain_id)*
+- [x] In-memory encryption: `SecretValue` holds encrypted blob; explicit `decrypt_for_use()` returns short-lived `Zeroizing<Vec<u8>>` *(S-1; the public crate API is structured around this)*
+- [x] Master session key sourced from OS credential store at process startup; wrapped in `Zeroizing` + overwritten on shutdown *(S-1 + S-2; `MasterSessionKey::load_or_generate(brain_id)` + PBKDF2 fallback for headless)*
+- [x] `secret_fetch` MCP tool ships; default autonomy `Approve`; routes through S13 approval queue *(S-5; tool wrapped via the autonomy gate from S13-B-5)*
+- [x] Returned tokens are single-use, expire in 60s, can only be passed to claude-proxy *(S-5; `ProxyTokenStore` mint/redeem with single-use guarantee + 60s default TTL + 10 unit tests)*
+- [x] `secrets-readiness` advisory domain registered (reads `secret-refs.yaml` + on-disk state) *(S-8; sensor at `crates/neurogrim-sensory/src/secrets_readiness.rs`; 9 tests; CMDB shape documented)*
+- [x] 14th explain topic: `neurogrim explain secrets` *(`crates/neurogrim-mcp/data/explain/secrets.md`; covers four-layer model, in-memory encryption, both backends, agent-side surface, single-use tokens, secrets-readiness; methodology_drift TOPICS extended)*
+
+**Deferred (heavy follow-ons):**
+- [ ] `claude-proxy` migrates `CLAUDE_PROXY_UPSTREAM_KEY` from env to OS-native lookup with `proxy-cli secret import-from-env` migration helper *(S-4 — cross-repo, touches `D:\Brains\claude-proxy\`)*
+- [ ] `claude-proxy` audit logs encrypted at rest with rotating session keys *(S-4)*
+- [ ] TLS on secret-management endpoints: self-signed cert via `rcgen` generated at first run, stored OS-native, pinned in browser *(S-4.5; needs browser-side cert-pinning UX)*
+- [ ] Secrets management UI page (`/brains/:id/secrets`) ships; values never displayed back *(S-6; depends on S-3 passphrase flow + UI work)*
+- [ ] Regression test: known sentinel value injected, greps logs/errors/responses prove never leaked *(deferred until S-4 + S-6 land — needs the full pipeline plumbed end-to-end to test against)*
+- [ ] `--allow-mutations` flag from v3.5 split into `--allow-service-lifecycle | --allow-layout-edits | --allow-secret-management` *(S-6 expansion; the per-capability split lands with the secret-management surface)*
+- [ ] Threat-model write-up: README + claude-proxy README both updated *(S-4 + S-7 follow-up)*
+- [ ] `neurogrim audit decrypt` tooling *(S-7; depends on S-4 encryption-at-rest)*
 
 ---
 

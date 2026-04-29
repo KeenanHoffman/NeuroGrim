@@ -8,6 +8,7 @@ members = [
     "crates/neurogrim-ecosystem",
     "crates/neurogrim-dashboard",
     "crates/neurogrim-cli",
+    "crates/neurogrim-secrets",
     "xtask",
 ]
 
@@ -121,6 +122,7 @@ flate2 = "1"
 # `workspace.package.version` above.
 neurogrim-core = { path = "crates/neurogrim-core", version = "3.5.0" }
 neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "3.5.0" }
+neurogrim-secrets = { path = "crates/neurogrim-secrets", version = "3.5.0" }
 neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "3.5.0" }
 neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "3.5.0" }
 neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "3.5.0" }

@@ -17,6 +17,7 @@ pub mod human_comms;
 pub mod operator_calibration;
 pub mod rust_health;
 pub mod secret_refs;
+pub mod secrets_readiness;
 pub mod security_standards;
 pub mod skill_coherence;
 pub mod supply_chain_calibration;

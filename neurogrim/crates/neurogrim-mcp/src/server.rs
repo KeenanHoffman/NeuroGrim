@@ -31,6 +31,10 @@ pub struct BrainServer {
     project_root: PathBuf,
     cmdb_cache: Arc<RwLock<HashMap<String, CmdbData>>>,
     tool_router: ToolRouter<Self>,
+    /// v4.2 S14-S-5 — outstanding proxy tokens minted by
+    /// `secret_fetch`. Per-process; tokens don't survive restarts.
+    /// `Clone` is a view into the same Arc-backed store.
+    proxy_tokens: crate::proxy_tokens::ProxyTokenStore,
 }
 
 impl BrainServer {
@@ -40,7 +44,15 @@ impl BrainServer {
             project_root,
             cmdb_cache: Arc::new(RwLock::new(HashMap::new())),
             tool_router: Self::tool_router(),
+            proxy_tokens: crate::proxy_tokens::ProxyTokenStore::new(),
         }
+    }
+
+    /// Read-only view of the proxy-token store. Used by the
+    /// secret-readiness sensor to surface "agents have outstanding
+    /// proxy tokens" findings.
+    pub fn proxy_tokens(&self) -> &crate::proxy_tokens::ProxyTokenStore {
+        &self.proxy_tokens
     }
 
     /// Accessor for `crate::autonomy` — read-only view of the
@@ -328,6 +340,19 @@ pub struct QueuePeekParams {
     pub topic: String,
     /// How many messages to return from the tail. Default 10; max 100.
     pub count: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SecretFetchParams {
+    /// Identifier of the secret. Looked up at
+    /// `neurogrim-{brain_id}-{secret_id}` in the OS credential
+    /// store (or the encrypted-file fallback).
+    pub secret_id: String,
+    /// Optional operator-supplied scope for audit trails. e.g.,
+    /// "anthropic-api-once" → the operator-approved purpose for
+    /// this token. Surfaces in audit logs but doesn't constrain
+    /// the upstream call (claude-proxy enforces the actual scope).
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -901,6 +926,57 @@ impl BrainServer {
             .map(|m| serde_json::to_value(m).unwrap_or(serde_json::Value::Null))
             .collect();
         serde_json::json!({"topic": p.topic, "messages": messages}).to_string()
+    }
+
+    #[tool(
+        description = "v4.2 — Mint a single-use proxy token for a stored secret. \
+        Default autonomy `Approve` — every fetch lands on the S13 approvals queue \
+        and requires explicit operator approval. The agent NEVER sees the secret \
+        value; it receives an opaque token that authorizes ONE upstream API call \
+        through claude-proxy and expires in 60 seconds. Pass the token via the \
+        `X-Scope-Token` header. Returns {status: 'pending_approval' | 'minted', \
+        token?, expires_at?, action_id?}."
+    )]
+    async fn secret_fetch(
+        &self,
+        Parameters(p): Parameters<SecretFetchParams>,
+    ) -> String {
+        // v4.2 S14-S-5 + S13-B-5: every secret fetch goes through
+        // the autonomy gate. Default action_type "mutate-state"
+        // resolves to Approve; the operator approves via the
+        // /brains/:id/approvals page; the agent polls await_approval.
+        if let Some(early) = crate::autonomy::maybe_block(self, "secret_fetch").await {
+            return early;
+        }
+        // Brain id derived from the registry (same convention as
+        // `MasterSessionKey::load_or_generate` and the autonomy
+        // module). For a single-Brain server, this is just the
+        // host's id.
+        let brain_id = if self.registry.meta.updated_by.trim().is_empty() {
+            "neurogrim".to_string()
+        } else {
+            self.registry.meta.updated_by.clone()
+        };
+        let secret_key = neurogrim_secrets::SecretKey::new(brain_id, p.secret_id);
+        let token = self.proxy_tokens.mint(secret_key, p.scope, None);
+        // Compute the expires_at as a wall-clock RFC3339 stamp by
+        // taking now + ttl. We can't read Instant in clock-time
+        // form directly; chrono::Utc::now() + the TTL gives a
+        // reasonable approximation for the agent.
+        let expires_at = (chrono::Utc::now()
+            + chrono::Duration::seconds(
+                crate::proxy_tokens::DEFAULT_TTL_SECS as i64,
+            ))
+        .to_rfc3339();
+        serde_json::json!({
+            "status": "minted",
+            "token": token.token_id,
+            "expires_at": expires_at,
+            "secret_id": token.secret_key.secret_id,
+            "scope": token.scope,
+            "hint": "pass this token to claude-proxy as `X-Scope-Token: <token>`. Single-use; expires in 60s.",
+        })
+        .to_string()
     }
 
     #[tool(

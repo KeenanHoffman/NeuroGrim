@@ -28,6 +28,7 @@ const TOPICS: &[&str] = &[
     "autonomy",
     "publish-gates",
     "queues",
+    "secrets",
 ];
 
 fn data_explain_dir() -> PathBuf {
