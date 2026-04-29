@@ -12,10 +12,16 @@ use axum::{
     routing::get,
     Router,
 };
+use neurogrim_core::types::TrajectoryClassification;
+use neurogrim_mcp::context::BrainContext;
+use neurogrim_mcp::prose::first_sentence;
 use rust_embed::RustEmbed;
+use std::path::Path;
 
 use crate::state::AppState;
-use crate::types::HealthResponse;
+use crate::types::{
+    DomainSignalDto, HealthResponse, OverviewResponse, RecommendationDto,
+};
 
 /// Frontend bundle embedded at compile time. Built by `npm run build`
 /// in `frontend/`. Empty during Phase 0 setup until the frontend has
@@ -28,6 +34,7 @@ struct FrontendAssets;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/overview", get(overview))
         .fallback(static_handler)
         .with_state(state)
 }
@@ -38,6 +45,159 @@ async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
         registry_path: state.registry_path.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
     })
+}
+
+/// `GET /api/overview` — landing-page summary for the Phase 1.1
+/// Overview page. Loads a fresh `BrainContext` (registry + scoring
+/// pipeline run) on every call; Phase 2.1 will add caching with
+/// SSE-driven invalidation.
+async fn overview(State(state): State<AppState>) -> Response {
+    let ctx = match BrainContext::load(&state.registry_path, None, None).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext: {e:#}")
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    Json(build_overview(&ctx)).into_response()
+}
+
+/// Pure conversion: BrainContext → OverviewResponse. Extracted so
+/// the route's failure handling stays simple AND the unit test can
+/// exercise the mapping logic against a constructed context without
+/// the http layer.
+fn build_overview(ctx: &BrainContext) -> OverviewResponse {
+    let registry = &ctx.registry;
+    let agent_output = &ctx.agent_output;
+
+    let project_label = if !registry.meta.description.is_empty() {
+        first_sentence(&registry.meta.description, 80)
+    } else {
+        Path::new(&*ctx.project_root.to_string_lossy())
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("(unnamed)")
+            .to_string()
+    };
+
+    let domain_count = registry.config.domain_weights.len() as u32;
+    let weighted_count = registry
+        .config
+        .domain_weights
+        .values()
+        .filter(|w| **w > 0.0)
+        .count() as u32;
+    let advisory_count = domain_count.saturating_sub(weighted_count);
+
+    // All-advisory Brain → score is structurally meaningless; surface
+    // None and let the frontend render "N/A (observe-only posture)"
+    // (matches the CLI's `agent --prose` behavior).
+    let is_all_advisory = weighted_count == 0 && domain_count > 0;
+    let score = if is_all_advisory {
+        None
+    } else {
+        Some(agent_output.score)
+    };
+    let confidence = if is_all_advisory {
+        None
+    } else {
+        Some(agent_output.unified_confidence)
+    };
+
+    let (trajectory_class, trajectory_velocity, trajectory_samples) =
+        match &agent_output.trajectory {
+            Some(t) => (
+                classification_string(&t.classification).to_string(),
+                t.velocity,
+                t.samples as u32,
+            ),
+            None => ("no-data".to_string(), 0.0, 0),
+        };
+
+    // Top 3 strongest signals (by effective_score desc, then weight desc, then name asc).
+    let mut signals: Vec<(&String, u8, u8, f64)> = agent_output
+        .domains
+        .iter()
+        .map(|(k, d)| (k, d.effective_score, d.confidence, d.weight))
+        .collect();
+    signals.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal))
+            .then_with(|| a.0.cmp(b.0))
+    });
+    let strongest_signals: Vec<DomainSignalDto> = signals
+        .iter()
+        .take(3)
+        .map(|(name, eff, conf, weight)| DomainSignalDto {
+            name: (*name).clone(),
+            display_name: registry
+                .config
+                .principle_map
+                .get(*name)
+                .cloned()
+                .unwrap_or_else(|| (*name).to_string()),
+            effective_score: *eff,
+            confidence: *conf,
+            weight: *weight,
+        })
+        .collect();
+
+    let top_recommendations: Vec<RecommendationDto> = agent_output
+        .top_recommendations
+        .iter()
+        .take(3)
+        .map(|r| RecommendationDto {
+            domain: r.domain.clone(),
+            gate: r.gate.clone(),
+            status: r.status.clone(),
+            command: r.command.clone(),
+            description: r.description.clone().unwrap_or_default(),
+        })
+        .collect();
+
+    let federation_peer_count = registry
+        .config
+        .extra
+        .get("children")
+        .and_then(|v| v.as_object())
+        .map(|m| m.len() as u32)
+        .unwrap_or(0);
+
+    OverviewResponse {
+        project_label,
+        project_root: ctx.project_root.to_string_lossy().to_string(),
+        domain_count,
+        weighted_count,
+        advisory_count,
+        score,
+        confidence,
+        trajectory_class,
+        trajectory_velocity,
+        trajectory_samples,
+        top_recommendations,
+        strongest_signals,
+        federation_peer_count,
+    }
+}
+
+/// Map `TrajectoryClassification` to a stable wire-format string.
+/// Frontend mirrors this set in a TS union. Stringly-typed at the
+/// wire keeps the JSON small + frontend-debuggable; the Rust enum
+/// stays the source of truth.
+fn classification_string(c: &TrajectoryClassification) -> &'static str {
+    match c {
+        TrajectoryClassification::Improving => "improving",
+        TrajectoryClassification::Degrading => "degrading",
+        TrajectoryClassification::Stable => "stable",
+        TrajectoryClassification::Volatile => "volatile",
+        TrajectoryClassification::NoData => "no-data",
+    }
 }
 
 /// Serve embedded frontend assets; fall back to `index.html` for

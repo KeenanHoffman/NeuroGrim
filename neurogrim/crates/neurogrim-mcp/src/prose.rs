@@ -106,7 +106,12 @@ fn section_identity(out: &mut String, registry: &BrainRegistry, project_root: &P
 
 /// Trim a multi-paragraph description to its first sentence (or the
 /// first `max` chars if no sentence break is found in range).
-fn first_sentence(s: &str, max: usize) -> String {
+///
+/// v3.4: promoted to `pub` so the dashboard's `/api/overview`
+/// route can produce the same project-label heuristic as the
+/// CLI's prose mode (single source of truth for "what should we
+/// call this Brain at a glance").
+pub fn first_sentence(s: &str, max: usize) -> String {
     let trimmed = s.trim();
     if let Some(idx) = trimmed.find(". ") {
         if idx + 1 <= max {
