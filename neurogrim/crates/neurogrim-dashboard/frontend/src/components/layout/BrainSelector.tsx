@@ -64,6 +64,12 @@ export function BrainSelector() {
           })
         }
         data-testid="brain-selector-select"
+        // Belt-and-suspenders: inline `color-scheme: dark light` lets
+        // the browser's native dropdown panel match either theme, so
+        // option text stays readable even if the page-level CSS rule
+        // hasn't been applied yet (e.g., a stale cached bundle from
+        // an older build).
+        style={{ colorScheme: "dark light" }}
         className="w-full bg-transparent border border-border rounded px-2 py-1 text-foreground text-sm focus:outline-none focus:border-foreground/40"
       >
         {data.brains.map((b: BrainListItemDto) => (

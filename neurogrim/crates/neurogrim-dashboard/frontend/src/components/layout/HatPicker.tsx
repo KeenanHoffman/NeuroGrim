@@ -75,6 +75,8 @@ export function HatPicker() {
         value={hat}
         onChange={(e) => setHat(e.target.value)}
         data-testid="hat-picker-select"
+        // See BrainSelector.tsx for why this inline style is here.
+        style={{ colorScheme: "dark light" }}
         className="bg-transparent border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:border-foreground/40"
       >
         {data.hats.map((h: HatDto) => (
