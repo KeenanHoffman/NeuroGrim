@@ -87,6 +87,75 @@ pub fn layout_file_path(project_root: &Path) -> PathBuf {
         .join("dashboard-layout.json")
 }
 
+/// Body of `PUT /api/brains/:id/dashboard-layout`. The operator
+/// (or an agent) submits widgets only — `schema_version` is
+/// pinned by the server, `brain_id` comes from the URL path,
+/// `is_default` is computed (always `false` after a successful
+/// PUT — the saved layout IS the operator's intent).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct DashboardLayoutRequest {
+    pub widgets: Vec<WidgetSpec>,
+}
+
+/// Write the layout to disk. Creates `<project>/.claude/brain/`
+/// if missing. Atomic write via rename: serialize to a temp file
+/// in the same directory, then rename onto the final path. This
+/// avoids the failure mode where a half-written file leaves the
+/// next read parsing a truncated JSON.
+///
+/// Errors only on filesystem failures (permissions, disk full).
+/// Malformed JSON can't reach this layer — the request is
+/// deserialized into a typed struct first.
+pub fn save_layout(project_root: &Path, widgets: Vec<WidgetSpec>) -> std::io::Result<()> {
+    use std::io::Write;
+    let dir = project_root.join(".claude").join("brain");
+    std::fs::create_dir_all(&dir)?;
+    let final_path = dir.join("dashboard-layout.json");
+
+    let derived_brain_id = project_root
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("brain")
+        .to_string();
+
+    let body = DashboardLayoutResponse {
+        schema_version: "1".to_string(),
+        brain_id: derived_brain_id,
+        is_default: false,
+        widgets,
+    };
+
+    let serialized = serde_json::to_string_pretty(&body)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    // Write to a temp file in the same directory, then rename.
+    // Same-directory rename is atomic on every supported OS;
+    // a process reading the file simultaneously will see either
+    // the old contents or the new contents, never a partial write.
+    let tmp_path = dir.join("dashboard-layout.json.tmp");
+    {
+        let mut f = std::fs::File::create(&tmp_path)?;
+        f.write_all(serialized.as_bytes())?;
+        f.write_all(b"\n")?;
+        f.sync_all()?;
+    }
+    std::fs::rename(&tmp_path, &final_path)?;
+    Ok(())
+}
+
+/// Delete a saved layout, restoring the synthesized default.
+/// Returns Ok(false) when no file existed (idempotent), Ok(true)
+/// when a file was removed.
+pub fn reset_layout(project_root: &Path) -> std::io::Result<bool> {
+    let path = layout_file_path(project_root);
+    match std::fs::remove_file(&path) {
+        Ok(_) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
 /// Read the layout from disk if present; return Some(parsed) on
 /// success, None otherwise. Malformed files are logged and treated
 /// as missing — operators get the default layout rather than a
@@ -410,6 +479,77 @@ mod tests {
         std::fs::write(layout_file_path(tmp.path()), "{ not json").unwrap();
         // Malformed → None (logged, but doesn't panic).
         assert!(read_layout(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn save_layout_writes_file_then_read_round_trips() {
+        let tmp = tempfile::tempdir().unwrap();
+        let widgets = vec![WidgetSpec {
+            id: "w1".to_string(),
+            widget_type: "score-gauge".to_string(),
+            size: "third".to_string(),
+            title: Some("My gauge".to_string()),
+            config: serde_json::json!({}),
+        }];
+        save_layout(tmp.path(), widgets.clone()).expect("save");
+        let read = read_layout(tmp.path()).expect("read");
+        assert!(!read.is_default);
+        assert_eq!(read.widgets.len(), 1);
+        assert_eq!(read.widgets[0].widget_type, "score-gauge");
+        assert_eq!(read.widgets[0].title.as_deref(), Some("My gauge"));
+    }
+
+    #[test]
+    fn save_layout_overwrites_atomically() {
+        // Save twice; second save replaces the first. The temp
+        // file used for atomic rename should not be left behind.
+        let tmp = tempfile::tempdir().unwrap();
+        save_layout(
+            tmp.path(),
+            vec![WidgetSpec {
+                id: "old".to_string(),
+                widget_type: "identity".to_string(),
+                size: "full".to_string(),
+                title: None,
+                config: serde_json::json!({}),
+            }],
+        )
+        .unwrap();
+        save_layout(
+            tmp.path(),
+            vec![WidgetSpec {
+                id: "new".to_string(),
+                widget_type: "score-gauge".to_string(),
+                size: "third".to_string(),
+                title: None,
+                config: serde_json::json!({}),
+            }],
+        )
+        .unwrap();
+        let read = read_layout(tmp.path()).unwrap();
+        assert_eq!(read.widgets[0].id, "new");
+        // Confirm the atomic-rename temp file is gone.
+        assert!(!tmp
+            .path()
+            .join(".claude/brain/dashboard-layout.json.tmp")
+            .exists());
+    }
+
+    #[test]
+    fn reset_layout_removes_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        save_layout(tmp.path(), vec![]).unwrap();
+        assert!(read_layout(tmp.path()).is_some());
+        let removed = reset_layout(tmp.path()).unwrap();
+        assert!(removed);
+        assert!(read_layout(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn reset_layout_idempotent_when_file_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let removed = reset_layout(tmp.path()).unwrap();
+        assert!(!removed, "no file → returns false, not an error");
     }
 
     #[test]

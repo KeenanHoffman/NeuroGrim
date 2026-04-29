@@ -32,7 +32,10 @@ use tokio_stream::wrappers::BroadcastStream;
 use url::Url;
 
 use crate::brains::BrainEntry;
-use crate::layout::{default_layout_for, read_layout, DashboardLayoutResponse};
+use crate::layout::{
+    default_layout_for, read_layout, reset_layout, save_layout, DashboardLayoutRequest,
+    DashboardLayoutResponse,
+};
 use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
 use crate::types::{
@@ -101,7 +104,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/brains/:brain_id/hats", get(brain_hats))
         .route(
             "/api/brains/:brain_id/dashboard-layout",
-            get(brain_dashboard_layout),
+            get(brain_dashboard_layout)
+                .put(brain_save_dashboard_layout)
+                .delete(brain_reset_dashboard_layout),
         )
         // ---- Live updates ----
         .route("/api/events", get(events_sse))
@@ -124,12 +129,10 @@ async fn overview(
     State(state): State<AppState>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let ctx = match BrainContext::load(
-        &state.registry_path,
-        query.resolved_hat(),
-        None,
-    )
-    .await
+    let ctx = match state
+        .cache
+        .load_or_get(&state.registry_path, query.resolved_hat(), None)
+        .await
     {
         Ok(c) => c,
         Err(e) => {
@@ -289,12 +292,10 @@ async fn domains_list(
     State(state): State<AppState>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let ctx = match BrainContext::load(
-        &state.registry_path,
-        query.resolved_hat(),
-        None,
-    )
-    .await
+    let ctx = match state
+        .cache
+        .load_or_get(&state.registry_path, query.resolved_hat(), None)
+        .await
     {
         Ok(c) => c,
         Err(e) => {
@@ -410,12 +411,10 @@ async fn domain_detail(
     AxumPath(name): AxumPath<String>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let ctx = match BrainContext::load(
-        &state.registry_path,
-        query.resolved_hat(),
-        None,
-    )
-    .await
+    let ctx = match state
+        .cache
+        .load_or_get(&state.registry_path, query.resolved_hat(), None)
+        .await
     {
         Ok(c) => c,
         Err(e) => {
@@ -605,7 +604,11 @@ const PEER_TCP_TIMEOUT: Duration = Duration::from_millis(1000);
 /// becomes a real issue we'd switch to `tokio::spawn` + `join_all`,
 /// but introducing `futures` here for 1-3 calls would be premature.
 async fn federation(State(state): State<AppState>) -> Response {
-    let ctx = match BrainContext::load(&state.registry_path, None, None).await {
+    let ctx = match state
+        .cache
+        .load_or_get(&state.registry_path, None, None)
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -1105,7 +1108,11 @@ async fn brain_overview(
         Err(r) => return r,
     };
     let registry = brain.registry_path.to_string_lossy().to_string();
-    let ctx = match BrainContext::load(&registry, query.resolved_hat(), None).await {
+    let ctx = match state
+        .cache
+        .load_or_get(&registry, query.resolved_hat(), None)
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -1130,7 +1137,11 @@ async fn brain_domains_list(
         Err(r) => return r,
     };
     let registry = brain.registry_path.to_string_lossy().to_string();
-    let ctx = match BrainContext::load(&registry, query.resolved_hat(), None).await {
+    let ctx = match state
+        .cache
+        .load_or_get(&registry, query.resolved_hat(), None)
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -1155,7 +1166,11 @@ async fn brain_domain_detail(
         Err(r) => return r,
     };
     let registry = brain.registry_path.to_string_lossy().to_string();
-    let ctx = match BrainContext::load(&registry, query.resolved_hat(), None).await {
+    let ctx = match state
+        .cache
+        .load_or_get(&registry, query.resolved_hat(), None)
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -1188,7 +1203,11 @@ async fn brain_federation(
         Err(r) => return r,
     };
     let registry = brain.registry_path.to_string_lossy().to_string();
-    let ctx = match BrainContext::load(&registry, None, None).await {
+    let ctx = match state
+        .cache
+        .load_or_get(&registry, None, None)
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -1347,6 +1366,76 @@ async fn brain_dashboard_layout(
     };
 
     Json(layout).into_response()
+}
+
+/// `PUT /api/brains/:id/dashboard-layout` — save a custom layout.
+/// First mutation endpoint in v3.4. Layout edits are operator
+/// preference, not Brain state, so this is *not* gated behind the
+/// `--allow-mutations` flag we're reserving for v3.5 score/CMDB
+/// mutations. Writes atomically (temp file + rename) so a
+/// concurrent reader never sees a half-written file.
+///
+/// Fires a `LayoutChanged` SSE event explicitly after a successful
+/// write. The filesystem watcher will also fire one within ~250ms,
+/// but pushing immediately means the operator's own browser sees
+/// the change without waiting on the watcher debounce.
+async fn brain_save_dashboard_layout(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+    Json(body): Json<DashboardLayoutRequest>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    if let Err(e) = save_layout(&brain.project_root, body.widgets) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("failed to save layout for '{brain_id}': {e}")
+            })),
+        )
+            .into_response();
+    }
+    if let Some(tx) = &state.events {
+        let _ = tx.send(crate::events::DashboardEvent::LayoutChanged);
+    }
+    (StatusCode::OK, Json(serde_json::json!({ "ok": true }))).into_response()
+}
+
+/// `DELETE /api/brains/:id/dashboard-layout` — reset to the
+/// posture-aware default by removing the on-disk file. Idempotent:
+/// returns 200 OK whether or not a file existed.
+async fn brain_reset_dashboard_layout(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let removed = match reset_layout(&brain.project_root) {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to reset layout for '{brain_id}': {e}")
+                })),
+            )
+                .into_response();
+        }
+    };
+    if removed {
+        if let Some(tx) = &state.events {
+            let _ = tx.send(crate::events::DashboardEvent::LayoutChanged);
+        }
+    }
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "ok": true, "removed": removed })),
+    )
+        .into_response()
 }
 
 // =================================================================

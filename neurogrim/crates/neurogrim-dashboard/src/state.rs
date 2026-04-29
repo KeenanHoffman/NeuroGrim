@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::brains::BrainTree;
+use crate::cache::BrainContextCache;
 use crate::events::DashboardEvent;
 
 #[derive(Clone)]
@@ -28,6 +29,12 @@ pub struct AppState {
     /// `POST /api/brains/refresh`) is queued for v3.5 alongside
     /// the other mutation endpoints.
     pub brains: Arc<BrainTree>,
+    /// Process-level BrainContext cache shared across all routes.
+    /// Avoids re-running the full scoring pipeline on every
+    /// request — hot for the multi-widget Overview pages that
+    /// fire ~9 parallel requests on first paint. Invalidated by
+    /// SSE events on registry / score changes.
+    pub cache: Arc<BrainContextCache>,
     /// Broadcast channel for live updates. The /api/events SSE
     /// handler subscribes one receiver per connection. Senders come
     /// from the filesystem watcher spawned at server startup.
@@ -43,25 +50,33 @@ impl AppState {
     /// Construct a state without live updates. Used by tests + Phase
     /// 0/1 routes that don't care about events. Re-discovers the
     /// brain tree from the registry path so the multi-Brain routes
-    /// still work in tests.
+    /// still work in tests. Cache uses TTL-only invalidation in
+    /// this mode (no broadcast channel to subscribe to).
     pub fn new(registry_path: String) -> Self {
         let brains = BrainTree::discover(Path::new(&registry_path));
+        let cache = BrainContextCache::new(None);
         Self {
             registry_path: Arc::new(registry_path),
             brains: Arc::new(brains),
+            cache: Arc::new(cache),
             events: None,
         }
     }
 
     /// Construct a state with a live-update channel. Production path.
+    /// The cache subscribes to the broadcast channel so registry /
+    /// score events invalidate cached BrainContexts within
+    /// milliseconds, in addition to the 30s TTL.
     pub fn with_events(
         registry_path: String,
         events: broadcast::Sender<DashboardEvent>,
     ) -> Self {
         let brains = BrainTree::discover(Path::new(&registry_path));
+        let cache = BrainContextCache::new(Some(&events));
         Self {
             registry_path: Arc::new(registry_path),
             brains: Arc::new(brains),
+            cache: Arc::new(cache),
             events: Some(events),
         }
     }

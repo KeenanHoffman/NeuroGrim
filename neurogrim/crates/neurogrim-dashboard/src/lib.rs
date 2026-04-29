@@ -28,6 +28,7 @@
 //! the full plan.
 
 pub mod brains;
+pub mod cache;
 pub mod events;
 pub mod layout;
 pub mod routes;

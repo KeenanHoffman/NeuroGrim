@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OverviewPage } from "./OverviewPage";
@@ -196,6 +196,105 @@ describe("OverviewPage layout dispatch", () => {
     expect(
       await screen.findByText(/domain-card requires config\.domain/i)
     ).toBeInTheDocument();
+  });
+
+  it("default-layout banner shows a Customize button that enters edit mode", async () => {
+    mockFetch({
+      "/overview": overview(),
+      "/dashboard-layout": layout(
+        [
+          {
+            id: "i",
+            widget_type: "identity",
+            size: "full",
+            title: null,
+            config: {},
+          },
+        ],
+        true
+      ),
+    });
+    renderPage();
+    const banner = await screen.findByTestId("default-layout-banner");
+    const customize = banner.querySelector(
+      "[data-testid='customize-from-banner']"
+    ) as HTMLButtonElement;
+    expect(customize).toBeTruthy();
+    fireEvent.click(customize);
+    // Banner is hidden in edit mode; toolbar appears.
+    expect(screen.queryByTestId("default-layout-banner")).not.toBeInTheDocument();
+    expect(screen.getByTestId("edit-mode-on")).toBeInTheDocument();
+  });
+
+  it("entering edit mode shows per-widget controls (move + remove + size)", async () => {
+    mockFetch({
+      "/overview": overview(),
+      "/dashboard-layout": layout(
+        [
+          {
+            id: "w1",
+            widget_type: "identity",
+            size: "full",
+            title: null,
+            config: {},
+          },
+          {
+            id: "w2",
+            widget_type: "score-gauge",
+            size: "third",
+            title: null,
+            config: {},
+          },
+        ],
+        false
+      ),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByTestId("enter-edit-mode"));
+    // Two sets of controls, one per widget.
+    expect(screen.getByTestId("widget-edit-w1")).toBeInTheDocument();
+    expect(screen.getByTestId("widget-edit-w2")).toBeInTheDocument();
+    expect(screen.getByTestId("remove-w1")).toBeInTheDocument();
+    expect(screen.getByTestId("remove-w2")).toBeInTheDocument();
+    // Up/down arrow disable states: first widget can't move up,
+    // last widget can't move down.
+    expect(screen.getByTestId("move-up-w1")).toBeDisabled();
+    expect(screen.getByTestId("move-down-w2")).toBeDisabled();
+    // The middle/end pair: first widget CAN move down, second CAN move up.
+    expect(screen.getByTestId("move-down-w1")).not.toBeDisabled();
+    expect(screen.getByTestId("move-up-w2")).not.toBeDisabled();
+  });
+
+  it("removing a widget in edit mode drops it from the rendered grid", async () => {
+    mockFetch({
+      "/overview": overview(),
+      "/dashboard-layout": layout(
+        [
+          {
+            id: "stay",
+            widget_type: "identity",
+            size: "full",
+            title: null,
+            config: {},
+          },
+          {
+            id: "go",
+            widget_type: "score-gauge",
+            size: "third",
+            title: null,
+            config: {},
+          },
+        ],
+        false
+      ),
+    });
+    const { container } = renderPage();
+    fireEvent.click(await screen.findByTestId("enter-edit-mode"));
+    fireEvent.click(screen.getByTestId("remove-go"));
+    // After remove, only the "stay" widget remains in the grid.
+    const remaining = container.querySelectorAll("[data-widget-id]");
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].getAttribute("data-widget-id")).toBe("stay");
   });
 
   it("renders multiple widgets in layout order", async () => {
