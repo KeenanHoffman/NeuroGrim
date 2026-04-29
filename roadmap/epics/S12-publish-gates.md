@@ -22,7 +22,7 @@
 
 - [x] `cargo test --workspace --all-targets` runs in <90s baseline with the two `context_overhead.rs` benchmarks marked `#[ignore]` *(S12-G-1 — shipped in `6e7e6e1`; baseline 218s → 29s warm cache, 96s cold; snapshot at `roadmap/data/test-runtime-baseline.txt`)*
 - [x] `neurogrim test` quiet wrapper (carry-over from v3.5.1 backlog) ships with `--keep-last`, `--show-only-new`, `--retry-failed` *(S12-G-2 — shipped in this commit; also `--slow` and `--verbose`)*
-- [ ] `<brain>/.claude/brain/publish-gates.yaml` schema authored + validated by `neurogrim doctor`
+- [x] `<brain>/.claude/brain/publish-gates.yaml` schema authored + validated by `neurogrim doctor` *(S12-G-3 — shipped in this commit; schema at `crates/neurogrim-mcp/data/schemas/publish-gates-v1.schema.json`; validator + doctor check 8 in `crates/neurogrim-mcp/src/publish_gates.rs` + `doctor.rs::check_publish_gates`)*
 - [ ] `neurogrim publish-gate run` CLI ships with `--gate <id>`, `--mode {pre-commit,pre-publish,full}`
 - [ ] Gate-result ledger at `<brain>/.claude/brain/publish-gate-ledger.jsonl` with append-only writer + read helpers
 - [ ] Playwright foundation: `crates/neurogrim-dashboard/frontend/e2e/`, headless Chromium, total run time enforced <3 minutes
@@ -62,7 +62,7 @@
 
 **Status:** Complete as a standalone CLI. Not yet integrated into a publish-gate — S12-G-4 wires it as the `tests-pass` automated gate.
 
-### S12-G-3: Gate definition format (3 days)
+### S12-G-3: Gate definition format (3 days) — ✅ SHIPPED
 
 **What:** New file `<brain>/.claude/brain/publish-gates.yaml` declaring gate IDs, gate-type (`automated | manual | e2e`), description, and per-gate checks/instructions. Schema-versioned. Validated by `neurogrim doctor`.
 
@@ -101,9 +101,11 @@ gates:
 ```
 
 **Done when:**
-- [ ] Schema authored with JSON Schema sidecar at `crates/neurogrim-mcp/data/schemas/publish-gates-v1.schema.json`
-- [ ] `neurogrim doctor` reports findings for missing/malformed `publish-gates.yaml`
-- [ ] 8+ unit tests covering parse, validate, edge cases
+- [x] Schema authored with JSON Schema sidecar at `crates/neurogrim-mcp/data/schemas/publish-gates-v1.schema.json` *(Draft-07; closed vocabulary at every level via `additionalProperties: false`; kebab-case `id` pattern; `if/then` rules for `manual → instructions` and `automated → check_command`; timeout bounded 1–3600s)*
+- [x] `neurogrim doctor` reports findings for missing/malformed `publish-gates.yaml` *(new check 8: `check_publish_gates`; missing-file = silent advisory posture for v4.0 rollout; YAML syntax error / I/O error = `publish-gates-syntax` Error; schema-validation failure = `publish-gates-schema` Error per issue; duplicate gate IDs = single Error)*
+- [x] 8+ unit tests covering parse, validate, edge cases *(actually 22: 17 in `publish_gates::tests` covering parser + schema-validation paths + load round-trip, plus 5 in `doctor::tests` covering missing/clean/malformed/schema-invalid/duplicate-ids)*
+
+**Status:** Complete as a standalone validator + doctor check. Not yet a usable runtime gate — S12-G-4 (`neurogrim publish-gate run`) consumes the typed `PublishGatesConfig` view to execute gates. The schema's typed Rust mirror (`PublishGatesConfig`, `Gate`, `GateType`) is exported from `neurogrim_mcp::publish_gates` and ready for G-4 to import.
 
 ### S12-G-4: `neurogrim publish-gate run` CLI (5 days)
 

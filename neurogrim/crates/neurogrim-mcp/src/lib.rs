@@ -10,6 +10,7 @@ pub mod doctor;
 pub mod domain;
 pub mod explain;
 pub mod prose;
+pub mod publish_gates;
 pub mod server;
 pub mod transport;
 

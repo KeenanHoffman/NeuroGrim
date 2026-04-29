@@ -63,6 +63,8 @@ impl Finding {
 /// decides how to render them and what exit code to emit.
 ///
 /// v3.3 F3: added `check_autonomy` for autonomy-block schema correctness.
+/// v4.0 S12-G-3: added `check_publish_gates` for `publish-gates.yaml`
+///               schema correctness (advisory-during-rollout).
 pub fn audit(registry: &BrainRegistry, project_root: &Path) -> Vec<Finding> {
     let mut findings = Vec::new();
     findings.extend(check_validate(registry));
@@ -72,6 +74,7 @@ pub fn audit(registry: &BrainRegistry, project_root: &Path) -> Vec<Finding> {
     findings.extend(check_culture_yaml(project_root));
     findings.extend(check_federation_ports(registry, project_root));
     findings.extend(check_autonomy(registry));
+    findings.extend(check_publish_gates(project_root));
     findings
 }
 
@@ -510,6 +513,72 @@ pub(crate) fn parse_port(endpoint: &str) -> Option<u16> {
     let host_port = after_scheme.split('/').next()?;
     let port_str = host_port.rsplit(':').next()?;
     port_str.parse::<u16>().ok()
+}
+
+// --- Check 8: publish-gates.yaml schema correctness (v4.0 S12-G-3) --
+
+/// Validate `<project_root>/.claude/brain/publish-gates.yaml` against
+/// the embedded `publish-gates-v1.schema.json`.
+///
+/// Severity model — adopters are rolling onto v4.0 publish-gates
+/// progressively:
+///
+/// - **Missing file** → no finding. The file is opt-in. Brains that
+///   don't run their own publish pipeline (e.g., python-starter, a
+///   private adopter that hasn't authored gates yet) shouldn't see a
+///   warning forever. NeuroGrim's S12-G-7 self-hosting milestone makes
+///   it required for *NeuroGrim itself*, but the adopter contract
+///   stays advisory.
+/// - **YAML parse failure** → Error. Once authored, the file MUST be
+///   structurally well-formed; a broken manifest silently breaks every
+///   subsequent `publish-gate run`.
+/// - **Schema validation failure** → Error per validation issue. The
+///   schema is the contract; drift means the runner can't trust the
+///   declared shape.
+/// - **Duplicate gate IDs** → Error. The runner uses `id` as the
+///   ledger primary key; duplicates corrupt audit trails.
+pub fn check_publish_gates(project_root: &Path) -> Vec<Finding> {
+    let path = project_root
+        .join(".claude")
+        .join("brain")
+        .join("publish-gates.yaml");
+    match crate::publish_gates::load_publish_gates(&path) {
+        Ok(_) => Vec::new(),
+        Err(crate::publish_gates::PublishGatesError::NotFound) => {
+            // Opt-in posture during v4.0 rollout — no finding.
+            Vec::new()
+        }
+        Err(crate::publish_gates::PublishGatesError::Yaml(msg)) => {
+            vec![Finding::err(
+                "publish-gates-syntax",
+                format!("{}: YAML parse failed: {msg}", path.display()),
+            )]
+        }
+        Err(crate::publish_gates::PublishGatesError::Io(msg)) => {
+            vec![Finding::err(
+                "publish-gates-syntax",
+                format!("{}: I/O error: {msg}", path.display()),
+            )]
+        }
+        Err(crate::publish_gates::PublishGatesError::Schema(issues)) => issues
+            .into_iter()
+            .map(|i| {
+                Finding::err(
+                    "publish-gates-schema",
+                    format!("{}: {i}", path.display()),
+                )
+            })
+            .collect(),
+        Err(crate::publish_gates::PublishGatesError::DuplicateIds(ids)) => vec![Finding::err(
+            "publish-gates-schema",
+            format!(
+                "{}: duplicate gate id(s): {} — `id` is the ledger primary key; \
+                 each gate must have a unique kebab-case identifier",
+                path.display(),
+                ids.join(", ")
+            ),
+        )],
+    }
 }
 
 // --- Tests ------------------------------------------------------------
@@ -968,5 +1037,111 @@ mod tests {
             "got: {:?}",
             f
         );
+    }
+
+    // --- check_publish_gates (v4.0 S12-G-3) ---------------------------
+
+    use tempfile::TempDir;
+
+    #[test]
+    fn check_publish_gates_missing_file_emits_no_finding() {
+        let tmp = TempDir::new().unwrap();
+        // No .claude/brain/publish-gates.yaml present — opt-in posture.
+        let f = check_publish_gates(tmp.path());
+        assert!(
+            f.is_empty(),
+            "missing manifest should be silent during v4.0 rollout; got: {f:?}"
+        );
+    }
+
+    #[test]
+    fn check_publish_gates_clean_manifest_emits_no_finding() {
+        let tmp = TempDir::new().unwrap();
+        let brain = tmp.path().join(".claude").join("brain");
+        std::fs::create_dir_all(&brain).unwrap();
+        std::fs::write(
+            brain.join("publish-gates.yaml"),
+            r#"
+schema_version: "1"
+gates:
+  - id: tests-pass
+    gate_type: automated
+    description: All tests green
+    check_command: "neurogrim test"
+"#,
+        )
+        .unwrap();
+        let f = check_publish_gates(tmp.path());
+        assert!(f.is_empty(), "clean manifest should emit no findings; got: {f:?}");
+    }
+
+    #[test]
+    fn check_publish_gates_malformed_yaml_returns_error() {
+        let tmp = TempDir::new().unwrap();
+        let brain = tmp.path().join(".claude").join("brain");
+        std::fs::create_dir_all(&brain).unwrap();
+        // Bad indent → serde_yaml parse error
+        std::fs::write(
+            brain.join("publish-gates.yaml"),
+            "schema_version: \"1\"\ngates:\n  - id: tests-pass\n    gate_type: automated\n  description: bad indent\n",
+        )
+        .unwrap();
+        let f = check_publish_gates(tmp.path());
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Error);
+        assert_eq!(f[0].category, "publish-gates-syntax");
+    }
+
+    #[test]
+    fn check_publish_gates_schema_invalid_emits_error_per_issue() {
+        let tmp = TempDir::new().unwrap();
+        let brain = tmp.path().join(".claude").join("brain");
+        std::fs::create_dir_all(&brain).unwrap();
+        // Two issues: missing schema_version + unknown gate_type.
+        std::fs::write(
+            brain.join("publish-gates.yaml"),
+            r#"
+gates:
+  - id: weird
+    gate_type: telepathic
+    description: x
+"#,
+        )
+        .unwrap();
+        let f = check_publish_gates(tmp.path());
+        assert!(f.len() >= 2, "expected ≥2 findings; got: {f:?}");
+        for finding in &f {
+            assert_eq!(finding.severity, Severity::Error);
+            assert_eq!(finding.category, "publish-gates-schema");
+        }
+    }
+
+    #[test]
+    fn check_publish_gates_duplicate_ids_emits_single_error() {
+        let tmp = TempDir::new().unwrap();
+        let brain = tmp.path().join(".claude").join("brain");
+        std::fs::create_dir_all(&brain).unwrap();
+        std::fs::write(
+            brain.join("publish-gates.yaml"),
+            r#"
+schema_version: "1"
+gates:
+  - id: tests-pass
+    gate_type: automated
+    description: first
+    check_command: "neurogrim test"
+  - id: tests-pass
+    gate_type: automated
+    description: second
+    check_command: "neurogrim test --slow"
+"#,
+        )
+        .unwrap();
+        let f = check_publish_gates(tmp.path());
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Error);
+        assert_eq!(f[0].category, "publish-gates-schema");
+        assert!(f[0].message.contains("duplicate gate id"));
+        assert!(f[0].message.contains("tests-pass"));
     }
 }

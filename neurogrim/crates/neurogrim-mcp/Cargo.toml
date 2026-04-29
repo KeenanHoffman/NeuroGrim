@@ -33,6 +33,12 @@ url = { workspace = true }
 neurogrim-core = { workspace = true }
 neurogrim-sensory = { workspace = true }
 neurogrim-ecosystem = { workspace = true }
+# v4.0 S12-G-3 — `publish_gates` module parses
+# `<brain>/.claude/brain/publish-gates.yaml` and validates it against
+# the embedded `publish-gates-v1.schema.json` Draft-07 schema. Same
+# pattern + same crate version as `neurogrim-sensory::trust_budget`.
+serde_yaml = { workspace = true }
+jsonschema = "0.17"
 
 [dev-dependencies]
 tempfile = "3"

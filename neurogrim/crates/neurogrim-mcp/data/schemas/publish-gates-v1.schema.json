@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/KeenanHoffman/NeuroGrim/schemas/publish-gates-v1.schema.json",
+  "title": "Publish Gates Manifest v1",
+  "description": "Declares the gates a Brain runs before publishing. Read by `neurogrim publish-gate run` (S12-G-4) and validated by `neurogrim doctor` (S12-G-3). Lives at `<brain>/.claude/brain/publish-gates.yaml`. Schema is closed-vocabulary at every level (`additionalProperties: false`) — operators MAY extend by spec change with explicit METHODOLOGY-EVOLUTION entry, MUST NOT silently extend in adopter manifests. Three gate types are supported: `automated` (the runner executes `check_command` and treats exit 0 as pass), `manual` (the runner prints `instructions` and waits for operator y/n), `e2e` (the runner invokes the Playwright harness; bounded by `timeout_seconds`).",
+  "type": "object",
+  "required": ["schema_version", "gates"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1"],
+      "description": "Manifest schema version. v1 is the only valid value today; future bumps require a new schema sidecar (`publish-gates-v2.schema.json`) and a doctor finding when an old manifest is read by a newer binary."
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Ordered list of gate declarations. Order is significant — the runner executes automated gates in declared order so adopters can sequence cheap-fast gates before expensive-slow ones (e.g., lint → test → e2e).",
+      "items": { "$ref": "#/definitions/Gate" }
+    }
+  },
+  "definitions": {
+    "Gate": {
+      "type": "object",
+      "required": ["id", "gate_type", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Stable, kebab-case identifier. Used as the ledger primary key in `publish-gate-ledger.jsonl` (S12-G-4) and as the `--gate <id>` argument when running a single gate. MUST be unique within the manifest — duplicate IDs are rejected by `neurogrim doctor`."
+        },
+        "gate_type": {
+          "type": "string",
+          "enum": ["automated", "manual", "e2e"],
+          "description": "Closed vocabulary. `automated` = runner executes `check_command`, exit 0 = pass; `manual` = runner prints `instructions` and prompts operator (recorded with `$NEUROGRIM_OPERATOR`); `e2e` = runner invokes the Playwright harness (S12-G-5). Adding a new type requires a v2 schema bump."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280,
+          "description": "Human-readable one-liner. Surfaces in `publish-gate run` output and in the dashboard's `/brains/:id/publish-gates` page."
+        },
+        "blocking": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true (default), a failing gate stops the publish pipeline. If false, the gate is advisory — failure is logged but does not exit non-zero. v4.0 ships with default-on hard gates per the 2026-04-29 single-adopter decision; advisory mode is the safety valve when a gate is being authored / tuned."
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "description": "Wall-clock timeout for the gate. Capped at 1 hour to prevent a runaway gate from blocking a publish indefinitely. The runner kills the gate process on timeout and records a `timed_out` ledger entry."
+        },
+        "check_command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Shell command for `automated` gates. Executed via `sh -c` on Unix and `cmd /c` on Windows. Inherits the publish-gate runner's cwd (project root) and environment. Required for `automated` gates; ignored for `manual` and `e2e`."
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Multi-line operator-facing instructions for `manual` gates. Markdown-rendered in the dashboard surface (S12-G-6). Required for `manual` gates."
+        },
+        "operator_required": {
+          "type": "boolean",
+          "default": true,
+          "description": "For `manual` gates: whether `$NEUROGRIM_OPERATOR` must be set before the gate can be marked passed. Default true matches the audit-trail discipline the spec requires for governance. Setting false is an explicit opt-out (e.g., for unattended local dev where the operator handle isn't meaningful)."
+        }
+      },
+      "allOf": [
+        {
+          "description": "manual gates require `instructions`",
+          "if": {
+            "properties": { "gate_type": { "const": "manual" } },
+            "required": ["gate_type"]
+          },
+          "then": { "required": ["instructions"] }
+        },
+        {
+          "description": "automated gates require `check_command`",
+          "if": {
+            "properties": { "gate_type": { "const": "automated" } },
+            "required": ["gate_type"]
+          },
+          "then": { "required": ["check_command"] }
+        }
+      ]
+    }
+  }
+}
