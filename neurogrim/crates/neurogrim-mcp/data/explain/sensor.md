@@ -1,4 +1,4 @@
-<!-- topic: sensor — bundled in neurogrim-cli v3.3 -->
+<!-- topic: sensor — bundled in neurogrim-cli v3.4 -->
 # Sensors — the program that measures a domain
 
 A **sensor** is a small program that reads on-disk artifacts (or

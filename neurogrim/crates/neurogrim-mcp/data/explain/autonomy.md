@@ -1,4 +1,4 @@
-<!-- topic: autonomy — bundled in neurogrim-cli v3.3 -->
+<!-- topic: autonomy — bundled in neurogrim-cli v3.4 -->
 # Autonomy — declared action types and safety invariants
 
 The `autonomy` block in `brain-registry.json` declares **what an agent

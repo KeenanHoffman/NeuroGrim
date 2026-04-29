@@ -1,4 +1,4 @@
-<!-- topic: domain — bundled in neurogrim-cli v3.3 -->
+<!-- topic: domain — bundled in neurogrim-cli v3.4 -->
 # Domains — the unit of project concern
 
 A **domain** is a declared unit of project concern: "test health,"

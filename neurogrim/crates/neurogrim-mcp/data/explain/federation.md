@@ -1,4 +1,4 @@
-<!-- topic: federation — bundled in neurogrim-cli v3.3 -->
+<!-- topic: federation — bundled in neurogrim-cli v3.4 -->
 # Federation — Brains as A2A peers
 
 A Brain can stand alone, or it can participate in a federation

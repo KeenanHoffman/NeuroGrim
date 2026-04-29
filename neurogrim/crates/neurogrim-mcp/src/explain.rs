@@ -2,7 +2,7 @@
 //! neurogrim-cli to neurogrim-mcp in v3.2.1 so both the CLI and the
 //! MCP server can expose `explain` from a single source of truth).
 //!
-//! Eight self-contained topic files ship inside the binary via
+//! Ten self-contained topic files ship inside the binary via
 //! `include_str!`. Source: `neurogrim-mcp/data/explain/<topic>.md`.
 //!
 //! Each topic carries a version-stamped HTML comment header
@@ -18,12 +18,13 @@ const TOPIC_FEDERATION: &str = include_str!("../data/explain/federation.md");
 const TOPIC_CLI: &str = include_str!("../data/explain/cli.md");
 const TOPIC_CULTURE: &str = include_str!("../data/explain/culture.md");
 const TOPIC_AUTONOMY: &str = include_str!("../data/explain/autonomy.md");
+const TOPIC_UI: &str = include_str!("../data/explain/ui.md");
 
 /// Spec/methodology version this bundle was compiled against. Matches
 /// the version header in each `data/explain/*.md`. Bumped manually
 /// when methodology evolves enough to invalidate prior agent
 /// guidance. The `--version` surface in CLI + MCP both read this.
-pub const BUNDLED_VERSION: &str = "v3.3";
+pub const BUNDLED_VERSION: &str = "v3.4";
 
 /// Canonical-source path relative to the workspace root, surfaced via
 /// `neurogrim explain --version` and the MCP `explain --topic
@@ -80,6 +81,11 @@ pub fn topics() -> &'static [(&'static str, &'static str, &'static str)] {
             "Autonomy block: action_types, levels, safety_invariants (v3.3)",
             TOPIC_AUTONOMY,
         ),
+        (
+            "ui",
+            "Dashboard surface: 5 pages, SSE live updates, hat lens, theme (v3.4)",
+            TOPIC_UI,
+        ),
     ]
 }
 
@@ -100,8 +106,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn topic_count_is_9() {
-        assert_eq!(topics().len(), 9);
+    fn topic_count_is_10() {
+        assert_eq!(topics().len(), 10);
     }
 
     #[test]
@@ -160,5 +166,25 @@ mod tests {
     fn lookup_finds_known_topic() {
         assert!(lookup("methodology").is_some());
         assert!(lookup("nonexistent").is_none());
+    }
+
+    #[test]
+    fn ui_topic_describes_the_five_pages_and_sse() {
+        // Regression guard: the v3.4 dashboard's value prop is the
+        // five pages + live updates. If a future edit accidentally
+        // strips those out, the topic would still be "valid markdown
+        // with the version header" but uselessly thin.
+        assert!(TOPIC_UI.contains("Overview"));
+        assert!(TOPIC_UI.contains("Domains"));
+        assert!(TOPIC_UI.contains("Federation"));
+        assert!(TOPIC_UI.contains("Skills"));
+        assert!(
+            TOPIC_UI.contains("SSE") || TOPIC_UI.contains("Server-Sent Events"),
+            "ui topic should mention SSE / Server-Sent Events"
+        );
+        assert!(
+            TOPIC_UI.contains("hat") && TOPIC_UI.contains("lens"),
+            "ui topic should describe the hat lens picker"
+        );
     }
 }

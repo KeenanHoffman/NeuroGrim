@@ -1,4 +1,4 @@
-<!-- topic: cli — bundled in neurogrim-cli v3.3 -->
+<!-- topic: cli — bundled in neurogrim-cli v3.4 -->
 # CLI surface — what neurogrim can do for you
 
 NeuroGrim ships ~22 top-level commands grouped into four families.
