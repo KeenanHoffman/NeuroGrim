@@ -23,6 +23,14 @@
 # per-deployment runtime state; failure history is local-only.
 .claude/brain/test-failures.jsonl
 .claude/brain/test-failures.archive.jsonl
+# v4.0 S12-G-4 — `neurogrim publish-gate run` per-gate ledger;
+# per-deployment governance trail of which gates passed/failed/are
+# pending operator acknowledgement.
+.claude/brain/publish-gate-ledger.jsonl
+# v4.0 S12-G-5 — Playwright E2E artifacts (HTML report + per-test
+# traces/screenshots). Regenerated on every `npm run e2e` invocation.
+neurogrim/crates/neurogrim-dashboard/frontend/playwright-report/
+neurogrim/crates/neurogrim-dashboard/frontend/test-results/
 # E-SC-6 (2026-04-26) — supply-chain Layer 3 review framework runtime state.
 # Decision ledger is operator-local audit trail; tickets are open-work files.
 # Both per-deployment runtime state, not committed.

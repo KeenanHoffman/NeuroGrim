@@ -25,11 +25,11 @@
 - [x] `<brain>/.claude/brain/publish-gates.yaml` schema authored + validated by `neurogrim doctor` *(S12-G-3 — shipped in this commit; schema at `crates/neurogrim-mcp/data/schemas/publish-gates-v1.schema.json`; validator + doctor check 8 in `crates/neurogrim-mcp/src/publish_gates.rs` + `doctor.rs::check_publish_gates`)*
 - [x] `neurogrim publish-gate run` CLI ships with `--gate <id>`, `--mode {pre-commit,pre-publish,full}` *(S12-G-4 — shipped in this commit; also `publish-gate ack` sub-command for manual-gate operator acknowledgements; `--mode` filter is heuristic in v1, schema v2 will add explicit per-gate mode tags)*
 - [x] Gate-result ledger at `<brain>/.claude/brain/publish-gate-ledger.jsonl` with append-only writer + read helpers *(S12-G-4 — `LedgerEntry` schema with run_id, gate_id, gate_type, mode, started_at, completed_at, status, blocking, operator, exit_code, stdout/stderr truncation; `append_ledger_entries` + `read_most_recent_pending` exported)*
-- [ ] Playwright foundation: `crates/neurogrim-dashboard/frontend/e2e/`, headless Chromium, total run time enforced <3 minutes
-- [ ] Three smoke specs ship green: `overview-loads.spec.ts`, `federation-page.spec.ts`, `layout-edit.spec.ts`
+- [x] Playwright foundation: `crates/neurogrim-dashboard/frontend/e2e/`, headless Chromium, total run time enforced <3 minutes *(S12-G-5 — `playwright.config.ts` shipped with `globalTimeout: 180_000`; chromium-only project; sequential workers; webServer block spawns the prebuilt `target/debug/neurogrim.exe` on port 17345)*
+- [x] Three smoke specs ship green: `overview-loads.spec.ts`, `federation-page.spec.ts`, `layout-edit.spec.ts` *(S12-G-5 — all three pass in 9.6s wall-clock; targets are `data-testid` markers + accessible button names; `pageerror` + `console.error` listeners catch React #310-class crashes)*
 - [ ] Manual gate UI: `/brains/:id/publish-gates` page renders pending checklist + per-item verify URL/command
 - [ ] NeuroGrim's own `publish-gates.yaml` authored; v4.0 itself publishes through the gate pipeline as the first dogfood pass
-- [ ] 12th explain topic ships: `neurogrim explain publish-gates`
+- [x] 12th explain topic ships: `neurogrim explain publish-gates` *(S12-G-5 — `crates/neurogrim-mcp/data/explain/publish-gates.md`; covers gate types, manifest schema, runner CLI, ledger, mode filter, ack flow, e2e setup, adopter onboarding; methodology_drift `TOPICS` extended)*
 - [ ] Adopter walkthrough doc: how to set up gates in a fresh adopter Brain
 - [ ] CHANGELOG documents that v4.0+ NeuroGrim publishes go through `publish-gate run` before tagging
 
@@ -121,18 +121,20 @@ gates:
 
 **Status:** Complete as a standalone CLI with ack flow. e2e gate type ships as `deferred` until S12-G-5 wires the Playwright harness — adopters can declare e2e gates in their manifest today and they'll be visible in the ledger without driving exit code (deferred is non-blocking by design). Two extension sub-commands reserved for future stories: `publish-gate list` (read ledger) and `publish-gate inspect <gate-id>` (gate detail) — out of scope for v1.
 
-### S12-G-5: Playwright E2E foundation (4 days)
+### S12-G-5: Playwright E2E foundation (4 days) — ✅ SHIPPED
 
 **What:** New directory `crates/neurogrim-dashboard/frontend/e2e/` with `playwright.config.ts`. Headless Chromium only (Webkit fallback documented). Total run-time constraint enforced (test files >30s fail the build via custom matcher). Three initial smoke specs: `overview-loads.spec.ts`, `federation-page.spec.ts`, `layout-edit.spec.ts`.
 
 **Why:** v3.5 polish needed exactly these tests (the React #310 federation crash would have been caught by `federation-page.spec.ts`). E2E catches regressions that unit tests miss because they don't render real DOM. Constraint: must stay under 3 minutes total or operators won't run them.
 
 **Done when:**
-- [ ] `playwright.config.ts` shipped with timeout enforcement
-- [ ] 3 smoke specs green against a locally-running dashboard
-- [ ] `neurogrim test --e2e` invokes them
-- [ ] Documentation in `publish-gates.md` explain topic + frontend README
-- [ ] CI YAML scaffolding (`/.github/workflows/e2e.yml` if user opts in)
+- [x] `playwright.config.ts` shipped with timeout enforcement *(`globalTimeout: 180_000`; per-test 30s; `expect.timeout: 10_000`; `retries: process.env.CI ? 1 : 0`; `workers: 1` to prevent races on the single webServer instance)*
+- [x] 3 smoke specs green against a locally-running dashboard *(verified end-to-end against the v4.0-dev binary serving NeuroGrim's own brain registry; total wall-clock 9.6s of the 180s budget)*
+- [x] `neurogrim test --e2e` invokes them *(test.rs Args.e2e flag; diverts entirely from cargo path; `find_dashboard_frontend` walks up looking for both workspace-root and repo-root layouts; `spawn_playwright_inherit` shells out to `npx playwright test` with inherited stdio so the operator sees real-time progress; mirrors playwright's exit code)*
+- [x] Documentation in `publish-gates.md` explain topic + frontend README *(also satisfies the top-level "12th explain topic" done-when; methodology_drift TOPICS extended)*
+- [ ] CI YAML scaffolding (`/.github/workflows/e2e.yml` if user opts in) — **deliberately skipped in v1**; user is single-adopter with no CI today, the epic explicitly says "if user opts in", and adding YAML adds maintenance for no value. Re-open this when a second adopter or a CI need materializes.
+
+**Status:** Complete. Bonus wire-up: G-4's `execute_e2e_deferred` was replaced by `execute_e2e_playwright` — `e2e` gate types in `publish-gates.yaml` now actually run Playwright through the runner, capture stdout/stderr to the ledger (truncated to 4 KB head + 4 KB tail), and respect `timeout_seconds`. End-to-end smoke against a single-gate manifest passed cleanly with the e2e gate landing as `passed` in the ledger.
 
 ### S12-G-6: Manual gate UI surface (3 days)
 

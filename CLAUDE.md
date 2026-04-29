@@ -26,9 +26,10 @@ neurogrim explain cli            # what can I invoke?
 
 Each takes ~5–30 seconds to digest. Together they answer "what's here,
 is it sound, what does it mean, what can I do with it." The bundled
-`explain` topics (`neurogrim explain` lists all 8) cover domain
-authoring, sensors, hats, scoring, federation, and culture in
-depth. See `docs/AGENT-PRIMER.md` for the index.
+`explain` topics (`neurogrim explain` lists all 10) cover domain
+authoring, sensors, hats, scoring, federation, culture, autonomy,
+and the v4.0 publish-gates pipeline in depth. See
+`docs/AGENT-PRIMER.md` for the index.
 
 To add a new domain, run `neurogrim domain new <name>`. To add a
 project-specific skill, `neurogrim skill new <name>`. To register a

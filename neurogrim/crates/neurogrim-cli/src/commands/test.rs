@@ -100,6 +100,17 @@ pub struct Args {
     #[arg(long, short = 'v')]
     pub verbose: bool,
 
+    /// v4.0 S12-G-5 — invoke the Playwright E2E suite at
+    /// `<project_root>/crates/neurogrim-dashboard/frontend/`
+    /// instead of cargo. Skips cargo entirely; mirrors playwright's
+    /// exit code. Requires the operator to have run
+    /// `npm install` + `npx playwright install chromium` (one-time)
+    /// AND `cargo build --bin neurogrim` + `npm run build` (every
+    /// time the dashboard or frontend changes). README documents
+    /// the build sequence.
+    #[arg(long)]
+    pub e2e: bool,
+
     /// Project root containing `.claude/brain/`. Default: cwd.
     #[arg(long, default_value = ".")]
     pub project_root: String,
@@ -120,6 +131,25 @@ pub struct FailureEntry {
 /// Entry point for `neurogrim test`.
 pub async fn run(args: Args) -> Result<()> {
     let project_root = Path::new(&args.project_root);
+
+    // S12-G-5: --e2e diverts entirely from the cargo path. Spawn
+    // Playwright in the dashboard frontend dir, inherit its stdio so
+    // the operator sees real-time test progress, mirror its exit code.
+    if args.e2e {
+        let frontend = find_dashboard_frontend(project_root).with_context(|| {
+            "could not locate `crates/neurogrim-dashboard/frontend/` from \
+             --project-root; --e2e is only meaningful inside the NeuroGrim \
+             workspace where the dashboard lives"
+        })?;
+        eprintln!(
+            "✦ neurogrim test --e2e — invoking Playwright at {}",
+            frontend.display()
+        );
+        let status = spawn_playwright_inherit(&frontend)
+            .with_context(|| "failed to spawn playwright")?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
     let ledger_path = ledger_path(project_root);
     let archive_path = project_root.join(".claude/brain").join(ARCHIVE_FILENAME);
 
@@ -613,6 +643,68 @@ fn rotate_ledger_if_needed(
     }
     fs::write(ledger, to_keep.join("\n") + "\n")?;
     Ok(())
+}
+
+// ── S12-G-5: Playwright E2E launcher ────────────────────────────────
+
+/// Locate the dashboard frontend directory containing
+/// `playwright.config.ts`. Walks upward from `start` for a few levels,
+/// trying both layouts on the way up:
+///   - `<p>/crates/neurogrim-dashboard/frontend` (Cargo workspace root)
+///   - `<p>/neurogrim/crates/neurogrim-dashboard/frontend` (repo root,
+///     where the Brain's `.claude/` lives one level above the workspace)
+///
+/// Supports invocation from either the workspace root (`/d/Brains/NeuroGrim/neurogrim/`)
+/// or the repo root (`/d/Brains/NeuroGrim/`) without per-call config.
+pub fn find_dashboard_frontend(start: &Path) -> Result<PathBuf> {
+    let canonical = start.canonicalize().unwrap_or_else(|_| start.to_path_buf());
+    let mut cur: Option<&Path> = Some(&canonical);
+    for _ in 0..6 {
+        let p = match cur {
+            Some(p) => p,
+            None => break,
+        };
+        for prefix in [None, Some("neurogrim")] {
+            let mut candidate = p.to_path_buf();
+            if let Some(pref) = prefix {
+                candidate.push(pref);
+            }
+            candidate.push("crates");
+            candidate.push("neurogrim-dashboard");
+            candidate.push("frontend");
+            if candidate.join("playwright.config.ts").is_file() {
+                return Ok(candidate);
+            }
+        }
+        cur = p.parent();
+    }
+    anyhow::bail!(
+        "no `crates/neurogrim-dashboard/frontend/playwright.config.ts` found by \
+         walking up from {} (tried both `<p>/crates/...` and \
+         `<p>/neurogrim/crates/...` at each level)",
+        start.display()
+    )
+}
+
+/// Run `npx playwright test` in `frontend_dir`, inheriting stdio so
+/// the operator sees real-time test progress. Returns the child's
+/// exit status (caller decides whether to mirror it via
+/// `std::process::exit`).
+///
+/// Used by `neurogrim test --e2e` and (with capture instead of
+/// inherit) by `neurogrim publish-gate run` for `e2e` gate types.
+pub fn spawn_playwright_inherit(frontend_dir: &Path) -> Result<std::process::ExitStatus> {
+    let (program, args): (&str, Vec<&str>) = if cfg!(target_os = "windows") {
+        ("npx.cmd", vec!["playwright", "test"])
+    } else {
+        ("npx", vec!["playwright", "test"])
+    };
+    let status = Command::new(program)
+        .args(&args)
+        .current_dir(frontend_dir)
+        .status()
+        .with_context(|| format!("failed to spawn `{program} playwright test`"))?;
+    Ok(status)
 }
 
 /// Best-effort `git rev-parse --short HEAD`. Returns "unknown" when

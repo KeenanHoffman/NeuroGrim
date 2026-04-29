@@ -68,6 +68,8 @@ use std::time::Duration;
 use tokio::process::Command as TokioCommand;
 use uuid::Uuid;
 
+use crate::commands::test::find_dashboard_frontend;
+
 const SCHEMA_VERSION: &str = "1";
 const LEDGER_FILENAME: &str = "publish-gate-ledger.jsonl";
 const DEFAULT_TIMEOUT_SECS: u64 = 600;
@@ -244,7 +246,7 @@ async fn run_subcmd(args: RunArgs) -> Result<()> {
     let mut entries: Vec<LedgerEntry> = Vec::with_capacity(selected.len());
     for gate in &selected {
         let entry =
-            execute_gate(gate, &run_id, &mode_tag, args.verbose).await;
+            execute_gate(gate, &run_id, &mode_tag, args.verbose, project_root).await;
         print_outcome(&entry, args.verbose);
         entries.push(entry);
     }
@@ -322,6 +324,7 @@ async fn execute_gate(
     run_id: &str,
     mode_tag: &str,
     verbose: bool,
+    project_root: &Path,
 ) -> LedgerEntry {
     let started_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let blocking = gate.blocking.unwrap_or(true);
@@ -344,7 +347,7 @@ async fn execute_gate(
     match gate.gate_type {
         GateType::Automated => execute_automated(gate, base, verbose).await,
         GateType::Manual => execute_manual_pending(gate, base),
-        GateType::E2e => execute_e2e_deferred(gate, base),
+        GateType::E2e => execute_e2e_playwright(gate, base, project_root).await,
     }
 }
 
@@ -441,20 +444,109 @@ fn execute_manual_pending(gate: &Gate, mut entry: LedgerEntry) -> LedgerEntry {
     entry
 }
 
-fn execute_e2e_deferred(gate: &Gate, mut entry: LedgerEntry) -> LedgerEntry {
+/// Run the Playwright E2E suite at
+/// `<project_root>/crates/neurogrim-dashboard/frontend/`. The suite
+/// is the third gate-type in the v4.0 publish pipeline; under the
+/// hood it shells out to `npx playwright test`, which itself spawns
+/// the dashboard binary on a fixed port (per
+/// `playwright.config.ts:webServer`) and runs the smoke specs against
+/// the built React bundle.
+///
+/// Failure modes:
+/// - frontend dir missing → `error` (adopters who don't ship the
+///   dashboard shouldn't declare e2e gates; surface explicitly)
+/// - playwright not installed (`npx` exits 9009 / "not found") →
+///   `error` with a hint pointing at the install steps in README
+/// - playwright runs but tests fail → `failed` with exit code captured
+/// - playwright runs and tests pass → `passed`
+///
+/// Timeout enforcement: respects the gate's `timeout_seconds` (or the
+/// 600s default). Playwright also has its own `globalTimeout` ceiling
+/// in the config (180s) — whichever fires first wins.
+async fn execute_e2e_playwright(
+    gate: &Gate,
+    mut entry: LedgerEntry,
+    project_root: &Path,
+) -> LedgerEntry {
+    let frontend = match find_dashboard_frontend(project_root) {
+        Ok(p) => p,
+        Err(e) => {
+            entry.status = Status::Error.as_str().to_string();
+            entry.error_detail = Some(format!(
+                "{e} — `e2e` gate type requires the NeuroGrim dashboard frontend; \
+                 adopters without `crates/neurogrim-dashboard/frontend/` should use \
+                 `automated` gates with their own playwright command instead"
+            ));
+            entry.completed_at = Some(now_rfc3339());
+            return entry;
+        }
+    };
+
+    let timeout_secs =
+        gate.timeout_seconds.map(u64::from).unwrap_or(DEFAULT_TIMEOUT_SECS);
+
     eprintln!();
     eprintln!(
-        "○ e2e gate '{}' — Playwright harness ships in S12-G-5; \
-         marking deferred (advisory)",
-        gate.id
+        "▶ e2e gate '{}' — invoking Playwright at {}",
+        gate.id,
+        frontend.display()
     );
-    entry.status = Status::Deferred.as_str().to_string();
+
+    let (program, args): (&str, Vec<&str>) = if cfg!(target_os = "windows") {
+        ("npx.cmd", vec!["playwright", "test"])
+    } else {
+        ("npx", vec!["playwright", "test"])
+    };
+    let mut child_cmd = TokioCommand::new(program);
+    child_cmd
+        .args(&args)
+        .current_dir(&frontend)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let child = match child_cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            entry.status = Status::Error.as_str().to_string();
+            entry.error_detail = Some(format!(
+                "failed to spawn `{program} playwright test` in {}: {e} \
+                 — install with `npm install` + `npx playwright install chromium` \
+                 (see frontend/README.md)",
+                frontend.display()
+            ));
+            entry.completed_at = Some(now_rfc3339());
+            return entry;
+        }
+    };
+
+    let outcome =
+        tokio::time::timeout(Duration::from_secs(timeout_secs), child.wait_with_output()).await;
+
+    match outcome {
+        Ok(Ok(output)) => {
+            let exit_code = output.status.code().unwrap_or(-1);
+            entry.exit_code = Some(exit_code);
+            entry.stdout_truncated = truncate_stream(&output.stdout);
+            entry.stderr_truncated = truncate_stream(&output.stderr);
+            entry.status = if output.status.success() {
+                Status::Passed.as_str().to_string()
+            } else {
+                Status::Failed.as_str().to_string()
+            };
+        }
+        Ok(Err(e)) => {
+            entry.status = Status::Error.as_str().to_string();
+            entry.error_detail = Some(format!("playwright wait failed: {e}"));
+        }
+        Err(_elapsed) => {
+            entry.status = Status::TimedOut.as_str().to_string();
+            entry.error_detail = Some(format!(
+                "playwright exceeded timeout_seconds={timeout_secs}; process killed"
+            ));
+        }
+    }
     entry.completed_at = Some(now_rfc3339());
-    entry.error_detail = Some(
-        "e2e gate type not yet implemented — see roadmap/epics/S12-publish-gates.md \
-         §S12-G-5 (Playwright E2E foundation)"
-            .to_string(),
-    );
     entry
 }
 
@@ -706,11 +798,19 @@ mod tests {
         }
     }
 
+    /// Tempdir → Path that has no frontend dir. e2e gates targeted
+    /// at this root will hit the "no frontend" error path. Used by
+    /// non-e2e tests just to satisfy execute_gate's signature.
+    fn no_frontend_root() -> TempDir {
+        TempDir::new().unwrap()
+    }
+
     #[tokio::test]
     async fn passing_automated_gate_returns_passed_status() {
         let mut g = fresh_gate("ok", GateType::Automated);
         g.check_command = Some("echo hello".to_string());
-        let entry = execute_gate(&g, "run-1", "full", false).await;
+        let tmp = no_frontend_root();
+        let entry = execute_gate(&g, "run-1", "full", false, tmp.path()).await;
         assert_eq!(entry.status, "passed");
         assert_eq!(entry.exit_code, Some(0));
         assert!(entry.completed_at.is_some());
@@ -729,7 +829,8 @@ mod tests {
         let mut g = fresh_gate("bad", GateType::Automated);
         // `exit 1` works in both sh and cmd.
         g.check_command = Some("exit 1".to_string());
-        let entry = execute_gate(&g, "run-2", "full", false).await;
+        let tmp = no_frontend_root();
+        let entry = execute_gate(&g, "run-2", "full", false, tmp.path()).await;
         assert_eq!(entry.status, "failed");
         assert_eq!(entry.exit_code, Some(1));
         assert!(entry.completed_at.is_some());
@@ -738,8 +839,8 @@ mod tests {
     #[tokio::test]
     async fn automated_gate_without_check_command_returns_error() {
         let g = fresh_gate("nocmd", GateType::Automated);
-        // .check_command is None
-        let entry = execute_gate(&g, "run-3", "full", false).await;
+        let tmp = no_frontend_root();
+        let entry = execute_gate(&g, "run-3", "full", false, tmp.path()).await;
         assert_eq!(entry.status, "error");
         assert!(
             entry
@@ -761,8 +862,9 @@ mod tests {
         } else {
             "sleep 5".to_string()
         });
+        let tmp = no_frontend_root();
         let started = std::time::Instant::now();
-        let entry = execute_gate(&g, "run-4", "full", false).await;
+        let entry = execute_gate(&g, "run-4", "full", false, tmp.path()).await;
         let elapsed = started.elapsed();
         assert_eq!(entry.status, "timed_out", "entry: {entry:?}");
         assert!(
@@ -775,22 +877,32 @@ mod tests {
     async fn manual_gate_run_emits_pending() {
         let mut g = fresh_gate("review", GateType::Manual);
         g.instructions = Some("look at the dashboard".into());
-        let entry = execute_gate(&g, "run-5", "full", false).await;
+        let tmp = no_frontend_root();
+        let entry = execute_gate(&g, "run-5", "full", false, tmp.path()).await;
         assert_eq!(entry.status, "pending");
         assert_eq!(entry.completed_at, None);
     }
 
+    /// S12-G-5 changed e2e behavior: instead of unconditional
+    /// `deferred`, the runner now invokes Playwright at
+    /// `<project_root>/crates/neurogrim-dashboard/frontend/`. When
+    /// the frontend dir is absent — adopter brain that doesn't ship
+    /// the dashboard — the gate emits `error` with a clear message
+    /// pointing at the alternative (use `automated` instead).
     #[tokio::test]
-    async fn e2e_gate_returns_deferred_status() {
+    async fn e2e_gate_without_frontend_dir_returns_error() {
         let g = fresh_gate("e2e-smoke", GateType::E2e);
-        let entry = execute_gate(&g, "run-6", "full", false).await;
-        assert_eq!(entry.status, "deferred");
+        let tmp = no_frontend_root();
+        let entry = execute_gate(&g, "run-6", "full", false, tmp.path()).await;
+        assert_eq!(entry.status, "error");
+        let detail = entry.error_detail.as_deref().unwrap_or("");
         assert!(
-            entry
-                .error_detail
-                .as_deref()
-                .unwrap_or("")
-                .contains("S12-G-5")
+            detail.contains("crates/neurogrim-dashboard/frontend"),
+            "error_detail should mention the missing dir; got: {detail}"
+        );
+        assert!(
+            detail.contains("automated"),
+            "error_detail should suggest the `automated` alternative; got: {detail}"
         );
     }
 
