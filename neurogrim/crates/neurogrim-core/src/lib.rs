@@ -35,6 +35,15 @@
 //!   Pattern 1 (fan-out, multi-consumer, no-ack); Pattern 2
 //!   (request/response coordination — `await_approval`) ships in S13-B-5
 //!   on top of this primitive.
+//! - **[`queue_backend`]** — v4.1 S13-B-3 pluggable persistence trait.
+//!   `QueueBackend`, `JsonlBackend`, and (under the `sqlite` feature)
+//!   `SqliteBackend` with per-consumer-group ack semantics for
+//!   `ack_required: true` topics. JSONL preserves "everything
+//!   inspectable as files"; SQLite earns its keep for transactional
+//!   exactly-once consumption.
+//! - **[`queue_config`]** — v4.1 S13-B-3 per-topic configuration
+//!   schema (`<brain>/.claude/brain/queue-config.yaml`). Adopters
+//!   opt into SQLite per topic; topics not listed default to JSONL.
 //! - **[`ecosystem`]** — `ChildEntry`, `EcosystemRegistry`, topological
 //!   ordering for fractal-composition score aggregation (spec §9).
 //! - **[`awareness`]** — `LocalAwareness`: per-machine fact store (tool
@@ -67,6 +76,8 @@ pub mod governance;
 pub mod learning;
 pub mod ports;
 pub mod queue;
+pub mod queue_backend;
+pub mod queue_config;
 pub mod registry;
 pub mod scoring;
 pub mod trajectory;

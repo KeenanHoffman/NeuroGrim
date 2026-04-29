@@ -16,6 +16,7 @@ description = "LSP Brains core scoring engine — pure logic, zero I/O"
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 url = { version = "2", features = ["serde"] }
@@ -35,6 +36,19 @@ rand = { workspace = true }
 # Same crate version as neurogrim-cli's run_id generators for
 # consistency. Serde feature for `#[derive(Serialize, Deserialize)]`.
 uuid = { version = "1", features = ["v4", "serde"] }
+# v4.1 S13-B-3 — opt-in SQLite backend for `ack_required: true`
+# topics. Feature-gated so callers that only need the JSONL fan-out
+# path don't pay the rusqlite compile-time + binary cost.
+# `bundled` matches the discipline in `neurogrim-a2a/token_store.rs`
+# (no system libsqlite3 dependency).
+rusqlite = { version = "0.31", features = ["bundled"], optional = true }
+
+[features]
+default = []
+# Pulls in the SqliteBackend from `queue_backend.rs`. Enabled by
+# default in neurogrim-cli + neurogrim-dashboard so the operator-
+# facing surfaces always have it.
+sqlite = ["dep:rusqlite"]
 
 [dev-dependencies]
 proptest = { workspace = true }
