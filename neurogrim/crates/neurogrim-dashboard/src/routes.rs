@@ -564,6 +564,15 @@ fn build_domain_detail(ctx: &BrainContext, name: &str) -> Option<DomainDetailRes
 /// ecosystem Brain hitting NeuroGrim and LSP-Brains.
 const PEER_PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
 
+/// TCP-precheck timeout — the first stage of the two-stage probe.
+/// On Windows in particular, a closed localhost port can take
+/// 200-500ms to return ConnectionRefused (the kernel's SYN retry
+/// timing). 1000ms gives us a clean signal across platforms while
+/// keeping the federation page acceptable when peers are offline
+/// (worst case: 1s per offline peer, sequential — the page is
+/// otherwise free of latency from this code path).
+const PEER_TCP_TIMEOUT: Duration = Duration::from_millis(1000);
+
 /// `GET /api/federation` — the Brain's view of itself + its declared
 /// A2A / subprocess peers, with a freshness probe for each enabled
 /// A2A peer.
@@ -713,14 +722,98 @@ async fn build_federation(ctx: &BrainContext) -> FederationResponse {
     }
 }
 
-/// Run a single Agent Card probe with the standard timeout. Maps any
-/// failure to a `unreachable` status with a short operator-facing
-/// message; never panics.
+/// Two-stage probe: TCP precheck → Agent Card fetch.
+///
+/// Stage 1 — TCP precheck: a fast `tokio::net::TcpStream::connect`
+/// against the endpoint's host:port with a 250ms timeout. Splits
+/// the prior catch-all `unreachable` into:
+///
+/// - **not-running**: connection refused at the OS level → the
+///   A2A daemon isn't listening on that port.
+/// - **unreachable**: any other TCP failure (DNS resolution failed,
+///   network unreachable, route timeout). Genuinely unknown state.
+///
+/// Stage 2 — Agent Card fetch: only runs when the TCP precheck
+/// succeeded. Maps to:
+///
+/// - **alive**: card fetched + parsed.
+/// - **unhealthy**: card fetch failed or timed out. Process is
+///   running but not serving the well-known endpoint cleanly.
+///
+/// The two-stage approach costs one extra round trip per peer
+/// (~5ms on localhost when the port is open) and adds zero latency
+/// for the common "peer not running" case (TCP refusal is
+/// near-instant). Worth it for the operator-visible improvement of
+/// "is the daemon running" — the question the dashboard is most
+/// often answering.
 async fn probe_peer(
     client: &TaskClient<neurogrim_a2a::transport::HttpSseTransport>,
     endpoint: &Url,
     override_url: Option<&Url>,
 ) -> (PeerStatusDto, Option<AgentCardExcerptDto>) {
+    // Stage 1: TCP precheck.
+    let host = endpoint.host_str().unwrap_or("localhost");
+    let port = endpoint.port_or_known_default().unwrap_or(80);
+    let addr = format!("{host}:{port}");
+    let is_localhost = matches!(host, "127.0.0.1" | "::1" | "localhost");
+
+    match timeout(PEER_TCP_TIMEOUT, tokio::net::TcpStream::connect(&addr)).await {
+        Ok(Ok(_stream)) => {
+            // TCP open — drop the stream and proceed to Agent Card fetch.
+        }
+        Ok(Err(e)) => {
+            // Connection refused / reset / etc. → daemon not running.
+            // ConnectionRefused is the canonical signal; other IO
+            // errors here (broken pipe, etc.) shouldn't normally
+            // happen on connect but we treat them as "not-running"
+            // because the OS-level layer rejected us before any
+            // application logic ran.
+            let message = if e.kind() == std::io::ErrorKind::ConnectionRefused {
+                format!("port {port} not accepting connections")
+            } else {
+                format!("tcp connect to {addr} failed: {e}")
+            };
+            return (
+                PeerStatusDto {
+                    kind: "not-running".to_string(),
+                    message,
+                },
+                None,
+            );
+        }
+        Err(_) => {
+            // TCP-level timeout. Two real-world cases:
+            //
+            // - Localhost (127.0.0.1 / ::1): a closed port on
+            //   Windows takes seconds to return ConnectionRefused
+            //   (kernel SYN retries). For localhost there's no
+            //   firewall-or-routing alternative, so a timeout
+            //   here effectively means "daemon not running".
+            //
+            // - Remote host: timeout could legitimately be
+            //   firewall, routing, or a slow connect. Classify
+            //   as `unreachable` to leave the daemon-state
+            //   question undetermined.
+            let (kind, descriptor) = if is_localhost {
+                ("not-running", "no daemon listening")
+            } else {
+                ("unreachable", "host did not respond to TCP SYN")
+            };
+            return (
+                PeerStatusDto {
+                    kind: kind.to_string(),
+                    message: format!(
+                        "{descriptor} (tcp connect to {addr} timed out after {} ms)",
+                        PEER_TCP_TIMEOUT.as_millis()
+                    ),
+                },
+                None,
+            );
+        }
+    }
+
+    // Stage 2: Agent Card fetch. Process is running; question is
+    // whether the well-known endpoint is healthy.
     let probe = client.discover_at(endpoint, override_url);
     match timeout(PEER_PROBE_TIMEOUT, probe).await {
         Ok(Ok(card)) => (
@@ -732,15 +825,18 @@ async fn probe_peer(
         ),
         Ok(Err(e)) => (
             PeerStatusDto {
-                kind: "unreachable".to_string(),
-                message: format!("{e}"),
+                kind: "unhealthy".to_string(),
+                message: format!("agent-card fetch failed: {e}"),
             },
             None,
         ),
         Err(_) => (
             PeerStatusDto {
-                kind: "unreachable".to_string(),
-                message: format!("timeout after {} ms", PEER_PROBE_TIMEOUT.as_millis()),
+                kind: "unhealthy".to_string(),
+                message: format!(
+                    "agent-card fetch timed out after {} ms",
+                    PEER_PROBE_TIMEOUT.as_millis()
+                ),
             },
             None,
         ),
@@ -1207,6 +1303,58 @@ mod tests {
         assert_eq!(v["ledger_present"], false);
         assert_eq!(v["total_invocations"], 0);
         assert_eq!(v["alive_window_days"], 30);
+    }
+
+    #[tokio::test]
+    async fn probe_peer_classifies_closed_port_as_not_running() {
+        // Bind a TcpListener to grab an unused port, then drop it
+        // immediately so the port is closed when probe_peer runs.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let client = TaskClient::new_http();
+        let endpoint =
+            Url::parse(&format!("http://127.0.0.1:{port}/a2a/v1/")).unwrap();
+        let (status, agent_card) = probe_peer(&client, &endpoint, None).await;
+        assert_eq!(
+            status.kind, "not-running",
+            "closed port should classify as not-running, not '{}' (msg: {})",
+            status.kind, status.message
+        );
+        assert!(
+            status.message.contains(&port.to_string()),
+            "message should mention the port for operator clarity: {}",
+            status.message
+        );
+        assert!(agent_card.is_none());
+    }
+
+    #[tokio::test]
+    async fn probe_peer_classifies_open_port_with_no_handler_as_unhealthy() {
+        // Bind a listener and KEEP it bound — but never accept any
+        // connection. The TCP precheck will succeed (the kernel
+        // accepts incoming connections via the listen backlog), but
+        // the Agent Card fetch will time out because nothing reads
+        // from the socket. This is the canonical "process is up but
+        // not serving the well-known endpoint" signal.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // Hold the listener; never `accept()`. Drop happens at
+        // end of scope after the test body completes.
+
+        let client = TaskClient::new_http();
+        let endpoint =
+            Url::parse(&format!("http://127.0.0.1:{port}/a2a/v1/")).unwrap();
+        let (status, agent_card) = probe_peer(&client, &endpoint, None).await;
+        assert_eq!(
+            status.kind, "unhealthy",
+            "open port with no handler should classify as unhealthy, not '{}'",
+            status.kind
+        );
+        assert!(agent_card.is_none());
+        // Keep listener alive until after the probe completes.
+        drop(listener);
     }
 
     #[tokio::test]

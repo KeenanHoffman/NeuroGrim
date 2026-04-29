@@ -4,10 +4,27 @@
  * Status taxonomy for federation peers. Stringly-typed at the wire
  * (matches the rest of this module's stringly-typed enums) and
  * re-narrowed in TS via a discriminated union.
+ *
+ * The two-stage probe (Phase 2.6.1) splits the old catch-all
+ * `unreachable` into three more specific outcomes so the dashboard
+ * can tell the operator *why* a peer isn't responding:
+ *
+ * - **alive** — Agent Card fetched successfully.
+ * - **not-running** — TCP connection refused. The clearest signal
+ *   that the A2A daemon isn't listening on the declared port.
+ * - **unhealthy** — TCP connected but the Agent Card fetch failed
+ *   or timed out. The process is running but not serving the
+ *   well-known endpoint cleanly.
+ * - **unreachable** — Network-level failure (DNS, no route, etc.)
+ *   or a TCP-connect timeout that wasn't a refusal. Catch-all for
+ *   anything that's not one of the above.
+ * - **unprobed** — subprocess transport (we don't probe those).
+ * - **disabled** — `enabled: false` in the registry.
  */
 export type PeerStatusDto = { 
 /**
- * One of "alive" | "unreachable" | "unprobed" | "disabled".
+ * One of "alive" | "not-running" | "unhealthy" | "unreachable"
+ * | "unprobed" | "disabled".
  */
 kind: string, 
 /**

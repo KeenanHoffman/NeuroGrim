@@ -239,6 +239,15 @@ function TopologyCard({
   );
 }
 
+type StatusAccent =
+  | "self"
+  | "alive"
+  | "not-running"
+  | "unhealthy"
+  | "unreachable"
+  | "unprobed"
+  | "disabled";
+
 interface TopologyNodeProps {
   x: number;
   y: number;
@@ -246,7 +255,7 @@ interface TopologyNodeProps {
   h: number;
   label: string;
   sublabel: string;
-  accent: "self" | "alive" | "unreachable" | "unprobed" | "disabled";
+  accent: StatusAccent;
   selected: boolean;
 }
 
@@ -263,6 +272,11 @@ function TopologyNode({
   const fill = {
     self: "hsl(var(--secondary))",
     alive: "rgb(16 185 129 / 0.12)",
+    // unhealthy: process running but the well-known endpoint is
+    // unresponsive — amber tone matches the "warning" badge variant
+    // we use in the table.
+    unhealthy: "rgb(245 158 11 / 0.12)",
+    "not-running": "rgb(239 68 68 / 0.12)",
     unreachable: "rgb(239 68 68 / 0.12)",
     unprobed: "hsl(var(--muted))",
     disabled: "hsl(var(--muted) / 0.5)",
@@ -270,6 +284,8 @@ function TopologyNode({
   const stroke = {
     self: "hsl(var(--foreground) / 0.6)",
     alive: "rgb(16 185 129)",
+    unhealthy: "rgb(245 158 11)",
+    "not-running": "rgb(239 68 68)",
     unreachable: "rgb(239 68 68)",
     unprobed: "hsl(var(--border))",
     disabled: "hsl(var(--border))",
@@ -385,6 +401,13 @@ function StatusBadge({ peer }: { peer: PeerDto }) {
     switch (peer.status.kind) {
       case "alive":
         return "success" as const;
+      case "unhealthy":
+        // TCP open but the well-known endpoint isn't serving — the
+        // process is up, just not behaving. Warning tone reflects
+        // "something's wrong here, take a look" rather than the
+        // harder "this is offline" of `not-running`.
+        return "warning" as const;
+      case "not-running":
       case "unreachable":
         return "danger" as const;
       case "disabled":
@@ -510,13 +533,15 @@ function FederationSkeleton() {
   );
 }
 
-function statusAccent(
-  p: PeerDto
-): "alive" | "unreachable" | "unprobed" | "disabled" {
+function statusAccent(p: PeerDto): Exclude<StatusAccent, "self"> {
   if (!p.enabled) return "disabled";
   switch (p.status.kind) {
     case "alive":
       return "alive";
+    case "unhealthy":
+      return "unhealthy";
+    case "not-running":
+      return "not-running";
     case "unreachable":
       return "unreachable";
     case "disabled":
@@ -532,6 +557,9 @@ function edgeColor(p: PeerDto): string {
   switch (p.status.kind) {
     case "alive":
       return "rgb(16 185 129 / 0.7)";
+    case "unhealthy":
+      return "rgb(245 158 11 / 0.6)";
+    case "not-running":
     case "unreachable":
       return "rgb(239 68 68 / 0.6)";
     default:
