@@ -126,9 +126,9 @@
   "has_security_policy": false,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T05:57:14.012649500+00:00",
+    "updated_at": "2026-04-29T03:24:10.050879300+00:00",
     "updated_by": "check-security-standards"
   },
   "score": 5,
-  "updated_at": "2026-04-28T05:57:14.012649500+00:00"
+  "updated_at": "2026-04-29T03:24:10.050879300+00:00"
 }

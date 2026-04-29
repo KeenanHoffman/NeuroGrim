@@ -16,11 +16,11 @@
   "ledger_dir_missing": false,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T05:57:21.467896800+00:00",
+    "updated_at": "2026-04-29T03:24:28.726809500+00:00",
     "updated_by": "domain-calibration"
   },
   "open_pending_total": 0,
   "score": 100,
   "triaged_total": 0,
-  "updated_at": "2026-04-28T05:57:21.467896800+00:00"
+  "updated_at": "2026-04-29T03:24:28.726809500+00:00"
 }

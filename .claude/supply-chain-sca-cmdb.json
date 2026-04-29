@@ -6,6 +6,7 @@
   "advisories_accepted": 1,
   "advisories_found": 1,
   "advisories_unaccepted": 0,
+  "confidence": 29,
   "ecosystems_scanned": [
     "crates.io"
   ],
@@ -19,21 +20,21 @@
   ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T06:08:35.927199500+00:00",
+    "updated_at": "2026-04-29T03:24:16.004844400+00:00",
     "updated_by": "supply-chain-sca"
   },
   "osv_cache_bypassed": false,
-  "osv_cache_hits": 0,
-  "osv_live_queries": 363,
-  "osv_oldest_cache_age_seconds": null,
+  "osv_cache_hits": 363,
+  "osv_live_queries": 41,
+  "osv_oldest_cache_age_seconds": 76538,
   "osv_reachable": true,
   "packages_by_ecosystem": {
-    "crates.io": 363
+    "crates.io": 404
   },
   "rustsec_local_unique_hits": 0,
   "rustsec_local_unique_ids": [],
   "score": 100,
   "sensor_status": "ok",
-  "total_packages_scanned": 363,
-  "updated_at": "2026-04-28T06:08:35.927199500+00:00"
+  "total_packages_scanned": 404,
+  "updated_at": "2026-04-29T03:24:16.004844400+00:00"
 }

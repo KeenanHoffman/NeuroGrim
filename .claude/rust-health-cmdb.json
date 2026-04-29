@@ -32,10 +32,10 @@
   "is_rust_project": true,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T05:57:13.450200300+00:00",
+    "updated_at": "2026-04-29T03:24:09.213321400+00:00",
     "updated_by": "check-rust-health"
   },
   "score": 55,
-  "updated_at": "2026-04-28T05:57:13.450200300+00:00",
+  "updated_at": "2026-04-29T03:24:09.213321400+00:00",
   "workspace_path": "neurogrim"
 }

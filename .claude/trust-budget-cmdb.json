@@ -1,6 +1,54 @@
 {
   "findings": [
     {
+      "detail": "`http-body-util` is in `Cargo.lock` but missing from `trust-budget.toml#declared_crates`. Either add it (with an `ecosystem = \"cargo\"`) or, for first-run noise, mark a `seeded = true` entry to suppress (E4-1).",
+      "name": "trust_budget:undeclared:crate:http-body-util",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "`notify` is in `Cargo.lock` but missing from `trust-budget.toml#declared_crates`. Either add it (with an `ecosystem = \"cargo\"`) or, for first-run noise, mark a `seeded = true` entry to suppress (E4-1).",
+      "name": "trust_budget:undeclared:crate:notify",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "`rust-embed` is in `Cargo.lock` but missing from `trust-budget.toml#declared_crates`. Either add it (with an `ecosystem = \"cargo\"`) or, for first-run noise, mark a `seeded = true` entry to suppress (E4-1).",
+      "name": "trust_budget:undeclared:crate:rust-embed",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "`tokio-stream` is in `Cargo.lock` but missing from `trust-budget.toml#declared_crates`. Either add it (with an `ecosystem = \"cargo\"`) or, for first-run noise, mark a `seeded = true` entry to suppress (E4-1).",
+      "name": "trust_budget:undeclared:crate:tokio-stream",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "`tower-http` is in `Cargo.lock` but missing from `trust-budget.toml#declared_crates`. Either add it (with an `ecosystem = \"cargo\"`) or, for first-run noise, mark a `seeded = true` entry to suppress (E4-1).",
+      "name": "trust_budget:undeclared:crate:tower-http",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "`ts-rs` is in `Cargo.lock` but missing from `trust-budget.toml#declared_crates`. Either add it (with an `ecosystem = \"cargo\"`) or, for first-run noise, mark a `seeded = true` entry to suppress (E4-1).",
+      "name": "trust_budget:undeclared:crate:ts-rs",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "`walkdir` is in `Cargo.lock` but missing from `trust-budget.toml#declared_crates`. Either add it (with an `ecosystem = \"cargo\"`) or, for first-run noise, mark a `seeded = true` entry to suppress (E4-1).",
+      "name": "trust_budget:undeclared:crate:walkdir",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
+      "detail": "`webbrowser` is in `Cargo.lock` but missing from `trust-budget.toml#declared_crates`. Either add it (with an `ecosystem = \"cargo\"`) or, for first-run noise, mark a `seeded = true` entry to suppress (E4-1).",
+      "name": "trust_budget:undeclared:crate:webbrowser",
+      "points": 0,
+      "status": "neutral"
+    },
+    {
       "detail": "`py` is invoked from `scripts/*.sh|ps1` but missing from `trust-budget.toml#declared_shell_outs`. Either declare it or remove the invocation.",
       "name": "trust_budget:undeclared:shell_out:py",
       "points": 0,
@@ -15,13 +63,13 @@
   ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T05:57:22.537598300+00:00",
+    "updated_at": "2026-04-29T03:24:29.437076700+00:00",
     "updated_by": "trust-budget"
   },
-  "score": 96,
+  "score": 80,
   "trust_budget_breakdown": {
     "actual": {
-      "crate_count": 36,
+      "crate_count": 44,
       "crates": [
         "anyhow",
         "async-trait",
@@ -34,12 +82,15 @@
         "filetime",
         "flate2",
         "futures",
+        "http-body-util",
         "jsonschema",
+        "notify",
         "proptest",
         "rand",
         "reqwest",
         "rmcp",
         "rusqlite",
+        "rust-embed",
         "schemars",
         "semver",
         "serde",
@@ -52,12 +103,17 @@
         "thiserror",
         "tiktoken-rs",
         "tokio",
+        "tokio-stream",
         "toml",
         "tower",
+        "tower-http",
         "tracing",
         "tracing-subscriber",
+        "ts-rs",
         "url",
         "uuid",
+        "walkdir",
+        "webbrowser",
         "yarn-lock-parser"
       ],
       "service_count": 20,
@@ -303,5 +359,5 @@
       ]
     }
   },
-  "updated_at": "2026-04-28T05:57:22.537598300+00:00"
+  "updated_at": "2026-04-29T03:24:29.437076700+00:00"
 }

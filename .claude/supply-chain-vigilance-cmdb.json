@@ -1,5 +1,6 @@
 {
   "_impl_status": "E-SC-5 (Layer 2 vigilance): all 7 sub-sensors active. typosquat + publish-cadence + maintainer-delta + transitive-surface + signature-gap + binary-reproducibility + exfil-indicator. Registry-metadata 7-day file cache. NO external scanner binaries. Default weight 0.0 (advisory) per spec §16.3.",
+  "confidence": 84,
   "ecosystems_scanned": [
     "crates.io"
   ],
@@ -14,6 +15,18 @@
       "detail": "typosquat-proximity [bit-vec@0.6.3, crates.io] (candidate_typosquat_target=\"bitvec\", levenshtein_distance=1) — name is one edit from popular package 'bitvec' (ecosystem: crates.io)",
       "name": "typosquat-proximity:crates.io:bit-vec",
       "points": 25,
+      "status": "warning"
+    },
+    {
+      "detail": "typosquat-proximity [inotify@0.9.6, crates.io] (candidate_typosquat_target=\"notify\", levenshtein_distance=1) — name is one edit from popular package 'notify' (ecosystem: crates.io)",
+      "name": "typosquat-proximity:crates.io:inotify",
+      "points": 25,
+      "status": "warning"
+    },
+    {
+      "detail": "publish-cadence-post-dormancy [axum-macros@0.4.2, crates.io] (dormancy_days=467, dormancy_threshold_days=365, post_dormancy_version=\"0.5.1\", recent_window_days=30) — release after 467-day dormancy",
+      "name": "publish-cadence-post-dormancy:crates.io:axum-macros",
+      "points": 15,
       "status": "warning"
     },
     {
@@ -85,28 +98,28 @@
   ],
   "findings_by_kind": {
     "publish-cadence-acceleration": 3,
-    "publish-cadence-post-dormancy": 5,
+    "publish-cadence-post-dormancy": 6,
     "signature-gap": 3,
-    "typosquat-proximity": 2
+    "typosquat-proximity": 3
   },
-  "findings_total": 13,
+  "findings_total": 15,
   "lockfile_parse_errors": [],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T06:09:15.012439300+00:00",
+    "updated_at": "2026-04-29T03:24:28.347379400+00:00",
     "updated_by": "supply-chain-vigilance"
   },
   "packages_by_ecosystem": {
-    "crates.io": 363
+    "crates.io": 404
   },
   "registry_cache_bypassed": false,
-  "registry_cache_hits": 0,
+  "registry_cache_hits": 319,
   "registry_client_error": null,
-  "registry_live_queries": 319,
-  "registry_oldest_cache_age_seconds": null,
+  "registry_live_queries": 39,
+  "registry_oldest_cache_age_seconds": 76543,
   "registry_unreachable_ecosystems": [],
   "score": 0,
-  "total_packages_scanned": 363,
-  "updated_at": "2026-04-28T06:09:15.012439300+00:00",
+  "total_packages_scanned": 404,
+  "updated_at": "2026-04-29T03:24:28.347379400+00:00",
   "vigilance_reachable": true
 }

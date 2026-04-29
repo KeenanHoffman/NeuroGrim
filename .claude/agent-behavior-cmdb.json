@@ -1,7 +1,7 @@
 {
   "findings": [
     {
-      "detail": "expected ..\\.claude\\agent-behavior-scenarios; author scenarios per LSP-Brains spec §15.2",
+      "detail": "expected D:/Brains/NeuroGrim\\.claude\\agent-behavior-scenarios; author scenarios per LSP-Brains spec §15.2",
       "name": "scenarios_dir",
       "points": -100,
       "status": "missing"
@@ -9,9 +9,9 @@
   ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T05:57:16.280321100+00:00",
+    "updated_at": "2026-04-29T03:24:10.878141200+00:00",
     "updated_by": "cast-agent-behavior"
   },
   "score": 0,
-  "updated_at": "2026-04-28T05:57:16.280321100+00:00"
+  "updated_at": "2026-04-29T03:24:10.878141200+00:00"
 }

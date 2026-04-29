@@ -3,42 +3,42 @@
     {
       "id": "self",
       "path": "\\\\?\\D:\\Brains\\NeuroGrim",
-      "skill_count": 20
+      "skill_count": 22
     },
     {
       "id": "Brains",
       "path": "\\\\?\\D:\\Brains",
-      "skill_count": 19
+      "skill_count": 21
     },
     {
       "id": "LSP-Brains",
       "path": "\\\\?\\D:\\Brains\\LSP-Brains",
-      "skill_count": 2
+      "skill_count": 4
     },
     {
       "id": "NeuroGrim-python-starter",
       "path": "\\\\?\\D:\\Brains\\NeuroGrim\\NeuroGrim-python-starter",
-      "skill_count": 0
+      "skill_count": 2
     }
   ],
-  "brains_discovered": 3,
+  "brains_discovered": 4,
   "drift_count": 0,
   "drift_details": [],
   "findings": [
     {
-      "detail": "17 duplicated basename(s) across 3 brain(s); all byte-identical.",
+      "detail": "19 duplicated basename(s) across 4 brain(s); all byte-identical.",
       "name": "all-duplicates-in-sync",
       "points": 0,
       "status": "ok"
     }
   ],
-  "in_sync_count": 17,
+  "in_sync_count": 19,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T05:57:16.955825100+00:00",
+    "updated_at": "2026-04-29T03:24:11.097011100+00:00",
     "updated_by": "skill-coherence"
   },
   "score": 100,
-  "total_duplicated_basenames": 17,
-  "updated_at": "2026-04-28T05:57:16.955825100+00:00"
+  "total_duplicated_basenames": 19,
+  "updated_at": "2026-04-29T03:24:11.097011100+00:00"
 }

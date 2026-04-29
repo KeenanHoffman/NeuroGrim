@@ -1,26 +1,173 @@
 {
   "_impl_status": "E-SC-6 (Layer 3 review framework): supply-chain-auditor hat + decision-ledger writer + review-ticket file format + supply-chain-review CMDB sensor + auto-create from Layer 2 vigilance findings + CLI (sca-review create/list/resolve). Default weight 0.0 (advisory) per spec §16.4. v1 score model: 100 - 10 × open_tickets. Calibration: E-SC-8.",
   "decision_kinds_seen": {
-    "review-pending": 1,
+    "review-pending": 16,
     "review-triaged": 1
   },
-  "findings": [],
+  "findings": [
+    {
+      "detail": "Layer 3 review pending — adler2@2.0.1 [crates.io], signals: vigilance:typosquat-proximity — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0001",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — bit-vec@0.6.3 [crates.io], signals: vigilance:typosquat-proximity — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0002",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — fastrand@2.4.1 [crates.io], signals: vigilance:publish-cadence-acceleration — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0003",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — fastrand@2.4.1 [crates.io], signals: vigilance:publish-cadence-post-dormancy — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0004",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — fraction@0.13.1 [crates.io], signals: vigilance:publish-cadence-post-dormancy — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0005",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — hyper-rustls@0.27.9 [crates.io], signals: vigilance:publish-cadence-acceleration — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0006",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — pkg-config@0.3.33 [crates.io], signals: vigilance:publish-cadence-post-dormancy — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0007",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — toml_parser@1.1.2+spec-1.1.0 [crates.io], signals: vigilance:publish-cadence-acceleration — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0008",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — zerofrom@0.1.7 [crates.io], signals: vigilance:publish-cadence-post-dormancy — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0009",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — zerofrom-derive@0.1.7 [crates.io], signals: vigilance:publish-cadence-post-dormancy — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0010",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — iana-time-zone@0.1.65 [crates.io], signals: vigilance:signature-gap — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0011",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — pin-project-lite@0.2.17 [crates.io], signals: vigilance:signature-gap — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0012",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — rand@0.9.3 [crates.io], signals: vigilance:signature-gap — opened by auto on 2026-04-28",
+      "name": "open-ticket:t-2026-04-28-0013",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — inotify@0.9.6 [crates.io], signals: vigilance:typosquat-proximity — opened by auto on 2026-04-29",
+      "name": "open-ticket:t-2026-04-29-0001",
+      "points": 10,
+      "status": "warning"
+    },
+    {
+      "detail": "Layer 3 review pending — axum-macros@0.4.2 [crates.io], signals: vigilance:publish-cadence-post-dormancy — opened by auto on 2026-04-29",
+      "name": "open-ticket:t-2026-04-29-0002",
+      "points": 10,
+      "status": "warning"
+    }
+  ],
   "latest_decision_per_package": {
     "PyPI:litellm": {
       "kind": "review-triaged",
       "ts": 1777228705.6522796
+    },
+    "crates.io:adler2": {
+      "kind": "review-pending",
+      "ts": 1777356554.8762472
+    },
+    "crates.io:axum-macros": {
+      "kind": "review-pending",
+      "ts": 1777433068.3454494
+    },
+    "crates.io:bit-vec": {
+      "kind": "review-pending",
+      "ts": 1777356554.8839087
+    },
+    "crates.io:fastrand": {
+      "kind": "review-pending",
+      "ts": 1777356554.889624
+    },
+    "crates.io:fraction": {
+      "kind": "review-pending",
+      "ts": 1777356554.891822
+    },
+    "crates.io:hyper-rustls": {
+      "kind": "review-pending",
+      "ts": 1777356554.9056349
+    },
+    "crates.io:iana-time-zone": {
+      "kind": "review-pending",
+      "ts": 1777356554.960961
+    },
+    "crates.io:inotify": {
+      "kind": "review-pending",
+      "ts": 1777433068.343803
+    },
+    "crates.io:pin-project-lite": {
+      "kind": "review-pending",
+      "ts": 1777356554.9639318
+    },
+    "crates.io:pkg-config": {
+      "kind": "review-pending",
+      "ts": 1777356554.9119742
+    },
+    "crates.io:rand": {
+      "kind": "review-pending",
+      "ts": 1777356554.9792745
+    },
+    "crates.io:toml_parser": {
+      "kind": "review-pending",
+      "ts": 1777356554.914683
+    },
+    "crates.io:zerofrom": {
+      "kind": "review-pending",
+      "ts": 1777356554.917132
+    },
+    "crates.io:zerofrom-derive": {
+      "kind": "review-pending",
+      "ts": 1777356554.9446318
     }
   },
-  "ledger_entries_total": 2,
+  "ledger_entries_total": 17,
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-04-28T05:57:20.693435100+00:00",
+    "updated_at": "2026-04-29T03:24:28.545810+00:00",
     "updated_by": "supply-chain-review"
   },
-  "score": 100,
+  "score": 0,
   "score_model": "open-ticket-count-v1",
-  "tickets_open": 0,
+  "tickets_open": 15,
   "tickets_resolved_total": 1,
-  "tickets_total": 1,
-  "updated_at": "2026-04-28T05:57:20.693435100+00:00"
+  "tickets_total": 16,
+  "updated_at": "2026-04-29T03:24:28.545810+00:00"
 }
