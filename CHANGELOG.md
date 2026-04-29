@@ -4,6 +4,136 @@ All notable changes to NeuroGrim + the LSP Brains specification live
 here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+*v4.0 — Ship Without Surprise — the structured pre-publish pipeline.
+Replaces the v3.x "manual operator review + `methodology_drift` test
+only" posture with a declarative gate manifest, a runner CLI that
+executes gates in declared order, a per-gate JSONL ledger, a
+read-only dashboard surface, and a Playwright E2E foundation.
+NeuroGrim itself starts going through this pipeline at v4.0 (see
+`roadmap/v4.0-publish-process.md`).*
+
+### Added — slow-benchmark surgery (S12-G-1)
+
+Two `crates/neurogrim-cli/tests/context_overhead.rs` benchmarks
+(`b10_phase1_four_brain_sweep`, `b10_phase1p5_description_only_measurement`)
+moved behind `#[ignore]`. Workspace test runtime drops from ~218s
+to ~29s warm cache (96s cold). Run the slow ones with `neurogrim
+test --slow` (passes `--include-ignored` to cargo). Snapshot at
+`roadmap/data/test-runtime-baseline.txt`.
+
+### Added — `neurogrim test` quiet wrapper (S12-G-2)
+
+New CLI subcommand wrapping `cargo test --workspace --all-targets`.
+Suppresses success spam, prints failures inline, appends one JSONL
+entry per failure to `<project>/.claude/brain/test-failures.jsonl`,
+mirrors cargo's exit code. Flags: `--keep-last N` (rotate older
+entries to archive), `--show-only-new` (diff against prior run),
+`--retry-failed` (replay only the most recent failure batch),
+`--slow` (include `#[ignore]`d tests), `--verbose` (bypass parser),
+`--e2e` (S12-G-5 — invoke the Playwright suite instead of cargo).
+
+### Added — `publish-gates.yaml` schema + doctor validation (S12-G-3)
+
+New manifest format at `<brain>/.claude/brain/publish-gates.yaml`
+declaring publish gates by `gate_type` (`automated` / `manual` /
+`e2e`). Schema-versioned (Draft-07 JSON Schema vendored at
+`crates/neurogrim-mcp/data/schemas/publish-gates-v1.schema.json`).
+Closed vocabulary: kebab-case `id` pattern, `additionalProperties:
+false` at every level, `if/then` rules for type-specific required
+fields, timeout bounded 1–3600s. Validated by `neurogrim doctor`
+(new check 8); missing manifest is silent during v4.0 rollout
+(opt-in posture for adopters); malformed manifest emits one Error
+finding per validation issue. Typed Rust view `PublishGatesConfig`
+exported from `neurogrim_mcp::publish_gates` for downstream
+consumers.
+
+### Added — `neurogrim publish-gate {run,ack}` CLI (S12-G-4)
+
+Load-bearing v4.0 CLI. `run` executes the manifest's gates in
+declared order, prints per-gate outcomes, and appends one JSONL
+entry per gate to `<brain>/.claude/brain/publish-gate-ledger.jsonl`.
+`ack` marks the most recent `pending` entry for a manual gate as
+passed by an operator. Exit code precedence: failed > pending >
+passed (0 = all blocking passed, 1 = any blocking failed/timed_out/
+errored, 2 = any blocking pending and none failed). Non-blocking
+gate failures recorded but never drive exit. Mode filter (heuristic
+in v1; schema v2 will introduce explicit per-gate mode tags):
+pre-commit = automated gates with `timeout_seconds ≤ 30`;
+pre-publish = all `blocking: true` gates; full = every gate.
+`--gate <id>` overrides mode. Operator handle resolution:
+`--operator` flag → `$NEUROGRIM_OPERATOR` env → reject (no
+"unknown" fallback per spec §17.6 audit-rationale discipline).
+Stdout/stderr captured per gate (truncated to 4 KB head + 4 KB
+tail with `…[truncated N bytes]…` marker, keeping typical entries
+under PIPE_BUF for `O_APPEND` atomicity).
+
+### Added — Playwright E2E foundation (S12-G-5)
+
+New `crates/neurogrim-dashboard/frontend/e2e/` directory with
+`playwright.config.ts` (chromium-only, sequential workers,
+`globalTimeout: 180_000` enforcing the 3-minute S12 invariant).
+Three smoke specs ship green: `overview-loads.spec.ts`,
+`federation-page.spec.ts`, `layout-edit.spec.ts` (canary for the
+v3.5 React #310 federation crash class). The webServer block
+spawns a fresh `target/debug/neurogrim ui` instance on port 17345
+mounted at NeuroGrim's brain registry. `e2e` gate type in
+`publish-gates.yaml` runs the suite via `npx playwright test`;
+adopters without the dashboard frontend get a clear "use
+`automated` instead" error.
+
+### Added — Manual gate UI surface (S12-G-6)
+
+Read-only dashboard page at `/brains/:id/publish-gates` joining the
+manifest with the ledger. Renders gate table with status badges
+(passed / failed / pending / timed_out / deferred / error / no_runs)
++ recent-activity timeline (last 50 entries). Backed by new
+`GET /api/brains/:brain_id/publish-gates` API endpoint.
+AppShell nav link with `GitMerge` icon. CLI side: `--interactive`
+flag on `run` enables inline y/N prompting for manual gates (auto-
+detected via `IsTerminal` when neither `--interactive` nor
+`--no-interactive` is passed); 'y' + resolvable operator = inline
+ack; everything else falls through to the existing async pending
+flow, preserving the CI-friendly path.
+
+### Added — NeuroGrim self-hosting (S12-G-7)
+
+NeuroGrim's own publish pipeline declared at
+`.claude/brain/publish-gates.yaml` with 7 gates: `doctor-clean`,
+`tests-pass`, `cargo-publish-dryrun`, `changelog-dated`,
+`e2e-smoke`, `review-changelog`, `dashboard-renders-locally`. v4.0
+itself ships through this pipeline as the first dogfood pass.
+Publish process documented at `roadmap/v4.0-publish-process.md`.
+
+### Added — 12th explain topic
+
+`neurogrim explain publish-gates` covers the gate pipeline end to
+end: gate types, manifest schema, runner CLI, ledger schema, mode
+filter, ack flow, e2e setup, adopter onboarding.
+
+### Changed — v4.0+ NeuroGrim publishes go through `publish-gate run`
+
+Starting with v4.0, every NeuroGrim release is gated on a clean
+`neurogrim publish-gate run` from the repo root. The runbook lives
+at `roadmap/v4.0-publish-process.md`; the gate manifest at
+`.claude/brain/publish-gates.yaml`. Adopters are NOT required to
+adopt the same posture — `neurogrim doctor`'s `check_publish_gates`
+treats a missing manifest as silent (opt-in during rollout).
+
+### Architectural decisions baked in
+
+These were locked via the 2026-04-29 four-question + follow-up
+conversation, documented at the top of each epic file:
+
+- Hard gates default-on (single-adopter reality; `--enforce-autonomy`
+  reserved as future escape hatch, not default-off opt-in).
+- Schema v2 will add per-gate mode tags; v1 mode filter is
+  heuristic only.
+- e2e gates are NeuroGrim-internal in v1 (run the bundled Playwright
+  suite); adopters with their own browser tooling should use
+  `automated` gate type.
+
 ## [3.5.0] - 2026-04-29
 
 *Bind & Run — per-project random port allocation + dashboard service

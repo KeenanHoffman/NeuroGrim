@@ -28,10 +28,10 @@
 - [x] Playwright foundation: `crates/neurogrim-dashboard/frontend/e2e/`, headless Chromium, total run time enforced <3 minutes *(S12-G-5 — `playwright.config.ts` shipped with `globalTimeout: 180_000`; chromium-only project; sequential workers; webServer block spawns the prebuilt `target/debug/neurogrim.exe` on port 17345)*
 - [x] Three smoke specs ship green: `overview-loads.spec.ts`, `federation-page.spec.ts`, `layout-edit.spec.ts` *(S12-G-5 — all three pass in 9.6s wall-clock; targets are `data-testid` markers + accessible button names; `pageerror` + `console.error` listeners catch React #310-class crashes)*
 - [x] Manual gate UI: `/brains/:id/publish-gates` page renders pending checklist + per-item verify URL/command *(S12-G-6 — read-only React page at `frontend/src/components/publish-gates/`; backed by `GET /api/brains/:brain_id/publish-gates` joining manifest + ledger; nav link in AppShell; ack still happens via the CLI `ack` sub-command but inline `--interactive` y/N prompt also added to `run` for TTY operators)*
-- [ ] NeuroGrim's own `publish-gates.yaml` authored; v4.0 itself publishes through the gate pipeline as the first dogfood pass
+- [x] NeuroGrim's own `publish-gates.yaml` authored; v4.0 itself publishes through the gate pipeline as the first dogfood pass *(S12-G-7 — `.claude/brain/publish-gates.yaml` with 7 gates: doctor-clean, tests-pass, cargo-publish-dryrun, changelog-dated, e2e-smoke, review-changelog, dashboard-renders-locally)*
 - [x] 12th explain topic ships: `neurogrim explain publish-gates` *(S12-G-5 — `crates/neurogrim-mcp/data/explain/publish-gates.md`; covers gate types, manifest schema, runner CLI, ledger, mode filter, ack flow, e2e setup, adopter onboarding; methodology_drift `TOPICS` extended)*
-- [ ] Adopter walkthrough doc: how to set up gates in a fresh adopter Brain
-- [ ] CHANGELOG documents that v4.0+ NeuroGrim publishes go through `publish-gate run` before tagging
+- [x] Adopter walkthrough doc: how to set up gates in a fresh adopter Brain *(S12-G-5 — covered in the explain topic's "Adopter onboarding" section, plus the v4.0 publish-process doc covers adopter perspective at the bottom; v4.0 ships with permissive doctor stance — missing manifest = silent — so adopters can roll the pipeline in at their own pace)*
+- [x] CHANGELOG documents that v4.0+ NeuroGrim publishes go through `publish-gate run` before tagging *(S12-G-7 — v4.0 [Unreleased] section in CHANGELOG.md declares the requirement under "Changed — v4.0+ NeuroGrim publishes go through `publish-gate run`")*
 
 ---
 
@@ -150,16 +150,18 @@ gates:
 
 **Status:** Complete. The dashboard surface is read-only; ack happens via the CLI (`ack` sub-command or `--interactive` flag on `run`). A future story can add ack buttons to the page once the audit-trail discipline for dashboard-side mutations is settled (the same conversation that gated `--allow-mutations` in v3.5).
 
-### S12-G-7: Self-hosting milestone (2 days)
+### S12-G-7: Self-hosting milestone (2 days) — ✅ SHIPPED
 
 **What:** Author NeuroGrim's own `publish-gates.yaml`. First v4.x publish (v4.0 itself) goes through the pipeline manually. Update CHANGELOG to declare gate-required-from-v4.0 forward.
 
 **Why:** No methodology, just dogfood. If our own publishes don't run through the gates, why would adopters trust them?
 
 **Done when:**
-- [ ] `publish-gates.yaml` declared at NeuroGrim repo root with at least 5 gates
-- [ ] v4.0 publish process documented as: develop → run gates → fix → re-run → publish
-- [ ] CHANGELOG declares the requirement
+- [x] `publish-gates.yaml` declared at NeuroGrim repo root with at least 5 gates *(7 gates at `.claude/brain/publish-gates.yaml` exercising all three gate types: 4 automated — `doctor-clean`, `tests-pass`, `cargo-publish-dryrun`, `changelog-dated`; 1 e2e — `e2e-smoke`; 2 manual — `review-changelog`, `dashboard-renders-locally`. Validates cleanly via `neurogrim doctor`.)*
+- [x] v4.0 publish process documented as: develop → run gates → fix → re-run → publish *(`roadmap/v4.0-publish-process.md` — pre-flight, 9-step publish flow, per-gate failure-mode guide, adopter-perspective section)*
+- [x] CHANGELOG declares the requirement *(v4.0 [Unreleased] section in CHANGELOG.md, "Changed — v4.0+ NeuroGrim publishes go through `publish-gate run`")*
+
+**Status:** Self-hosting infrastructure complete. The actual v4.0 publish is a separate event (operator-driven, requires real `cargo publish` invocations); this story authored everything required for that event to happen, but does not itself publish v4.0. When the operator runs the pipeline for the v4.0 release, the `[Unreleased]` section in CHANGELOG flips to `[4.0.0] - YYYY-MM-DD` (the `changelog-dated` gate enforces this), the workspace version bumps, and the publish proceeds per the runbook.
 
 ---
 

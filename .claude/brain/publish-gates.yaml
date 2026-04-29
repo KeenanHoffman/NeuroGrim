@@ -1,0 +1,123 @@
+# NeuroGrim's own publish gates (v4.0 S12-G-7).
+#
+# Every v4.0+ NeuroGrim release goes through this pipeline before
+# tagging. The CHANGELOG entry for v4.0 declares the requirement
+# from this version forward.
+#
+# Run order (declared sequentially; runner honors order):
+#   1. doctor-clean      — catches misconfiguration before anything slow
+#   2. tests-pass        — cheap relative to e2e; fails fast
+#   3. cargo-publish-dryrun — verifies every crate is publishable
+#   4. changelog-dated   — release-eve check
+#   5. e2e-smoke         — Playwright dashboard suite
+#   6. review-changelog  — operator confirms the changelog is honest
+#   7. dashboard-renders-locally — operator confirms a smoke pass on the
+#                                  running v4.x dashboard
+#
+# Three gates are blocking-automated, two are blocking-manual, and
+# one is blocking-e2e. None are advisory — v4.0 ships with the
+# "hard gates default-on" posture from the 2026-04-29 architecture
+# conversation (single-adopter reality; operator can override per-run
+# if needed).
+#
+# Validation: `neurogrim doctor` checks this file against
+# `publish-gates-v1.schema.json` (S12-G-3). Run a dry-pass with
+# `neurogrim publish-gate run` from the repo root.
+schema_version: "1"
+gates:
+  - id: doctor-clean
+    gate_type: automated
+    description: "`neurogrim doctor` reports no errors on the registry + culture + publish-gates manifest (warnings allowed)"
+    blocking: true
+    timeout_seconds: 60
+    # Wrapper script flattens doctor's 0/1/2 exit semantics into
+    # gate-pass/fail (warnings OK, errors not). See the script's
+    # header for why; expected to become redundant once the
+    # rust-health advisory orphan is closed.
+    check_command: "bash scripts/gates/doctor-clean.sh"
+
+  - id: tests-pass
+    gate_type: automated
+    description: All workspace tests green via the v4.0 quiet wrapper
+    blocking: true
+    timeout_seconds: 600
+    # The Cargo workspace lives at <repo>/neurogrim/; the brain
+    # lives at <repo>/.claude/. cd into the workspace so cargo
+    # finds Cargo.toml; pass --project-root .. so the failure
+    # ledger lands in the repo's brain dir alongside the
+    # publish-gate ledger.
+    check_command: "cd neurogrim && neurogrim test --project-root .."
+
+  - id: cargo-publish-dryrun
+    gate_type: automated
+    description: Every published crate can be packaged (no missing files, no version conflicts)
+    blocking: true
+    timeout_seconds: 600
+    # Run from the workspace root. Stops at the first failure. v4.x
+    # publishes are gated on every crate publishing cleanly.
+    check_command: "cd neurogrim && cargo publish --dry-run -p neurogrim-core && cargo publish --dry-run -p neurogrim-sensory && cargo publish --dry-run -p neurogrim-mcp && cargo publish --dry-run -p neurogrim-a2a && cargo publish --dry-run -p neurogrim-ecosystem && cargo publish --dry-run -p neurogrim-dashboard && cargo publish --dry-run -p neurogrim-cli"
+
+  - id: changelog-dated
+    gate_type: automated
+    description: "CHANGELOG's [Unreleased] section has been converted to a date-stamped release header"
+    blocking: true
+    timeout_seconds: 10
+    # Looks for a release header with a 4-digit year. Catches the
+    # most common pre-publish slip — forgetting to flip [Unreleased]
+    # to [vX.Y.Z] - YYYY-MM-DD before tagging.
+    check_command: "grep -E '^## \\[[0-9]+\\.[0-9]+\\.[0-9]+\\] - 20[0-9]{2}-[0-9]{2}-[0-9]{2}' CHANGELOG.md"
+
+  - id: e2e-smoke
+    gate_type: e2e
+    description: Playwright dashboard suite — overview, federation, layout-edit, publish-gates page
+    blocking: true
+    timeout_seconds: 240
+
+  - id: review-changelog
+    gate_type: manual
+    description: Operator confirms the CHANGELOG accurately summarizes what shipped
+    operator_required: true
+    instructions: |
+      Read the [Unreleased] (or newly-dated) section of CHANGELOG.md
+      against `git log <prev-tag>..HEAD`.
+
+      Confirm:
+        1. Every commit since the previous tag is reflected in the
+           changelog (or deliberately collapsed under a higher-level
+           bullet).
+        2. Breaking changes are flagged in a "Breaking" subsection.
+        3. The version number bumped follows semver:
+           - patch for fixes-only
+           - minor for additive features
+           - major for breaking changes
+        4. No internal-only refactors leak into adopter-visible
+           bullets that mislead about scope.
+
+  - id: dashboard-renders-locally
+    gate_type: manual
+    description: Operator launches the dashboard against this branch's binary and clicks through every nav item
+    operator_required: true
+    instructions: |
+      Build a fresh binary and launch the dashboard against
+      NeuroGrim's own brain registry:
+
+        cd crates/neurogrim-dashboard/frontend && npm run build && cd ../../..
+        cargo build --bin neurogrim
+        ./target/debug/neurogrim ui --port 8420 \
+          --bind 127.0.0.1 \
+          --no-browser \
+          --allow-mutations \
+          --registry ../.claude/brain-registry.json
+
+      Then visit each nav item and confirm it renders without
+      console errors:
+        - http://127.0.0.1:8420/                            (Overview)
+        - http://127.0.0.1:8420/brains/<id>/domains         (Domains)
+        - http://127.0.0.1:8420/brains/<id>/federation      (Federation)
+        - http://127.0.0.1:8420/brains/<id>/skills          (Skills)
+        - http://127.0.0.1:8420/brains/<id>/publish-gates   (this page)
+
+      The Playwright suite covers the smoke version of this; the
+      manual gate exists because an operator's eyes catch
+      regressions Playwright misses (visual layout, color contrast,
+      icon misalignment, keyboard focus order).
