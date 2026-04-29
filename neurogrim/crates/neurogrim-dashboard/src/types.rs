@@ -443,11 +443,25 @@ pub struct SkillDto {
     /// None when never invoked or no ledger.
     pub last_invoked_at: Option<String>,
     /// Total invocation count from the ledger (all time, not windowed).
+    /// Sum of hard + soft.
     pub invocation_count: u32,
     /// Invocations in the alive_window. Used to drive the
     /// alive/dead/new classification and shown in the table for
-    /// at-a-glance freshness.
+    /// at-a-glance freshness. Sum of hard + soft.
     pub recent_invocation_count: u32,
+    /// "Hard" invocations: explicit `Skill` tool calls (slash
+    /// commands or `Skill(name=...)`). All-time.
+    pub hard_invocations: u32,
+    /// "Soft" invocations: agent reads of the SKILL.md file via
+    /// the Read tool. All-time. Captures the more common usage
+    /// pattern where an agent follows skill guidance without
+    /// going through the Skill tool. Schema-1 ledger entries
+    /// (pre-soft tracking) are counted as hard.
+    pub soft_invocations: u32,
+    /// Hard invocations within the alive_window.
+    pub recent_hard_invocations: u32,
+    /// Soft invocations within the alive_window.
+    pub recent_soft_invocations: u32,
     /// One of "alive" | "dead" | "new" | "no-ledger".
     /// - alive: at least one invocation in the alive_window
     /// - dead: invocations exist but none in the alive_window

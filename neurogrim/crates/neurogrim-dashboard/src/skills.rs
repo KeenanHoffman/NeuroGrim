@@ -59,9 +59,32 @@ pub fn scan(project_root: &Path, now: DateTime<Utc>) -> SkillScan {
         .map(|raw| {
             let stats = per_skill.get(&raw.skill_id);
             let invocation_count = stats.map(|s| s.total_count).unwrap_or(0);
+            let hard_count = stats.map(|s| s.hard_count).unwrap_or(0);
+            let soft_count = stats.map(|s| s.soft_count).unwrap_or(0);
             let last_invoked_at = stats.and_then(|s| s.last_invoked).map(|t| t.to_rfc3339());
             let recent_invocation_count = stats
-                .map(|s| s.invocations.iter().filter(|t| **t >= alive_cutoff).count() as u32)
+                .map(|s| {
+                    s.invocations
+                        .iter()
+                        .filter(|(t, _)| *t >= alive_cutoff)
+                        .count() as u32
+                })
+                .unwrap_or(0);
+            let recent_hard_count = stats
+                .map(|s| {
+                    s.invocations
+                        .iter()
+                        .filter(|(t, k)| *t >= alive_cutoff && *k == InvocationSubtype::Hard)
+                        .count() as u32
+                })
+                .unwrap_or(0);
+            let recent_soft_count = stats
+                .map(|s| {
+                    s.invocations
+                        .iter()
+                        .filter(|(t, k)| *t >= alive_cutoff && *k == InvocationSubtype::Soft)
+                        .count() as u32
+                })
                 .unwrap_or(0);
             let hygiene_status = classify(
                 ledger_present,
@@ -79,6 +102,10 @@ pub fn scan(project_root: &Path, now: DateTime<Utc>) -> SkillScan {
                 last_invoked_at,
                 invocation_count,
                 recent_invocation_count,
+                hard_invocations: hard_count,
+                soft_invocations: soft_count,
+                recent_hard_invocations: recent_hard_count,
+                recent_soft_invocations: recent_soft_count,
                 hygiene_status,
             }
         })
@@ -287,15 +314,36 @@ fn extract_legacy_description(body: &str) -> String {
     paragraph.join(" ")
 }
 
+/// Invocation subtype as recorded in the ledger.
+///
+/// - `Hard` — explicit `Skill` tool calls. The original signal.
+/// - `Soft` — agent reads of a SKILL.md file via the Read tool.
+///   Captures the more common pattern where an agent follows
+///   skill guidance directly from the file rather than going
+///   through the Skill tool. Without this signal the ledger
+///   under-counts skill usage by an order of magnitude — agents
+///   typically read 5-50 SKILL.md files per session for every
+///   1 explicit Skill invocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InvocationSubtype {
+    Hard,
+    Soft,
+}
+
 #[derive(Debug, Default)]
 struct SkillStats {
-    /// Total invocations across all time.
+    /// Total invocations across all time, both subtypes.
     total_count: u32,
-    /// Most-recent invocation timestamp.
+    /// Hard invocations (explicit Skill tool calls), all-time.
+    hard_count: u32,
+    /// Soft invocations (Read on SKILL.md), all-time.
+    soft_count: u32,
+    /// Most-recent invocation timestamp (any subtype).
     last_invoked: Option<DateTime<Utc>>,
-    /// Per-invocation timestamps. Retained so we can window-count
-    /// (recent_invocation_count) without a second pass.
-    invocations: Vec<DateTime<Utc>>,
+    /// Per-invocation timestamps + subtypes. Retained so we can
+    /// window-count by subtype (recent_hard / recent_soft) without
+    /// re-reading the ledger.
+    invocations: Vec<(DateTime<Utc>, InvocationSubtype)>,
 }
 
 /// Read the JSONL ledger and return per-skill stats + the total count
@@ -340,10 +388,23 @@ fn read_invocation_ledger(
             Err(_) => continue,
         };
 
+        // Subtype: schema_version 2+ ledgers carry `subtype: "hard"`
+        // or `subtype: "soft"`. Schema 1 entries (and entries with
+        // an unknown subtype) default to `hard` — that matches the
+        // semantics of the original Skill-tool-only hook.
+        let subtype = match parsed.get("subtype").and_then(|v| v.as_str()) {
+            Some("soft") => InvocationSubtype::Soft,
+            _ => InvocationSubtype::Hard,
+        };
+
         total += 1;
         let entry = per_skill.entry(name).or_default();
         entry.total_count += 1;
-        entry.invocations.push(ts);
+        match subtype {
+            InvocationSubtype::Hard => entry.hard_count += 1,
+            InvocationSubtype::Soft => entry.soft_count += 1,
+        }
+        entry.invocations.push((ts, subtype));
         entry.last_invoked = Some(match entry.last_invoked {
             Some(prev) if prev > ts => prev,
             _ => ts,
@@ -544,6 +605,47 @@ mod tests {
         let scan = scan(tmp.path(), fixed_now());
         assert!(!scan.ledger_present);
         assert_eq!(scan.skills[0].hygiene_status, "no-ledger");
+    }
+
+    #[test]
+    fn scan_splits_hard_and_soft_invocations() {
+        let tmp = tempfile::tempdir().unwrap();
+        let skills = tmp.path().join(".claude").join("skills");
+        let brain = tmp.path().join(".claude").join("brain");
+        std::fs::create_dir_all(&skills).unwrap();
+        std::fs::create_dir_all(&brain).unwrap();
+        let dir = skills.join("rubber-duck");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("SKILL.md"),
+            "---\ndescription: Socratic listener.\n---\n",
+        )
+        .unwrap();
+
+        let now = fixed_now();
+        let recent = (now - Duration::days(2)).to_rfc3339();
+        // Mix of subtypes + a schema-1 entry (no subtype field — must
+        // default to hard for backward compat).
+        let ledger = format!(
+            "{{\"schema_version\":\"2\",\"type\":\"skill\",\"subtype\":\"hard\",\"name\":\"rubber-duck\",\"ts\":\"{recent}\"}}\n\
+             {{\"schema_version\":\"2\",\"type\":\"skill\",\"subtype\":\"soft\",\"name\":\"rubber-duck\",\"ts\":\"{recent}\"}}\n\
+             {{\"schema_version\":\"2\",\"type\":\"skill\",\"subtype\":\"soft\",\"name\":\"rubber-duck\",\"ts\":\"{recent}\"}}\n\
+             {{\"schema_version\":\"1\",\"type\":\"skill\",\"name\":\"rubber-duck\",\"ts\":\"{recent}\"}}\n"
+        );
+        std::fs::write(brain.join("invocation-ledger.jsonl"), ledger).unwrap();
+
+        let scan = scan(tmp.path(), now);
+        assert_eq!(scan.skills.len(), 1);
+        let s = &scan.skills[0];
+        assert_eq!(s.invocation_count, 4, "total = hard + soft");
+        assert_eq!(
+            s.hard_invocations, 2,
+            "1 explicit hard + 1 schema-1 (defaults to hard)"
+        );
+        assert_eq!(s.soft_invocations, 2);
+        assert_eq!(s.recent_hard_invocations, 2);
+        assert_eq!(s.recent_soft_invocations, 2);
+        assert_eq!(s.recent_invocation_count, 4);
     }
 
     #[test]

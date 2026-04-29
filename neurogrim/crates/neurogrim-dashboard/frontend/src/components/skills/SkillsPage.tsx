@@ -276,15 +276,18 @@ function SkillRow({
         </TableCell>
         <TableCell className="text-right font-mono text-xs">
           {skill.invocation_count > 0 ? (
-            <>
+            <span
+              title={`${skill.hard_invocations} hard (Skill-tool calls) + ${skill.soft_invocations} soft (SKILL.md reads); ${skill.recent_hard_invocations}h / ${skill.recent_soft_invocations}s within the alive window`}
+            >
               <span className="font-semibold">{skill.invocation_count}</span>
-              {skill.recent_invocation_count > 0 && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  ({skill.recent_invocation_count} recent)
-                </span>
-              )}
-            </>
+              <span className="text-muted-foreground/80">
+                {" ("}
+                {skill.hard_invocations}h
+                {" / "}
+                {skill.soft_invocations}s
+                {")"}
+              </span>
+            </span>
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -310,6 +313,32 @@ function SkillRow({
                   </div>
                   <div className="whitespace-pre-wrap text-foreground/90">
                     {skill.description}
+                  </div>
+                </div>
+              )}
+              {skill.invocation_count > 0 && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Invocations
+                  </div>
+                  <div className="text-xs">
+                    <span className="font-semibold">{skill.invocation_count}</span>{" "}
+                    total ·{" "}
+                    <span title="Hard: explicit Skill-tool calls (slash commands or Skill(name=...)).">
+                      {skill.hard_invocations} hard
+                    </span>{" "}
+                    ·{" "}
+                    <span title="Soft: agent reads of the SKILL.md file via the Read tool. Captures the more common usage pattern where an agent follows skill guidance directly.">
+                      {skill.soft_invocations} soft
+                    </span>
+                    {(skill.recent_hard_invocations > 0 ||
+                      skill.recent_soft_invocations > 0) && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        (recent: {skill.recent_hard_invocations}h /{" "}
+                        {skill.recent_soft_invocations}s)
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

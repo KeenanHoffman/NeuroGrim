@@ -15,6 +15,10 @@ const skill = (overrides: Partial<SkillDto> = {}): SkillDto => ({
   last_invoked_at: "2026-04-27T12:00:00Z",
   invocation_count: 5,
   recent_invocation_count: 3,
+  hard_invocations: 2,
+  soft_invocations: 3,
+  recent_hard_invocations: 1,
+  recent_soft_invocations: 2,
   hygiene_status: "alive",
   ...overrides,
 });
@@ -235,6 +239,10 @@ describe("SkillsPage", () => {
             name: "active",
             invocation_count: 7,
             recent_invocation_count: 3,
+            hard_invocations: 2,
+            soft_invocations: 5,
+            recent_hard_invocations: 1,
+            recent_soft_invocations: 2,
           }),
         ],
       })
@@ -244,7 +252,8 @@ describe("SkillsPage", () => {
     expect(within(neverRow).getAllByText("—").length).toBeGreaterThan(0);
     const activeRow = screen.getByTestId("skill-row-active");
     expect(within(activeRow).getByText("7")).toBeInTheDocument();
-    expect(within(activeRow).getByText(/\(3 recent\)/)).toBeInTheDocument();
+    // Rendering: "7 (2h / 5s)" — total + hard/soft breakdown.
+    expect(within(activeRow).getByText(/2h.*\/.*5s/)).toBeInTheDocument();
   });
 
   it("renders 'No skills match' when filter+search yield empty", async () => {

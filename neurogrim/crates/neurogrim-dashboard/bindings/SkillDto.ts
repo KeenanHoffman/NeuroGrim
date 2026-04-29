@@ -33,14 +33,36 @@ description: string,
 last_invoked_at: string | null, 
 /**
  * Total invocation count from the ledger (all time, not windowed).
+ * Sum of hard + soft.
  */
 invocation_count: number, 
 /**
  * Invocations in the alive_window. Used to drive the
  * alive/dead/new classification and shown in the table for
- * at-a-glance freshness.
+ * at-a-glance freshness. Sum of hard + soft.
  */
 recent_invocation_count: number, 
+/**
+ * "Hard" invocations: explicit `Skill` tool calls (slash
+ * commands or `Skill(name=...)`). All-time.
+ */
+hard_invocations: number, 
+/**
+ * "Soft" invocations: agent reads of the SKILL.md file via
+ * the Read tool. All-time. Captures the more common usage
+ * pattern where an agent follows skill guidance without
+ * going through the Skill tool. Schema-1 ledger entries
+ * (pre-soft tracking) are counted as hard.
+ */
+soft_invocations: number, 
+/**
+ * Hard invocations within the alive_window.
+ */
+recent_hard_invocations: number, 
+/**
+ * Soft invocations within the alive_window.
+ */
+recent_soft_invocations: number, 
 /**
  * One of "alive" | "dead" | "new" | "no-ledger".
  * - alive: at least one invocation in the alive_window
