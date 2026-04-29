@@ -27,6 +27,7 @@
 //! See `audit/v3.4-CHARTER.md` and the workspace `CHANGELOG.md` for
 //! the full plan.
 
+pub mod brains;
 pub mod events;
 pub mod routes;
 pub mod skills;

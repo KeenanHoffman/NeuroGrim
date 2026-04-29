@@ -352,6 +352,41 @@ pub struct SkillsResponse {
 }
 
 // =================================================================
+// Path 2 — Multi-Brain navigation
+// =================================================================
+
+/// Response body of `GET /api/brains` — every Brain reachable from
+/// the host registry, transitively walked through `config.children`.
+///
+/// The dashboard uses this to populate the AppShell's Brain
+/// switcher and to validate the `:brain_id` URL path segment.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct BrainsListResponse {
+    pub self_id: String,
+    pub brains: Vec<BrainListItemDto>,
+}
+
+/// One Brain in the federation tree.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct BrainListItemDto {
+    /// kebab-case id (URL-safe). Derived from `meta.project` or
+    /// project_root basename. Stable across server restarts.
+    pub id: String,
+    /// Human-readable name from `meta.project` (or the id when that
+    /// field is absent).
+    pub display_name: String,
+    /// Filesystem path to the project root.
+    pub project_root: String,
+    /// id of the parent Brain in the federation tree, or `null` for
+    /// the host.
+    pub parent_id: Option<String>,
+    /// 0 for the host, 1 for direct children, 2 for grandchildren.
+    pub depth: u32,
+}
+
+// =================================================================
 // Phase 2.2 — Hat lens
 // =================================================================
 

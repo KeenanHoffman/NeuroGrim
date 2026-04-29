@@ -3,17 +3,31 @@
 //! Phase 0.3: just the registry path.
 //! Phase 2.1: adds the SSE broadcast Sender so the events handler
 //! can subscribe a fresh receiver per connection.
+//! Path 2 (multi-Brain): adds the BrainTree so per-Brain handlers
+//! can resolve the URL's `brain_id` to a registry path without
+//! re-walking the federation on every request.
 
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
+use crate::brains::BrainTree;
 use crate::events::DashboardEvent;
 
 #[derive(Clone)]
 pub struct AppState {
-    /// Path to the Brain's `brain-registry.json`. Loaded fresh per
-    /// request.
+    /// Path to the host Brain's `brain-registry.json`. Routes that
+    /// pre-date Path 2 (overview, domains, etc. without a brain_id
+    /// path segment) load this. The newer `/api/brains/:id/...`
+    /// routes use [`AppState::brains`] to resolve the appropriate
+    /// registry per request.
     pub registry_path: Arc<String>,
+    /// Discovered Brain tree — host + transitively-walked children.
+    /// Built once at server startup; immutable for the server's
+    /// lifetime. A refresh-on-demand endpoint (e.g.,
+    /// `POST /api/brains/refresh`) is queued for v3.5 alongside
+    /// the other mutation endpoints.
+    pub brains: Arc<BrainTree>,
     /// Broadcast channel for live updates. The /api/events SSE
     /// handler subscribes one receiver per connection. Senders come
     /// from the filesystem watcher spawned at server startup.
@@ -27,10 +41,14 @@ pub struct AppState {
 
 impl AppState {
     /// Construct a state without live updates. Used by tests + Phase
-    /// 0/1 routes that don't care about events.
+    /// 0/1 routes that don't care about events. Re-discovers the
+    /// brain tree from the registry path so the multi-Brain routes
+    /// still work in tests.
     pub fn new(registry_path: String) -> Self {
+        let brains = BrainTree::discover(Path::new(&registry_path));
         Self {
             registry_path: Arc::new(registry_path),
+            brains: Arc::new(brains),
             events: None,
         }
     }
@@ -40,8 +58,10 @@ impl AppState {
         registry_path: String,
         events: broadcast::Sender<DashboardEvent>,
     ) -> Self {
+        let brains = BrainTree::discover(Path::new(&registry_path));
         Self {
             registry_path: Arc::new(registry_path),
+            brains: Arc::new(brains),
             events: Some(events),
         }
     }

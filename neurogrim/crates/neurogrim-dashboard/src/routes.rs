@@ -31,13 +31,14 @@ use tokio::time::timeout;
 use tokio_stream::wrappers::BroadcastStream;
 use url::Url;
 
+use crate::brains::BrainEntry;
 use crate::skills::{scan as scan_skills, ALIVE_WINDOW_DAYS};
 use crate::state::AppState;
 use crate::types::{
-    AgentCardExcerptDto, DomainDetailResponse, DomainListItemDto, DomainSignalDto,
-    DomainsListResponse, FederationResponse, FindingDto, HatDto, HatsResponse, HealthResponse,
-    HistoryPointDto, OverviewResponse, PeerDto, PeerStatusDto, RecommendationDto, SelfBrainDto,
-    SkillsResponse,
+    AgentCardExcerptDto, BrainListItemDto, BrainsListResponse, DomainDetailResponse,
+    DomainListItemDto, DomainSignalDto, DomainsListResponse, FederationResponse, FindingDto,
+    HatDto, HatsResponse, HealthResponse, HistoryPointDto, OverviewResponse, PeerDto,
+    PeerStatusDto, RecommendationDto, SelfBrainDto, SkillsResponse,
 };
 
 /// Query params accepted by score-aware routes (overview, domains
@@ -76,12 +77,28 @@ struct FrontendAssets;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        // ---- Legacy single-Brain routes (point at the host Brain) ----
+        // These are kept for backward compatibility while the
+        // frontend transitions to /brains/:id/* — Path 2's index
+        // route will redirect to /brains/<self_id>/.
         .route("/api/overview", get(overview))
         .route("/api/domains", get(domains_list))
         .route("/api/domains/:name", get(domain_detail))
         .route("/api/federation", get(federation))
         .route("/api/skills", get(skills))
         .route("/api/hats", get(hats))
+        // ---- Multi-Brain navigation (Path 2) ----
+        .route("/api/brains", get(brains_list))
+        .route("/api/brains/:brain_id/overview", get(brain_overview))
+        .route("/api/brains/:brain_id/domains", get(brain_domains_list))
+        .route(
+            "/api/brains/:brain_id/domains/:name",
+            get(brain_domain_detail),
+        )
+        .route("/api/brains/:brain_id/federation", get(brain_federation))
+        .route("/api/brains/:brain_id/skills", get(brain_skills))
+        .route("/api/brains/:brain_id/hats", get(brain_hats))
+        // ---- Live updates ----
         .route("/api/events", get(events_sse))
         .fallback(static_handler)
         .with_state(state)
@@ -1024,6 +1041,246 @@ async fn hats(State(state): State<AppState>) -> Response {
         hats.extend(declared);
     }
 
+    Json(HatsResponse { hats }).into_response()
+}
+
+// =================================================================
+// Path 2 — Multi-Brain navigation
+// =================================================================
+
+/// `GET /api/brains` — every Brain reachable from the host's
+/// federation tree. The frontend uses this to render the AppShell
+/// Brain switcher and to redirect `/` to `/brains/<self_id>/`.
+async fn brains_list(State(state): State<AppState>) -> Response {
+    let brains: Vec<BrainListItemDto> = state
+        .brains
+        .list()
+        .into_iter()
+        .map(|e| BrainListItemDto {
+            id: e.id.clone(),
+            display_name: e.display_name.clone(),
+            project_root: e.project_root.to_string_lossy().to_string(),
+            parent_id: e.parent_id.clone(),
+            depth: e.depth as u32,
+        })
+        .collect();
+    Json(BrainsListResponse {
+        self_id: state.brains.self_id.clone(),
+        brains,
+    })
+    .into_response()
+}
+
+/// Resolve a `:brain_id` URL segment to a BrainEntry. Returns a
+/// 404 response when the id is unknown — the frontend treats this
+/// as "navigate the user back to the brain list."
+fn resolve_brain<'a>(
+    state: &'a AppState,
+    brain_id: &str,
+) -> Result<&'a BrainEntry, Response> {
+    state.brains.get(brain_id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": format!("brain '{brain_id}' not found in this dashboard's federation tree"),
+                "known_ids": state.brains.list().iter().map(|e| e.id.clone()).collect::<Vec<_>>(),
+            })),
+        )
+            .into_response()
+    })
+}
+
+async fn brain_overview(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+    Query(query): Query<ScoreQuery>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let registry = brain.registry_path.to_string_lossy().to_string();
+    let ctx = match BrainContext::load(&registry, query.resolved_hat(), None).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
+                })),
+            )
+                .into_response();
+        }
+    };
+    Json(build_overview(&ctx)).into_response()
+}
+
+async fn brain_domains_list(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+    Query(query): Query<ScoreQuery>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let registry = brain.registry_path.to_string_lossy().to_string();
+    let ctx = match BrainContext::load(&registry, query.resolved_hat(), None).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
+                })),
+            )
+                .into_response();
+        }
+    };
+    Json(build_domains_list(&ctx)).into_response()
+}
+
+async fn brain_domain_detail(
+    State(state): State<AppState>,
+    AxumPath((brain_id, name)): AxumPath<(String, String)>,
+    Query(query): Query<ScoreQuery>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let registry = brain.registry_path.to_string_lossy().to_string();
+    let ctx = match BrainContext::load(&registry, query.resolved_hat(), None).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
+                })),
+            )
+                .into_response();
+        }
+    };
+    match build_domain_detail(&ctx, &name) {
+        Some(d) => Json(d).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": format!("domain '{name}' not in '{brain_id}' registry"),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+async fn brain_federation(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let registry = brain.registry_path.to_string_lossy().to_string();
+    let ctx = match BrainContext::load(&registry, None, None).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
+                })),
+            )
+                .into_response();
+        }
+    };
+    Json(build_federation(&ctx).await).into_response()
+}
+
+async fn brain_skills(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let now = chrono::Utc::now();
+    let scan = scan_skills(&brain.project_root, now);
+    Json(SkillsResponse {
+        skills: scan.skills,
+        ledger_present: scan.ledger_present,
+        total_invocations: scan.total_invocations,
+        alive_window_days: ALIVE_WINDOW_DAYS as u32,
+    })
+    .into_response()
+}
+
+async fn brain_hats(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    // Reuse the same logic as the legacy /api/hats handler but with
+    // the resolved brain's registry path. Inline rather than calling
+    // the legacy function so the brain_id-specific error message
+    // surfaces correctly.
+    let registry_text =
+        match tokio::fs::read_to_string(brain.registry_path.as_path()).await {
+            Ok(t) => t,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": format!("failed to read registry for '{brain_id}': {e}"),
+                    })),
+                )
+                    .into_response();
+            }
+        };
+    let parsed: serde_json::Value = match serde_json::from_str(&registry_text) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("registry for '{brain_id}' is not valid JSON: {e}"),
+                })),
+            )
+                .into_response();
+        }
+    };
+    let mut hats: Vec<HatDto> = vec![HatDto {
+        name: "default".to_string(),
+        description:
+            "No hat — every domain weighted at 1.0× (the registry's authored weights apply unchanged)."
+                .to_string(),
+        is_default: true,
+    }];
+    if let Some(map) = parsed
+        .get("config")
+        .and_then(|c| c.get("hats"))
+        .and_then(|h| h.as_object())
+    {
+        let mut declared: Vec<HatDto> = map
+            .iter()
+            .map(|(name, body)| HatDto {
+                name: name.clone(),
+                description: body
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                is_default: false,
+            })
+            .collect();
+        declared.sort_by(|a, b| a.name.cmp(&b.name));
+        hats.extend(declared);
+    }
     Json(HatsResponse { hats }).into_response()
 }
 
