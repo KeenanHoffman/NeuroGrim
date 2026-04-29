@@ -403,6 +403,20 @@ enum Commands {
     /// cargo's output).
     Test(commands::test::Args),
 
+    /// v4.0 (S12-G-4) — publish-gate runner. Two sub-commands:
+    /// `run` executes the manifest's gates and emits a per-gate JSONL
+    /// entry to `<brain>/.claude/brain/publish-gate-ledger.jsonl`;
+    /// `ack` marks the most recent pending entry for `--gate <id>` as
+    /// passed (operator handle from `--operator` or
+    /// `$NEUROGRIM_OPERATOR`). `run` exit code: 0 all blocking gates
+    /// passed, 1 any blocking failed/timed_out, 2 any blocking
+    /// pending operator. `--mode` heuristic (v1): pre-commit = fast
+    /// automated only, pre-publish = blocking only, full = every
+    /// gate. e2e gates ship as `deferred` until S12-G-5 wires the
+    /// Playwright harness.
+    #[command(name = "publish-gate")]
+    PublishGate(commands::publish_gate::Args),
+
     /// Domain workflow commands. v3.2: `neurogrim domain new <name>`
     /// scaffolds a new domain (registry mutation + stub CMDB +
     /// optional Python sensor skeleton).
@@ -531,6 +545,7 @@ async fn main() -> Result<()> {
         }
         Commands::Skill(args) => commands::skill::run(args).await,
         Commands::Test(args) => commands::test::run(args).await,
+        Commands::PublishGate(args) => commands::publish_gate::run(args).await,
         Commands::Domain(args) => commands::domain::run(args).await,
         Commands::Federation(args) => commands::federation::run(args).await,
     }

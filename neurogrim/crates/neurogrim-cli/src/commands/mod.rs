@@ -15,6 +15,7 @@ pub mod health;
 pub mod init;
 pub mod init_scaffold;
 pub mod narrate;
+pub mod publish_gate;
 pub mod sca_calibrate;
 pub mod sca_review;
 pub mod score;

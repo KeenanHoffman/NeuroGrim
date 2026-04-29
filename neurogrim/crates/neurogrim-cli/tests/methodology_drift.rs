@@ -140,6 +140,7 @@ fn no_topic_references_unknown_command() {
         "a2a-discover",
         "a2a-token",
         "test",
+        "publish-gate",
         "disposition",
         "domain-calibration",
         "federated-pattern",

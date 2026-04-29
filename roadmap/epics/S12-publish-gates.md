@@ -23,8 +23,8 @@
 - [x] `cargo test --workspace --all-targets` runs in <90s baseline with the two `context_overhead.rs` benchmarks marked `#[ignore]` *(S12-G-1 — shipped in `6e7e6e1`; baseline 218s → 29s warm cache, 96s cold; snapshot at `roadmap/data/test-runtime-baseline.txt`)*
 - [x] `neurogrim test` quiet wrapper (carry-over from v3.5.1 backlog) ships with `--keep-last`, `--show-only-new`, `--retry-failed` *(S12-G-2 — shipped in this commit; also `--slow` and `--verbose`)*
 - [x] `<brain>/.claude/brain/publish-gates.yaml` schema authored + validated by `neurogrim doctor` *(S12-G-3 — shipped in this commit; schema at `crates/neurogrim-mcp/data/schemas/publish-gates-v1.schema.json`; validator + doctor check 8 in `crates/neurogrim-mcp/src/publish_gates.rs` + `doctor.rs::check_publish_gates`)*
-- [ ] `neurogrim publish-gate run` CLI ships with `--gate <id>`, `--mode {pre-commit,pre-publish,full}`
-- [ ] Gate-result ledger at `<brain>/.claude/brain/publish-gate-ledger.jsonl` with append-only writer + read helpers
+- [x] `neurogrim publish-gate run` CLI ships with `--gate <id>`, `--mode {pre-commit,pre-publish,full}` *(S12-G-4 — shipped in this commit; also `publish-gate ack` sub-command for manual-gate operator acknowledgements; `--mode` filter is heuristic in v1, schema v2 will add explicit per-gate mode tags)*
+- [x] Gate-result ledger at `<brain>/.claude/brain/publish-gate-ledger.jsonl` with append-only writer + read helpers *(S12-G-4 — `LedgerEntry` schema with run_id, gate_id, gate_type, mode, started_at, completed_at, status, blocking, operator, exit_code, stdout/stderr truncation; `append_ledger_entries` + `read_most_recent_pending` exported)*
 - [ ] Playwright foundation: `crates/neurogrim-dashboard/frontend/e2e/`, headless Chromium, total run time enforced <3 minutes
 - [ ] Three smoke specs ship green: `overview-loads.spec.ts`, `federation-page.spec.ts`, `layout-edit.spec.ts`
 - [ ] Manual gate UI: `/brains/:id/publish-gates` page renders pending checklist + per-item verify URL/command
@@ -107,17 +107,19 @@ gates:
 
 **Status:** Complete as a standalone validator + doctor check. Not yet a usable runtime gate — S12-G-4 (`neurogrim publish-gate run`) consumes the typed `PublishGatesConfig` view to execute gates. The schema's typed Rust mirror (`PublishGatesConfig`, `Gate`, `GateType`) is exported from `neurogrim_mcp::publish_gates` and ready for G-4 to import.
 
-### S12-G-4: `neurogrim publish-gate run` CLI (5 days)
+### S12-G-4: `neurogrim publish-gate run` CLI (5 days) — ✅ SHIPPED
 
 **What:** New CLI subcommand that reads `publish-gates.yaml`, executes automated gates in declared order, emits per-gate findings to `publish-gate-ledger.jsonl`, surfaces manual gates as a checklist with copy-paste verification steps. Supports `--gate <id>` to run a single gate; `--mode {pre-commit,pre-publish,full}` selects which gates run; exit code reflects pass/fail/pending.
 
 **Why:** This is the load-bearing CLI for S12. Every other story produces inputs to this one. Self-hosting target: NeuroGrim's own publishes go through it.
 
 **Done when:**
-- [ ] CLI registered + exit code semantics documented (0=pass, 1=fail, 2=pending operator)
-- [ ] Ledger writer + reader; ledger entries include gate ID, mode, started_at, completed_at, status, operator (if manual), findings
-- [ ] 12+ tests cover happy path, automated failure, manual pending, missing gates, malformed YAML
-- [ ] Verbose mode (`-v`) shows command output per gate
+- [x] CLI registered + exit code semantics documented (0=pass, 1=fail, 2=pending operator) *(precedence: failed > pending > passed; non-blocking gate failures recorded in ledger but never drive exit code)*
+- [x] Ledger writer + reader; ledger entries include gate ID, mode, started_at, completed_at, status, operator (if manual), findings *(`append_ledger_entries` + `read_most_recent_pending`; entries include exit_code, stdout/stderr truncated to 4 KB head + 4 KB tail to keep typical lines under PIPE_BUF)*
+- [x] 12+ tests cover happy path, automated failure, manual pending, missing gates, malformed YAML *(actually 28 unit tests: passing/failing/timing-out automated, missing check_command, manual-pending, e2e-deferred, aggregate exit-code precedence (5 cases), select_gates filters (4 modes + unknown-id error), ledger round-trip + read_most_recent_pending behavior (3 cases), truncate_stream (3 cases), ack flow (2 cases), resolve_operator (3 cases))*
+- [x] Verbose mode (`-v`) shows command output per gate *(stdout + stderr first 20 lines per gate; trims to truncation envelope)*
+
+**Status:** Complete as a standalone CLI with ack flow. e2e gate type ships as `deferred` until S12-G-5 wires the Playwright harness — adopters can declare e2e gates in their manifest today and they'll be visible in the ledger without driving exit code (deferred is non-blocking by design). Two extension sub-commands reserved for future stories: `publish-gate list` (read ledger) and `publish-gate inspect <gate-id>` (gate detail) — out of scope for v1.
 
 ### S12-G-5: Playwright E2E foundation (4 days)
 

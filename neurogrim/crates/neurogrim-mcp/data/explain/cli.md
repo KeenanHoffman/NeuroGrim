@@ -49,6 +49,8 @@ output pointing at follow-on commands.
 | `neurogrim a2a-discover` | Fetch a peer's Agent Card |
 | `neurogrim a2a-token` | Manage A2A bearer tokens (issue / list / revoke) |
 | `neurogrim test` (v4.0+) | Quiet test wrapper with persisted failure ledger; mirrors cargo's exit code; supports `--keep-last`, `--show-only-new`, `--retry-failed`, `--slow`, `--verbose` |
+| `neurogrim publish-gate run` (v4.0+) | Execute gates from `<brain>/.claude/brain/publish-gates.yaml` (S12-G-3 schema); emits per-gate JSONL to `publish-gate-ledger.jsonl`. Exit: 0 all blocking passed, 1 any blocking failed, 2 any blocking pending. Flags: `--gate <id>`, `--mode {pre-commit,pre-publish,full}`, `-v` |
+| `neurogrim publish-gate ack` (v4.0+) | Mark a manual gate's most recent pending entry as passed by an operator. Requires `--gate <id>`; operator from `--operator` or `$NEUROGRIM_OPERATOR` |
 
 Sensor invocation pattern: `neurogrim sensory <name> --project-root . > .claude/<name>-cmdb.json`.
 This is how CMDBs are refreshed in CI or pre-commit hooks.
