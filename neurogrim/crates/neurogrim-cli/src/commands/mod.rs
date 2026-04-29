@@ -20,6 +20,7 @@ pub mod sca_review;
 pub mod score;
 pub mod skill;
 pub mod serve;
+pub mod test;
 pub mod ui;
 pub mod trend;
 pub mod validate;

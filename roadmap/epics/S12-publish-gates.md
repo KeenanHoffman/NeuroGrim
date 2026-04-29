@@ -20,8 +20,8 @@
 
 ## Stage 12 Is Done When
 
-- [ ] `cargo test --workspace --all-targets` runs in <90s baseline with the two `context_overhead.rs` benchmarks marked `#[ignore]`
-- [ ] `neurogrim test` quiet wrapper (carry-over from v3.5.1 backlog) ships with `--keep-last`, `--show-only-new`, `--retry-failed`
+- [x] `cargo test --workspace --all-targets` runs in <90s baseline with the two `context_overhead.rs` benchmarks marked `#[ignore]` *(S12-G-1 — shipped in `6e7e6e1`; baseline 218s → 29s warm cache, 96s cold; snapshot at `roadmap/data/test-runtime-baseline.txt`)*
+- [x] `neurogrim test` quiet wrapper (carry-over from v3.5.1 backlog) ships with `--keep-last`, `--show-only-new`, `--retry-failed` *(S12-G-2 — shipped in this commit; also `--slow` and `--verbose`)*
 - [ ] `<brain>/.claude/brain/publish-gates.yaml` schema authored + validated by `neurogrim doctor`
 - [ ] `neurogrim publish-gate run` CLI ships with `--gate <id>`, `--mode {pre-commit,pre-publish,full}`
 - [ ] Gate-result ledger at `<brain>/.claude/brain/publish-gate-ledger.jsonl` with append-only writer + read helpers
@@ -48,17 +48,19 @@
 - [ ] `cargo test --features benchmarks --ignored` runs the slow ones; documented in `neurogrim explain publish-gates`
 - [ ] Snapshot file `roadmap/data/test-runtime-baseline.txt` records the new baseline
 
-### S12-G-2: `neurogrim test` quiet wrapper (3 days)
+### S12-G-2: `neurogrim test` quiet wrapper (3 days) — ✅ SHIPPED
 
-**What:** New CLI subcommand `neurogrim test` that wraps `cargo test --workspace --all-targets`, suppresses success spam, and appends failures to `<brain>/.claude/brain/test-failures.jsonl`. Reuses the JSONL append pattern from `disposition.rs:48`. Flags: `--keep-last N` (default 500), `--show-only-new`, `--retry-failed`.
+**What:** New CLI subcommand `neurogrim test` that wraps `cargo test --workspace --all-targets`, suppresses success spam, and appends failures to `<brain>/.claude/brain/test-failures.jsonl`. Reuses the JSONL append pattern from `disposition.rs:48`. Flags: `--keep-last N` (default 500), `--show-only-new`, `--retry-failed`, plus `--slow` (passes `--include-ignored`) and `--verbose` (bypasses the quiet wrapper for parser-debug).
 
 **Why:** Carry-over from v3.5.1 plans. Required by S12-G-4 because the publish-gate runner consumes test results. Without quiet output, agents/operators drown in success noise.
 
 **Done when:**
-- [ ] CLI subcommand registered in `crates/neurogrim-cli/src/main.rs`
-- [ ] `crates/neurogrim-cli/src/commands/test.rs` module created
-- [ ] 5+ unit tests cover quiet output, append-mode, retry-failed flow
-- [ ] Documentation in `cli.md` explain topic
+- [x] CLI subcommand registered in `crates/neurogrim-cli/src/main.rs`
+- [x] `crates/neurogrim-cli/src/commands/test.rs` module created (~650 lines, schema documented in module docstring)
+- [x] 5+ unit tests cover quiet output, append-mode, retry-failed flow *(actually 10: parser no-failures, parser one-failure-one-binary, parser ANSI-strip, parser stderr-appended-after-stdout ordering, append round-trip, recent-batch read, ledger rotate, rotate no-op, failure-detail-header, binary-id extraction)*
+- [x] Documentation in `cli.md` explain topic *(Family 3 row added; `methodology_drift::no_topic_references_unknown_command` known-commands list extended with `"test"`)*
+
+**Status:** Complete as a standalone CLI. Not yet integrated into a publish-gate — S12-G-4 wires it as the `tests-pass` automated gate.
 
 ### S12-G-3: Gate definition format (3 days)
 

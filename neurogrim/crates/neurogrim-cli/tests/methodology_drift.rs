@@ -139,6 +139,7 @@ fn no_topic_references_unknown_command() {
         "a2a-invoke",
         "a2a-discover",
         "a2a-token",
+        "test",
         "disposition",
         "domain-calibration",
         "federated-pattern",

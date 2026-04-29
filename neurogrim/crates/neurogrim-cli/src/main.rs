@@ -390,6 +390,19 @@ enum Commands {
     /// scaffolds a SKILL.md skeleton for a project-specific skill.
     Skill(commands::skill::Args),
 
+    /// v4.0 (S12-G-2) — quiet test wrapper with persisted failure
+    /// ledger. Runs `cargo test --workspace --all-targets`,
+    /// suppresses success spam, prints failures inline, appends one
+    /// JSONL entry per failure to
+    /// `<project_root>/.claude/brain/test-failures.jsonl`. Mirrors
+    /// cargo's exit code (0 on all-pass, 1 on any-fail). Flags:
+    /// `--keep-last N` (rotate older entries to archive),
+    /// `--show-only-new` (diff against prior run), `--retry-failed`
+    /// (replay only the most recent failure batch), `--slow` (include
+    /// `#[ignore]`d benchmarks), `--verbose` (bypass parser; stream
+    /// cargo's output).
+    Test(commands::test::Args),
+
     /// Domain workflow commands. v3.2: `neurogrim domain new <name>`
     /// scaffolds a new domain (registry mutation + stub CMDB +
     /// optional Python sensor skeleton).
@@ -517,6 +530,7 @@ async fn main() -> Result<()> {
             commands::a2a_token::run(store, subcommand).await
         }
         Commands::Skill(args) => commands::skill::run(args).await,
+        Commands::Test(args) => commands::test::run(args).await,
         Commands::Domain(args) => commands::domain::run(args).await,
         Commands::Federation(args) => commands::federation::run(args).await,
     }

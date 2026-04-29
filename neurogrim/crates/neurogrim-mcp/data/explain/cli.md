@@ -48,6 +48,7 @@ output pointing at follow-on commands.
 | `neurogrim a2a-invoke` | Send a single A2A envelope to a peer |
 | `neurogrim a2a-discover` | Fetch a peer's Agent Card |
 | `neurogrim a2a-token` | Manage A2A bearer tokens (issue / list / revoke) |
+| `neurogrim test` (v4.0+) | Quiet test wrapper with persisted failure ledger; mirrors cargo's exit code; supports `--keep-last`, `--show-only-new`, `--retry-failed`, `--slow`, `--verbose` |
 
 Sensor invocation pattern: `neurogrim sensory <name> --project-root . > .claude/<name>-cmdb.json`.
 This is how CMDBs are refreshed in CI or pre-commit hooks.
