@@ -41,6 +41,7 @@ Domains, Federation, Skills, Publish gates, Approvals):
 | **C-8** inline help | `?` icons next to each settings field linking to relevant explain-topic anchors. Adds anchors to all 15 topics. Session 2. |
 | **C-9** mobile-responsive breakpoints | Audit each page at 375px viewport; collapse sidebar at <768px. Session 2 polish. |
 
+<!-- anchor: multi-page-schema -->
 ## Multi-page schema (v2)
 
 The new `dashboard-pages.json` shape supersedes v3.4's single
@@ -74,6 +75,7 @@ not yet wired into the existing `dashboard-layout` endpoints. Full
 migration lands with C-6 (custom pages) when the dynamic-route
 runtime derivation is actually exercised.
 
+<!-- anchor: cli-parity -->
 ## CLI parity invariant
 
 Per S15 epic refinement, **every UI mutation maps to a documented
@@ -104,6 +106,7 @@ Adopters can `tail -f .claude/brain/dashboard-pages.json` to
 watch their changes propagate, the same way they can `tail -f`
 any other Brain artifact.
 
+<!-- anchor: edit-via-bus -->
 ## Edit-via-bus design (C-7 preview)
 
 Once C-4 + C-7 ship, every UI mutation will emit on

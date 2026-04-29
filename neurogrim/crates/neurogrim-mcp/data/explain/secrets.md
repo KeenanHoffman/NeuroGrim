@@ -11,6 +11,7 @@ This topic covers v4.2 S14's foundation stories. The cross-repo
 claude-proxy migration (S-4) and the operator-facing UI page (S-6)
 ship in follow-up sessions.
 
+<!-- anchor: four-layer -->
 ## Four-layer encryption model
 
 | Layer | Where | What this crate provides |
@@ -20,6 +21,7 @@ ship in follow-up sessions.
 | **In-memory** | runtime values | `EncryptedSecretValue` + `MasterSessionKey` (this stage) |
 | **At-rest** | OS / disk | `OsNativeBackend` or `EncryptedFileBackend` (this stage) |
 
+<!-- anchor: in-memory -->
 ## In-memory encryption
 
 The `MasterSessionKey` is a 32-byte ChaCha20Poly1305 key derived
@@ -52,6 +54,7 @@ SecretValue { plaintext: [REDACTED; len=32] }
 EncryptedSecretValue { ciphertext: [REDACTED; len=48], nonce: [REDACTED] }
 ```
 
+<!-- anchor: at-rest -->
 ## At-rest backends
 
 Two implementations:
@@ -127,6 +130,7 @@ the Approvals UI page (`/brains/:id/approvals`). The agent calls
 Adopters can downgrade per-secret to `Notify` for low-sensitivity
 public APIs via the registry's `autonomy.action_types` override.
 
+<!-- anchor: single-use-tokens -->
 ## Single-use tokens
 
 Tokens are tracked in-process by the `BrainServer`'s

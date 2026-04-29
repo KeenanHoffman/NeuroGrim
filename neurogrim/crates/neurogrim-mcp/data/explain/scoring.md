@@ -58,6 +58,7 @@ Low confidence pulls the unified score *down* (multiplicatively),
 not up. A weighted domain at score 90 with confidence 20 contributes
 the same as a domain at score 18 with confidence 100.
 
+<!-- anchor: floor-gates -->
 ## Floor gates
 
 A floor gate lets a single domain cap the unified score regardless
@@ -93,6 +94,7 @@ The score is a *signal*. Agents should treat trends (improving /
 degrading) as more meaningful than absolute values. A score of 78
 with degrading trajectory is worse than 73 with stable trajectory.
 
+<!-- anchor: trajectory -->
 ## Trajectory
 
 After ~5 score samples accumulate (`min_samples_for_trend`,

@@ -11,6 +11,7 @@ B-7, B-8). The autonomy-enforcement wiring (B-5), the SQLite
 opt-in backend (B-3), the Approvals UI (B-6), and the cross-Brain
 A2A subscription (B-9) ship in subsequent stories.
 
+<!-- anchor: two-patterns -->
 ## The two patterns, one primitive
 
 Same underlying append-only JSONL log; two distinct API surfaces:
@@ -30,6 +31,7 @@ Same underlying append-only JSONL log; two distinct API surfaces:
 In v4.1 v1 (this release): Pattern 1 ships. Pattern 2's API surface
 is reserved.
 
+<!-- anchor: reserved-namespace -->
 ## Reserved namespace
 
 - `_neurogrim/<name>` — system topics (approvals, notifications,
@@ -43,6 +45,7 @@ is reserved.
 
 Examples: `pc-state/alerts`, `release/candidates`, `scratch`.
 
+<!-- anchor: writes -->
 ## Writes
 
 Three ways to publish:
@@ -66,6 +69,7 @@ Each publish writes one JSONL line to
 `<project>/.claude/brain/queues/<topic>.jsonl` (slashes in the
 topic become directory levels, preserving `cat` inspectability).
 
+<!-- anchor: reads -->
 ## Reads
 
 Offset-based; consumers persist their own cursor.
@@ -107,6 +111,7 @@ Subdirs for slash segments. Adopters can `tail -f` any of these
 files directly — the bus is built on top of "everything inspectable
 as files," not in spite of it.
 
+<!-- anchor: live-updates -->
 ## Live updates
 
 Each topic has a per-process broadcast channel (capacity 64).

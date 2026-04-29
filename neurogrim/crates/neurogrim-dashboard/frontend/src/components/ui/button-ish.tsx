@@ -6,8 +6,10 @@ import { cn } from "@/lib/utils";
  * this is a slim local primitive — not the full shadcn Button
  * (we don't pull the CVA variants graph for now). Variants:
  *
- * - `default` — solid primary surface
- * - `ghost`   — subtle hover-tint, no border
+ * - `default`     — solid primary surface
+ * - `ghost`       — subtle hover-tint, no border
+ * - `outline`     — bordered surface, transparent fill
+ * - `destructive` — red surface for delete / dangerous actions
  *
  * Sizes:
  *
@@ -15,11 +17,11 @@ import { cn } from "@/lib/utils";
  * - `sm`      — h-7 px-2 (toolbar / inline density)
  *
  * Used by the layout editor toolbar + per-widget controls. If
- * the surface grows beyond these two variants, swap for the full
+ * the surface grows beyond these variants, swap for the full
  * shadcn Button.
  */
 
-type Variant = "default" | "ghost";
+type Variant = "default" | "ghost" | "outline" | "destructive";
 type Size = "default" | "sm";
 
 interface ButtonProps
@@ -35,6 +37,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         "bg-secondary text-secondary-foreground hover:bg-secondary/80",
       ghost:
         "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+      outline:
+        "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+      destructive:
+        "bg-destructive text-destructive-foreground hover:bg-destructive/90",
     }[variant];
     const sizeClass = {
       default: "h-9 px-3 text-sm",

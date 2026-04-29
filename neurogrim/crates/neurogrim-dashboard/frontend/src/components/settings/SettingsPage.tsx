@@ -489,6 +489,7 @@ function CustomPagesTab() {
         <CardTitle className="text-lg flex items-center gap-2">
           <FileText className="h-5 w-5" />
           Custom pages ({customNames.length})
+          <HelpIcon topic="command-post" anchor="multi-page-schema" />
         </CardTitle>
         <CardDescription>
           Operator-defined pages live alongside the built-ins. Reach
@@ -602,6 +603,8 @@ function CultureTab() {
         </>
       }
       learnMoreCommand="neurogrim explain culture"
+      helpTopic="culture"
+      helpAnchor="five-values"
       testidSuffix="culture"
     />
   );
@@ -623,6 +626,8 @@ function QueueConfigTab() {
         </>
       }
       learnMoreCommand="neurogrim explain queues"
+      helpTopic="queues"
+      helpAnchor="reserved-namespace"
       testidSuffix="queue-config"
     />
   );
@@ -636,6 +641,7 @@ function PublishGatesTab() {
         <CardTitle className="text-lg flex items-center gap-2">
           <FileText className="h-5 w-5" />
           Publish gates
+          <HelpIcon topic="publish-gates" anchor="gate-types" />
         </CardTitle>
         <CardDescription>
           The publish-gates manifest has its own dedicated page with
@@ -674,6 +680,8 @@ function ConfigViewer({
   icon,
   description,
   learnMoreCommand,
+  helpTopic,
+  helpAnchor,
   testidSuffix,
 }: {
   configName: string;
@@ -681,6 +689,8 @@ function ConfigViewer({
   icon: React.ReactNode;
   description: React.ReactNode;
   learnMoreCommand: string;
+  helpTopic?: string;
+  helpAnchor?: string;
   testidSuffix: string;
 }) {
   const brainId = useBrainId();
@@ -696,6 +706,7 @@ function ConfigViewer({
         <CardTitle className="text-lg flex items-center gap-2">
           {icon}
           {title}
+          {helpTopic && <HelpIcon topic={helpTopic} anchor={helpAnchor} />}
         </CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>

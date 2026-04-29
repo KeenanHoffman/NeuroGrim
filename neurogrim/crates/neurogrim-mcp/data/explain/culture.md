@@ -10,6 +10,7 @@ culture.yaml, look at `.claude/culture.yaml` in the project root.
 To verify federation-wide coherence, run
 `neurogrim sensory culture-coherence` (ecosystem-level sensor).
 
+<!-- anchor: five-values -->
 ## The five values
 
 ```yaml
@@ -24,6 +25,7 @@ values:
 That's the entire contract. Five named values, no defaults
 override, no per-hat exceptions.
 
+<!-- anchor: floor-only -->
 ## What "floor only" means
 
 The invariants are a *floor*, not a ceiling. They say what the
@@ -42,6 +44,7 @@ culture. An adversary hat is allowed to be blunt — but bluntness
 must not corrode respect. A visionary hat is allowed to be
 expansive — but expansion must not corrode honesty.
 
+<!-- anchor: byte-identical -->
 ## Per-Brain copies stay byte-identical
 
 In a federation, every Brain ships the same `culture.yaml` file
@@ -55,6 +58,7 @@ shared invariant, and the only way to verify "we agree on the
 floor" is to confirm every copy reads the same. Negotiated culture
 is no culture.
 
+<!-- anchor: editing -->
 ## Editing culture
 
 Culture changes are rare and high-stakes. The propagation protocol

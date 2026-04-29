@@ -11,6 +11,7 @@ and how to add one. To see this Brain's current domain set, run
 `neurogrim agent --prose`. To author a new domain, run
 `neurogrim domain new <name>`.
 
+<!-- anchor: anatomy -->
 ## Anatomy
 
 A registered domain has three parts in `brain-registry.json`:
@@ -45,6 +46,7 @@ A registered domain has three parts in `brain-registry.json`:
   - `"a2a"` — query a peer Brain at `endpoint` (federation)
   - `"function"` — implementation-specific scoring function
 
+<!-- anchor: weight-tiers -->
 ## Weight tiers
 
 There are three postures a domain can take:
@@ -77,6 +79,7 @@ Don't add a domain when:
 - The signal is already covered by `correlations` (cross-domain
   patterns) or `incident_patterns` (recurrence detection)
 
+<!-- anchor: add-domain -->
 ## How to add one
 
 The automated path:

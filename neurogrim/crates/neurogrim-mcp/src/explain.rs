@@ -2,7 +2,7 @@
 //! neurogrim-cli to neurogrim-mcp in v3.2.1 so both the CLI and the
 //! MCP server can expose `explain` from a single source of truth).
 //!
-//! Eleven self-contained topic files ship inside the binary via
+//! Fifteen self-contained topic files ship inside the binary via
 //! `include_str!`. Source: `neurogrim-mcp/data/explain/<topic>.md`.
 //!
 //! Each topic carries a version-stamped HTML comment header
@@ -20,6 +20,14 @@ const TOPIC_CULTURE: &str = include_str!("../data/explain/culture.md");
 const TOPIC_AUTONOMY: &str = include_str!("../data/explain/autonomy.md");
 const TOPIC_UI: &str = include_str!("../data/explain/ui.md");
 const TOPIC_DASHBOARD_LAYOUTS: &str = include_str!("../data/explain/dashboard-layouts.md");
+// v4.x topics (added retroactively in v4.3 S15-C-8 v2 — the topic .md
+// files landed in S12/S13/S14/S15 but were never wired into the
+// `topics()` array, so the inline-help HelpIcon couldn't resolve
+// them. Wiring them now closes that regression.)
+const TOPIC_PUBLISH_GATES: &str = include_str!("../data/explain/publish-gates.md");
+const TOPIC_QUEUES: &str = include_str!("../data/explain/queues.md");
+const TOPIC_SECRETS: &str = include_str!("../data/explain/secrets.md");
+const TOPIC_COMMAND_POST: &str = include_str!("../data/explain/command-post.md");
 
 /// Spec/methodology version this bundle was compiled against. Matches
 /// the version header in each `data/explain/*.md`. Bumped manually
@@ -92,6 +100,26 @@ pub fn topics() -> &'static [(&'static str, &'static str, &'static str)] {
             "Authoring per-Brain widget layouts: catalog, sizes, common patterns, edit mode (v3.4)",
             TOPIC_DASHBOARD_LAYOUTS,
         ),
+        (
+            "publish-gates",
+            "v4.0 publish-gates pipeline: automated/manual/e2e gate types, manifest, runner, ledger",
+            TOPIC_PUBLISH_GATES,
+        ),
+        (
+            "queues",
+            "v4.1 agent coordination bus: append-only JSONL, reserved namespace, SSE live updates",
+            TOPIC_QUEUES,
+        ),
+        (
+            "secrets",
+            "v4.2 encrypted secrets: four-layer model, OS-native + encrypted-file backends, single-use proxy tokens",
+            TOPIC_SECRETS,
+        ),
+        (
+            "command-post",
+            "v4.3 dashboard-as-primary-editing-surface: multi-page schema, edit-via-bus, CLI parity",
+            TOPIC_COMMAND_POST,
+        ),
     ]
 }
 
@@ -112,8 +140,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn topic_count_is_11() {
-        assert_eq!(topics().len(), 11);
+    fn topic_count_is_15() {
+        assert_eq!(topics().len(), 15);
     }
 
     #[test]

@@ -11,6 +11,7 @@ one declarative manifest.
 This is the v4.0 epic the rest of the v4.x stages depend on. Every
 later stage's publishes go through the gates this stage establishes.
 
+<!-- anchor: gate-types -->
 ## The three gate types
 
 Every gate has a `gate_type` from a closed vocabulary:
@@ -30,6 +31,7 @@ A gate's `blocking` field controls whether a failure stops the
 publish. Default `true`. Advisory gates (`blocking: false`) are
 recorded but never drive the runner's exit code.
 
+<!-- anchor: manifest -->
 ## The manifest
 
 Adopters declare gates in
@@ -75,6 +77,7 @@ ledger's primary key. Schema enforcement is closed-vocabulary at
 every level (`additionalProperties: false`); adding a field
 requires a v2 schema bump with a METHODOLOGY-EVOLUTION entry.
 
+<!-- anchor: runner -->
 ## The runner
 
 ```
@@ -106,6 +109,7 @@ per-gate mode tags):
 
 `--gate <id>` runs a single gate and overrides `--mode`.
 
+<!-- anchor: manual-ack -->
 ## Manual gate ack flow
 
 When `publish-gate run` encounters a manual gate, it:
@@ -130,6 +134,7 @@ Operator handle is required: `--operator <handle>` flag, then
 `$NEUROGRIM_OPERATOR` env, then reject. No "unknown" fallback —
 audit-trail discipline (LSP-Brains spec §17.6).
 
+<!-- anchor: ledger -->
 ## The ledger
 
 `<brain>/.claude/brain/publish-gate-ledger.jsonl` is append-only

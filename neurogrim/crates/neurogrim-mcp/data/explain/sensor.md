@@ -11,6 +11,7 @@ This document covers the sensor authoring contract. To scaffold a
 new domain with a stub Python sensor, run
 `neurogrim domain new <name> --type python`.
 
+<!-- anchor: contract -->
 ## The contract
 
 A sensor has one job: read project state, return a CMDB envelope.
@@ -45,6 +46,7 @@ Optional fields:
 
 Schema: `LSP-Brains/schemas/cmdb-envelope-v1.schema.json`.
 
+<!-- anchor: score-patterns -->
 ## Score formula patterns
 
 Most sensors follow one of two patterns:
@@ -69,6 +71,7 @@ Avoid:
   registry's `scoring_source`, or pair with confidence < 50)
 - **Floating-point scores** (the contract is `u8`, 0..=100 inclusive)
 
+<!-- anchor: python-skeleton -->
 ## Python sensor skeleton
 
 ```python
@@ -124,6 +127,7 @@ sensor for *your* project, prefer Python — you can iterate without
 recompiling NeuroGrim, and the bundled `domain new --type python`
 handles the scaffolding.
 
+<!-- anchor: good-sensor -->
 ## What makes a good sensor
 
 - **Static-only signals.** A good sensor reads files; it doesn't

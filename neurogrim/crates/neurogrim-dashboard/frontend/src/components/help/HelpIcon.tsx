@@ -1,27 +1,31 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { HelpCircle, X } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { Components } from "react-markdown";
 import type { ExplainTopicResponse } from "@bindings/ExplainTopicResponse";
 
 /**
- * S15-C-8 v1: inline-help "?" icon.
+ * S15-C-8 v2: inline-help "?" icon with rendered markdown.
  *
  * Click → modal that fetches `/api/explain/:topic` and renders the
- * markdown content as preformatted text. Anchor support is best-
- * effort: when the topic content has `<!-- anchor: <id> -->` markers,
- * the modal scrolls to the relevant section.
+ * markdown via `react-markdown` (with `remark-gfm` for GitHub-flavored
+ * extensions: tables, fenced code, autolinks).
  *
- * **v1 scope:** plain-text rendering. Future stories (C-8 v2) can
- * upgrade to a markdown renderer (`react-markdown`) for syntax-
- * highlighted code blocks + clickable links. For v1, the
- * pre-formatted view + the operator's familiarity with the
- * `neurogrim explain` CLI output is enough.
+ * **Anchor support:** topic markdown can include
+ * `<!-- anchor: <kebab-id> -->` markers next to section headings.
+ * When `anchor` prop matches, the rendered content is sliced to start
+ * at that section. Anchor markers themselves are stripped from output.
  *
- * **Anchor convention:** topic markdown can include
- * `<!-- anchor: <kebab-id> -->` lines next to section headings;
- * this component scrolls the modal body to that line on open.
- * Authoring more anchors across the 13 explain topics is a
- * gradual roll-out as Settings forms mature.
+ * **Styling:** explicit Tailwind classes per element (no @tailwindcss/
+ * typography plugin) so the modal stays self-contained and small.
+ *
+ * **v1 → v2 migration:** v1 used `<pre>` preformatted text; v2 renders
+ * proper markdown. Code blocks get monospace + muted background, lists
+ * indent properly, headings get a subtle hierarchy. Operators reading
+ * help get the same content as `neurogrim explain <topic>` but
+ * formatted for browser viewing instead of terminal viewing.
  */
 export function HelpIcon({
   topic,
@@ -103,17 +107,80 @@ function HelpModal({
             </div>
           )}
           {data && (
-            <pre
-              className="text-xs whitespace-pre-wrap font-mono"
-              data-testid="help-modal-content"
-            >
-              {sliceToAnchor(data.content, anchor)}
-            </pre>
+            <div className="text-sm" data-testid="help-modal-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                {prepareContent(data.content, anchor)}
+              </ReactMarkdown>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Component overrides for ReactMarkdown — keeps the modal styling
+ * coherent with the rest of the dashboard (no plugin dependency).
+ */
+const MARKDOWN_COMPONENTS: Components = {
+  h1: ({ children }) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-base font-bold mt-4 mb-2">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-sm font-bold mt-3 mb-1">{children}</h3>,
+  p: ({ children }) => <p className="my-2 leading-relaxed">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc list-outside ml-5 my-2 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal list-outside ml-5 my-2 space-y-1">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  code: ({ children, className }) => {
+    // Inline code (no language class) → small inline span.
+    // Block code (rendered inside <pre>) keeps default text styling.
+    const isBlock = className?.startsWith("language-");
+    if (isBlock) {
+      return <code className={className}>{children}</code>;
+    }
+    return (
+      <code className="px-1 py-0.5 rounded bg-muted text-xs font-mono">{children}</code>
+    );
+  },
+  pre: ({ children }) => (
+    <pre className="my-2 p-3 rounded bg-muted text-xs font-mono overflow-x-auto whitespace-pre">
+      {children}
+    </pre>
+  ),
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary underline hover:no-underline"
+    >
+      {children}
+    </a>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-muted-foreground/30 pl-3 my-2 text-muted-foreground">
+      {children}
+    </blockquote>
+  ),
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-2">
+      <table className="text-xs border-collapse">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-muted px-2 py-1 text-left font-bold">{children}</th>
+  ),
+  td: ({ children }) => <td className="border border-muted px-2 py-1">{children}</td>,
+  hr: () => <hr className="my-4 border-muted" />,
+};
+
+/**
+ * Prepare topic content for rendering: slice to anchor (if any) and
+ * strip all `<!-- anchor: ... -->` markers from the visible output.
+ */
+export function prepareContent(content: string, anchor?: string): string {
+  const sliced = sliceToAnchor(content, anchor);
+  return stripAnchorMarkers(sliced);
 }
 
 /**
@@ -124,12 +191,23 @@ function HelpModal({
  * Marker convention: `<!-- anchor: <id> -->` on its own line, just
  * above the section heading.
  */
-function sliceToAnchor(content: string, anchor?: string): string {
+export function sliceToAnchor(content: string, anchor?: string): string {
   if (!anchor) return content;
   const marker = `<!-- anchor: ${anchor} -->`;
   const idx = content.indexOf(marker);
   if (idx < 0) return content;
   return content.slice(idx);
+}
+
+/**
+ * Strip all `<!-- anchor: ... -->` markers (including the trailing
+ * newline) so they don't appear in the rendered output. Other HTML
+ * comments are preserved (operators may legitimately want them
+ * visible — the topic.md author can use `<!-- ... -->` comments to
+ * leave authoring notes that they want rendered).
+ */
+export function stripAnchorMarkers(content: string): string {
+  return content.replace(/<!--\s*anchor:\s*[^>]*-->\s*\n?/g, "");
 }
 
 async function fetchExplainTopic(topic: string): Promise<ExplainTopicResponse> {
