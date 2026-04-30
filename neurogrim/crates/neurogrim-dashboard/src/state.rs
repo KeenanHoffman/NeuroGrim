@@ -59,6 +59,12 @@ pub struct AppState {
     /// broadcast channels for SSE pubsub; persistent storage lives
     /// on disk under `<project>/.claude/brain/queues/<topic>.jsonl`.
     pub bus: BusState,
+    /// v4.2 S14-S-4.5 v3 — HTTPS listener port when bound. None
+    /// when only the HTTP listener is running. The Secrets page
+    /// reads this via `/api/tls-status` to drive its
+    /// "switch to HTTPS" banner; route handlers consult it to
+    /// decide whether to enforce HTTPS for secret-write paths.
+    pub https_port: Option<u16>,
 }
 
 impl AppState {
@@ -83,6 +89,7 @@ impl AppState {
             mutations_allowed: false,
             service_registry: Arc::new(ServiceRegistry::new()),
             bus,
+            https_port: None,
         }
     }
 
@@ -106,6 +113,7 @@ impl AppState {
             mutations_allowed,
             service_registry: Arc::new(ServiceRegistry::new()),
             bus,
+            https_port: None,
         }
     }
 }

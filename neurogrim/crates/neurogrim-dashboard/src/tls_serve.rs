@@ -70,6 +70,20 @@ pub fn tls_files_present(project_root: &Path) -> bool {
     cert.is_file() && key.is_file()
 }
 
+/// SHA-256 fingerprint of the on-disk cert at the convention
+/// location. Returns `None` when the cert file is missing or
+/// can't be parsed. Used by the frontend's TOFU pinning UX
+/// (S14-S-4.5 v3).
+pub fn cert_fingerprint(project_root: &Path) -> Option<String> {
+    let (cert, _) = tls_paths(project_root);
+    if !cert.is_file() {
+        return None;
+    }
+    neurogrim_secrets::tls::cert_der_from_pem_file(&cert)
+        .ok()
+        .map(|der| neurogrim_secrets::tls::cert_fingerprint_sha256(&der))
+}
+
 /// HTTPS port = HTTP port + 1.
 ///
 /// Picked deliberately so operators don't need a second config

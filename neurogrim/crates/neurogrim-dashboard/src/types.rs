@@ -45,6 +45,34 @@ pub struct HealthResponse {
     pub mutations_allowed: bool,
 }
 
+/// Response body of `GET /api/tls-status` (v4.2 S14-S-4.5 v3).
+///
+/// Lets the Secrets page determine whether HTTPS is available +
+/// what fingerprint to pin in localStorage for TOFU verification.
+/// This endpoint serves on BOTH the HTTP and HTTPS listeners — the
+/// values are public (cert fingerprint is by definition public,
+/// HTTPS port is loopback-only) so there's no harm in exposing
+/// them over either listener.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct TlsStatusResponse {
+    /// True when the dashboard has both cert + key on disk and
+    /// the HTTPS listener is bound. The frontend uses this to
+    /// decide whether to render the "switch to HTTPS" banner on
+    /// secret-management pages.
+    pub https_available: bool,
+    /// HTTPS listener port. None when `https_available` is false.
+    /// Conventionally the HTTP port + 1.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub https_port: Option<u16>,
+    /// SHA-256 fingerprint of the cert (lowercase hex, no
+    /// separators). Frontend pins this in localStorage on first
+    /// visit; subsequent visits compare to detect rotation or
+    /// MITM. None when no cert file is on disk.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub fingerprint_sha256: Option<String>,
+}
+
 /// Lightweight, prose-tuned summary of a Brain's current state,
 /// powering the dashboard's Overview page.
 ///

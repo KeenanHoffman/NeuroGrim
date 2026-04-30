@@ -10,6 +10,8 @@ import {
   Lock,
   RotateCw,
   Save,
+  ShieldAlert,
+  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
@@ -17,6 +19,15 @@ import type { SecretsListResponse } from "@bindings/SecretsListResponse";
 import type { SecretListItem } from "@bindings/SecretListItem";
 import type { SetSecretResponse } from "@bindings/SetSecretResponse";
 import type { DeleteSecretResponse } from "@bindings/DeleteSecretResponse";
+import {
+  clearPinnedFingerprint,
+  compareFingerprint,
+  httpsUrlForCurrentPage,
+  isCurrentPageHttps,
+  pinFingerprint,
+  readPinnedFingerprint,
+  useTlsStatus,
+} from "./useTlsStatus";
 import {
   Card,
   CardContent,
@@ -89,6 +100,8 @@ export function SecretsPage() {
           can set / rotate / delete only.
         </p>
       </header>
+
+      <TlsBanner />
 
       {isLoading && (
         <Card>
@@ -455,4 +468,195 @@ async function fetchSecretsList(brainId: string): Promise<SecretsListResponse> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as SecretsListResponse;
+}
+
+/**
+ * S14-S-4.5 v3 — combined TLS banner block. Renders one of:
+ *
+ *  - **Switch to HTTPS** banner when HTTPS is bound but the page
+ *    is loaded over HTTP (operator hasn't yet trusted the cert
+ *    or never realized HTTPS is available).
+ *  - **First-visit pinning** banner when on HTTPS for the first
+ *    time — informs the operator that the cert fingerprint has
+ *    been pinned in localStorage for TOFU verification.
+ *  - **Fingerprint mismatch** warning when the on-disk cert
+ *    fingerprint differs from the pinned value (rotation
+ *    forgotten or, rarely, a host-level cert swap attack). The
+ *    operator can clear the pin to re-trust.
+ *  - **No-TLS-configured** info when neither HTTPS is bound nor
+ *    a cert exists. Suggests `tls-cert generate`.
+ *
+ * Returns null when no banner is needed (HTTPS fingerprint
+ * matches — silent steady state).
+ */
+function TlsBanner() {
+  const { data: status } = useTlsStatus();
+  const onHttps = isCurrentPageHttps();
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const [pinned, setPinned] = useState<string | null>(() =>
+    readPinnedFingerprint(host),
+  );
+
+  if (!status) return null;
+
+  // Case 1: HTTPS available but we're on HTTP — show "switch" banner.
+  if (status.https_available && status.https_port && !onHttps) {
+    const url = httpsUrlForCurrentPage(status.https_port);
+    return (
+      <Card
+        className="border-amber-500/50 bg-amber-500/10"
+        data-testid="tls-banner-switch"
+      >
+        <CardContent className="flex items-start gap-3 p-4">
+          <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm">
+            <p className="font-medium">
+              HTTPS is available — switch for secret writes
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Secret writes (POST / DELETE) over HTTP are rejected
+              with{" "}
+              <code className="text-xs">426 Upgrade Required</code>.
+              Click below to switch to the HTTPS listener; your
+              browser will warn about the self-signed cert the
+              first time — accept it and the fingerprint gets
+              pinned for subsequent visits.
+            </p>
+            {status.fingerprint_sha256 && (
+              <p className="text-xs text-muted-foreground mt-1 font-mono break-all">
+                expected fingerprint: {status.fingerprint_sha256}
+              </p>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => {
+              window.location.href = url;
+            }}
+            data-testid="tls-banner-switch-button"
+          >
+            Switch to HTTPS
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Case 2: HTTPS not configured at all.
+  if (!status.https_available && !onHttps) {
+    return (
+      <Card data-testid="tls-banner-no-tls">
+        <CardContent className="flex items-start gap-3 p-4 text-sm">
+          <ShieldAlert className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">HTTPS is not configured</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Secret values currently flow over plaintext HTTP on
+              loopback. To encrypt the wire, run{" "}
+              <code className="text-xs">
+                neurogrim secrets tls-cert generate
+              </code>{" "}
+              and restart the dashboard. The cert lifecycle is
+              documented in{" "}
+              <code className="text-xs">neurogrim explain secrets</code>{" "}
+              under the <em>tls-cert</em> anchor.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Case 3: on HTTPS — TOFU comparison.
+  const check = compareFingerprint(status.fingerprint_sha256, pinned);
+  if (check.kind === "match") {
+    return null; // silent steady state
+  }
+  if (check.kind === "first-visit") {
+    return (
+      <Card
+        className="border-amber-500/50 bg-amber-500/10"
+        data-testid="tls-banner-first-visit"
+      >
+        <CardContent className="flex items-start gap-3 p-4 text-sm">
+          <ShieldCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium">Trust this dashboard's TLS cert?</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              First visit on this browser. Compare the fingerprint
+              below to what your browser shows under{" "}
+              <em>View certificate → SHA-256 fingerprint</em>. If
+              they match, click Trust to pin it in localStorage —
+              future visits will warn if it changes (cert rotation
+              or, rarely, a swap).
+            </p>
+            <p className="text-xs text-muted-foreground mt-2 font-mono break-all">
+              {check.fingerprint}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => {
+              pinFingerprint(host, check.fingerprint);
+              setPinned(check.fingerprint);
+            }}
+            data-testid="tls-banner-first-visit-trust"
+          >
+            Trust
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (check.kind === "mismatch") {
+    return (
+      <Card
+        className="border-destructive bg-destructive/10"
+        data-testid="tls-banner-mismatch"
+      >
+        <CardContent className="flex items-start gap-3 p-4 text-sm">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium">Cert fingerprint mismatch</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              The dashboard's TLS cert fingerprint differs from
+              the value pinned in this browser. This is expected
+              after{" "}
+              <code className="text-xs">
+                neurogrim secrets tls-cert rotate
+              </code>{" "}
+              — re-trust the new cert and clear the pin to silence
+              this warning. If you didn't rotate, this could
+              indicate a host-level cert swap; investigate before
+              entering new secret values.
+            </p>
+            <div className="mt-2 space-y-0.5">
+              <p className="text-xs font-mono">
+                pinned:&nbsp;<span className="break-all">{check.pinned}</span>
+              </p>
+              <p className="text-xs font-mono">
+                current: <span className="break-all">{check.current}</span>
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              clearPinnedFingerprint(host);
+              setPinned(null);
+            }}
+            data-testid="tls-banner-mismatch-clear"
+          >
+            Clear pin
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  // no-server-fingerprint: silently ignore (HTTPS bound but no
+  // cert file — shouldn't happen, defensive).
+  return null;
 }

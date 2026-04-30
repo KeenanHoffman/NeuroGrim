@@ -16,7 +16,7 @@ ship in follow-up sessions.
 
 | Layer | Where | What this crate provides |
 |---|---|---|
-| **Wire** | TCP between browser and dashboard | TLS via self-signed cert (S14-S-4.5 v1: cert lifecycle; v2: HTTPS server binding via axum-server + rustls; v3 deferred: frontend redirect + browser TOFU pinning + path-level enforcement) |
+| **Wire** | TCP between browser and dashboard | TLS via self-signed cert (S14-S-4.5 v1: cert lifecycle; v2: HTTPS server binding via axum-server + rustls; v3: HTTPS banner + browser TOFU fingerprint pinning + 426 path-level enforcement on the HTTP listener) |
 | **Process boundary** | JSON in/out | dashboard zeroizes request buffers (paired with S-4.5) |
 | **In-memory** | runtime values | `EncryptedSecretValue` + `MasterSessionKey` (this stage) |
 | **At-rest** | OS / disk | `OsNativeBackend` or `EncryptedFileBackend` (this stage) |
@@ -188,22 +188,45 @@ Implementation: `axum-server` + `rustls` (ring crypto provider).
 Both servers share state (`AppState`) so SSE channels, the bus,
 and the cache are coherent across listeners.
 
-### v3 — UX hardening (deferred)
+### v3 — UX hardening (this stage)
 
-The remaining v3 work that closes the secret-management loop:
+Closes the secret-management security loop:
 
-- **Frontend HTTPS routing** — the React app picks the HTTPS URL
-  for `/api/brains/:id/secrets/*` fetches automatically.
-- **Browser TOFU fingerprint pinning** — first visit captures the
-  cert fingerprint to localStorage; subsequent visits verify it
-  hasn't changed under the operator. (Valid on loopback because
-  swapping the cert requires already controlling the host.)
-- **Path-level enforcement** — server rejects HTTP requests to
-  `/api/brains/:id/secrets/*` once the UI redirect is in place.
+- **`GET /api/tls-status`** exposes `{ https_available, https_port,
+  fingerprint_sha256 }` so the Secrets page can render the right
+  banner without trying to introspect the browser's cert
+  acceptance state directly.
+- **HTTPS banner on the Secrets page** — when on HTTP and HTTPS
+  is available, the page surfaces a "Switch to HTTPS" banner
+  with the expected fingerprint. When no TLS is configured, a
+  hint points operators at `tls-cert generate`.
+- **Browser TOFU fingerprint pinning** — first visit on HTTPS
+  shows a "Trust this fingerprint" banner with the cert SHA-256.
+  Operator compares it to the browser's "View certificate"
+  dialog and clicks Trust to pin it in localStorage. Subsequent
+  visits compare silently; mismatches surface a warning with
+  pinned + current values + a "Clear pin" action for after a
+  legitimate `tls-cert rotate`.
+- **HTTP listener rejects secret writes** — when both HTTP +
+  HTTPS are bound, the HTTP listener returns
+  `426 Upgrade Required` for POST/DELETE on
+  `/api/brains/:id/secrets/*` (GET stays available so the page
+  can render and surface the banner). Adopters who haven't run
+  `tls-cert generate` see no enforcement — HTTP-only deployments
+  keep working.
+
+### v4 — deferred
+
 - **`tls-cert import <path>`** — load operator-supplied certs
   from a real CA (production deployments fronted by a reverse
   proxy). The bundled cert lifecycle handles the dev-loopback
   case end-to-end.
+- **Storing the private key in `SecretBackend`** instead of a
+  `0600` file (relevant for multi-user host deployments).
+- **Auto-redirect** from HTTP to HTTPS for `/secrets` paths.
+  v3 ships a "Switch to HTTPS" button rather than auto-redirect
+  because the first-visit cert acceptance is an operator
+  decision, not a server-side one.
 
 <!-- anchor: single-use-tokens -->
 ## Single-use tokens

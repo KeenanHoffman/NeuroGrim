@@ -53,7 +53,7 @@ use crate::types::{
     ExplainTopicResponse, QueueMessageDto, QueuePublishRequest, QueuePublishResponse,
     QueueReadResponse, QueueTopicStatsDto, QueuesListResponse, RecommendationDto,
     RegistryResponse, RegistryUpdateRequest, ResolveApprovalRequest, ResolveApprovalResponse,
-    SelfBrainDto, SkillsResponse,
+    SelfBrainDto, SkillsResponse, TlsStatusResponse,
 };
 
 /// Query params accepted by score-aware routes (overview, domains
@@ -92,6 +92,10 @@ struct FrontendAssets;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        // v4.2 S14-S-4.5 v3 — TLS status for the Secrets page's
+        // "switch to HTTPS" banner + browser TOFU pinning.
+        // Public values; safe on both HTTP and HTTPS listeners.
+        .route("/api/tls-status", get(tls_status))
         // ---- Legacy single-Brain routes (point at the host Brain) ----
         // These are kept for backward compatibility while the
         // frontend transitions to /brains/:id/* — Path 2's index
@@ -227,6 +231,40 @@ async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
         version: env!("CARGO_PKG_VERSION").to_string(),
         mutations_allowed: state.mutations_allowed,
     })
+}
+
+/// `GET /api/tls-status` — v4.2 S14-S-4.5 v3.
+///
+/// Returns whether HTTPS is bound on this dashboard + the cert
+/// fingerprint operators pin in localStorage. Both listeners
+/// serve this endpoint (the values are public). Frontend reads
+/// it on the Secrets page to drive the "switch to HTTPS" banner
+/// and the TOFU comparison.
+async fn tls_status(State(state): State<AppState>) -> Json<TlsStatusResponse> {
+    // The dashboard tracks HTTPS availability + port at startup
+    // (the constructor probes for cert files). The fingerprint
+    // is recomputed on each call so a `tls-cert rotate` between
+    // requests is visible to the frontend without a server
+    // restart.
+    let project_root = derive_project_root_from_registry(&state.registry_path);
+    let fingerprint = crate::tls_serve::cert_fingerprint(&project_root);
+    Json(TlsStatusResponse {
+        https_available: state.https_port.is_some(),
+        https_port: state.https_port,
+        fingerprint_sha256: fingerprint,
+    })
+}
+
+/// Derive the project root from the registry path string. Same
+/// rule as `lib.rs::serve()` — registry path is
+/// `<project>/.claude/brain-registry.json`, parent.parent gives
+/// the project root.
+fn derive_project_root_from_registry(registry_path: &str) -> std::path::PathBuf {
+    let p = std::path::Path::new(registry_path);
+    p.parent()
+        .and_then(std::path::Path::parent)
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
 /// `GET /api/overview` — landing-page summary for the Phase 1.1
