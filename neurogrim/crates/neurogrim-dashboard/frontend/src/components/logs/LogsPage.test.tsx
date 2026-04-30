@@ -416,6 +416,111 @@ describe("LogsPage", () => {
     expect(notifications.textContent).toContain("(1)");
   });
 
+  // ── S15-C-3 expansion: score-history source ────────────────────
+
+  it("aggregates score-history entries with delta-encoded outcomes", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: { topic: "_neurogrim/notifications", messages: [], next_offset: 0 },
+      "score-history": {
+        history_path: "/x/score-history.json",
+        present: true,
+        total_entries: 4,
+        entries: [
+          // Newest-first; backend already sorted.
+          { scored_at: "2026-04-29T13:00:00Z", score: 80, delta: 2 },
+          { scored_at: "2026-04-29T12:00:00Z", score: 78, delta: 0 },
+          { scored_at: "2026-04-29T11:00:00Z", score: 78, delta: -2 },
+          { scored_at: "2026-04-29T10:00:00Z", score: 80, delta: null },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    // Subjects: each row shows "score N (±Δ)".
+    expect(screen.getByText("score 80 (+2)")).toBeInTheDocument();
+    expect(screen.getByText("score 78 (±0)")).toBeInTheDocument();
+    expect(screen.getByText("score 78 (-2)")).toBeInTheDocument();
+    // First-ever snapshot has no delta — surface the raw score.
+    expect(screen.getByText("score 80")).toBeInTheDocument();
+    // One outcome badge per direction.
+    expect(screen.getByTestId("outcome-improved")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-stable")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-declined")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-first")).toBeInTheDocument();
+  });
+
+  it("renders N/A subject when score-history snapshot has null score", async () => {
+    // All-advisory Brains record `score: null`; the timeline should
+    // still surface those snapshots without crashing or rendering
+    // "score null".
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: { topic: "_neurogrim/notifications", messages: [], next_offset: 0 },
+      "score-history": {
+        history_path: "/x/score-history.json",
+        present: true,
+        total_entries: 1,
+        entries: [
+          { scored_at: "2026-04-29T10:00:00Z", score: null, delta: null },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    expect(screen.getByText("N/A")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-first")).toBeInTheDocument();
+  });
+
+  it("score-history filter chip narrows the timeline to score events only", async () => {
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "r1",
+            gate_id: "tests-pass",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-29T18:00:00Z",
+            completed_at: null,
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+        ],
+      },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: { topic: "_neurogrim/notifications", messages: [], next_offset: 0 },
+      "score-history": {
+        history_path: "/x/score-history.json",
+        present: true,
+        total_entries: 1,
+        entries: [
+          { scored_at: "2026-04-29T17:00:00Z", score: 80, delta: 2 },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    // Both visible initially.
+    expect(screen.getByText("tests-pass")).toBeInTheDocument();
+    expect(screen.getByText("score 80 (+2)")).toBeInTheDocument();
+    // Click the score-history chip → only score events remain.
+    fireEvent.click(screen.getByTestId("filter-score-history"));
+    expect(screen.queryByText("tests-pass")).not.toBeInTheDocument();
+    expect(screen.getByText("score 80 (+2)")).toBeInTheDocument();
+  });
+
   it("sorts entries newest first", async () => {
     mockFetch({
       "publish-gates": {

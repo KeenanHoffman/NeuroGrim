@@ -40,7 +40,7 @@
 - [x] Schema → form generator handles 80% case (object/array/string/number/boolean/enum) *(C-4 v2 ships curated forms for autonomy / hats / federation; the schemars-driven generic generator + textarea fallback is C-4 v3)*
 - [ ] 3-way merge UI when concurrent edits collide *(C-4 v3; current behavior is reload-on-conflict via the etag-conflict banner from v1)*
 - [ ] Built-in Services page: log tail, manual re-probe, sensor refresh *(C-2 expansion; needs new API endpoints for per-service log streams)*
-- [x] Built-in Logs page: invocation-ledger + notifications sources *(C-2 v2 + C-3 expansion shipped; score-history + services.jsonl sources still deferred)*
+- [x] Built-in Logs page: invocation-ledger + notifications + score-history sources *(C-2 v2 + C-3 expansion shipped; services.jsonl source still deferred — needs service-registry persistence first)*
 - [x] Custom page widget gallery: operator picks widgets from the v3.4 catalog *(C-6 v2 — LayoutEditorToolbar + WidgetGallery + WidgetEditControls + WidgetDispatch reused; add/remove/reorder/resize + per-widget config all work; PUT to `/api/brains/:id/dashboard-pages/:name/layout`)*
 - [x] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights *(C-6 v2 — `applyHashAnchor` parity with Overview)*
 - [x] Edit-via-bus payloads carry keypath-level diffs *(C-7 v2 — `crate::json_diff::diff` powers `emit_config_change_with_diff`; registry edits + layout changes emit `{path, op, before, after}` lists so subscribed agents react surgically without re-fetching)*
@@ -94,7 +94,7 @@ Sidebar navigation auto-populates from declared pages. Per-page persistence in `
 - [ ] Re-probe + sensor refresh buttons + tests
 - [ ] vitest covers the page
 
-### S15-C-3: Built-in Logs page (3 days) — 🟡 PARTIAL (publish-gates + approvals sources shipped; remaining 4 sources + toast notifications deferred)
+### S15-C-3: Built-in Logs page (3 days) — 🟡 PARTIAL (v1: publish-gates + approvals; v2 expansion: invocation-ledger + notifications + score-history shipped; remaining: services.jsonl source + toast notifications + per-row drill-down)
 
 **What:** Filterable timeline view reading from:
 - `<brain>/.claude/brain/services.jsonl` (S13.7 service runtime ledger)

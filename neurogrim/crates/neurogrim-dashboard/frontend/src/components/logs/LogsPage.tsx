@@ -10,11 +10,15 @@ import {
   Layers,
   PauseCircle,
   Sparkles,
+  TrendingDown,
+  TrendingUp,
+  Minus,
   XCircle,
 } from "lucide-react";
 import type { PublishGatesPageResponse } from "@bindings/PublishGatesPageResponse";
 import type { ApprovalsPageResponse } from "@bindings/ApprovalsPageResponse";
 import type { InvocationLedgerResponse } from "@bindings/InvocationLedgerResponse";
+import type { ScoreHistoryResponse } from "@bindings/ScoreHistoryResponse";
 import type { QueueReadResponse } from "@bindings/QueueReadResponse";
 import {
   Card,
@@ -38,6 +42,7 @@ import { brainApi, useBrainId } from "@/lib/useBrain";
 /**
  * S15-C-3: built-in Logs page (v1: publish-gates + approvals).
  * S15-C-2 v2: extended with invocation-ledger + notifications.
+ * S15-C-3 expansion: score-history added as the fifth source.
  *
  * Filterable timeline aggregating events from multiple ledgers:
  *
@@ -48,6 +53,10 @@ import { brainApi, useBrainId } from "@/lib/useBrain";
  * - **Notifications** — adopter-facing events on
  *   `_neurogrim/notifications` (autonomy post-execution emits,
  *   future: federation discovery, etc.)
+ * - **Score history** — unified-score snapshots from
+ *   `score-history.json`, each annotated with the delta against
+ *   the chronologically-prior snapshot (improving / declining /
+ *   stable / first). Per-domain detail lives in the Domains pages.
  *
  * Each source has its own filter chip; "All" defaults. Newest events
  * first; refreshes every 30 seconds via TanStack Query, plus
@@ -55,17 +64,15 @@ import { brainApi, useBrainId } from "@/lib/useBrain";
  * changes to the underlying ledgers (`useDashboardEvents` hook
  * mounted in AppShell).
  *
- * **Deferred (v3 follow-ups):**
+ * **Deferred:**
  *
- * - **score-history** — diff snapshots into per-domain "score
- *   changed by Δ" entries; needs threshold tuning to avoid noise
- *   (every snapshot would otherwise produce 17 entries).
  * - **services.jsonl** — service start/stop events; today's
  *   `ServiceRegistry` is in-memory only, so this needs a small
  *   persistence layer first.
  * - **Per-row drill-down** — click a row → see the full payload
- *   (publish-gate stdout/stderr, full notification body, etc.)
- *   in a side sheet.
+ *   (publish-gate stdout/stderr, full notification body, full
+ *   score-history snapshot with per-domain breakdown, etc.) in a
+ *   side sheet.
  */
 export function LogsPage() {
   const brainId = useBrainId();
@@ -91,12 +98,21 @@ export function LogsPage() {
     queryFn: () => fetchNotifications(brainId),
     refetchInterval: 30_000,
   });
+  const { data: scoreHistory } = useQuery({
+    queryKey: ["logs-score-history", brainId],
+    queryFn: () => fetchScoreHistory(brainId),
+    refetchInterval: 30_000,
+  });
 
   const entries = useMemo(() => {
-    return aggregate(gates, approvals, invocations, notifications).filter((e) =>
-      filter === "all" ? true : e.source === filter,
-    );
-  }, [gates, approvals, invocations, notifications, filter]);
+    return aggregate(
+      gates,
+      approvals,
+      invocations,
+      notifications,
+      scoreHistory,
+    ).filter((e) => (filter === "all" ? true : e.source === filter));
+  }, [gates, approvals, invocations, notifications, scoreHistory, filter]);
 
   return (
     <div className="space-y-6 p-6" data-testid="logs-page">
@@ -156,6 +172,13 @@ export function LogsPage() {
               onClick={() => setFilter("notifications")}
               testid="filter-notifications"
             />
+            <FilterChip
+              label="Score history"
+              count={countSource(entries, "score-history")}
+              active={filter === "score-history"}
+              onClick={() => setFilter("score-history")}
+              testid="filter-score-history"
+            />
           </div>
         </CardContent>
       </Card>
@@ -198,7 +221,8 @@ type LogSource =
   | "publish-gates"
   | "approvals"
   | "invocations"
-  | "notifications";
+  | "notifications"
+  | "score-history";
 
 interface LogEntry {
   id: string;
@@ -215,6 +239,7 @@ function aggregate(
   approvals: ApprovalsPageResponse | undefined,
   invocations: InvocationLedgerResponse | undefined,
   notifications: QueueReadResponse | undefined,
+  scoreHistory: ScoreHistoryResponse | undefined,
 ): LogEntry[] {
   const out: LogEntry[] = [];
   if (gates) {
@@ -290,6 +315,41 @@ function aggregate(
         when: m.produced_at,
         subject,
         outcome: severity,
+        actor: null,
+      });
+    }
+  }
+  if (scoreHistory) {
+    for (const e of scoreHistory.entries) {
+      // Subject shows the unified score; outcome encodes the
+      // direction so the row's badge mirrors what the operator sees
+      // on the trajectory badge elsewhere.
+      const scoreLabel = e.score === null ? "N/A" : `score ${e.score}`;
+      const deltaLabel =
+        e.delta === null
+          ? null
+          : e.delta > 0
+          ? `+${e.delta}`
+          : e.delta < 0
+          ? `${e.delta}`
+          : "±0";
+      const subject = deltaLabel
+        ? `${scoreLabel} (${deltaLabel})`
+        : scoreLabel;
+      const outcome =
+        e.delta === null
+          ? "first"
+          : e.delta > 0
+          ? "improved"
+          : e.delta < 0
+          ? "declined"
+          : "stable";
+      out.push({
+        id: `score-${e.scored_at}`,
+        source: "score-history",
+        when: e.scored_at,
+        subject,
+        outcome,
         actor: null,
       });
     }
@@ -397,6 +457,8 @@ function sourceIcon(source: LogSource): typeof CheckCircle2 {
       return Sparkles;
     case "notifications":
       return Bell;
+    case "score-history":
+      return TrendingUp;
     default:
       return Layers;
   }
@@ -437,6 +499,15 @@ function outcomeStyle(outcome: string): {
       return { Icon: Sparkles, variant: "secondary", label: "invoked" };
     case "info":
       return { Icon: Bell, variant: "outline", label: "info" };
+    // S15-C-3 expansion: score-history outcomes.
+    case "improved":
+      return { Icon: TrendingUp, variant: "default", label: "improved" };
+    case "declined":
+      return { Icon: TrendingDown, variant: "destructive", label: "declined" };
+    case "stable":
+      return { Icon: Minus, variant: "secondary", label: "stable" };
+    case "first":
+      return { Icon: Sparkles, variant: "outline", label: "first" };
     default:
       return { Icon: CircleAlert, variant: "outline", label: outcome };
   }
@@ -489,4 +560,13 @@ async function fetchNotifications(
     return { topic: "_neurogrim/notifications", messages: [], next_offset: 0n };
   }
   return (await res.json()) as QueueReadResponse;
+}
+
+async function fetchScoreHistory(
+  brainId: string,
+): Promise<ScoreHistoryResponse> {
+  const url = `${brainApi(brainId, "logs")}/score-history?limit=50`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
+  return (await res.json()) as ScoreHistoryResponse;
 }

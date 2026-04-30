@@ -209,6 +209,14 @@ pub fn router(state: AppState) -> Router {
             "/api/brains/:brain_id/logs/invocation-ledger",
             get(brain_logs_invocation_ledger),
         )
+        // v4.3 S15-C-3 expansion: score-history source for the Logs
+        // page. Same shape as invocation-ledger — newest-first, with
+        // per-snapshot delta computed against the chronologically-
+        // prior entry.
+        .route(
+            "/api/brains/:brain_id/logs/score-history",
+            get(brain_logs_score_history),
+        )
         // v4.2 S14-S-6 v1: secrets-management UI surface. List
         // is read-only; set + delete gated behind
         // --allow-mutations. Values flow over the HTTPS listener
@@ -2711,6 +2719,28 @@ async fn brain_logs_invocation_ledger(
     };
     let limit = q.limit.unwrap_or(crate::logs::DEFAULT_LIMIT);
     let resp = crate::logs::read_invocation_ledger(&brain.project_root, limit);
+    Json(resp).into_response()
+}
+
+/// `GET /api/brains/:brain_id/logs/score-history?limit=N` —
+/// recent score-history snapshots for the Logs page timeline,
+/// each annotated with the delta against its chronologically-prior
+/// snapshot. S15-C-3 expansion.
+///
+/// Returns newest-first. Defaults to 50 entries. Only the unified
+/// score is surfaced (per-domain detail lives in the Domains pages)
+/// so a Brain scored 50× per day doesn't drown the timeline.
+async fn brain_logs_score_history(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+    Query(q): Query<LogsLimitQuery>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let limit = q.limit.unwrap_or(crate::logs::DEFAULT_LIMIT);
+    let resp = crate::logs::read_score_history(&brain.project_root, limit);
     Json(resp).into_response()
 }
 

@@ -1,23 +1,28 @@
-//! v4.3 S15-C-2 v2 — log-source readers for the Logs page.
+//! v4.3 S15-C-2 v2 / S15-C-3 expansion — log-source readers for the
+//! Logs page.
 //!
 //! The Logs page aggregates events from multiple ledgers into a
 //! single timeline. v1 covered publish-gates + approvals (already
 //! exposed via `/api/brains/:id/publish-gates` and `/api/brains/
-//! :id/approvals`). This module adds the reader for the third
-//! source landing in v2: the invocation ledger.
+//! :id/approvals`). v2 added the invocation ledger reader. The C-3
+//! expansion (this module's score-history reader) adds the fourth
+//! ledger source so operators see score deltas in the unified
+//! "what happened" timeline alongside gate runs, approvals, and
+//! invocations.
 //!
-//! The reader is intentionally narrow — it returns the most recent
+//! Each reader is intentionally narrow — it returns the most recent
 //! N entries flattened to a structured DTO. Per-skill aggregation
-//! lives in `crate::skills` (Skills page); this is the raw timeline
-//! view.
+//! lives in `crate::skills` (Skills page); per-domain detail lives
+//! in the Domains pages — the Logs reader returns only the unified
+//! score per snapshot (with a delta from the prior snapshot) so the
+//! timeline doesn't blow up at 17-entries-per-score-run.
 //!
-//! Future v3 (deferred) sources:
+//! Future deferred sources:
 //!
-//! - `score-history.json` — diff snapshots into per-domain "score
-//!   changed by Δ" entries (needs threshold tuning).
 //! - `<project>/.claude/brain/services.jsonl` — service start/stop
 //!   events. Requires a persistence layer in `crate::services`
-//!   (today's registry is in-memory only).
+//!   (today's registry is in-memory only). Out of scope for the
+//!   C-3 expansion.
 //!
 //! The `_neurogrim/notifications` source uses the existing bus
 //! endpoint at `/api/brains/:id/queues/_neurogrim/notifications`
@@ -169,6 +174,176 @@ pub fn read_invocation_ledger(
 
     InvocationLedgerResponse {
         ledger_path: ledger_path.to_string_lossy().to_string(),
+        present: true,
+        total_entries,
+        entries,
+    }
+}
+
+// ── S15-C-3 expansion: score-history reader ──────────────────────────────
+
+/// One snapshot from `<project>/.claude/brain/score-history.json`,
+/// projected to a Logs-timeline shape: just the unified score plus
+/// a delta against the prior snapshot. Per-domain detail lives in
+/// the Domains pages — the Logs reader stays terse so a Brain
+/// scored 50× per day doesn't drown the timeline.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ScoreHistoryEntry {
+    /// RFC3339 timestamp from the snapshot's `scored_at` field.
+    pub scored_at: String,
+    /// Unified score on that snapshot (0-100, or null when the
+    /// Brain is fully advisory and the snapshot recorded `null`).
+    pub score: Option<i32>,
+    /// Delta vs. the previous snapshot in time-ordered sequence.
+    /// `None` for the oldest snapshot in the returned window
+    /// (no prior to diff against). `Some(0)` for unchanged scores.
+    pub delta: Option<i32>,
+}
+
+/// Response body of `GET /api/brains/:id/logs/score-history`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ScoreHistoryResponse {
+    /// Resolved on-disk path. Helps operators correlate the timeline
+    /// with their score-history.json.
+    pub history_path: String,
+    /// True when the file exists. False = empty timeline (the Brain
+    /// has never been scored).
+    pub present: bool,
+    /// Total snapshots parsed before the limit was applied. Surfaces
+    /// "history has 700 snapshots; we returned the most recent 50"
+    /// telemetry without forcing the operator to inspect the file.
+    pub total_entries: u32,
+    /// Entries newest-first, capped at the request's limit. The
+    /// `delta` field is computed against the chronologically-prior
+    /// snapshot (so the oldest entry in the returned slice has a
+    /// real delta when there's at least one snapshot beyond the
+    /// window; `None` when the slice covers the entire history).
+    pub entries: Vec<ScoreHistoryEntry>,
+}
+
+/// Read the score history and return the most-recent `limit` snapshots
+/// (newest-first), each annotated with the delta against its
+/// chronologically-prior snapshot.
+///
+/// Invariants:
+///
+/// - Missing file → `present: false`, empty entries.
+/// - Malformed file (not a JSON array, parse error) → `present:
+///   true` (the file was found) with empty entries; operators see
+///   the path in the response and can investigate. Drift signal
+///   without aborting the whole page.
+/// - `limit` clamped to `[1, MAX_LIMIT]`.
+/// - Snapshot ordering: the on-disk history is append-only (oldest
+///   first); we sort by `scored_at` defensively before computing
+///   deltas.
+pub fn read_score_history(
+    project_root: &Path,
+    limit: usize,
+) -> ScoreHistoryResponse {
+    let history_path = project_root
+        .join(".claude")
+        .join("brain")
+        .join("score-history.json");
+
+    let limit = limit.clamp(1, MAX_LIMIT);
+
+    let text = match std::fs::read_to_string(&history_path) {
+        Ok(t) => t,
+        Err(_) => {
+            return ScoreHistoryResponse {
+                history_path: history_path.to_string_lossy().to_string(),
+                present: false,
+                total_entries: 0,
+                entries: vec![],
+            };
+        }
+    };
+
+    // Parse to a flexible Value so unknown fields (per-domain
+    // breakdowns, future schema additions) don't fail the read.
+    let parsed: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => {
+            return ScoreHistoryResponse {
+                history_path: history_path.to_string_lossy().to_string(),
+                present: true,
+                total_entries: 0,
+                entries: vec![],
+            };
+        }
+    };
+
+    let array = match parsed.as_array() {
+        Some(a) => a,
+        None => {
+            return ScoreHistoryResponse {
+                history_path: history_path.to_string_lossy().to_string(),
+                present: true,
+                total_entries: 0,
+                entries: vec![],
+            };
+        }
+    };
+
+    // Project each snapshot to (scored_at, score). Skip entries
+    // missing the timestamp; missing/null scores are kept as-is so
+    // observers see "score: null" episodes in the timeline (e.g.,
+    // all-advisory Brains).
+    let mut snapshots: Vec<(DateTime<Utc>, String, Option<i32>)> = vec![];
+    let mut total_entries: u32 = 0;
+    for entry in array {
+        total_entries = total_entries.saturating_add(1);
+        let ts_str = match entry.get("scored_at").and_then(|v| v.as_str()) {
+            Some(t) => t,
+            None => continue,
+        };
+        let ts = match DateTime::parse_from_rfc3339(ts_str) {
+            Ok(t) => t.with_timezone(&Utc),
+            Err(_) => continue,
+        };
+        let score = entry
+            .get("score")
+            .and_then(|v| v.as_i64())
+            .map(|n| n as i32);
+        snapshots.push((ts, ts_str.to_string(), score));
+    }
+
+    // Defensive sort by timestamp — score-history.json is append-
+    // only oldest-first in practice, but treating the file as
+    // ordered would mask corruption.
+    snapshots.sort_by(|a, b| a.0.cmp(&b.0));
+
+    // Compute deltas vs. the chronologically-prior snapshot. The
+    // oldest snapshot in the *full* history has delta=None; later
+    // snapshots have delta=Some(current - prior).
+    let mut prior_score: Option<i32> = None;
+    let mut with_deltas: Vec<(DateTime<Utc>, ScoreHistoryEntry)> = snapshots
+        .into_iter()
+        .map(|(ts, ts_str, score)| {
+            let delta = match (prior_score, score) {
+                (Some(p), Some(c)) => Some(c - p),
+                _ => None,
+            };
+            prior_score = score;
+            let entry = ScoreHistoryEntry {
+                scored_at: ts_str,
+                score,
+                delta,
+            };
+            (ts, entry)
+        })
+        .collect();
+
+    // Newest-first, take the requested window.
+    with_deltas.sort_by(|a, b| b.0.cmp(&a.0));
+    with_deltas.truncate(limit);
+    let entries: Vec<ScoreHistoryEntry> =
+        with_deltas.into_iter().map(|(_, e)| e).collect();
+
+    ScoreHistoryResponse {
+        history_path: history_path.to_string_lossy().to_string(),
         present: true,
         total_entries,
         entries,
@@ -336,5 +511,189 @@ mod tests {
         let resp = read_invocation_ledger(&root, 50);
         assert_eq!(resp.entries.len(), 1);
         assert_eq!(resp.entries[0].name, None);
+    }
+
+    // ── score-history reader (S15-C-3 expansion) ─────────────────
+
+    fn write_score_history(project_root: &Path, json: &str) {
+        let path = project_root
+            .join(".claude")
+            .join("brain")
+            .join("score-history.json");
+        fs::write(&path, json).expect("write score-history");
+    }
+
+    #[test]
+    fn missing_score_history_returns_absent_response() {
+        let (_dir, root) = setup();
+        let resp = read_score_history(&root, 50);
+        assert!(!resp.present);
+        assert_eq!(resp.total_entries, 0);
+        assert!(resp.entries.is_empty());
+        assert!(resp.history_path.ends_with("score-history.json"));
+    }
+
+    #[test]
+    fn empty_array_returns_present_with_zero_entries() {
+        let (_dir, root) = setup();
+        write_score_history(&root, "[]");
+        let resp = read_score_history(&root, 50);
+        assert!(resp.present);
+        assert_eq!(resp.total_entries, 0);
+        assert!(resp.entries.is_empty());
+    }
+
+    #[test]
+    fn malformed_json_returns_present_with_empty_entries() {
+        // Drift signal: file exists but corrupt → operator sees
+        // present=true with 0 entries; they can investigate the
+        // path the response surfaces.
+        let (_dir, root) = setup();
+        write_score_history(&root, "not json at all");
+        let resp = read_score_history(&root, 50);
+        assert!(resp.present);
+        assert_eq!(resp.total_entries, 0);
+        assert!(resp.entries.is_empty());
+    }
+
+    #[test]
+    fn computes_delta_against_chronologically_prior_snapshot() {
+        let (_dir, root) = setup();
+        write_score_history(
+            &root,
+            r#"[
+              {"scored_at":"2026-04-29T10:00:00Z","score":70,"domains":{}},
+              {"scored_at":"2026-04-29T11:00:00Z","score":75,"domains":{}},
+              {"scored_at":"2026-04-29T12:00:00Z","score":78,"domains":{}}
+            ]"#,
+        );
+        let resp = read_score_history(&root, 50);
+        assert_eq!(resp.total_entries, 3);
+        // Newest-first.
+        assert_eq!(resp.entries[0].scored_at, "2026-04-29T12:00:00Z");
+        assert_eq!(resp.entries[0].score, Some(78));
+        assert_eq!(resp.entries[0].delta, Some(3)); // 78 - 75
+        assert_eq!(resp.entries[1].score, Some(75));
+        assert_eq!(resp.entries[1].delta, Some(5)); // 75 - 70
+        // Oldest in the full history → no prior to diff against.
+        assert_eq!(resp.entries[2].score, Some(70));
+        assert_eq!(resp.entries[2].delta, None);
+    }
+
+    #[test]
+    fn delta_uses_full_history_not_just_returned_window() {
+        // When the window is smaller than the history, the oldest
+        // returned entry should still have a delta computed from
+        // the snapshot prior to it (in the full history, not the
+        // window). Validates that we sort + diff first, then
+        // truncate.
+        let (_dir, root) = setup();
+        write_score_history(
+            &root,
+            r#"[
+              {"scored_at":"2026-04-29T10:00:00Z","score":70,"domains":{}},
+              {"scored_at":"2026-04-29T11:00:00Z","score":75,"domains":{}},
+              {"scored_at":"2026-04-29T12:00:00Z","score":78,"domains":{}},
+              {"scored_at":"2026-04-29T13:00:00Z","score":80,"domains":{}}
+            ]"#,
+        );
+        // Limit = 2 → two newest entries, oldest of those (the
+        // 12:00 snapshot) should have delta vs. 11:00 snapshot.
+        let resp = read_score_history(&root, 2);
+        assert_eq!(resp.total_entries, 4);
+        assert_eq!(resp.entries.len(), 2);
+        assert_eq!(resp.entries[0].scored_at, "2026-04-29T13:00:00Z");
+        assert_eq!(resp.entries[0].delta, Some(2)); // 80 - 78
+        assert_eq!(resp.entries[1].scored_at, "2026-04-29T12:00:00Z");
+        assert_eq!(resp.entries[1].delta, Some(3)); // 78 - 75
+    }
+
+    #[test]
+    fn null_score_is_preserved_with_no_delta() {
+        // All-advisory Brains record `score: null`. Both the score
+        // and any delta involving null should round-trip as null.
+        let (_dir, root) = setup();
+        write_score_history(
+            &root,
+            r#"[
+              {"scored_at":"2026-04-29T10:00:00Z","score":null,"domains":{}},
+              {"scored_at":"2026-04-29T11:00:00Z","score":75,"domains":{}}
+            ]"#,
+        );
+        let resp = read_score_history(&root, 50);
+        assert_eq!(resp.entries[0].score, Some(75));
+        // Prior snapshot was null → no delta.
+        assert_eq!(resp.entries[0].delta, None);
+        assert_eq!(resp.entries[1].score, None);
+        assert_eq!(resp.entries[1].delta, None);
+    }
+
+    #[test]
+    fn unsorted_history_is_re_sorted_by_timestamp() {
+        // Defensive: a corrupted on-disk file written out of order
+        // should still produce a chronologically-sane delta sequence.
+        let (_dir, root) = setup();
+        write_score_history(
+            &root,
+            r#"[
+              {"scored_at":"2026-04-29T12:00:00Z","score":78,"domains":{}},
+              {"scored_at":"2026-04-29T10:00:00Z","score":70,"domains":{}},
+              {"scored_at":"2026-04-29T11:00:00Z","score":75,"domains":{}}
+            ]"#,
+        );
+        let resp = read_score_history(&root, 50);
+        // Returned newest-first regardless of file order.
+        assert_eq!(resp.entries[0].scored_at, "2026-04-29T12:00:00Z");
+        assert_eq!(resp.entries[0].delta, Some(3));
+        assert_eq!(resp.entries[1].scored_at, "2026-04-29T11:00:00Z");
+        assert_eq!(resp.entries[1].delta, Some(5));
+        assert_eq!(resp.entries[2].scored_at, "2026-04-29T10:00:00Z");
+        assert_eq!(resp.entries[2].delta, None);
+    }
+
+    #[test]
+    fn limit_clamps_to_max_and_min() {
+        let (_dir, root) = setup();
+        write_score_history(
+            &root,
+            r#"[{"scored_at":"2026-04-29T10:00:00Z","score":70,"domains":{}}]"#,
+        );
+        // Pathological limit clamps to MAX_LIMIT.
+        let resp_max = read_score_history(&root, 99_999_999);
+        assert_eq!(resp_max.entries.len(), 1);
+        // Zero limit clamps to 1.
+        let resp_zero = read_score_history(&root, 0);
+        assert_eq!(resp_zero.entries.len(), 1);
+    }
+
+    #[test]
+    fn entries_missing_timestamps_skipped_but_counted_in_total() {
+        let (_dir, root) = setup();
+        write_score_history(
+            &root,
+            r#"[
+              {"scored_at":"2026-04-29T10:00:00Z","score":70,"domains":{}},
+              {"score":75,"domains":{}},
+              {"scored_at":"not-a-date","score":80,"domains":{}}
+            ]"#,
+        );
+        let resp = read_score_history(&root, 50);
+        // Total reflects every array element — drift signal.
+        assert_eq!(resp.total_entries, 3);
+        // Only the well-formed entry parses.
+        assert_eq!(resp.entries.len(), 1);
+    }
+
+    #[test]
+    fn non_array_root_returns_empty_entries() {
+        // Defensive: if score-history.json was somehow written as a
+        // single object (schema migration gone wrong, etc.), don't
+        // crash — return empty.
+        let (_dir, root) = setup();
+        write_score_history(&root, r#"{"not": "an array"}"#);
+        let resp = read_score_history(&root, 50);
+        assert!(resp.present);
+        assert_eq!(resp.total_entries, 0);
+        assert!(resp.entries.is_empty());
     }
 }

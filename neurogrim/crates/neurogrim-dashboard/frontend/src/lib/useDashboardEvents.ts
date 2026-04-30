@@ -202,6 +202,10 @@ function invalidate(
       // an exact key match invalidates all `["domain-detail", *]`
       // entries — TanStack Query treats the queryKey as a prefix.
       qc.invalidateQueries({ queryKey: ["domain-detail"] });
+      // v4.3 S15-C-3 expansion: score-history is a Logs page source.
+      // Invalidate so a new snapshot lands in the timeline within
+      // ~1s instead of waiting for the 30s refetch.
+      qc.invalidateQueries({ queryKey: ["logs-score-history"] });
       break;
     case "skill_invoked":
       qc.invalidateQueries({ queryKey: ["skills"] });

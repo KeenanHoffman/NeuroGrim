@@ -6,8 +6,10 @@ The Command Post is v4.3's reframe — the dashboard becomes the
 touch JSON files for routine work; they use forms, tables, and
 curated views. Edits emit on the bus so agents observe.
 
-This topic covers v4.3's foundation stories. As of v4.3 session 5,
+This topic covers v4.3's foundation stories. As of v4.3 session 6,
 the registry editor (C-4 v1 weights + v2 autonomy/hats/federation),
+the Logs page (C-3 v1 + v2 with 5 of 6 sources wired —
+publish-gates, approvals, invocations, notifications, score-history),
 custom pages (C-6 v1 CRUD + v2 widget gallery integration),
 edit-via-bus integration (C-7 v1 envelope + v2 keypath diffs), and
 inline help (C-8 v3) are shipped. Mobile-responsive breakpoints
@@ -25,10 +27,13 @@ Domains, Federation, Skills, Publish gates, Approvals):
   the Federation page.
 
 - **Logs** (`/brains/:id/logs`) — filterable timeline aggregating
-  publish-gate runs + autonomy approvals into a single view.
-  Filter chips per source. Refreshes every 30 seconds. v1 ships
-  publish-gates + approvals sources; future stories add invocation-
-  ledger, score-history, services.jsonl, and `_neurogrim/notifications`.
+  five ledger sources into a single view: publish-gate runs,
+  autonomy approvals, skill invocations, `_neurogrim/notifications`,
+  and score-history snapshots (each annotated with the delta
+  against the chronologically-prior score). Filter chips narrow
+  per source. Refreshes every 30 seconds + SSE-driven live updates.
+  Services.jsonl is the remaining deferred source (service
+  registry is in-memory today; persistence is a separate piece).
 
 - **Settings** (`/brains/:id/settings`) — five tabs:
   - **Registry** (C-4 v1+v2) — sub-tabbed curated editors for
