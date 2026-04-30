@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "./AppShell";
 import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 import { HatProvider } from "@/lib/useHat";
+import { ToastProvider } from "@/components/ui/toast";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -78,9 +79,11 @@ function renderShell(initialPath: string = "/brains/test-brain") {
     router,
     ...render(
       <QueryClientProvider client={qc}>
-        <HatProvider>
-          <RouterProvider router={router} />
-        </HatProvider>
+        <ToastProvider>
+          <HatProvider>
+            <RouterProvider router={router} />
+          </HatProvider>
+        </ToastProvider>
       </QueryClientProvider>
     ),
   };
@@ -166,5 +169,79 @@ describe("AppShell", () => {
     const overlay = screen.getByTestId("mobile-sidebar-overlay");
     fireEvent.click(overlay);
     expect(screen.queryByTestId("mobile-sidebar-overlay")).not.toBeInTheDocument();
+  });
+});
+
+// ── Pure dispatcher: SSE event → toast call ─────────────────────────────
+
+import { vi } from "vitest";
+import { dispatchToastForEvent } from "./AppShell";
+import type { DashboardEvent } from "@/lib/useDashboardEvents";
+
+describe("dispatchToastForEvent (toast trigger policy)", () => {
+  it("service_failed dispatches an error toast with peer + reason", () => {
+    const addToast = vi.fn();
+    const event: DashboardEvent = {
+      kind: "service_failed",
+      peer_name: "alpha",
+      reason: "port-conflict: port 8421 already bound",
+    };
+    dispatchToastForEvent(event, addToast);
+    expect(addToast).toHaveBeenCalledTimes(1);
+    expect(addToast).toHaveBeenCalledWith(
+      "error",
+      'Peer "alpha" failed',
+      "port-conflict: port 8421 already bound",
+    );
+  });
+
+  it("service_started does NOT toast (operator-caused / visible on Federation)", () => {
+    const addToast = vi.fn();
+    const event: DashboardEvent = {
+      kind: "service_started",
+      peer_name: "alpha",
+      pid: 1234,
+      port: 8421,
+    };
+    dispatchToastForEvent(event, addToast);
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("service_stopped does NOT toast (operator-caused)", () => {
+    const addToast = vi.fn();
+    const event: DashboardEvent = {
+      kind: "service_stopped",
+      peer_name: "alpha",
+      pid: 1234,
+    };
+    dispatchToastForEvent(event, addToast);
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("registry_changed does NOT toast (operator caused, would be noise)", () => {
+    const addToast = vi.fn();
+    dispatchToastForEvent({ kind: "registry_changed" }, addToast);
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("score_changed does NOT toast (too high frequency)", () => {
+    const addToast = vi.fn();
+    dispatchToastForEvent(
+      { kind: "score_changed", domain: "test-health" },
+      addToast,
+    );
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("notification_published does NOT toast (v2 work)", () => {
+    const addToast = vi.fn();
+    dispatchToastForEvent({ kind: "notification_published" }, addToast);
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("approval_resolved does NOT toast (operator just resolved)", () => {
+    const addToast = vi.fn();
+    dispatchToastForEvent({ kind: "approval_resolved" }, addToast);
+    expect(addToast).not.toHaveBeenCalled();
   });
 });

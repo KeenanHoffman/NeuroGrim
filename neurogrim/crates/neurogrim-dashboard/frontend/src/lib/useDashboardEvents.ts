@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 export type ConnectionStatus = "connecting" | "live" | "offline" | "disabled";
@@ -39,10 +39,28 @@ export type DashboardEvent =
  *
  * Returns the current connection status so the AppShell can render
  * a "live" indicator for operator visibility.
+ *
+ * **Optional `onEvent` callback** — fires for every parsed event
+ * AFTER cache invalidation. Used by AppShell to dispatch toasts
+ * (and is the extension point for any future "react to a specific
+ * event without a query refetch" consumer). Stable identity is the
+ * caller's responsibility — wrap in `useCallback` when the toast
+ * dispatcher you pass closes over hook results.
  */
-export function useDashboardEvents(): ConnectionStatus {
+export function useDashboardEvents(
+  onEvent?: (event: DashboardEvent) => void,
+): ConnectionStatus {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
+  // Latch the latest callback so the EventSource handler always
+  // reads the current value without re-binding on every render.
+  // Without the ref, passing an inline `(e) => addToast(...)` would
+  // tear down + re-open the SSE connection on every render of the
+  // parent.
+  const onEventRef = useRef(onEvent);
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   useEffect(() => {
     let es: EventSource | null = null;
@@ -68,6 +86,11 @@ export function useDashboardEvents(): ConnectionStatus {
         const event = normalize(parsed);
         if (!event) return;
         invalidate(queryClient, event);
+        // Notify the optional listener AFTER invalidation so any
+        // toast it dispatches reflects the post-invalidation state
+        // (the queries the operator might click through to are
+        // already invalidated by the time they read the toast).
+        onEventRef.current?.(event);
       } catch {
         // Malformed events are ignored — the backend's serde
         // implementation is stable, so a parse failure indicates

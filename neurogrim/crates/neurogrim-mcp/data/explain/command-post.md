@@ -43,6 +43,15 @@ Domains, Federation, Skills, Publish gates, Approvals):
   / stop / readiness-watcher handlers, durable across dashboard
   restarts.
 
+  **Cross-page toast notifications** — when a peer fails (the
+  canonical "operator on the wrong page misses something
+  important" event), a top-right toast surfaces the peer name +
+  failure reason regardless of which page the operator is on.
+  Auto-dismisses after 8 seconds, or click to dismiss. Toast
+  triggers are conservative by policy: only `service_failed` for
+  v1, with the framework reusable for future events identified as
+  "operator-would-miss-this" without being noisy.
+
 - **Settings** (`/brains/:id/settings`) — five tabs:
   - **Registry** (C-4 v1+v2) — sub-tabbed curated editors for
     domain weights, autonomy action_types, hats with multipliers,

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "@tanstack/react-router";
 import {
   Brain,
@@ -18,7 +18,12 @@ import {
   X,
 } from "lucide-react";
 import { useTheme } from "@/lib/useTheme";
-import { useDashboardEvents, type ConnectionStatus } from "@/lib/useDashboardEvents";
+import {
+  useDashboardEvents,
+  type ConnectionStatus,
+  type DashboardEvent,
+} from "@/lib/useDashboardEvents";
+import { useToast } from "@/components/ui/toast";
 import { HatPicker } from "@/components/layout/HatPicker";
 import { BrainSelector } from "@/components/layout/BrainSelector";
 
@@ -116,9 +121,16 @@ const NAV: NavItem[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { addToast } = useToast();
+  const onSseEvent = useCallback(
+    (event: DashboardEvent) => {
+      dispatchToastForEvent(event, addToast);
+    },
+    [addToast],
+  );
   // Subscribe at the shell level so the connection lives for the
   // whole session — pages mount/unmount, but the SSE socket persists.
-  const liveStatus = useDashboardEvents();
+  const liveStatus = useDashboardEvents(onSseEvent);
 
   // Read brainId from URL params when we're inside `/brains/$brainId/`;
   // strict: false because the index route `/` has no brainId. The
@@ -309,4 +321,53 @@ function LiveIndicator({ status }: { status: ConnectionStatus }) {
       {label}
     </span>
   );
+}
+
+/**
+ * Pure dispatcher: maps a dashboard SSE event to a toast call.
+ *
+ * Exported for unit testing — the AppShell wires this through
+ * `useDashboardEvents`'s `onEvent` callback. Only the events worth
+ * surfacing as cross-page ambient notifications fire a toast;
+ * the rest stay silent.
+ *
+ * **Current trigger policy:**
+ *
+ * - `service_failed` → error toast. Canonical "operator on the
+ *   wrong page misses a peer crash" case. Body carries the reason
+ *   so operators can route to the right diagnostic.
+ *
+ * **Intentionally silent:**
+ *
+ * - `registry_changed`, `layout_changed`, `approval_resolved` —
+ *   operator-caused; they already know.
+ * - `score_changed`, `skill_invoked`, `services_log_appended`,
+ *   `publish_gate_ledger_appended`, `notification_published` —
+ *   too noisy or already visible on the page that cares (Logs,
+ *   Domains, etc.). v2 may add `notification_published` once we
+ *   have a payload-driven severity convention.
+ *
+ * Adding new triggers? Toast fatigue is the primary risk —
+ * operators learn to ignore high-volume notifications. Each new
+ * trigger should carry a justification for "the operator would
+ * miss this if not on the right page."
+ */
+export function dispatchToastForEvent(
+  event: DashboardEvent,
+  addToast: (
+    severity: "info" | "success" | "warning" | "error",
+    title: string,
+    body?: string,
+  ) => string,
+): void {
+  if (event.kind === "service_failed") {
+    addToast("error", `Peer "${event.peer_name}" failed`, event.reason);
+    return;
+  }
+  // All other event kinds intentionally do not toast (see policy
+  // above). Use `_exhaustive` to catch new variants at compile time
+  // — a future event added to DashboardEvent will fail this match
+  // until someone consciously decides whether it should toast.
+  const _exhaustive: Exclude<typeof event.kind, "service_failed"> = event.kind;
+  void _exhaustive;
 }

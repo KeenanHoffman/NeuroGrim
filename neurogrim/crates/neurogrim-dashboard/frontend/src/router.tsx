@@ -9,6 +9,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import type { BrainsListResponse } from "@bindings/BrainsListResponse";
 import { AppShell } from "@/components/layout/AppShell";
+import { ToastProvider } from "@/components/ui/toast";
 import { OverviewPage } from "@/components/overview/OverviewPage";
 import { DomainsPage } from "@/components/domains/DomainsPage";
 import { DomainDetailPage } from "@/components/domains/DomainDetailPage";
@@ -35,9 +36,16 @@ import { BrainProvider } from "@/lib/useBrain";
 
 const rootRoute = createRootRoute({
   component: () => (
-    <AppShell>
-      <Outlet />
-    </AppShell>
+    // ToastProvider wraps the whole shell so any descendant can
+    // call useToast() — including AppShell's own SSE-event
+    // dispatcher. AppShell intentionally lives INSIDE the provider
+    // so toast triggers can be wired into useDashboardEvents at
+    // the same level as the connection-status hook.
+    <ToastProvider>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </ToastProvider>
   ),
   notFoundComponent: NotFoundPage,
 });
