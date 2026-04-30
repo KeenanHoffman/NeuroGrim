@@ -1542,6 +1542,16 @@ async fn brain_save_dashboard_layout(
         Ok(b) => b,
         Err(r) => return r,
     };
+    // S15-C-7 v2: snapshot before/after to compute the keypath
+    // diff. Read the existing layout (None when this is a first
+    // save), serialize both shapes to Value, then save. Capturing
+    // before the save keeps the diff snapshot consistent with what
+    // got written.
+    let before_value = read_layout(&brain.project_root)
+        .map(|saved| serde_json::to_value(saved.widgets).unwrap_or(serde_json::Value::Null))
+        .unwrap_or(serde_json::Value::Null);
+    let after_value =
+        serde_json::to_value(&body.widgets).unwrap_or(serde_json::Value::Null);
     let widget_count = body.widgets.len();
     if let Err(e) = save_layout(&brain.project_root, body.widgets) {
         return (
@@ -1555,13 +1565,14 @@ async fn brain_save_dashboard_layout(
     if let Some(tx) = &state.events {
         let _ = tx.send(crate::events::DashboardEvent::LayoutChanged);
     }
-    // S15-C-7: emit on the config-changes queue.
-    emit_config_change(
+    let diff = crate::json_diff::diff(&before_value, &after_value);
+    emit_config_change_with_diff(
         &state,
         &brain_id,
         "layout_change",
         format!("dashboard-layout saved with {widget_count} widget(s)"),
         &brain.project_root,
+        if diff.is_empty() { None } else { Some(diff) },
     )
     .await;
     (StatusCode::OK, Json(serde_json::json!({ "ok": true }))).into_response()
@@ -2519,12 +2530,17 @@ pub const CONFIG_CHANGES_TOPIC: &str = "_neurogrim/config-changes";
 /// }
 /// ```
 ///
-/// Detailed `before` / `after` diffs are a v2 enhancement — for v1,
-/// adopters subscribed to the queue see WHAT changed (action_type) +
-/// WHO (operator) + WHEN (timestamp), and can read the file from disk
-/// to see the new state. Sensitive sections (autonomy safety
-/// invariants, secrets) won't have plaintext diffs in any version;
-/// the keypath-only diff is the v2 design (S15-C-7 expansion).
+/// **v1 (this signature):** WHAT (action_type) + WHO (operator) +
+/// WHEN (timestamp) + free-text summary. Adopters subscribed to the
+/// queue can read the file from disk to see the new state.
+///
+/// **v2:** [`emit_config_change_with_diff`] adds an optional
+/// `diff: [{path, op, before, after}]` field so subscribers react
+/// surgically without re-fetching. Call sites that have natural
+/// before/after snapshots (registry edits, layout edits) compute
+/// the diff via [`crate::json_diff::diff`] and use the v2 helper;
+/// call sites without natural snapshots (page CRUD, approval
+/// resolution) keep using this v1 helper.
 pub async fn emit_config_change(
     state: &AppState,
     brain_id: &str,
@@ -2532,13 +2548,46 @@ pub async fn emit_config_change(
     summary: impl Into<String>,
     project_root: &std::path::Path,
 ) {
-    let payload = serde_json::json!({
+    emit_config_change_with_diff(state, brain_id, action_type, summary, project_root, None).await
+}
+
+/// S15-C-7 v2: emit on the config-changes queue with an optional
+/// keypath diff. The diff lets agents subscribed to the topic react
+/// to specific field changes (e.g. autonomy level dropped, federation
+/// child added) without re-fetching the whole document.
+///
+/// Pass `None` for `diff` when the change has no natural before/after
+/// shape (e.g. page deletion, approval resolution); the payload will
+/// match the v1 shape and existing subscribers stay compatible.
+pub async fn emit_config_change_with_diff(
+    state: &AppState,
+    brain_id: &str,
+    action_type: &str,
+    summary: impl Into<String>,
+    project_root: &std::path::Path,
+    diff: Option<Vec<crate::json_diff::KeypathChange>>,
+) {
+    let mut payload = serde_json::json!({
         "action_type": action_type,
         "operator": std::env::var("NEUROGRIM_OPERATOR").ok(),
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "brain_id": brain_id,
         "summary": summary.into(),
     });
+    if let Some(changes) = diff {
+        if !changes.is_empty() {
+            // v2: embed as `diff: [...]`. Empty vec is functionally
+            // identical to v1; skip emitting it to keep payloads
+            // tight for change-free saves (rare but possible — a
+            // double-Save with no changes between).
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert(
+                    "diff".to_string(),
+                    serde_json::to_value(&changes).unwrap_or(serde_json::Value::Null),
+                );
+            }
+        }
+    }
     let msg = neurogrim_core::queue::QueueMessage::new(CONFIG_CHANGES_TOPIC, payload);
     if let Err(e) = state.bus.publish(project_root, msg).await {
         // Best-effort — log but don't propagate.
@@ -3000,6 +3049,19 @@ async fn brain_dashboard_pages_save_layout(
         )
             .into_response();
     }
+    // S15-C-7 v2: snapshot before/after. The before-state is the
+    // page's existing widget list (empty array on a fresh page);
+    // the after-state is the request body. Diff scoped to the
+    // page's widget list rather than the whole multi-page config —
+    // matches the URL scope and keeps subscribers focused on what
+    // the operator actually edited.
+    let before_value = cfg
+        .pages
+        .get(&name)
+        .map(|widgets| serde_json::to_value(widgets).unwrap_or(serde_json::Value::Null))
+        .unwrap_or(serde_json::Value::Null);
+    let after_value =
+        serde_json::to_value(&body.widgets).unwrap_or(serde_json::Value::Null);
     let widget_count = body.widgets.len();
     cfg.pages.insert(name.clone(), body.widgets);
     if let Err(e) = crate::pages::save_dashboard_pages(&brain.project_root, &cfg) {
@@ -3014,8 +3076,8 @@ async fn brain_dashboard_pages_save_layout(
     if let Some(tx) = &state.events {
         let _ = tx.send(crate::events::DashboardEvent::LayoutChanged);
     }
-    // S15-C-7: emit on the config-changes queue.
-    emit_config_change(
+    let diff = crate::json_diff::diff(&before_value, &after_value);
+    emit_config_change_with_diff(
         &state,
         &brain_id,
         "layout_change",
@@ -3024,6 +3086,7 @@ async fn brain_dashboard_pages_save_layout(
             name, widget_count
         ),
         &brain.project_root,
+        if diff.is_empty() { None } else { Some(diff) },
     )
     .await;
     Json(serde_json::json!({
@@ -3201,13 +3264,28 @@ async fn brain_registry_put(
         let _ = tx.send(crate::events::DashboardEvent::RegistryChanged);
     }
     let new_etag = compute_etag(&new_text);
-    // S15-C-7: emit on the config-changes queue.
-    emit_config_change(
+    // S15-C-7 v2: compute keypath diff so subscribers see exactly
+    // what changed rather than just "registry was edited". The
+    // before-state was already read at ETag-check time
+    // (`current_raw`); parse it once for the diff. Parse failure
+    // here is non-fatal (the new state still saved successfully) —
+    // we fall back to the v1 summary-only payload.
+    let diff = serde_json::from_str::<serde_json::Value>(&current_raw)
+        .ok()
+        .map(|before_value| crate::json_diff::diff(&before_value, &body.registry));
+    emit_config_change_with_diff(
         &state,
         &brain_id,
         "registry_edit",
-        "brain-registry.json saved via dashboard editor",
+        match &diff {
+            Some(changes) if !changes.is_empty() => format!(
+                "brain-registry.json: {} keypath change(s)",
+                changes.len()
+            ),
+            _ => "brain-registry.json saved via dashboard editor".to_string(),
+        },
         &brain.project_root,
+        diff,
     )
     .await;
     Json(serde_json::json!({
@@ -4180,6 +4258,158 @@ mod tests {
         assert_eq!(widgets[0].id, "w1");
         assert_eq!(widgets[1].id, "w2");
         assert_eq!(widgets[1].widget_type, "markdown-note");
+    }
+
+    /// Helper: read every line of the `_neurogrim/config-changes`
+    /// topic JSONL backing file in the given project root. Returns
+    /// parsed JSON values in append order. Returns an empty vec
+    /// when the topic file doesn't exist (no events emitted yet).
+    fn read_config_changes_topic(
+        project_root: &std::path::Path,
+    ) -> Vec<serde_json::Value> {
+        let path = crate::bus::topic_path(project_root, CONFIG_CHANGES_TOPIC);
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return Vec::new();
+        };
+        text.lines()
+            .filter(|line| !line.trim().is_empty())
+            .filter_map(|line| serde_json::from_str(line).ok())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn registry_put_emits_config_change_with_keypath_diff() {
+        // S15-C-7 v2: registry edits (the v4.x reframe surface)
+        // emit on the config-changes queue with a keypath diff so
+        // agents subscribed to operator activity see *what
+        // changed*, not just "registry was edited".
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut state, brain_id) =
+            make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        state.mutations_allowed = true;
+
+        // The seed registry from `make_state_with_brain` has a
+        // single domain with weight 0.0; bump it to 1.0 to exercise
+        // the diff path. Read the on-disk file to compute the
+        // ETag the PUT will need to match.
+        let registry_path = tmp.path().join(".claude").join("brain-registry.json");
+        let current_text = std::fs::read_to_string(&registry_path).unwrap();
+        let etag = compute_etag(&current_text);
+        let mut current_value: serde_json::Value =
+            serde_json::from_str(&current_text).unwrap();
+        current_value["config"]["domain_weights"]["placeholder"] =
+            serde_json::json!(1.0);
+
+        let app = router(state);
+        let body = serde_json::json!({
+            "expected_etag": etag,
+            "registry": current_value,
+        });
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!("/api/brains/{brain_id}/registry"))
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let body_text = String::from_utf8_lossy(&body_bytes);
+        assert_eq!(status, StatusCode::OK, "body was: {body_text}");
+
+        // The queue payload should carry a `diff: [...]` field
+        // pointing at the changed weight path.
+        let entries = read_config_changes_topic(tmp.path());
+        assert_eq!(entries.len(), 1, "expected one event, got {entries:?}");
+        let payload = &entries[0]["payload"];
+        assert_eq!(payload["action_type"], "registry_edit");
+        let diff = payload["diff"]
+            .as_array()
+            .expect("diff field present and is an array");
+        // Find the weight change — there might be other paths if the
+        // serialization round-trip surfaces extra fields.
+        let weight_change = diff
+            .iter()
+            .find(|c| c["path"] == "config.domain_weights.placeholder")
+            .expect("expected a keypath change at config.domain_weights.placeholder");
+        assert_eq!(weight_change["op"], "replace");
+        assert_eq!(weight_change["before"], 0.0);
+        assert_eq!(weight_change["after"], 1.0);
+        // Summary surfaces the keypath count rather than the
+        // generic v1 "saved via dashboard editor" copy.
+        assert!(
+            payload["summary"]
+                .as_str()
+                .unwrap_or("")
+                .contains("keypath change"),
+            "summary was: {}",
+            payload["summary"]
+        );
+    }
+
+    #[tokio::test]
+    async fn save_layout_emits_config_change_with_diff_payload() {
+        // S15-C-7 v2: layout saves should emit on the config-changes
+        // queue with a `diff: [...]` field showing the keypath
+        // changes between old + new widget lists.
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) = make_state_with_custom_page(&tmp, "my-page");
+        // Seed an existing widget so the diff has a non-trivial
+        // before/after.
+        let mut cfg = crate::pages::read_dashboard_pages(tmp.path(), &brain_id);
+        cfg.pages.insert(
+            "my-page".to_string(),
+            vec![crate::layout::WidgetSpec {
+                id: "old".to_string(),
+                widget_type: "score-gauge".to_string(),
+                size: "third".to_string(),
+                title: None,
+                config: serde_json::json!({}),
+            }],
+        );
+        crate::pages::save_dashboard_pages(tmp.path(), &cfg).unwrap();
+
+        let app = router(state);
+        let body = serde_json::json!({
+            "widgets": [
+                {
+                    "id": "old",
+                    "widget_type": "score-gauge",
+                    "size": "full",
+                    "title": null,
+                    "config": {}
+                }
+            ]
+        });
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!(
+                "/api/brains/{brain_id}/dashboard-pages/my-page/layout"
+            ))
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Inspect the queue payload — it should carry a `diff` field
+        // pointing at the size change.
+        let entries = read_config_changes_topic(tmp.path());
+        assert_eq!(
+            entries.len(),
+            1,
+            "expected exactly one config-changes event, got {entries:?}"
+        );
+        let payload = &entries[0]["payload"];
+        assert_eq!(payload["action_type"], "layout_change");
+        let diff = payload["diff"]
+            .as_array()
+            .expect("diff field present and is an array");
+        assert_eq!(diff.len(), 1, "expected one keypath change, got {diff:?}");
+        assert_eq!(diff[0]["path"], "[0].size");
+        assert_eq!(diff[0]["op"], "replace");
+        assert_eq!(diff[0]["before"], "third");
+        assert_eq!(diff[0]["after"], "full");
     }
 
     #[tokio::test]

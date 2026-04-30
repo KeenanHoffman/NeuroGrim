@@ -6,12 +6,13 @@ The Command Post is v4.3's reframe — the dashboard becomes the
 touch JSON files for routine work; they use forms, tables, and
 curated views. Edits emit on the bus so agents observe.
 
-This topic covers v4.3's foundation stories. As of v4.3 session 4,
+This topic covers v4.3's foundation stories. As of v4.3 session 5,
 the registry editor (C-4 v1 weights + v2 autonomy/hats/federation),
 custom pages (C-6 v1 CRUD + v2 widget gallery integration),
-edit-via-bus integration (C-7 v1), and inline help (C-8 v3) are
-shipped. Mobile-responsive breakpoints (C-9) and the schemars-driven
-generic form generator (C-4 v3) are the remaining deferred polish.
+edit-via-bus integration (C-7 v1 envelope + v2 keypath diffs), and
+inline help (C-8 v3) are shipped. Mobile-responsive breakpoints
+(C-9) and the schemars-driven generic form generator (C-4 v3) are
+the remaining deferred polish.
 
 ## What's in v4.3 v1 (this stage)
 
@@ -123,8 +124,12 @@ the same way they can `tail -f` any other Brain artifact.
 <!-- anchor: edit-via-bus -->
 ## Edit-via-bus design (C-7)
 
-Every UI mutation emits on `_neurogrim/config-changes` with this
-payload (v1 minimal — v2 will add keypath-level diffs):
+Every UI mutation emits on `_neurogrim/config-changes`. v1 (the
+foundation) shipped a minimal envelope; v2 adds a keypath-level
+`diff` so agents subscribed to the topic react surgically without
+re-fetching the whole document.
+
+### v2 payload shape (registry edits + layout changes)
 
 ```json
 {
@@ -132,14 +137,74 @@ payload (v1 minimal — v2 will add keypath-level diffs):
   "operator": "<from $NEUROGRIM_OPERATOR>",
   "timestamp": "<RFC3339>",
   "brain_id": "<id>",
-  "summary": "<one-line human-readable summary>"
+  "summary": "<one-line human-readable summary>",
+  "diff": [
+    {
+      "path": "config.autonomy.action_types.edit-code.default_level",
+      "op": "replace",
+      "before": "approve",
+      "after": "auto"
+    },
+    {
+      "path": "config.children.python-starter.weight",
+      "op": "replace",
+      "before": 1.0,
+      "after": 0.8
+    }
+  ]
 }
 ```
 
-Agents subscribing to that topic observe operator activity in
+### Diff semantics
+
+- **Path format** — object keys joined with `.`; array indices
+  bracketed. Examples: `config.domain_weights.test-health`,
+  `widgets[2].size`. Top-level scalar replacements (rare — our
+  domain's roots are always objects) use the `"$"` marker.
+- **Ops** — `add` (new path), `remove` (path gone), `replace`
+  (existing path's value changed). Mirrors RFC 6902 (JSON Patch).
+- **Before/after** — `before` is omitted for `add`; `after` is
+  omitted for `remove`; both populated for `replace`.
+- **Truncation** — capped at 100 entries to keep queue payloads
+  bounded. Realistic operator edits touch 1-3 paths; widget
+  re-orderings emit replaces per index. Pathological all-fields
+  edits truncate silently (consumer notices via the count).
+- **Diff scope** — registry edits diff the whole registry JSON;
+  layout changes diff just the page's widget array (not the whole
+  multi-page config), matching the URL-scope of the PUT.
+
+### Which actions carry diffs
+
+| `action_type` | Has `diff`? | Why |
+|---|---|---|
+| `registry_edit` | yes | natural before/after via the GET that loaded + the PUT that saved |
+| `layout_change` | yes | both the legacy `dashboard-layout` and the v4.3 per-page `dashboard-pages/:name/layout` PUTs compute it |
+| `layout_reset` | no | DELETE has no after-state; the summary is enough |
+| `page_added` | no | trivial (single page added); summary names the page |
+| `page_removed` | no | trivial (single page removed); summary names the page |
+| `approval_resolved` | no | different shape entirely (approval action_id + decision) |
+
+Agents subscribed to the topic observe operator activity in
 real-time — the substrate for "agent reacts when operator changes
-the autonomy block" workflows. No polling; SSE-pushed via the
-v4.1 bus.
+the autonomy block" workflows. SSE-pushed via the v4.1 bus.
+
+### Subscriber example (agent reacting to autonomy changes)
+
+```python
+# pseudocode — actual queue subscription via the MCP queue tools
+for event in subscribe("_neurogrim/config-changes"):
+    if event["action_type"] != "registry_edit":
+        continue
+    for change in event.get("diff", []):
+        if change["path"].startswith("config.autonomy.action_types"):
+            # The operator just dropped or raised an autonomy floor.
+            log_autonomy_shift(change["path"], change["before"], change["after"])
+```
+
+The keypath path lets the agent route to the right handler without
+parsing the registry; the before/after lets it react to the
+direction of the change (loosened vs tightened) rather than just
+"something autonomy-related".
 
 ## Conflict detection (C-4 v1)
 

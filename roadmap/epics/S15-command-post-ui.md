@@ -43,6 +43,7 @@
 - [x] Built-in Logs page: invocation-ledger + notifications sources *(C-2 v2 + C-3 expansion shipped; score-history + services.jsonl sources still deferred)*
 - [x] Custom page widget gallery: operator picks widgets from the v3.4 catalog *(C-6 v2 — LayoutEditorToolbar + WidgetGallery + WidgetEditControls + WidgetDispatch reused; add/remove/reorder/resize + per-widget config all work; PUT to `/api/brains/:id/dashboard-pages/:name/layout`)*
 - [x] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights *(C-6 v2 — `applyHashAnchor` parity with Overview)*
+- [x] Edit-via-bus payloads carry keypath-level diffs *(C-7 v2 — `crate::json_diff::diff` powers `emit_config_change_with_diff`; registry edits + layout changes emit `{path, op, before, after}` lists so subscribed agents react surgically without re-fetching)*
 - [ ] Custom page limit (default 8 per Brain) + folder grouping when exceeded *(C-6 v3)*
 - [ ] Page icon picker + per-page title *(C-6 v3)*
 - [x] Inline help anchors rolled out across all 13 explain topics *(C-8 v3 — autonomy.md added 3 anchors in C-4 v2 session; total 61 anchors across 14 topics)*
@@ -167,7 +168,7 @@ Limit: 8 custom pages per Brain by default (configurable). Group into folders if
 - [ ] Per-page title (vs. just the kebab-case id) *(v3)*
 - [ ] Folder grouping when limit exceeded *(v3 — only matters when adopters declare 8+ pages)*
 
-### S15-C-7: Edit-via-bus integration (3 days) — ✅ SHIPPED (v1 minimal payload; keypath-level before/after diffs deferred to v2)
+### S15-C-7: Edit-via-bus integration (3 days) — ✅ v1 + v2 SHIPPED (v1 minimal envelope; v2 adds keypath-level before/after diffs for registry + layout edits)
 
 **What:** Every UI mutation emits on `_neurogrim/config-changes` queue.
 
@@ -185,10 +186,10 @@ Standard payload:
 Documented as the way for agents to observe operator activity. Sample agent: PC-state pilot can subscribe to its own Brain's queue.
 
 **Done when:**
-- [ ] Emission infrastructure shared across all mutation handlers
-- [ ] `before/after` diff is small (key paths only, not full structures, for sensitive sections)
-- [ ] vitest covers emission for each mutation type
-- [ ] Adopter doc: how to write an agent that subscribes
+- [x] Emission infrastructure shared across all mutation handlers *(v1 — `emit_config_change` helper used by registry-edit, layout-save, layout-reset, page-add, page-remove, approval-resolve)*
+- [x] `before/after` diff is small (key paths only, not full structures) *(v2 — `crate::json_diff::diff` walks two `serde_json::Value`s and emits a `Vec<KeypathChange>`; capped at 100 entries; registry-edit + layout-change emit it via `emit_config_change_with_diff`)*
+- [x] Backend tests cover emission for each mutation type *(v1: 4 tests for the emit-helper; v2: 17 json_diff tests + 2 integration tests verifying the diff lands on the queue)*
+- [ ] Adopter doc: how to write an agent that subscribes *(documentation pass — v2 explain topic shows the payload shape + a subscriber pseudocode example)*
 
 ### S15-C-8: Inline help integration (2 days) — 🟡 PARTIAL (HelpIcon component + modal + `GET /api/explain/:topic` endpoint + anchor convention with proof anchors in scoring.md; rolling anchors out across all 13 topics + markdown renderer deferred)
 

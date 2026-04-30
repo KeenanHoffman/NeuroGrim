@@ -31,6 +31,7 @@ pub mod brains;
 pub mod bus;
 pub mod cache;
 pub mod events;
+pub mod json_diff;
 pub mod layout;
 pub mod logs;
 pub mod pages;
