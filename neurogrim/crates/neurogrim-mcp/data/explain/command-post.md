@@ -22,9 +22,15 @@ Three new built-in pages joined the existing six (Overview,
 Domains, Federation, Skills, Publish gates, Approvals):
 
 - **Services** (`/brains/:id/services`) — per-peer process list:
-  peer_name, pid, port, uptime, log path. Read-only fleet
-  telemetry. Refreshes every 5 seconds. Start/stop actions stay on
-  the Federation page.
+  peer_name, pid, port, uptime, log path. Refreshes every 5
+  seconds. Start/stop actions stay on the Federation page. Each
+  row has a **View log** button that opens an in-dashboard log
+  tail modal — surfaces the trailing ~256 KB of the peer's
+  spawned-process log file with a manual refresh button. Works
+  for any peer declared in the registry, including ones started
+  in a previous dashboard session (the log path is computed from
+  the conventional `<peer_brain>/.claude/brain/logs/<peer>.log`
+  rather than tied to the in-memory service registry).
 
 - **Logs** (`/brains/:id/logs`) — filterable timeline aggregating
   six ledger sources into a single view: publish-gate runs,

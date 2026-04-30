@@ -132,6 +132,13 @@ pub fn router(state: AppState) -> Router {
             "/api/brains/:brain_id/peers/:peer/stop",
             axum::routing::post(brain_peer_stop),
         )
+        // v4.3 S15-C-2 expansion: trailing lines from the peer's
+        // spawned-process log file. Read-only; bounded by
+        // PEER_LOG_TAIL_BYTES so a huge log doesn't OOM the response.
+        .route(
+            "/api/brains/:brain_id/peers/:peer/log",
+            get(brain_peer_log),
+        )
         // Read-only: list services tracked by this dashboard.
         .route("/api/brains/:brain_id/services", get(brain_services))
         // Read-only: surface the project's port allocation for the
@@ -2824,6 +2831,51 @@ async fn brain_logs_services(
     Json(resp).into_response()
 }
 
+/// Query params for the per-peer log endpoint.
+#[derive(Debug, Deserialize)]
+struct PeerLogQuery {
+    /// Number of trailing lines to return. Clamped server-side to
+    /// `[1, logs::PEER_LOG_MAX_LINES]`. Defaults to
+    /// `logs::PEER_LOG_DEFAULT_LINES`.
+    lines: Option<usize>,
+}
+
+/// `GET /api/brains/:brain_id/peers/:peer_name/log?lines=N` —
+/// trailing lines from the peer's spawned-process log file.
+/// S15-C-2 expansion: gives operators in-dashboard debugging
+/// without dropping to a terminal for `tail -f`.
+///
+/// The log lives at the conventional path:
+///   `<peer_brain_path>/.claude/brain/logs/<peer_name>.log`
+/// (where `<peer_brain_path>` is resolved from the parent brain's
+/// `config.children.<peer_name>.brain_path`). Works for any peer
+/// declared in the registry, whether currently tracked by the
+/// in-memory service registry or not — operators can read logs
+/// from a peer that started in a previous dashboard session.
+///
+/// The reader is bounded by [`crate::logs::PEER_LOG_TAIL_BYTES`]
+/// so a multi-GB log doesn't OOM the dashboard. The response's
+/// `truncated` field tells the UI whether older content exists.
+async fn brain_peer_log(
+    State(state): State<AppState>,
+    AxumPath((brain_id, peer_name)): AxumPath<(String, String)>,
+    Query(q): Query<PeerLogQuery>,
+) -> Response {
+    let peer = match resolve_peer(&state, &brain_id, &peer_name).await {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+    let log_path = peer
+        .brain_path
+        .join(".claude")
+        .join("brain")
+        .join("logs")
+        .join(format!("{}.log", peer.peer_name));
+    let lines = q.lines.unwrap_or(crate::logs::PEER_LOG_DEFAULT_LINES);
+    let resp = crate::logs::read_peer_log_tail(&log_path, lines);
+    Json(resp).into_response()
+}
+
 // ── S14-S-6 v1: secrets-management UI surface ──────────────────────────
 
 /// `GET /api/brains/:brain_id/secrets` — list declared secrets
@@ -4455,6 +4507,110 @@ mod tests {
             "summary was: {}",
             payload["summary"]
         );
+    }
+
+    #[tokio::test]
+    async fn peer_log_endpoint_returns_tail_lines_from_disk() {
+        // S15-C-2 expansion integration: write a peer log to disk
+        // and confirm the endpoint reads it via the resolve_peer +
+        // log-path-convention chain.
+        let tmp = tempfile::tempdir().unwrap();
+        // Set up a parent brain with a child peer.
+        let peer_root = tmp.path().join("peer-alpha");
+        std::fs::create_dir_all(&peer_root).unwrap();
+        let (state, brain_id) = make_state_with_brain(
+            &tmp,
+            "parent-brain",
+            serde_json::json!({
+                "alpha": {
+                    "brain_path": peer_root.to_string_lossy(),
+                    "a2a_endpoint": "http://localhost:8421/a2a/v1/",
+                    "interface_version": "1",
+                    "weight": 1.0,
+                    "enabled": true,
+                }
+            }),
+        );
+        // Write the peer log at the conventional path.
+        let log_dir = peer_root.join(".claude").join("brain").join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let log_path = log_dir.join("alpha.log");
+        std::fs::write(
+            &log_path,
+            "boot\nready\nincoming probe\nshutdown signal\n",
+        )
+        .unwrap();
+
+        let app = router(state);
+        let req = Request::builder()
+            .uri(format!(
+                "/api/brains/{brain_id}/peers/alpha/log?lines=200"
+            ))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let body_text = String::from_utf8_lossy(&body_bytes);
+        assert_eq!(status, StatusCode::OK, "body was: {body_text}");
+        let v: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(v["present"], true);
+        assert_eq!(v["truncated"], false);
+        let lines = v["lines"].as_array().expect("lines is array");
+        assert_eq!(lines.len(), 4);
+        assert_eq!(lines[0], "boot");
+        assert_eq!(lines[3], "shutdown signal");
+    }
+
+    #[tokio::test]
+    async fn peer_log_endpoint_returns_404_for_unknown_peer() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) =
+            make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        let app = router(state);
+        let req = Request::builder()
+            .uri(format!("/api/brains/{brain_id}/peers/never-declared/log"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(v["code"], "peer-not-found");
+    }
+
+    #[tokio::test]
+    async fn peer_log_endpoint_returns_absent_when_file_missing() {
+        // Peer is declared but never started → no log file. Endpoint
+        // should return 200 with present=false rather than 500.
+        let tmp = tempfile::tempdir().unwrap();
+        let peer_root = tmp.path().join("peer-alpha");
+        std::fs::create_dir_all(&peer_root).unwrap();
+        let (state, brain_id) = make_state_with_brain(
+            &tmp,
+            "parent-brain",
+            serde_json::json!({
+                "alpha": {
+                    "brain_path": peer_root.to_string_lossy(),
+                    "a2a_endpoint": "http://localhost:8421/a2a/v1/",
+                    "interface_version": "1",
+                    "weight": 1.0,
+                    "enabled": true,
+                }
+            }),
+        );
+        let app = router(state);
+        let req = Request::builder()
+            .uri(format!("/api/brains/{brain_id}/peers/alpha/log"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(v["present"], false);
+        let lines = v["lines"].as_array().expect("lines is array");
+        assert!(lines.is_empty());
     }
 
     #[tokio::test]

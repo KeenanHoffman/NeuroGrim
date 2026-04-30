@@ -83,7 +83,7 @@ Sidebar navigation auto-populates from declared pages. Per-page persistence in `
 - [ ] TanStack Router routes auto-derived from pages map
 - [ ] Migration helper: `neurogrim dashboard-pages migrate` rewrites old → new shape
 
-### S15-C-2: Built-in Services page (5 days) — 🟡 PARTIAL (read-only fleet view shipped; log tail + re-probe + sensor refresh deferred)
+### S15-C-2: Built-in Services page (5 days) — 🟡 PARTIAL (v1: read-only fleet view; v2 expansion: in-dashboard peer log tail viewer modal — operators no longer drop to a terminal for `tail -f <peer>.log`. Manual re-probe + on-demand sensor refresh remain deferred — re-probe is mostly redundant with the federation page's 30s refetch; sensor refresh requires spawning arbitrary child processes which is its own piece.)
 
 **What:** Extract v3.5 `PeerActions` into a full page. Show per-peer process list (reads from `services.jsonl`), per-service log tail (5-second poll OR SSE-pushed), manual re-probe + sensor refresh actions (carry-over from v3.5.1 backlog).
 

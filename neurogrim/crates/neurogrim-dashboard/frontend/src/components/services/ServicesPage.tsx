@@ -1,12 +1,17 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
   CircleSlash,
+  FileText,
+  RefreshCw,
   Server,
+  X,
 } from "lucide-react";
 import type { ServicesListResponse } from "@bindings/ServicesListResponse";
 import type { ServiceSnapshot } from "@bindings/ServiceSnapshot";
+import type { PeerLogResponse } from "@bindings/PeerLogResponse";
 import {
   Card,
   CardContent,
@@ -22,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button-ish";
 import { Badge } from "@/components/ui/badge";
 import { brainApi, useBrainId } from "@/lib/useBrain";
 
@@ -32,16 +38,23 @@ import { brainApi, useBrainId } from "@/lib/useBrain";
  * tracking (spawned via `--allow-mutations` from the Federation
  * page). Surfaces peer_name, pid, port, started_at, log_path.
  *
- * **v1 scope:** read-only display. Re-probe / sensor-refresh
- * actions are deferred until the relevant API endpoints land
- * (carry-over from the v3.5.1 backlog noted in the S15 epic). The
- * existing Federation page already provides start/stop buttons
- * via `PeerActions`; this page surfaces the running fleet at a
- * glance instead.
+ * **v1:** read-only fleet view (peer_name, pid, port, uptime, log
+ * path).
  *
- * **What this catches:** "is the peer for ecosystem-A still up?"
- * without clicking through to Federation. Useful when running
- * multiple Brains side-by-side.
+ * **v2 (this expansion):** in-dashboard log tail viewer. Click the
+ * "View log" button on any peer row to open a modal showing the
+ * trailing lines of the peer's spawned-process log. The modal has
+ * a manual refresh button; live SSE-streamed updates are a v3
+ * follow-on. Operators no longer drop to a terminal for
+ * `tail -f <peer>.log`.
+ *
+ * **Still deferred:** manual re-probe (federation page already
+ * refetches every 30s; on-demand probe trigger is low-value); on-
+ * demand sensor refresh (spawning child processes for arbitrary
+ * sensors is a separate piece).
+ *
+ * **What this catches:** "is the peer for ecosystem-A still up
+ * AND why did it crash?" without leaving the dashboard.
  */
 export function ServicesPage() {
   const brainId = useBrainId();
@@ -50,6 +63,9 @@ export function ServicesPage() {
     queryFn: () => fetchServices(brainId),
     refetchInterval: 5_000,
   });
+  // S15-C-2 expansion: per-peer log viewer modal. Tracks the
+  // currently-open peer's name; null means no modal.
+  const [logPeer, setLogPeer] = useState<string | null>(null);
 
   if (isLoading) {
     return <PageShell>Loading services…</PageShell>;
@@ -101,17 +117,29 @@ export function ServicesPage() {
                 <TableHead>PID</TableHead>
                 <TableHead>Port</TableHead>
                 <TableHead>Uptime</TableHead>
-                <TableHead>Log</TableHead>
+                <TableHead>Log path</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.services.map((s) => (
-                <ServiceRow key={s.peer_name} service={s} />
+                <ServiceRow
+                  key={s.peer_name}
+                  service={s}
+                  onViewLog={() => setLogPeer(s.peer_name)}
+                />
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+      {logPeer && (
+        <PeerLogModal
+          brainId={brainId}
+          peerName={logPeer}
+          onClose={() => setLogPeer(null)}
+        />
+      )}
     </PageShell>
   );
 }
@@ -163,7 +191,13 @@ function EmptyState() {
   );
 }
 
-function ServiceRow({ service }: { service: ServiceSnapshot }) {
+function ServiceRow({
+  service,
+  onViewLog,
+}: {
+  service: ServiceSnapshot;
+  onViewLog: () => void;
+}) {
   return (
     <TableRow data-testid={`service-row-${service.peer_name}`}>
       <TableCell>
@@ -179,11 +213,187 @@ function ServiceRow({ service }: { service: ServiceSnapshot }) {
       <TableCell className="text-xs text-muted-foreground">
         {formatUptime(service.started_at)}
       </TableCell>
-      <TableCell className="text-xs text-muted-foreground font-mono">
+      <TableCell className="text-xs text-muted-foreground font-mono truncate max-w-xs">
         {service.log_path}
+      </TableCell>
+      <TableCell className="text-right">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onViewLog}
+          data-testid={`service-view-log-${service.peer_name}`}
+        >
+          <FileText className="h-3.5 w-3.5 mr-1" />
+          View log
+        </Button>
       </TableCell>
     </TableRow>
   );
+}
+
+/**
+ * S15-C-2 expansion: in-dashboard log tail viewer. Reads the most
+ * recent ~256 KB of `<peer_brain>/.claude/brain/logs/<peer>.log`
+ * via the per-peer log endpoint and renders it in a centered
+ * modal.
+ *
+ * Manual refresh button reloads the tail; live streaming via SSE
+ * is a v3 follow-on (current refresh-on-click is enough for
+ * "what just happened" debugging without engineering the
+ * file-watcher complexity yet).
+ */
+function PeerLogModal({
+  brainId,
+  peerName,
+  onClose,
+}: {
+  brainId: string;
+  peerName: string;
+  onClose: () => void;
+}) {
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ["peer-log", brainId, peerName],
+    queryFn: () => fetchPeerLog(brainId, peerName),
+    // No refetchInterval — operator clicks Refresh when they want
+    // a new tail. Auto-polling is v3 polish.
+  });
+
+  // ESC closes the modal. Keep wiring minimal — backdrop click +
+  // explicit close button cover the rest.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      data-testid="peer-log-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="bg-background border rounded-lg shadow-lg max-w-4xl w-full m-4 flex flex-col overflow-hidden max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+        data-testid={`peer-log-modal-${peerName}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="peer-log-title"
+      >
+        <header className="flex items-center justify-between p-4 border-b gap-3">
+          <div className="min-w-0 flex-1">
+            <h2
+              id="peer-log-title"
+              className="text-lg font-bold flex items-center gap-2"
+            >
+              <FileText className="h-5 w-5" />
+              <span className="truncate">{peerName}</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                log tail
+              </span>
+            </h2>
+            {data && (
+              <p className="text-xs text-muted-foreground mt-1 font-mono truncate">
+                {data.log_path}
+                {data.truncated && (
+                  <span className="ml-2 text-amber-600">
+                    (showing last ~256 KB of{" "}
+                    {formatBytes(Number(data.total_size_bytes ?? 0))})
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              data-testid="peer-log-refresh"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 mr-1 ${isFetching ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 hover:bg-muted rounded"
+              aria-label="Close"
+              data-testid="peer-log-close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </header>
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {isLoading && (
+            <div className="p-4 text-sm text-muted-foreground">
+              Loading log…
+            </div>
+          )}
+          {error && (
+            <div
+              className="p-4 text-sm text-destructive flex items-center gap-2"
+              data-testid="peer-log-error"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              Failed to load log:{" "}
+              {error instanceof Error ? error.message : "unknown error"}
+            </div>
+          )}
+          {data && !data.present && (
+            <div
+              className="p-4 text-sm text-muted-foreground flex items-center gap-2"
+              data-testid="peer-log-absent"
+            >
+              <CircleSlash className="h-4 w-4" />
+              No log file yet for{" "}
+              <code className="text-xs">{peerName}</code> — the peer
+              hasn't been started in this dashboard's lifetime, or
+              the file was rotated/deleted out of band.
+            </div>
+          )}
+          {data && data.present && data.lines.length === 0 && (
+            <div
+              className="p-4 text-sm text-muted-foreground"
+              data-testid="peer-log-empty"
+            >
+              Log file exists but is empty (0 bytes).
+            </div>
+          )}
+          {data && data.present && data.lines.length > 0 && (
+            <pre
+              className="text-xs font-mono bg-muted/30 px-4 py-3 overflow-auto whitespace-pre-wrap break-all flex-1"
+              data-testid="peer-log-content"
+            >
+              {data.lines.join("\n")}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pretty-prints byte counts (1.2 MB, 256 KB, etc.). Used in the
+ * modal header to show how big the full log is when only a tail
+ * is rendered.
+ */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(2)} GB`;
 }
 
 function formatUptime(startedAt: string): string {
@@ -207,4 +417,14 @@ async function fetchServices(brainId: string): Promise<ServicesListResponse> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as ServicesListResponse;
+}
+
+async function fetchPeerLog(
+  brainId: string,
+  peerName: string,
+): Promise<PeerLogResponse> {
+  const url = `${brainApi(brainId, "peers")}/${encodeURIComponent(peerName)}/log?lines=200`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
+  return (await res.json()) as PeerLogResponse;
 }

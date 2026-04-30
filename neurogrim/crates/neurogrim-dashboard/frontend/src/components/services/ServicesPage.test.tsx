@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ServicesPage } from "./ServicesPage";
@@ -6,6 +6,7 @@ import { BrainProvider } from "@/lib/useBrain";
 import { makeTestRouter, RouterProvider } from "@/test/router-helper";
 import type { ServicesListResponse } from "@bindings/ServicesListResponse";
 import type { ServiceSnapshot } from "@bindings/ServiceSnapshot";
+import type { PeerLogResponse } from "@bindings/PeerLogResponse";
 
 const svc = (overrides: Partial<ServiceSnapshot> = {}): ServiceSnapshot => ({
   peer_name: "neurogrim",
@@ -23,6 +24,34 @@ function mockFetch(payload: ServicesListResponse, status = 200) {
     json: async () => payload,
     text: async () => JSON.stringify(payload),
   } as Response);
+}
+
+/**
+ * Mock fetch that handles BOTH the services-list and the
+ * per-peer log endpoint. Returns the right payload based on URL
+ * substring; tests pass partial responses for each.
+ */
+function mockServicesAndLogFetch(opts: {
+  services: ServicesListResponse;
+  log: PeerLogResponse;
+}) {
+  global.fetch = vi.fn().mockImplementation(async (url: RequestInfo | URL) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("/peers/") && u.includes("/log")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => opts.log,
+        text: async () => JSON.stringify(opts.log),
+      } as Response;
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => opts.services,
+      text: async () => JSON.stringify(opts.services),
+    } as Response;
+  });
 }
 
 function renderPage() {
@@ -86,6 +115,149 @@ describe("ServicesPage", () => {
     renderPage();
     expect(
       await screen.findByText(/failed to load services/i),
+    ).toBeInTheDocument();
+  });
+
+  // ── Per-peer log tail viewer (S15-C-2 expansion) ──────────────
+
+  it("each row has a View log button that opens the peer log modal", async () => {
+    mockServicesAndLogFetch({
+      services: { services: [svc({ peer_name: "alpha" })] },
+      log: {
+        log_path: "/proj/.claude/brain/logs/alpha.log",
+        present: true,
+        total_size_bytes: 42n,
+        truncated: false,
+        lines: ["boot complete", "ready on port 8421"],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("service-row-alpha");
+    fireEvent.click(screen.getByTestId("service-view-log-alpha"));
+    // Modal opens with the log content.
+    expect(
+      await screen.findByTestId("peer-log-modal-alpha"),
+    ).toBeInTheDocument();
+    const content = await screen.findByTestId("peer-log-content");
+    expect(content.textContent).toContain("boot complete");
+    expect(content.textContent).toContain("ready on port 8421");
+  });
+
+  it("close button dismisses the peer log modal", async () => {
+    mockServicesAndLogFetch({
+      services: { services: [svc({ peer_name: "alpha" })] },
+      log: {
+        log_path: "/x",
+        present: true,
+        total_size_bytes: 0n,
+        truncated: false,
+        lines: ["x"],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("service-row-alpha");
+    fireEvent.click(screen.getByTestId("service-view-log-alpha"));
+    await screen.findByTestId("peer-log-backdrop");
+    fireEvent.click(screen.getByTestId("peer-log-close"));
+    expect(screen.queryByTestId("peer-log-backdrop")).toBeNull();
+  });
+
+  it("ESC dismisses the peer log modal", async () => {
+    mockServicesAndLogFetch({
+      services: { services: [svc({ peer_name: "alpha" })] },
+      log: {
+        log_path: "/x",
+        present: true,
+        total_size_bytes: 0n,
+        truncated: false,
+        lines: ["x"],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("service-row-alpha");
+    fireEvent.click(screen.getByTestId("service-view-log-alpha"));
+    await screen.findByTestId("peer-log-backdrop");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("peer-log-backdrop")).toBeNull();
+  });
+
+  it("backdrop click dismisses the peer log modal", async () => {
+    mockServicesAndLogFetch({
+      services: { services: [svc({ peer_name: "alpha" })] },
+      log: {
+        log_path: "/x",
+        present: true,
+        total_size_bytes: 0n,
+        truncated: false,
+        lines: ["x"],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("service-row-alpha");
+    fireEvent.click(screen.getByTestId("service-view-log-alpha"));
+    const backdrop = await screen.findByTestId("peer-log-backdrop");
+    fireEvent.click(backdrop);
+    expect(screen.queryByTestId("peer-log-backdrop")).toBeNull();
+  });
+
+  it("renders absent state when log file is missing", async () => {
+    mockServicesAndLogFetch({
+      services: { services: [svc({ peer_name: "alpha" })] },
+      log: {
+        log_path: "/proj/.claude/brain/logs/alpha.log",
+        present: false,
+        total_size_bytes: null,
+        truncated: false,
+        lines: [],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("service-row-alpha");
+    fireEvent.click(screen.getByTestId("service-view-log-alpha"));
+    expect(
+      await screen.findByTestId("peer-log-absent"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows truncation hint when log is larger than tail window", async () => {
+    mockServicesAndLogFetch({
+      services: { services: [svc({ peer_name: "alpha" })] },
+      log: {
+        log_path: "/proj/.claude/brain/logs/alpha.log",
+        present: true,
+        total_size_bytes: 12n * 1024n * 1024n, // 12 MB
+        truncated: true,
+        lines: ["recent line"],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("service-row-alpha");
+    fireEvent.click(screen.getByTestId("service-view-log-alpha"));
+    // Wait for the data fetch to land so the truncation hint
+    // (which renders alongside the log_path inside the data
+    // check) is visible.
+    await screen.findByTestId("peer-log-content");
+    expect(
+      screen.getByText(/showing last/i),
+    ).toBeInTheDocument();
+  });
+
+  it("renders empty-file state when log exists but has zero bytes", async () => {
+    mockServicesAndLogFetch({
+      services: { services: [svc({ peer_name: "alpha" })] },
+      log: {
+        log_path: "/x",
+        present: true,
+        total_size_bytes: 0n,
+        truncated: false,
+        lines: [],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("service-row-alpha");
+    fireEvent.click(screen.getByTestId("service-view-log-alpha"));
+    expect(
+      await screen.findByTestId("peer-log-empty"),
     ).toBeInTheDocument();
   });
 });

@@ -428,6 +428,140 @@ pub fn read_services_log(
     }
 }
 
+// ── S15-C-2 expansion: per-peer log tail reader ─────────────────────────
+
+/// Maximum bytes read from the end of a peer log file. Caps memory +
+/// response payload size regardless of how long the peer has been
+/// running. 256 KB comfortably holds thousands of log lines while
+/// keeping `GET /peers/:peer_name/log` cheap.
+pub const PEER_LOG_TAIL_BYTES: u64 = 256 * 1024;
+
+/// Hard upper bound on `?lines=N`. The on-disk log might have more
+/// lines in the tail window than the operator wants to render — this
+/// caps the count at a level that keeps the modal manageable.
+pub const PEER_LOG_MAX_LINES: usize = 2000;
+
+/// Default lines returned when `?lines=` is omitted.
+pub const PEER_LOG_DEFAULT_LINES: usize = 200;
+
+/// Response body of `GET /api/brains/:id/peers/:peer_name/log`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct PeerLogResponse {
+    /// Resolved on-disk path. Helps operators correlate the modal
+    /// with what they'd see in `tail -f` outside the dashboard.
+    pub log_path: String,
+    pub present: bool,
+    /// Total file size in bytes. `None` when `present: false`.
+    /// Surfaces "the tail you see is the last 256 KB of a 12 MB
+    /// file" telemetry without requiring a full read.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub total_size_bytes: Option<u64>,
+    /// True when [`PEER_LOG_TAIL_BYTES`] truncation discarded older
+    /// content. The frontend can hint that the operator is seeing
+    /// only the most recent slice.
+    pub truncated: bool,
+    /// Lines, oldest-first within the returned slice. May contain a
+    /// partial leading line stripped (we discard the first line
+    /// when seeking into the middle of one) so all lines are whole.
+    pub lines: Vec<String>,
+}
+
+/// Read the trailing portion of a peer log file as line-bounded
+/// chunks. Reads only the last [`PEER_LOG_TAIL_BYTES`] from the
+/// file regardless of total size, then returns the most-recent N
+/// lines from that window.
+///
+/// Invariants:
+/// - Missing file → `present: false`, empty lines.
+/// - Read errors (permissions, etc.) → `present: false`, empty
+///   lines. Partial-failure modes don't surface to the operator;
+///   the path is included so manual investigation is one step away.
+/// - Non-UTF-8 bytes → replaced with U+FFFD via
+///   `String::from_utf8_lossy`. Operators get readable output even
+///   when the peer emits raw binary stderr.
+/// - `lines` clamped to `[1, PEER_LOG_MAX_LINES]`.
+/// - When the file is larger than [`PEER_LOG_TAIL_BYTES`], the first
+///   line in the read window is discarded (it might be a fragment),
+///   and `truncated` is set so the UI can hint about the window.
+pub fn read_peer_log_tail(log_path: &Path, lines: usize) -> PeerLogResponse {
+    use std::io::{Read, Seek, SeekFrom};
+    let lines = lines.clamp(1, PEER_LOG_MAX_LINES);
+    let metadata = match std::fs::metadata(log_path) {
+        Ok(m) => m,
+        Err(_) => {
+            return PeerLogResponse {
+                log_path: log_path.to_string_lossy().to_string(),
+                present: false,
+                total_size_bytes: None,
+                truncated: false,
+                lines: vec![],
+            };
+        }
+    };
+    let total_size = metadata.len();
+    let read_from = total_size.saturating_sub(PEER_LOG_TAIL_BYTES);
+    let truncated = read_from > 0;
+
+    let mut file = match std::fs::File::open(log_path) {
+        Ok(f) => f,
+        Err(_) => {
+            return PeerLogResponse {
+                log_path: log_path.to_string_lossy().to_string(),
+                present: false,
+                total_size_bytes: Some(total_size),
+                truncated: false,
+                lines: vec![],
+            };
+        }
+    };
+    if read_from > 0 {
+        if file.seek(SeekFrom::Start(read_from)).is_err() {
+            return PeerLogResponse {
+                log_path: log_path.to_string_lossy().to_string(),
+                present: false,
+                total_size_bytes: Some(total_size),
+                truncated: false,
+                lines: vec![],
+            };
+        }
+    }
+    let mut buf = Vec::with_capacity(PEER_LOG_TAIL_BYTES.min(total_size) as usize);
+    if file.read_to_end(&mut buf).is_err() {
+        return PeerLogResponse {
+            log_path: log_path.to_string_lossy().to_string(),
+            present: false,
+            total_size_bytes: Some(total_size),
+            truncated: false,
+            lines: vec![],
+        };
+    }
+    // Lossy-decode so non-UTF-8 bytes don't fail the whole read.
+    let text = String::from_utf8_lossy(&buf).into_owned();
+    // Drop the partial first line when we seeked into the middle of
+    // a line — otherwise the operator sees a fragment at the top of
+    // the tail.
+    let aligned = if truncated {
+        match text.find('\n') {
+            Some(idx) => text[idx + 1..].to_string(),
+            None => String::new(), // entire window was a single partial line
+        }
+    } else {
+        text
+    };
+    let all_lines: Vec<&str> = aligned.lines().collect();
+    let start = all_lines.len().saturating_sub(lines);
+    let tail: Vec<String> = all_lines[start..].iter().map(|s| s.to_string()).collect();
+
+    PeerLogResponse {
+        log_path: log_path.to_string_lossy().to_string(),
+        present: true,
+        total_size_bytes: Some(total_size),
+        truncated,
+        lines: tail,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -904,5 +1038,165 @@ mod tests {
         assert!(resp.present);
         assert_eq!(resp.entries.len(), 1);
         assert_eq!(resp.entries[0].peer_name, "gamma");
+    }
+
+    // ── peer log tail reader (S15-C-2 expansion) ─────────────────
+
+    fn write_peer_log(
+        dir: &TempDir,
+        peer: &str,
+        content: &str,
+    ) -> std::path::PathBuf {
+        let log_dir = dir.path().join(".claude").join("brain").join("logs");
+        fs::create_dir_all(&log_dir).expect("log dir");
+        let path = log_dir.join(format!("{peer}.log"));
+        fs::write(&path, content).expect("write peer log");
+        path
+    }
+
+    #[test]
+    fn missing_peer_log_returns_absent_response() {
+        let dir = TempDir::new().unwrap();
+        let path = dir
+            .path()
+            .join(".claude")
+            .join("brain")
+            .join("logs")
+            .join("alpha.log");
+        let resp = read_peer_log_tail(&path, 200);
+        assert!(!resp.present);
+        assert_eq!(resp.total_size_bytes, None);
+        assert!(!resp.truncated);
+        assert!(resp.lines.is_empty());
+        assert!(resp.log_path.ends_with("alpha.log"));
+    }
+
+    #[test]
+    fn small_peer_log_returns_all_lines_untruncated() {
+        let dir = TempDir::new().unwrap();
+        let path = write_peer_log(&dir, "alpha", "line 1\nline 2\nline 3\n");
+        let resp = read_peer_log_tail(&path, 200);
+        assert!(resp.present);
+        assert_eq!(resp.total_size_bytes, Some(21));
+        assert!(!resp.truncated);
+        assert_eq!(resp.lines, vec!["line 1", "line 2", "line 3"]);
+    }
+
+    #[test]
+    fn lines_clamps_to_most_recent() {
+        let dir = TempDir::new().unwrap();
+        let mut content = String::new();
+        for i in 0..50 {
+            content.push_str(&format!("line {i}\n"));
+        }
+        let path = write_peer_log(&dir, "alpha", &content);
+        let resp = read_peer_log_tail(&path, 5);
+        assert_eq!(resp.lines.len(), 5);
+        assert_eq!(resp.lines[0], "line 45");
+        assert_eq!(resp.lines[4], "line 49");
+    }
+
+    #[test]
+    fn lines_clamps_to_max_limit() {
+        let dir = TempDir::new().unwrap();
+        let path = write_peer_log(&dir, "alpha", "x\n");
+        let resp = read_peer_log_tail(&path, 99_999_999);
+        // Only one real line; clamp shouldn't error.
+        assert_eq!(resp.lines, vec!["x"]);
+    }
+
+    #[test]
+    fn lines_clamps_zero_to_one() {
+        let dir = TempDir::new().unwrap();
+        let path = write_peer_log(&dir, "alpha", "a\nb\nc\n");
+        let resp = read_peer_log_tail(&path, 0);
+        // 0 → 1; returns the single most-recent line.
+        assert_eq!(resp.lines, vec!["c"]);
+    }
+
+    #[test]
+    fn large_peer_log_truncates_and_drops_partial_first_line() {
+        // Build a log that's larger than PEER_LOG_TAIL_BYTES.
+        let dir = TempDir::new().unwrap();
+        // ~512 KB total: ensures the read window of 256 KB starts
+        // somewhere in the middle of a line.
+        let mut content = String::with_capacity(600_000);
+        let line_count = 12_000;
+        for i in 0..line_count {
+            // Long-ish lines (~50 bytes each) so the window cuts
+            // through one.
+            content.push_str(&format!(
+                "line-{i:08}-{}\n",
+                "x".repeat(40)
+            ));
+        }
+        let path = write_peer_log(&dir, "alpha", &content);
+        let total_size = std::fs::metadata(&path).unwrap().len();
+        assert!(total_size > PEER_LOG_TAIL_BYTES);
+
+        let resp = read_peer_log_tail(&path, 50);
+        assert!(resp.present);
+        assert_eq!(resp.total_size_bytes, Some(total_size));
+        assert!(resp.truncated);
+        assert_eq!(resp.lines.len(), 50);
+        // Most recent line is the last one written.
+        let last = format!("line-{:08}-{}", line_count - 1, "x".repeat(40));
+        assert_eq!(resp.lines.last().unwrap(), &last);
+        // Every returned line is whole — none of them start with an
+        // incomplete fragment.
+        for line in &resp.lines {
+            assert!(
+                line.starts_with("line-"),
+                "line is a fragment, not whole: {line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn non_utf8_bytes_lossy_decoded() {
+        // A peer might emit raw bytes (binary stderr, rotated
+        // buffers, etc.). The reader should not crash; bytes that
+        // aren't valid UTF-8 become U+FFFD.
+        let dir = TempDir::new().unwrap();
+        let log_dir = dir.path().join(".claude").join("brain").join("logs");
+        fs::create_dir_all(&log_dir).unwrap();
+        let path = log_dir.join("alpha.log");
+        // Valid UTF-8 line + invalid sequence + another valid line.
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(b"valid line\n");
+        bytes.extend_from_slice(&[0xFF, 0xFE, 0xFD]); // invalid UTF-8
+        bytes.extend_from_slice(b"\nrecovery line\n");
+        std::fs::write(&path, &bytes).unwrap();
+
+        let resp = read_peer_log_tail(&path, 200);
+        assert!(resp.present);
+        // 3 lines: valid, invalid-decoded, recovery.
+        assert_eq!(resp.lines.len(), 3);
+        assert_eq!(resp.lines[0], "valid line");
+        assert_eq!(resp.lines[2], "recovery line");
+        // The middle line decodes lossy — should contain the
+        // replacement char rather than panicking.
+        assert!(resp.lines[1].contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn empty_peer_log_returns_present_with_no_lines() {
+        let dir = TempDir::new().unwrap();
+        let path = write_peer_log(&dir, "alpha", "");
+        let resp = read_peer_log_tail(&path, 200);
+        assert!(resp.present);
+        assert_eq!(resp.total_size_bytes, Some(0));
+        assert!(!resp.truncated);
+        assert!(resp.lines.is_empty());
+    }
+
+    #[test]
+    fn log_without_trailing_newline_returns_partial_last_line() {
+        // Some peers don't flush a final newline; we should still
+        // surface the trailing fragment.
+        let dir = TempDir::new().unwrap();
+        let path = write_peer_log(&dir, "alpha", "first\nsecond no newline");
+        let resp = read_peer_log_tail(&path, 200);
+        assert_eq!(resp.lines, vec!["first", "second no newline"]);
     }
 }
