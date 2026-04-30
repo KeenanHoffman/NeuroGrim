@@ -74,6 +74,7 @@ impl AppState {
     pub fn new(registry_path: String) -> Self {
         let brains = BrainTree::discover(Path::new(&registry_path));
         let cache = BrainContextCache::new(None);
+        let bus = BusState::from_project_root(&derive_project_root(&registry_path));
         Self {
             registry_path: Arc::new(registry_path),
             brains: Arc::new(brains),
@@ -81,7 +82,7 @@ impl AppState {
             events: None,
             mutations_allowed: false,
             service_registry: Arc::new(ServiceRegistry::new()),
-            bus: BusState::new(),
+            bus,
         }
     }
 
@@ -96,6 +97,7 @@ impl AppState {
     ) -> Self {
         let brains = BrainTree::discover(Path::new(&registry_path));
         let cache = BrainContextCache::new(Some(&events));
+        let bus = BusState::from_project_root(&derive_project_root(&registry_path));
         Self {
             registry_path: Arc::new(registry_path),
             brains: Arc::new(brains),
@@ -103,7 +105,19 @@ impl AppState {
             events: Some(events),
             mutations_allowed,
             service_registry: Arc::new(ServiceRegistry::new()),
-            bus: BusState::new(),
+            bus,
         }
     }
+}
+
+/// `<project>/.claude/brain-registry.json` → `<project>`. Used by
+/// the constructors above to feed `BusState::from_project_root`.
+/// Falls back to `.` if the registry path has fewer than 2 ancestors
+/// (defensive — the production path is always absolute and well-formed).
+fn derive_project_root(registry_path: &str) -> std::path::PathBuf {
+    Path::new(registry_path)
+        .parent()
+        .and_then(Path::parent)
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
 }

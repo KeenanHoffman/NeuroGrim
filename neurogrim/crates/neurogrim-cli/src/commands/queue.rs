@@ -1,31 +1,42 @@
-//! `neurogrim queue {list, tail, publish, stats}` — v4.1 S13-B-7
-//! (partial v1; `compact`, `migrate`, `inspect` are deferred until
-//! the SQLite backend lands in S13-B-3).
+//! `neurogrim queue {list, tail, publish, stats, compact, migrate,
+//! inspect}` — v4.1 S13-B-7 + S13-B-3 v2 wiring.
 //!
-//! Thin CLI wrapper around `neurogrim_core::queue` with no
-//! dashboard dependency — operators can inspect a Brain's bus state
-//! without spinning up the HTTP server. Mirrors the convention from
-//! `neurogrim test`, `neurogrim publish-gate`, etc.: the binary
-//! resolves a `--project-root` and operates relative to its
-//! `.claude/brain/queues/` directory.
+//! Thin CLI wrapper around `neurogrim_core::queue` +
+//! `queue_backend` with no dashboard dependency — operators can
+//! inspect a Brain's bus state without spinning up the HTTP server.
+//! Mirrors the convention from `neurogrim test`, `neurogrim
+//! publish-gate`, etc.: the binary resolves a `--project-root` and
+//! operates relative to its `.claude/brain/queues/` directory.
 //!
 //! ## Sub-commands
 //!
-//! - `queue list` — every topic with a `*.jsonl` file on disk +
-//!   per-topic stats (count, size, oldest/newest timestamps).
+//! - `queue list` — every topic with a `.jsonl` OR `.sqlite` file
+//!   on disk + per-topic stats (count, size, oldest/newest
+//!   timestamps).
 //! - `queue tail <topic> [-n N]` — print the last N messages on a
-//!   topic as pretty JSON. Default N = 20.
+//!   topic as pretty JSON. Default N = 20. Honors per-topic backend
+//!   choice from `queue-config.yaml` when present.
 //! - `queue publish <topic> <payload-as-json>` — manual produce
 //!   (operator-driven flow; agents use the MCP `queue_publish`
 //!   tool). Optional `--priority` and `--expires-in-ms`.
 //! - `queue stats <topic>` — single-topic stats (same fields as
 //!   `list` but for one topic, JSON-printed).
+//! - `queue compact` — apply retention to a JSONL topic.
+//! - `queue migrate <topic> <from> <to>` — convert a topic's
+//!   on-disk format. Reads every message from `from`, writes to
+//!   `to`, leaves the source file in place (operator deletes after
+//!   verifying). v2 of S13-B-3.
+//! - `queue inspect <topic>` — read all messages from whichever
+//!   backend is on disk + emit them as JSONL on stdout. Same shape
+//!   regardless of backend, so `cat` / `tail -f` workflows work
+//!   for SQLite topics too. v2 of S13-B-3.
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Args as ClapArgs, Subcommand};
 use neurogrim_core::queue::{
     self, JsonlQueueReader, Priority, QueueMessage, RetentionPolicy, Topic,
 };
+use neurogrim_core::queue_backend::{JsonlBackend, QueueBackend, SqliteBackend};
 use std::path::{Path, PathBuf};
 
 #[derive(ClapArgs, Debug)]
@@ -49,6 +60,16 @@ pub enum QueueCommand {
     /// v1; SQLite topics will gain an analogous compact path with
     /// B-3.
     Compact(CompactArgs),
+    /// v4.1 S13-B-3 v2 — convert a topic's on-disk format
+    /// between JSONL and SQLite. Reads every message from `--from`,
+    /// writes to `--to`. Source file is left in place; operator
+    /// deletes after verifying.
+    Migrate(MigrateArgs),
+    /// v4.1 S13-B-3 v2 — read every message from a topic
+    /// (whichever backend is on disk) + emit as JSONL on stdout.
+    /// Same shape regardless of backend, restoring `cat` / `tail -f`
+    /// inspectability for SQLite topics.
+    Inspect(InspectArgs),
 }
 
 #[derive(ClapArgs, Debug)]
@@ -97,6 +118,42 @@ pub struct StatsArgs {
     pub project_root: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum BackendChoice {
+    Jsonl,
+    Sqlite,
+}
+
+#[derive(ClapArgs, Debug)]
+pub struct MigrateArgs {
+    /// Topic to migrate. Both source + destination paths are
+    /// derived from `<project>/.claude/brain/queues/<topic>`.
+    pub topic: String,
+    /// Source backend.
+    #[arg(long, value_enum)]
+    pub from: BackendChoice,
+    /// Destination backend.
+    #[arg(long, value_enum)]
+    pub to: BackendChoice,
+    #[arg(long, default_value = ".")]
+    pub project_root: String,
+}
+
+#[derive(ClapArgs, Debug)]
+pub struct InspectArgs {
+    /// Topic to inspect.
+    pub topic: String,
+    /// Which backend to read from. Default: auto-detect (prefers
+    /// SQLite when both files exist; falls back to JSONL).
+    #[arg(long, value_enum)]
+    pub backend: Option<BackendChoice>,
+    /// Max messages to emit. Default: all.
+    #[arg(long)]
+    pub limit: Option<usize>,
+    #[arg(long, default_value = ".")]
+    pub project_root: String,
+}
+
 #[derive(ClapArgs, Debug)]
 pub struct CompactArgs {
     pub topic: String,
@@ -126,6 +183,8 @@ pub async fn run(args: Args) -> Result<()> {
         QueueCommand::Publish(a) => publish(a).await,
         QueueCommand::Stats(a) => stats(a).await,
         QueueCommand::Compact(a) => compact(a).await,
+        QueueCommand::Migrate(a) => migrate(a).await,
+        QueueCommand::Inspect(a) => inspect(a).await,
     }
 }
 
@@ -300,6 +359,138 @@ async fn stats(args: StatsArgs) -> Result<()> {
         serde_json::to_string_pretty(&s).unwrap_or_default()
     );
     Ok(())
+}
+
+// ── S13-B-3 v2: migrate + inspect ─────────────────────────────────────
+
+async fn migrate(args: MigrateArgs) -> Result<()> {
+    if !Topic::is_valid(&args.topic) {
+        return Err(anyhow!("invalid topic name '{}'", args.topic));
+    }
+    if args.from == args.to {
+        return Err(anyhow!(
+            "migrate: --from and --to are the same backend ({:?}); \
+             nothing to do",
+            args.from
+        ));
+    }
+    let root = Path::new(&args.project_root);
+
+    // Step 1: open source. Read every message into memory. Topics
+    // are bounded by retention so loading the full set is OK; if
+    // an operator has 500k+ messages they'll want to compact first.
+    let mut source: Box<dyn QueueBackend> = open_backend(&args.from, root, &args.topic)?;
+    let total = source.len()?;
+    let messages = source.read_from(0, total as usize)?;
+    drop(source); // release any open handles before opening dest.
+
+    // Step 2: open destination + replay. We append rather than
+    // batch-insert so the message ids + produced_at timestamps are
+    // preserved exactly.
+    let mut dest: Box<dyn QueueBackend> = open_backend(&args.to, root, &args.topic)?;
+    // Refuse migration if dest already has data — we don't want to
+    // mix topics. The operator should `rm` the dest first if they
+    // really mean to overwrite (loud failure beats silent merge).
+    let dest_existing = dest.len()?;
+    if dest_existing > 0 {
+        return Err(anyhow!(
+            "migrate: destination ({:?}) already has {} messages; \
+             refusing to overwrite — delete the destination file \
+             first if this is intentional",
+            args.to,
+            dest_existing
+        ));
+    }
+    for sm in &messages {
+        dest.append(&sm.message)?;
+    }
+
+    let source_path = topic_path_for(&args.from, root, &args.topic);
+    let dest_path = topic_path_for(&args.to, root, &args.topic);
+    println!(
+        "{}",
+        serde_json::json!({
+            "topic": args.topic,
+            "migrated": messages.len(),
+            "from": format!("{:?}", args.from).to_lowercase(),
+            "from_path": source_path.display().to_string(),
+            "to": format!("{:?}", args.to).to_lowercase(),
+            "to_path": dest_path.display().to_string(),
+            "note": "source file left in place; remove after verifying the destination",
+        })
+    );
+    Ok(())
+}
+
+async fn inspect(args: InspectArgs) -> Result<()> {
+    if !Topic::is_valid(&args.topic) {
+        return Err(anyhow!("invalid topic name '{}'", args.topic));
+    }
+    let root = Path::new(&args.project_root);
+    let backend = match args.backend {
+        Some(b) => b,
+        None => detect_backend(root, &args.topic).ok_or_else(|| {
+            anyhow!(
+                "queue inspect: no `.jsonl` or `.sqlite` file found for \
+                 topic '{}' under {}/.claude/brain/queues/",
+                args.topic,
+                root.display()
+            )
+        })?,
+    };
+    let be = open_backend(&backend, root, &args.topic)?;
+    let total = be.len()?;
+    let limit = args.limit.unwrap_or(total as usize);
+    let messages = be.read_from(0, limit)?;
+    for sm in messages {
+        let line = serde_json::to_string(&sm.message)
+            .context("inspect: serialize message")?;
+        println!("{line}");
+    }
+    Ok(())
+}
+
+fn detect_backend(root: &Path, topic: &str) -> Option<BackendChoice> {
+    let sqlite = topic_path_for(&BackendChoice::Sqlite, root, topic);
+    let jsonl = topic_path_for(&BackendChoice::Jsonl, root, topic);
+    if sqlite.exists() {
+        Some(BackendChoice::Sqlite)
+    } else if jsonl.exists() {
+        Some(BackendChoice::Jsonl)
+    } else {
+        None
+    }
+}
+
+fn topic_path_for(backend: &BackendChoice, root: &Path, topic: &str) -> PathBuf {
+    let mut p = root.join(".claude").join("brain").join("queues");
+    for seg in topic.split('/') {
+        if !seg.is_empty() {
+            p.push(seg);
+        }
+    }
+    let ext = match backend {
+        BackendChoice::Jsonl => "jsonl",
+        BackendChoice::Sqlite => "sqlite",
+    };
+    p.set_extension(ext);
+    p
+}
+
+fn open_backend(
+    backend: &BackendChoice,
+    root: &Path,
+    topic: &str,
+) -> Result<Box<dyn QueueBackend>> {
+    let path = topic_path_for(backend, root, topic);
+    match backend {
+        BackendChoice::Jsonl => Ok(Box::new(JsonlBackend::new(path))),
+        BackendChoice::Sqlite => {
+            let be = SqliteBackend::open(&path)
+                .with_context(|| format!("open sqlite at {}", path.display()))?;
+            Ok(Box::new(be))
+        }
+    }
 }
 
 // ── Local helpers (pure functions, no I/O dependency on the dashboard) ─
@@ -503,5 +694,163 @@ mod tests {
         };
         let res = publish(args).await;
         assert!(res.is_err());
+    }
+
+    // ── S13-B-3 v2: migrate + inspect tests ────────────────────────
+
+    fn seed_jsonl_topic(root: &Path, topic: &str, count: usize) {
+        let path = topic_path_for(&BackendChoice::Jsonl, root, topic);
+        for i in 0..count {
+            queue::append(
+                &path,
+                &QueueMessage::new(topic, json!({"i": i})),
+            )
+            .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn migrate_jsonl_to_sqlite_round_trip() {
+        let dir = TempDir::new().unwrap();
+        seed_jsonl_topic(dir.path(), "scratch", 3);
+        let args = MigrateArgs {
+            topic: "scratch".into(),
+            from: BackendChoice::Jsonl,
+            to: BackendChoice::Sqlite,
+            project_root: dir.path().display().to_string(),
+        };
+        migrate(args).await.unwrap();
+        // Source remains, destination has the data.
+        let jsonl = topic_path_for(&BackendChoice::Jsonl, dir.path(), "scratch");
+        let sqlite = topic_path_for(&BackendChoice::Sqlite, dir.path(), "scratch");
+        assert!(jsonl.exists(), "source should remain after migrate");
+        assert!(sqlite.exists(), "dest should be created");
+        // SQLite has 3 messages.
+        let be = SqliteBackend::open(&sqlite).unwrap();
+        assert_eq!(be.len().unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn migrate_sqlite_to_jsonl_round_trip() {
+        let dir = TempDir::new().unwrap();
+        // Seed via SQLite directly.
+        let sqlite = topic_path_for(&BackendChoice::Sqlite, dir.path(), "scratch");
+        std::fs::create_dir_all(sqlite.parent().unwrap()).unwrap();
+        {
+            let mut be = SqliteBackend::open(&sqlite).unwrap();
+            for i in 0..2 {
+                be.append(&QueueMessage::new("scratch", json!({"i": i})))
+                    .unwrap();
+            }
+        }
+        let args = MigrateArgs {
+            topic: "scratch".into(),
+            from: BackendChoice::Sqlite,
+            to: BackendChoice::Jsonl,
+            project_root: dir.path().display().to_string(),
+        };
+        migrate(args).await.unwrap();
+        let jsonl = topic_path_for(&BackendChoice::Jsonl, dir.path(), "scratch");
+        let r = JsonlQueueReader::open(&jsonl).unwrap();
+        assert_eq!(r.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn migrate_rejects_same_backend() {
+        let dir = TempDir::new().unwrap();
+        let args = MigrateArgs {
+            topic: "scratch".into(),
+            from: BackendChoice::Jsonl,
+            to: BackendChoice::Jsonl,
+            project_root: dir.path().display().to_string(),
+        };
+        let err = migrate(args).await.unwrap_err().to_string();
+        assert!(err.contains("same backend"));
+    }
+
+    #[tokio::test]
+    async fn migrate_refuses_to_overwrite_populated_dest() {
+        let dir = TempDir::new().unwrap();
+        seed_jsonl_topic(dir.path(), "scratch", 2);
+        // Pre-populate the destination so the migration would mix.
+        let sqlite = topic_path_for(&BackendChoice::Sqlite, dir.path(), "scratch");
+        std::fs::create_dir_all(sqlite.parent().unwrap()).unwrap();
+        {
+            let mut be = SqliteBackend::open(&sqlite).unwrap();
+            be.append(&QueueMessage::new("scratch", json!({"existing": true})))
+                .unwrap();
+        }
+        let args = MigrateArgs {
+            topic: "scratch".into(),
+            from: BackendChoice::Jsonl,
+            to: BackendChoice::Sqlite,
+            project_root: dir.path().display().to_string(),
+        };
+        let err = migrate(args).await.unwrap_err().to_string();
+        assert!(err.contains("already has"));
+    }
+
+    #[tokio::test]
+    async fn migrate_rejects_invalid_topic() {
+        let dir = TempDir::new().unwrap();
+        let args = MigrateArgs {
+            topic: "Bad/Name".into(),
+            from: BackendChoice::Jsonl,
+            to: BackendChoice::Sqlite,
+            project_root: dir.path().display().to_string(),
+        };
+        let err = migrate(args).await.unwrap_err().to_string();
+        assert!(err.contains("invalid topic"));
+    }
+
+    #[test]
+    fn detect_backend_prefers_sqlite_over_jsonl() {
+        let dir = TempDir::new().unwrap();
+        let queues = dir.path().join(".claude/brain/queues");
+        std::fs::create_dir_all(&queues).unwrap();
+        std::fs::write(queues.join("scratch.jsonl"), "").unwrap();
+        std::fs::write(queues.join("scratch.sqlite"), b"").unwrap();
+        assert_eq!(detect_backend(dir.path(), "scratch"), Some(BackendChoice::Sqlite));
+    }
+
+    #[test]
+    fn detect_backend_falls_back_to_jsonl() {
+        let dir = TempDir::new().unwrap();
+        let queues = dir.path().join(".claude/brain/queues");
+        std::fs::create_dir_all(&queues).unwrap();
+        std::fs::write(queues.join("scratch.jsonl"), "").unwrap();
+        assert_eq!(detect_backend(dir.path(), "scratch"), Some(BackendChoice::Jsonl));
+    }
+
+    #[test]
+    fn detect_backend_returns_none_when_no_file() {
+        let dir = TempDir::new().unwrap();
+        assert_eq!(detect_backend(dir.path(), "absent"), None);
+    }
+
+    #[tokio::test]
+    async fn inspect_rejects_invalid_topic() {
+        let dir = TempDir::new().unwrap();
+        let args = InspectArgs {
+            topic: "Bad/Name".into(),
+            backend: None,
+            limit: None,
+            project_root: dir.path().display().to_string(),
+        };
+        let err = inspect(args).await.unwrap_err().to_string();
+        assert!(err.contains("invalid topic"));
+    }
+
+    #[tokio::test]
+    async fn inspect_errors_when_no_backend_file_exists() {
+        let dir = TempDir::new().unwrap();
+        let args = InspectArgs {
+            topic: "absent".into(),
+            backend: None,
+            limit: None,
+            project_root: dir.path().display().to_string(),
+        };
+        let err = inspect(args).await.unwrap_err().to_string();
+        assert!(err.contains("no `.jsonl`"));
     }
 }

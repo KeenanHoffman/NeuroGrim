@@ -2221,21 +2221,29 @@ async fn brain_queues_list(
         Ok(b) => b,
         Err(r) => return r,
     };
+    // S13-B-3 v2: enumerate via the file walker (which now sees
+    // both .jsonl and .sqlite extensions) and resolve each topic's
+    // backend through the bus so stats reflect the right counts /
+    // size. Falls back to JSONL stats on backend init failure so
+    // partial misconfig still renders.
     let topics = crate::bus::list_topics(&brain.project_root);
-    let stats: Vec<QueueTopicStatsDto> = topics
-        .iter()
-        .map(|t| {
-            let path = crate::bus::topic_path(&brain.project_root, t);
-            let s = crate::bus::TopicStats::from_path(t, &path);
-            QueueTopicStatsDto {
-                topic: s.topic,
-                message_count: s.message_count.min(u32::MAX as usize) as u32,
-                size_bytes: s.size_bytes,
-                oldest: s.oldest,
-                newest: s.newest,
+    let mut stats: Vec<QueueTopicStatsDto> = Vec::with_capacity(topics.len());
+    for t in &topics {
+        let s = match state.bus.backend_for(&brain.project_root, t).await {
+            Ok(handle) => crate::bus::TopicStats::for_topic(&handle, &brain.project_root, t),
+            Err(_) => {
+                let path = crate::bus::topic_path(&brain.project_root, t);
+                crate::bus::TopicStats::from_path(t, &path)
             }
-        })
-        .collect();
+        };
+        stats.push(QueueTopicStatsDto {
+            topic: s.topic,
+            message_count: s.message_count.min(u32::MAX as usize) as u32,
+            size_bytes: s.size_bytes,
+            oldest: s.oldest,
+            newest: s.newest,
+        });
+    }
     Json(QueuesListResponse { topics: stats }).into_response()
 }
 
@@ -2262,9 +2270,28 @@ async fn brain_queue_read_or_events(
         )
             .into_response();
     }
-    let path = crate::bus::topic_path(&brain.project_root, &rest);
-    let reader = match neurogrim_core::queue::JsonlQueueReader::open(&path) {
-        Ok(r) => r,
+    // S13-B-3 v2: dispatch through the bus's backend handle so
+    // SQLite-configured topics serve correctly. The bus lazy-creates
+    // the right backend on first call.
+    let handle = match state.bus.backend_for(&brain.project_root, &rest).await {
+        Ok(h) => h,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("backend init failed: {e}"),
+                    "topic": rest,
+                })),
+            )
+                .into_response();
+        }
+    };
+    let limit = q
+        .limit
+        .unwrap_or(DEFAULT_QUEUE_READ_LIMIT)
+        .min(MAX_QUEUE_READ_LIMIT) as usize;
+    let stored = match handle.read_from(q.since, limit) {
+        Ok(s) => s,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -2276,20 +2303,21 @@ async fn brain_queue_read_or_events(
                 .into_response();
         }
     };
-    let limit = q
-        .limit
-        .unwrap_or(DEFAULT_QUEUE_READ_LIMIT)
-        .min(MAX_QUEUE_READ_LIMIT) as usize;
-    let messages: Vec<QueueMessageDto> = reader
-        .iter_from(q.since as usize)
-        .take(limit)
-        .map(qm_to_dto)
-        .collect();
-    let returned = messages.len() as u64;
+    let messages: Vec<QueueMessageDto> =
+        stored.iter().map(|sm| qm_to_dto(&sm.message)).collect();
+    // For ack-aware backends (SQLite), the next offset is one past
+    // the highest offset returned. For JSONL, offsets are
+    // line-numbered and contiguous, so this simplifies to
+    // `since + messages.len()` — but the explicit form is correct
+    // for both.
+    let next_offset = stored
+        .last()
+        .map(|sm| sm.offset + 1)
+        .unwrap_or(q.since);
     Json(QueueReadResponse {
         topic: rest,
         messages,
-        next_offset: q.since + returned,
+        next_offset,
     })
     .into_response()
 }

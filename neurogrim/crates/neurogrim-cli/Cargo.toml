@@ -28,7 +28,7 @@ tokio = { workspace = true }
 rmcp = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-neurogrim-core = { workspace = true }
+neurogrim-core = { workspace = true, features = ["sqlite"] }
 neurogrim-sensory = { workspace = true }
 neurogrim-mcp = { workspace = true }
 neurogrim-a2a = { workspace = true }

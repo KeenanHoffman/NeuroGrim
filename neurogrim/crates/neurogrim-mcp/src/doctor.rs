@@ -75,6 +75,7 @@ pub fn audit(registry: &BrainRegistry, project_root: &Path) -> Vec<Finding> {
     findings.extend(check_federation_ports(registry, project_root));
     findings.extend(check_autonomy(registry));
     findings.extend(check_publish_gates(project_root));
+    findings.extend(check_queue_config(project_root));
     findings
 }
 
@@ -577,6 +578,34 @@ pub fn check_publish_gates(project_root: &Path) -> Vec<Finding> {
                 path.display(),
                 ids.join(", ")
             ),
+        )],
+    }
+}
+
+// --- Check 9: queue-config.yaml schema correctness (S13-B-3 v2) ----
+
+/// Validate `<project_root>/.claude/brain/queue-config.yaml` against
+/// the schema in `neurogrim_core::queue_config::QueueConfig`.
+///
+/// Severity model:
+///
+/// - **Missing file** → silent (no finding). The file is opt-in;
+///   adopters who only use JSONL topics never need to author one.
+/// - **Parse / schema failure** → `Error`. A misconfigured topic
+///   would default to JSONL and silently violate the operator's
+///   intent (e.g., `ack_required` topics that should have been
+///   SQLite-backed will silently lose ack semantics). Loud failure
+///   beats silent fallback.
+pub fn check_queue_config(project_root: &Path) -> Vec<Finding> {
+    let path = project_root
+        .join(".claude")
+        .join("brain")
+        .join("queue-config.yaml");
+    match neurogrim_core::queue_config::QueueConfig::from_path(&path) {
+        Ok(_) => Vec::new(),
+        Err(e) => vec![Finding::err(
+            "queue-config",
+            format!("{}: {e:#}", path.display()),
         )],
     }
 }
@@ -1143,5 +1172,68 @@ gates:
         assert_eq!(f[0].category, "publish-gates-schema");
         assert!(f[0].message.contains("duplicate gate id"));
         assert!(f[0].message.contains("tests-pass"));
+    }
+
+    // --- queue-config.yaml (S13-B-3 v2) -------------------------------
+
+    #[test]
+    fn check_queue_config_clean_when_missing() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let f = check_queue_config(tmp.path());
+        assert!(f.is_empty(), "missing file is opt-in; no finding");
+    }
+
+    #[test]
+    fn check_queue_config_clean_when_valid() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude/brain")).unwrap();
+        std::fs::write(
+            tmp.path().join(".claude/brain/queue-config.yaml"),
+            r#"schema_version: "1"
+topics:
+  pc-state/alerts:
+    backend: sqlite
+    ack_required: true
+"#,
+        )
+        .unwrap();
+        let f = check_queue_config(tmp.path());
+        assert!(f.is_empty(), "valid config should produce no findings");
+    }
+
+    #[test]
+    fn check_queue_config_errors_on_bad_schema_version() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude/brain")).unwrap();
+        std::fs::write(
+            tmp.path().join(".claude/brain/queue-config.yaml"),
+            r#"schema_version: "99""#,
+        )
+        .unwrap();
+        let f = check_queue_config(tmp.path());
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Error);
+        assert_eq!(f[0].category, "queue-config");
+        assert!(f[0].message.contains("schema_version"));
+    }
+
+    #[test]
+    fn check_queue_config_errors_on_ack_required_with_jsonl() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude/brain")).unwrap();
+        std::fs::write(
+            tmp.path().join(".claude/brain/queue-config.yaml"),
+            r#"schema_version: "1"
+topics:
+  pc-state/alerts:
+    backend: jsonl
+    ack_required: true
+"#,
+        )
+        .unwrap();
+        let f = check_queue_config(tmp.path());
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Error);
+        assert!(f[0].message.contains("ack_required"));
     }
 }

@@ -63,7 +63,7 @@ futures = "0.3"
 sha2 = "0.10"
 
 # Internal deps
-neurogrim-core = { workspace = true }
+neurogrim-core = { workspace = true, features = ["sqlite"] }
 neurogrim-mcp = { workspace = true }
 # Phase 1.3 — Agent Card discovery for federation peer probes.
 # Reuses the same TaskClient the CLI's `a2a-discover` uses, so the
