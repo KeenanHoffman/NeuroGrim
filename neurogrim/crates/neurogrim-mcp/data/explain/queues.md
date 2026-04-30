@@ -139,6 +139,31 @@ Operator-driven approvals emit on
   single most important v4.1 change, but it depends on Pattern 2's
   approval round-trip which uses this bus underneath.
 
+<!-- anchor: hot-reload -->
+## queue-config.yaml hot-reload (v4.3-era follow-on)
+
+When operators edit `<project>/.claude/brain/queue-config.yaml`
+while the dashboard is running, the dashboard's filesystem watcher
+detects the change and reloads the bus's in-memory config without
+a restart. Topics that should now route to a different backend
+get re-evaluated on next access; in-flight uses of the previous
+backend handle proceed (the Arc keeps it alive until last release)
+— eventual consistency.
+
+The Settings page's Queue config viewer also live-refreshes via
+the same SSE event so the displayed YAML reflects the new file
+content without a manual reload.
+
+Edge cases:
+- **File saved mid-edit with broken YAML** → reload preserves the
+  previously-loaded config + logs a parse warning. Operators don't
+  lose their working bus while typing.
+- **File deleted entirely** → bus reverts to the no-config posture
+  (every topic falls back to JSONL on next access).
+- **Existing SQLite handles** → survive the reload via Arc clones;
+  only the cache slot is dropped, so a topic actively being read
+  doesn't see its connection ripped out from under it.
+
 ## See also
 
 - `neurogrim explain methodology` — the conceptual model

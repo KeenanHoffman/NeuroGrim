@@ -96,7 +96,26 @@ pub async fn serve(
         .unwrap_or(project_root_normalized);
 
     let events_tx = events::spawn_watcher(project_root.clone());
-    let mut state = AppState::with_events(registry_path, events_tx, allow_mutations);
+    let mut state = AppState::with_events(registry_path, events_tx.clone(), allow_mutations);
+
+    // S13 follow-on: hot-reload queue-config.yaml. Subscribe a
+    // background task to the event channel and re-read the YAML +
+    // swap into BusState whenever the watcher fires
+    // QueueConfigChanged. Frontend invalidates its viewer query
+    // off the same SSE event so the read-only viewer reflects the
+    // new content.
+    {
+        let bus = state.bus.clone();
+        let watch_root = project_root.clone();
+        let mut rx = events_tx.subscribe();
+        tokio::spawn(async move {
+            while let Ok(event) = rx.recv().await {
+                if matches!(event, events::DashboardEvent::QueueConfigChanged) {
+                    bus.reload_from_path(&watch_root).await;
+                }
+            }
+        });
+    }
 
     // Probe for the TLS files BEFORE binding so we know whether to
     // log the HTTPS port + plumb it into AppState so handlers can

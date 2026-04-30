@@ -107,6 +107,13 @@ pub enum DashboardEvent {
     /// out-of-band edits + dashboard-restart re-ingestion). Frontend
     /// invalidates the Logs page's services query.
     ServicesLogAppended,
+    /// v4.1 S13 follow-on — `<project>/.claude/brain/queue-config.yaml`
+    /// was modified. The bus reloads its in-memory config (clearing
+    /// the backend cache so topics that should now route differently
+    /// get re-evaluated on next access). Frontend invalidates the
+    /// Settings page's queue-config viewer query so the displayed
+    /// YAML reflects the new content.
+    QueueConfigChanged,
 }
 
 /// Classify a filesystem path into a `DashboardEvent`. Paths are
@@ -147,6 +154,9 @@ pub fn classify_event(path: &Path, project_root: &Path) -> Option<DashboardEvent
     }
     if rel_str == ".claude/brain/services.jsonl" {
         return Some(DashboardEvent::ServicesLogAppended);
+    }
+    if rel_str == ".claude/brain/queue-config.yaml" {
+        return Some(DashboardEvent::QueueConfigChanged);
     }
     if let Some(file_name) = rel.file_name().and_then(|n| n.to_str()) {
         // `.claude/<domain>-cmdb.json` lives directly under
@@ -338,6 +348,38 @@ mod tests {
         assert_eq!(
             classify_event(&path, &root),
             Some(DashboardEvent::NotificationPublished)
+        );
+    }
+
+    #[test]
+    fn classifies_queue_config_yaml_change() {
+        let root = PathBuf::from("/proj");
+        let path = PathBuf::from("/proj/.claude/brain/queue-config.yaml");
+        assert_eq!(
+            classify_event(&path, &root),
+            Some(DashboardEvent::QueueConfigChanged)
+        );
+    }
+
+    #[test]
+    fn does_not_classify_other_yaml_files_as_queue_config() {
+        // Defensive: only the conventional path counts. Adopter-
+        // authored YAMLs elsewhere shouldn't trigger a bus reload.
+        let root = PathBuf::from("/proj");
+        assert_eq!(
+            classify_event(
+                &PathBuf::from("/proj/.claude/queue-config.yaml"),
+                &root
+            ),
+            None,
+            "wrong dir — only .claude/brain/queue-config.yaml triggers",
+        );
+        assert_eq!(
+            classify_event(
+                &PathBuf::from("/proj/.claude/brain/some-other.yaml"),
+                &root
+            ),
+            None,
         );
     }
 

@@ -27,7 +27,8 @@ export type DashboardEvent =
   | { kind: "publish_gate_ledger_appended" }
   | { kind: "approval_resolved" }
   | { kind: "notification_published" }
-  | { kind: "services_log_appended" };
+  | { kind: "services_log_appended" }
+  | { kind: "queue_config_changed" };
 
 /**
  * Wire the dashboard to its live-update channel.
@@ -155,7 +156,8 @@ function normalize(raw: unknown): DashboardEvent | null {
       raw === "publish_gate_ledger_appended" ||
       raw === "approval_resolved" ||
       raw === "notification_published" ||
-      raw === "services_log_appended"
+      raw === "services_log_appended" ||
+      raw === "queue_config_changed"
     ) {
       return { kind: raw };
     }
@@ -283,6 +285,13 @@ function invalidate(
       // band edits.
       qc.invalidateQueries({ queryKey: ["logs-services"] });
       qc.invalidateQueries({ queryKey: ["services"] });
+      break;
+    case "queue_config_changed":
+      // S13 follow-on hot-reload: the bus has already swapped its
+      // in-memory config server-side. Frontend invalidates the
+      // Settings page's queue-config viewer query so the displayed
+      // YAML reflects the new file content.
+      qc.invalidateQueries({ queryKey: ["config-file"] });
       break;
   }
 }

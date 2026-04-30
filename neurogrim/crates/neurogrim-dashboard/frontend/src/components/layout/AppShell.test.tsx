@@ -244,4 +244,16 @@ describe("dispatchToastForEvent (toast trigger policy)", () => {
     dispatchToastForEvent({ kind: "approval_resolved" }, addToast);
     expect(addToast).not.toHaveBeenCalled();
   });
+
+  it("queue_config_changed does NOT toast (config swap is silent)", () => {
+    const addToast = vi.fn();
+    dispatchToastForEvent({ kind: "queue_config_changed" }, addToast);
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("services_log_appended does NOT toast (already covered by service_failed)", () => {
+    const addToast = vi.fn();
+    dispatchToastForEvent({ kind: "services_log_appended" }, addToast);
+    expect(addToast).not.toHaveBeenCalled();
+  });
 });

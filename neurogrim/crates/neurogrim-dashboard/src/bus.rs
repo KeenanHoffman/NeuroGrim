@@ -183,10 +183,12 @@ pub struct BusState {
     /// publish); JSONL handles are reconstructed-on-demand so the
     /// cache holds just a marker.
     backends: Arc<RwLock<HashMap<String, Arc<BackendHandle>>>>,
-    /// v4.1 S13-B-3 v2: queue-config.yaml resolved at startup.
-    /// `None` when no config file exists — every topic defaults
-    /// to JSONL.
-    config: Arc<Option<QueueConfig>>,
+    /// v4.1 S13-B-3 v2 (queue-config.yaml at startup) + S13 follow-on
+    /// hot-reload: wrapped in RwLock so the filesystem watcher can
+    /// swap the parsed config when the file changes without
+    /// restarting the dashboard. `None` means no config file
+    /// exists — every topic defaults to JSONL.
+    config: Arc<RwLock<Option<QueueConfig>>>,
 }
 
 impl BusState {
@@ -196,7 +198,7 @@ impl BusState {
         Self {
             senders: Arc::new(RwLock::new(HashMap::new())),
             backends: Arc::new(RwLock::new(HashMap::new())),
-            config: Arc::new(None),
+            config: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -207,8 +209,53 @@ impl BusState {
         Self {
             senders: Arc::new(RwLock::new(HashMap::new())),
             backends: Arc::new(RwLock::new(HashMap::new())),
-            config: Arc::new(Some(config)),
+            config: Arc::new(RwLock::new(Some(config))),
         }
+    }
+
+    /// Re-read `<project_root>/.claude/brain/queue-config.yaml` and
+    /// swap the in-memory config. Triggered by the filesystem
+    /// watcher's `QueueConfigChanged` event so operators don't have
+    /// to restart the dashboard after editing the file.
+    ///
+    /// Behavior:
+    /// - **Successful parse** → swaps the config; clears the backend
+    ///   cache so topics that should now route to a different
+    ///   backend get re-evaluated on next access. In-flight uses of
+    ///   the OLD backend handle proceed (the Arc keeps it alive
+    ///   until last release) — eventual consistency.
+    /// - **File missing** → swaps to `None`; topics fall back to
+    ///   JSONL on next access.
+    /// - **Parse error** → keeps the previous config; logs a warning
+    ///   so operators see the parse failure without losing their
+    ///   working state. Same recovery posture as `from_project_root`.
+    pub async fn reload_from_path(&self, project_root: &Path) {
+        let path = project_root
+            .join(".claude")
+            .join("brain")
+            .join("queue-config.yaml");
+        let new_cfg = match QueueConfig::from_path(&path) {
+            Ok(opt) => opt,
+            Err(e) => {
+                tracing::warn!(
+                    "bus: queue-config.yaml at {} failed to reload: {} — \
+                     keeping previously-loaded config",
+                    path.display(),
+                    e
+                );
+                return;
+            }
+        };
+        *self.config.write().await = new_cfg;
+        // Clear the backend cache: topics that now resolve to a
+        // different backend kind need a fresh handle. Existing
+        // handles in flight survive via their Arc clones; only the
+        // cache slot is dropped.
+        self.backends.write().await.clear();
+        tracing::info!(
+            "bus: queue-config.yaml reloaded from {}",
+            path.display()
+        );
     }
 
     /// Helper: load `queue-config.yaml` from the conventional path
@@ -279,9 +326,16 @@ impl BusState {
         if let Some(h) = map.get(topic) {
             return Ok(h.clone());
         }
-        let kind = match self.config.as_ref() {
-            Some(cfg) => cfg.lookup(topic).backend,
-            None => BackendKind::Jsonl,
+        let kind = {
+            // Read-lock release before any await on backend setup to
+            // avoid holding the lock across SQLite open(). Take a
+            // snapshot copy of the resolution; the topic's backend
+            // kind is a small enum.
+            let cfg_guard = self.config.read().await;
+            match cfg_guard.as_ref() {
+                Some(cfg) => cfg.lookup(topic).backend,
+                None => BackendKind::Jsonl,
+            }
         };
         let handle = match kind {
             BackendKind::Jsonl => {
@@ -801,6 +855,93 @@ topics:
         let bus = BusState::from_project_root(dir.path());
         let handle = bus.backend_for(dir.path(), "scratch").await.unwrap();
         assert!(matches!(handle.as_ref(), BackendHandle::Jsonl(_)));
+    }
+
+    // ── Hot-reload (S13 follow-on) ────────────────────────────────
+
+    /// Helper: write a queue-config.yaml at the conventional path.
+    fn write_queue_config(dir: &TempDir, body: &str) {
+        let path = dir.path().join(".claude/brain/queue-config.yaml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, body).unwrap();
+    }
+
+    #[tokio::test]
+    async fn reload_swaps_in_new_config_when_file_appears() {
+        let dir = TempDir::new().unwrap();
+        // Bus starts with no config (file absent).
+        let bus = BusState::from_project_root(dir.path());
+        let handle1 = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
+        // No config → falls back to JSONL.
+        assert!(matches!(handle1.as_ref(), BackendHandle::Jsonl(_)));
+
+        // Write a config that promotes ack-topic to SQLite.
+        write_queue_config(
+            &dir,
+            r#"schema_version: "1"
+topics:
+  ack-topic:
+    backend: sqlite
+    ack_required: true
+"#,
+        );
+        // Reload picks up the new config + clears the backend cache.
+        bus.reload_from_path(dir.path()).await;
+        // Next backend lookup re-evaluates against the new config.
+        let handle2 = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
+        assert!(handle2.supports_ack(), "expected SQLite backend after reload");
+    }
+
+    #[tokio::test]
+    async fn reload_swaps_to_none_when_file_removed() {
+        let dir = TempDir::new().unwrap();
+        write_queue_config(
+            &dir,
+            r#"schema_version: "1"
+topics:
+  ack-topic:
+    backend: sqlite
+    ack_required: true
+"#,
+        );
+        let bus = BusState::from_project_root(dir.path());
+        let handle1 = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
+        assert!(handle1.supports_ack());
+
+        // Remove the file + reload.
+        std::fs::remove_file(dir.path().join(".claude/brain/queue-config.yaml"))
+            .unwrap();
+        bus.reload_from_path(dir.path()).await;
+        // Next lookup falls back to JSONL.
+        let handle2 = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
+        assert!(matches!(handle2.as_ref(), BackendHandle::Jsonl(_)));
+    }
+
+    #[tokio::test]
+    async fn reload_preserves_previous_config_on_parse_error() {
+        let dir = TempDir::new().unwrap();
+        write_queue_config(
+            &dir,
+            r#"schema_version: "1"
+topics:
+  ack-topic:
+    backend: sqlite
+    ack_required: true
+"#,
+        );
+        let bus = BusState::from_project_root(dir.path());
+
+        // Operator saves a malformed YAML mid-edit.
+        write_queue_config(&dir, "this is not yaml");
+        bus.reload_from_path(dir.path()).await;
+
+        // Previous config survives — operators don't lose their
+        // working state because of an in-flight typo.
+        let handle = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
+        assert!(
+            handle.supports_ack(),
+            "previous config should survive a reload parse error"
+        );
     }
 
     #[tokio::test]
