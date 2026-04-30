@@ -80,6 +80,7 @@ fn minimal_card(endpoint: &str) -> AgentCard {
         },
         authentication: Authentication::default(),
         topology: None,
+        queue_endpoints: None,
     }
 }
 
@@ -485,6 +486,7 @@ async fn invoke_a2a_rejects_peer_missing_snapshot_capability() {
         },
         authentication: Authentication::default(),
         topology: None,
+        queue_endpoints: None,
     };
     let server = TaskServer::new(card);
     let router = server.router();
@@ -546,6 +548,7 @@ async fn invoke_a2a_rejects_peer_interface_version_mismatch() {
         },
         authentication: Authentication::default(),
         topology: None,
+        queue_endpoints: None,
     };
     let server = TaskServer::new(card);
     let router = server.router();

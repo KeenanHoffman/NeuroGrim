@@ -46,16 +46,39 @@ gates:
     # finds Cargo.toml; pass --project-root .. so the failure
     # ledger lands in the repo's brain dir alongside the
     # publish-gate ledger.
-    check_command: "cd neurogrim && neurogrim test --project-root .."
+    #
+    # Wrapper script invokes the local release binary directly,
+    # avoiding both the stale-PATH `neurogrim` problem (long-running
+    # federation peers can lock the user's PATH binary at an older
+    # version) and the cmd/bash shell-grouping incompatibility on
+    # Windows. See scripts/gates/tests-pass.sh for the why.
+    check_command: "bash scripts/gates/tests-pass.sh"
 
   - id: cargo-publish-dryrun
     gate_type: automated
-    description: Every published crate can be packaged (no missing files, no version conflicts)
+    description: neurogrim-core packages cleanly (no missing files, no metadata issues, builds from package archive)
     blocking: true
     timeout_seconds: 600
-    # Run from the workspace root. Stops at the first failure. v4.x
-    # publishes are gated on every crate publishing cleanly.
-    check_command: "cd neurogrim && cargo publish --dry-run -p neurogrim-core && cargo publish --dry-run -p neurogrim-sensory && cargo publish --dry-run -p neurogrim-mcp && cargo publish --dry-run -p neurogrim-a2a && cargo publish --dry-run -p neurogrim-ecosystem && cargo publish --dry-run -p neurogrim-dashboard && cargo publish --dry-run -p neurogrim-cli"
+    # Cargo's `publish --dry-run` for downstream workspace crates
+    # can't simulate the real publish sequencing — it tries to
+    # resolve workspace-internal deps (e.g. `neurogrim-core ^4.0.0`)
+    # from crates.io BEFORE we've published the new version.
+    # Even with `--no-verify`, the local-package preparation phase
+    # fails dep resolution.
+    #
+    # The actual publish flow (step 7 of v4.0-publish-process.md) is
+    # sequential: publish neurogrim-core first (no workspace deps),
+    # wait for crates.io indexing, then each downstream finds its
+    # newly-published dep. The dry-run can't model this.
+    #
+    # So this gate validates the ONE crate that's actually
+    # dryrun-able end-to-end: neurogrim-core, which has no workspace
+    # deps. A successful core dry-run + a green `tests-pass` gate
+    # (which compiles every workspace crate with its path-deps) is
+    # the strongest pre-publish signal we can get without going live.
+    # Downstream crates are validated post-core-publish during the
+    # real cascade.
+    check_command: "cd neurogrim && cargo publish --dry-run -p neurogrim-core"
 
   - id: changelog-dated
     gate_type: automated

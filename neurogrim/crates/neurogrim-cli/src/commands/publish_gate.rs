@@ -867,16 +867,24 @@ fn truncate_stream(bytes: &[u8]) -> Option<String> {
         return None;
     }
     let s = String::from_utf8_lossy(bytes);
+    // `total` is byte-length but the constants below are *character*
+    // counts (HEAD/TAIL). Multibyte content (Playwright's stderr can
+    // carry checkmarks etc.) means head.len() + tail.len() can exceed
+    // `total` once we extract — `saturating_sub` keeps the truncation
+    // message honest without panicking on integer underflow.
     let total = s.len();
-    if total <= STREAM_TRUNCATE_HEAD + STREAM_TRUNCATE_TAIL {
+    let char_count = s.chars().count();
+    if char_count <= STREAM_TRUNCATE_HEAD + STREAM_TRUNCATE_TAIL {
         return Some(s.into_owned());
     }
     let head: String = s.chars().take(STREAM_TRUNCATE_HEAD).collect();
-    let tail_start = s.chars().count().saturating_sub(STREAM_TRUNCATE_TAIL);
+    let tail_start = char_count.saturating_sub(STREAM_TRUNCATE_TAIL);
     let tail: String = s.chars().skip(tail_start).collect();
+    let truncated_bytes = total
+        .saturating_sub(head.len())
+        .saturating_sub(tail.len());
     Some(format!(
-        "{head}\n…[truncated {} bytes]…\n{tail}",
-        total - head.len() - tail.len()
+        "{head}\n…[truncated {truncated_bytes} bytes]…\n{tail}"
     ))
 }
 

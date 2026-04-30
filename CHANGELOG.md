@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-04-30
+
 *v4.0 — Ship Without Surprise — the structured pre-publish pipeline.
 Replaces the v3.x "manual operator review + `methodology_drift` test
 only" posture with a declarative gate manifest, a runner CLI that
@@ -13,6 +15,13 @@ executes gates in declared order, a per-gate JSONL ledger, a
 read-only dashboard surface, and a Playwright E2E foundation.
 NeuroGrim itself starts going through this pipeline at v4.0 (see
 `roadmap/v4.0-publish-process.md`).*
+
+**Also folded into v4.0:** a session of bus dogfooding migrations
+(score-history, services, skill-invocations all backed by SQLite bus
+topics) plus the v4.5 TSDB foundation (`neurogrim_core::metrics` +
+universal self-instrumentation + Plumbing page). All landed before
+the inaugural v4 publish; documented under their own subheadings
+below for traceability.
 
 ### Added — slow-benchmark surgery (S12-G-1)
 
@@ -133,6 +142,130 @@ conversation, documented at the top of each epic file:
 - e2e gates are NeuroGrim-internal in v1 (run the bundled Playwright
   suite); adopters with their own browser tooling should use
   `automated` gate type.
+
+### Added — bus dogfooding: score-snapshots SQLite topic
+
+`score-history.json` retired. Score snapshots now publish to the
+`_neurogrim/score-snapshots` SQLite-backed bus topic. Writer
+(`neurogrim-mcp::context::append_score_history`) opens
+`SqliteBackend` directly and auto-migrates from legacy JSON on first
+write; reader (`neurogrim-dashboard::logs::read_score_history`)
+uses bounded `read_from(start, limit+1)` with delta-window
+optimization. Eliminates the read-modify-write of a full JSON array
+on every score run — the worst persistence pattern in the prior
+codebase. Filesystem watcher recognizes both `.sqlite` and
+`.sqlite-wal` paths so SSE notifications fire on the first INSERT,
+not just on checkpoint.
+
+### Added — bus dogfooding: skill-invocations hybrid topic
+
+The PostToolUse shell hook (`scripts/record-skill-invocation.sh`)
+keeps writing JSONL — bash can't write SQLite without paying ~100ms
+cold-start per invocation. JSONL stays canonical; new
+`neurogrim_core::skill_invocations::ingest_and_open` lazily catches
+SQLite up from JSONL on every read using non-empty-line-count vs
+SQLite-row-count as the watermark. Both the dashboard reader and
+the `capability-hygiene` sensor switch to SQLite-backed reads —
+the sensor now consumes its own `_neurogrim/skill-invocations` bus
+topic. 6 new unit tests cover ingest, idempotency, malformed-line
+tolerance.
+
+### Added — bus dogfooding: services SQLite topic
+
+`services.jsonl` retired. Service lifecycle events (started /
+failed / stopped) now ride the `_neurogrim/services` SQLite topic.
+Same shape as the score-snapshots migration. Closes a parallel
+persistence layer that lived alongside the bus's queue
+infrastructure.
+
+### Added — `neurogrim_core::metrics` time-series store (B-36 iter 1)
+
+Local time-series store at
+`<project>/.claude/brain/queues/_neurogrim/metrics.sqlite`. Single
+file, WAL mode, schema:
+`metric_points(id, metric_name, ts_ms, tags_json, value)` with a
+composite index on `(metric_name, ts_ms)`. Pre-declared tag
+dimensions (no Prometheus-style freeform labels). Public API:
+`MetricsStore`, `MetricsHandle` thread-safe wrapper, typed `Tags`,
+`Query` builder with tag filters / time windows / limits, six
+aggregations (avg / sum / min / max / count / last) with bucketing,
+`list_series()` + `total_points()` + `size_bytes()` for plumbing
+introspection, `delete_before()` for retention sweeps. 9 unit tests.
+
+### Added — universal self-instrumentation
+
+Five always-on metric series record dashboard activity into the
+TSDB:
+
+- `request_duration_ms{path, status}` — axum middleware on every
+  `/api/` request. Path normalizer collapses
+  `/api/brains/<id>/domains/<name>` to
+  `/api/brains/:id/domains/:name` for bounded cardinality.
+- `cache_event{cache, kind=hit|miss|invalidate}` — wired into
+  `BrainContextCache::load_or_get` plus the SSE invalidation task.
+- `peer_probe_ms{peer, outcome}` — wired into `build_federation`.
+- `bus_publish{topic, backend}` — wired into `state.bus.publish()`
+  call sites.
+- `domain_score{domain}` + `brain_score` + `domain_confidence{domain}`
+  — auto-ingested from `_neurogrim/score-snapshots` payloads via a
+  bus subscriber spawned at server startup. One-time backfill from
+  the topic's persistent storage at first start.
+
+### Added — Plumbing dashboard page (B-36 iter 1 frontend)
+
+New top-level page at `/brains/$brainId/plumbing` (Wrench icon nav).
+Header strip with 4 stat cards (TSDB series count, total points +
+size, queue topic size, brain ID). Two functional tabs: **Metrics**
+(registered series table → click for expanded recent-points view;
+cardinality > 50 surfaces as destructive badge) and **Queues** (bus
+topic listing). Both auto-refresh every 10s via TanStack Query.
+Backend endpoints: `GET /api/brains/:id/plumbing/{overview,
+metrics/series, metrics/:name}`. Iteration 2 will add Storage and
+Watchers tabs plus operator actions (vacuum, replay, export to
+JSONL).
+
+### Added — `read_json_value` + `internal_error` route helpers
+
+Two tiny shared helpers in `routes.rs` collapse the two repeated
+patterns: 6-line BOM-stripping JSON read (`read_json_value(&path)`,
+2 sites) and 8-line
+`(StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": ...})))
+.into_response()` (`internal_error(format!(...))`, 9 sites for
+"failed to load BrainContext"). Net –41 lines; each call site reads
+more directly.
+
+### Added — `with_host_context` / `with_brain_context` async wrappers
+
+8 handlers (4 legacy single-Brain + 4 federation-aware) shared an
+identical resolve-load-error scaffolding. Two async-closure wrappers
+take a `Arc<BrainContext>` by value (so the closure can hold it
+across `.await` without lifetime gymnastics) and return any
+`IntoResponse`. Net –20 lines, clearer intent.
+
+### Added — perf baseline + B-33/B-34/B-35 backlog entries
+
+Pre-TSDB dashboard timing baseline at
+`roadmap/data/dashboard-perf-baseline-2026-04-30.md` with full
+per-page measurements + reproducible Playwright harness. Backlog
+entries: B-33 (federation peer-probe parallelization, ~30 min fix
+for the 2200ms wall-clock issue), B-34 (stat-validated CMDB cache
+to eliminate ~180ms/load of repeat parsing), B-35 (granular
+ScoreChanged invalidation), B-36 (TSDB epic with 4-iteration plan).
+
+### Fixed — stream-truncation underflow in `publish-gate run`
+
+`publish_gate.rs::truncate_for_log` would `total - head.len() -
+tail.len()` where `total` is byte-length but the truncate
+constants are character counts. Multibyte content (Playwright's
+stderr can carry UTF-8 box-drawing characters) caused integer
+underflow → panic. Fix: compare character counts in the early
+return; use `saturating_sub` for the "truncated bytes" message.
+
+### Test totals at v4.0 publish
+
+- Workspace lib: 1046 passing across 7 crates (was 1023 — +9 metrics
+  + 8 path-normalization + 6 skill-invocations).
+- Frontend (vitest): 283 passing across 28 files.
 
 ## [3.5.0] - 2026-04-29
 
