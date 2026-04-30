@@ -26,7 +26,8 @@ export type DashboardEvent =
   // v4.3 S15-C-2 v3 — Logs-page sources surface as live events.
   | { kind: "publish_gate_ledger_appended" }
   | { kind: "approval_resolved" }
-  | { kind: "notification_published" };
+  | { kind: "notification_published" }
+  | { kind: "services_log_appended" };
 
 /**
  * Wire the dashboard to its live-update channel.
@@ -130,7 +131,8 @@ function normalize(raw: unknown): DashboardEvent | null {
       raw === "layout_changed" ||
       raw === "publish_gate_ledger_appended" ||
       raw === "approval_resolved" ||
-      raw === "notification_published"
+      raw === "notification_published" ||
+      raw === "services_log_appended"
     ) {
       return { kind: raw };
     }
@@ -248,6 +250,16 @@ function invalidate(
       break;
     case "notification_published":
       qc.invalidateQueries({ queryKey: ["logs-notifications"] });
+      break;
+    case "services_log_appended":
+      // S15-C-3 expansion follow-on: services.jsonl rows trigger
+      // both the Logs page's services source AND the Federation /
+      // Services page (the operator's "fleet view"). The federation
+      // page already invalidates on service_started/stopped — the
+      // file-watcher event is a defense-in-depth path for out-of-
+      // band edits.
+      qc.invalidateQueries({ queryKey: ["logs-services"] });
+      qc.invalidateQueries({ queryKey: ["services"] });
       break;
   }
 }

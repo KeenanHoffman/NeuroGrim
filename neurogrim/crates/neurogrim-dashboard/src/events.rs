@@ -98,6 +98,15 @@ pub enum DashboardEvent {
     /// appended. Frontend invalidates the Logs page's
     /// notifications query.
     NotificationPublished,
+    /// v4.3 S15-C-3 expansion follow-on — a row was appended to
+    /// `<project>/.claude/brain/services.jsonl`. Distinct from
+    /// `Service{Started, Stopped, Failed}`: those are the in-process
+    /// broadcast that flips the Federation page state immediately
+    /// after the dashboard's own action; this fires when the
+    /// filesystem watcher sees the on-disk ledger change (covering
+    /// out-of-band edits + dashboard-restart re-ingestion). Frontend
+    /// invalidates the Logs page's services query.
+    ServicesLogAppended,
 }
 
 /// Classify a filesystem path into a `DashboardEvent`. Paths are
@@ -135,6 +144,9 @@ pub fn classify_event(path: &Path, project_root: &Path) -> Option<DashboardEvent
     }
     if rel_str == ".claude/brain/queues/_neurogrim/notifications.jsonl" {
         return Some(DashboardEvent::NotificationPublished);
+    }
+    if rel_str == ".claude/brain/services.jsonl" {
+        return Some(DashboardEvent::ServicesLogAppended);
     }
     if let Some(file_name) = rel.file_name().and_then(|n| n.to_str()) {
         // `.claude/<domain>-cmdb.json` lives directly under

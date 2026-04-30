@@ -521,6 +521,118 @@ describe("LogsPage", () => {
     expect(screen.getByText("score 80 (+2)")).toBeInTheDocument();
   });
 
+  // ── services.jsonl source (S15-C-3 expansion follow-on) ───────
+
+  it("aggregates services events with started/failed/stopped outcomes", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: { topic: "_neurogrim/notifications", messages: [], next_offset: 0 },
+      "score-history": { history_path: "/x", present: false, total_entries: 0, entries: [] },
+      "logs/services": {
+        log_path: "/x/services.jsonl",
+        present: true,
+        total_entries: 3,
+        entries: [
+          // Newest-first; backend already sorted.
+          {
+            ts: "2026-04-30T10:10:00Z",
+            kind: "stopped",
+            peer_name: "alpha",
+            pid: 1234,
+            port: null,
+            reason: null,
+          },
+          {
+            ts: "2026-04-30T10:05:00Z",
+            kind: "failed",
+            peer_name: "beta",
+            pid: null,
+            port: null,
+            reason: "port-conflict: port 8422 already bound",
+          },
+          {
+            ts: "2026-04-30T10:00:00Z",
+            kind: "started",
+            peer_name: "alpha",
+            pid: 1234,
+            port: 8421,
+            reason: null,
+          },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    // Started entries surface the bound port in the subject.
+    expect(screen.getByText("alpha (port 8421)")).toBeInTheDocument();
+    // Failed entries show the peer name without port suffix.
+    expect(screen.getByText("beta")).toBeInTheDocument();
+    // Stopped entries also drop the port suffix (it'd be redundant).
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    // Outcome badges per direction.
+    expect(screen.getByTestId("outcome-started")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-failed")).toBeInTheDocument();
+    expect(screen.getByTestId("outcome-stopped")).toBeInTheDocument();
+    // Actor column shows pid for entries that have one.
+    const pidCells = screen.getAllByText(/^pid \d+$/);
+    expect(pidCells.length).toBeGreaterThanOrEqual(2); // started + stopped
+  });
+
+  it("services filter chip narrows the timeline to lifecycle events", async () => {
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "r1",
+            gate_id: "tests-pass",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-30T18:00:00Z",
+            completed_at: null,
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+        ],
+      },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: { topic: "_neurogrim/notifications", messages: [], next_offset: 0 },
+      "score-history": { history_path: "/x", present: false, total_entries: 0, entries: [] },
+      "logs/services": {
+        log_path: "/x/services.jsonl",
+        present: true,
+        total_entries: 1,
+        entries: [
+          {
+            ts: "2026-04-30T17:00:00Z",
+            kind: "started",
+            peer_name: "alpha",
+            pid: 1234,
+            port: 8421,
+            reason: null,
+          },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    // Both visible initially.
+    expect(screen.getByText("tests-pass")).toBeInTheDocument();
+    expect(screen.getByText("alpha (port 8421)")).toBeInTheDocument();
+    // Click the services chip → only service events remain.
+    fireEvent.click(screen.getByTestId("filter-services"));
+    expect(screen.queryByText("tests-pass")).not.toBeInTheDocument();
+    expect(screen.getByText("alpha (port 8421)")).toBeInTheDocument();
+  });
+
   it("sorts entries newest first", async () => {
     mockFetch({
       "publish-gates": {

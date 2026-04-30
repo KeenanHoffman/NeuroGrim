@@ -109,7 +109,8 @@ impl BrainContextCache {
                         | DashboardEvent::ServiceFailed { .. }
                         | DashboardEvent::PublishGateLedgerAppended
                         | DashboardEvent::ApprovalResolved
-                        | DashboardEvent::NotificationPublished => {}
+                        | DashboardEvent::NotificationPublished
+                        | DashboardEvent::ServicesLogAppended => {}
                     }
                 }
             });

@@ -9,6 +9,8 @@ import {
   Filter,
   Layers,
   PauseCircle,
+  Power,
+  PowerOff,
   Sparkles,
   TrendingDown,
   TrendingUp,
@@ -19,6 +21,7 @@ import type { PublishGatesPageResponse } from "@bindings/PublishGatesPageRespons
 import type { ApprovalsPageResponse } from "@bindings/ApprovalsPageResponse";
 import type { InvocationLedgerResponse } from "@bindings/InvocationLedgerResponse";
 import type { ScoreHistoryResponse } from "@bindings/ScoreHistoryResponse";
+import type { ServicesLogResponse } from "@bindings/ServicesLogResponse";
 import type { QueueReadResponse } from "@bindings/QueueReadResponse";
 import {
   Card,
@@ -57,6 +60,10 @@ import { brainApi, useBrainId } from "@/lib/useBrain";
  *   `score-history.json`, each annotated with the delta against
  *   the chronologically-prior snapshot (improving / declining /
  *   stable / first). Per-domain detail lives in the Domains pages.
+ * - **Services** — service-lifecycle events from `services.jsonl`
+ *   (started / failed / stopped). The on-disk ledger is appended
+ *   by the start / stop / readiness-watcher handlers; durable
+ *   across dashboard restarts.
  *
  * Each source has its own filter chip; "All" defaults. Newest events
  * first; refreshes every 30 seconds via TanStack Query, plus
@@ -66,9 +73,6 @@ import { brainApi, useBrainId } from "@/lib/useBrain";
  *
  * **Deferred:**
  *
- * - **services.jsonl** — service start/stop events; today's
- *   `ServiceRegistry` is in-memory only, so this needs a small
- *   persistence layer first.
  * - **Per-row drill-down** — click a row → see the full payload
  *   (publish-gate stdout/stderr, full notification body, full
  *   score-history snapshot with per-domain breakdown, etc.) in a
@@ -103,6 +107,11 @@ export function LogsPage() {
     queryFn: () => fetchScoreHistory(brainId),
     refetchInterval: 30_000,
   });
+  const { data: servicesLog } = useQuery({
+    queryKey: ["logs-services", brainId],
+    queryFn: () => fetchServicesLog(brainId),
+    refetchInterval: 30_000,
+  });
 
   const entries = useMemo(() => {
     return aggregate(
@@ -111,8 +120,17 @@ export function LogsPage() {
       invocations,
       notifications,
       scoreHistory,
+      servicesLog,
     ).filter((e) => (filter === "all" ? true : e.source === filter));
-  }, [gates, approvals, invocations, notifications, scoreHistory, filter]);
+  }, [
+    gates,
+    approvals,
+    invocations,
+    notifications,
+    scoreHistory,
+    servicesLog,
+    filter,
+  ]);
 
   return (
     <div className="space-y-6 p-6" data-testid="logs-page">
@@ -179,6 +197,13 @@ export function LogsPage() {
               onClick={() => setFilter("score-history")}
               testid="filter-score-history"
             />
+            <FilterChip
+              label="Services"
+              count={countSource(entries, "services")}
+              active={filter === "services"}
+              onClick={() => setFilter("services")}
+              testid="filter-services"
+            />
           </div>
         </CardContent>
       </Card>
@@ -222,7 +247,8 @@ type LogSource =
   | "approvals"
   | "invocations"
   | "notifications"
-  | "score-history";
+  | "score-history"
+  | "services";
 
 interface LogEntry {
   id: string;
@@ -240,6 +266,7 @@ function aggregate(
   invocations: InvocationLedgerResponse | undefined,
   notifications: QueueReadResponse | undefined,
   scoreHistory: ScoreHistoryResponse | undefined,
+  servicesLog: ServicesLogResponse | undefined,
 ): LogEntry[] {
   const out: LogEntry[] = [];
   if (gates) {
@@ -316,6 +343,26 @@ function aggregate(
         subject,
         outcome: severity,
         actor: null,
+      });
+    }
+  }
+  if (servicesLog) {
+    for (const e of servicesLog.entries) {
+      // Subject names the peer; outcome encodes the lifecycle
+      // direction (started / failed / stopped) so the badge styling
+      // matches the operator's mental model.
+      const portSuffix =
+        e.kind === "started" && e.port !== null && e.port !== undefined
+          ? ` (port ${e.port})`
+          : "";
+      const subject = `${e.peer_name}${portSuffix}`;
+      out.push({
+        id: `service-${e.ts}-${e.peer_name}-${e.kind}`,
+        source: "services",
+        when: e.ts,
+        subject,
+        outcome: e.kind, // "started" | "failed" | "stopped"
+        actor: e.pid !== null && e.pid !== undefined ? `pid ${e.pid}` : null,
       });
     }
   }
@@ -459,6 +506,8 @@ function sourceIcon(source: LogSource): typeof CheckCircle2 {
       return Bell;
     case "score-history":
       return TrendingUp;
+    case "services":
+      return Power;
     default:
       return Layers;
   }
@@ -508,6 +557,11 @@ function outcomeStyle(outcome: string): {
       return { Icon: Minus, variant: "secondary", label: "stable" };
     case "first":
       return { Icon: Sparkles, variant: "outline", label: "first" };
+    // S15-C-3 expansion follow-on: services lifecycle outcomes.
+    case "started":
+      return { Icon: Power, variant: "default", label: "started" };
+    case "stopped":
+      return { Icon: PowerOff, variant: "secondary", label: "stopped" };
     default:
       return { Icon: CircleAlert, variant: "outline", label: outcome };
   }
@@ -569,4 +623,13 @@ async function fetchScoreHistory(
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as ScoreHistoryResponse;
+}
+
+async function fetchServicesLog(
+  brainId: string,
+): Promise<ServicesLogResponse> {
+  const url = `${brainApi(brainId, "logs")}/services?limit=50`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
+  return (await res.json()) as ServicesLogResponse;
 }

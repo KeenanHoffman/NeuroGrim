@@ -350,6 +350,84 @@ pub fn read_score_history(
     }
 }
 
+// ── S15-C-3 expansion follow-on: services.jsonl reader ──────────────────
+
+/// Response body of `GET /api/brains/:id/logs/services`.
+///
+/// Mirrors the on-disk JSONL ledger shape but typed + projected for
+/// the Logs page. The ledger is append-only; we re-read on each
+/// request and return the most-recent N entries newest-first. A
+/// future v5 may add streaming-read for very long histories, but
+/// services.jsonl grows much more slowly than invocation-ledger
+/// (operators don't restart peers constantly), so the simple read
+/// is sufficient.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ServicesLogResponse {
+    pub log_path: String,
+    pub present: bool,
+    pub total_entries: u32,
+    pub entries: Vec<crate::services::ServiceLogEntry>,
+}
+
+/// Read the services ledger and return the most-recent `limit`
+/// entries (newest-first).
+///
+/// Same invariants as [`read_invocation_ledger`]:
+/// - Missing file → `present: false`, empty entries.
+/// - Malformed lines silently skipped from `entries` but counted in
+///   `total_entries` for drift visibility.
+/// - `limit` clamped to `[1, MAX_LIMIT]`.
+pub fn read_services_log(
+    project_root: &Path,
+    limit: usize,
+) -> ServicesLogResponse {
+    let log_path = crate::services::services_log_path(project_root);
+    let limit = limit.clamp(1, MAX_LIMIT);
+
+    let text = match std::fs::read_to_string(&log_path) {
+        Ok(t) => t,
+        Err(_) => {
+            return ServicesLogResponse {
+                log_path: log_path.to_string_lossy().to_string(),
+                present: false,
+                total_entries: 0,
+                entries: vec![],
+            };
+        }
+    };
+
+    let mut total_entries: u32 = 0;
+    let mut parsed: Vec<(DateTime<Utc>, crate::services::ServiceLogEntry)> = vec![];
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        total_entries = total_entries.saturating_add(1);
+        let entry: crate::services::ServiceLogEntry = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let ts = match DateTime::parse_from_rfc3339(&entry.ts) {
+            Ok(t) => t.with_timezone(&Utc),
+            Err(_) => continue,
+        };
+        parsed.push((ts, entry));
+    }
+    parsed.sort_by(|a, b| b.0.cmp(&a.0));
+    parsed.truncate(limit);
+    let entries: Vec<crate::services::ServiceLogEntry> =
+        parsed.into_iter().map(|(_, e)| e).collect();
+
+    ServicesLogResponse {
+        log_path: log_path.to_string_lossy().to_string(),
+        present: true,
+        total_entries,
+        entries,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -695,5 +773,136 @@ mod tests {
         assert!(resp.present);
         assert_eq!(resp.total_entries, 0);
         assert!(resp.entries.is_empty());
+    }
+
+    // ── services.jsonl reader (S15-C-3 expansion follow-on) ─────
+
+    fn write_services_log(project_root: &Path, lines: &[&str]) {
+        let path = crate::services::services_log_path(project_root);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, lines.join("\n") + "\n").expect("write services log");
+    }
+
+    #[test]
+    fn missing_services_log_returns_absent_response() {
+        let (_dir, root) = setup();
+        let resp = read_services_log(&root, 50);
+        assert!(!resp.present);
+        assert_eq!(resp.total_entries, 0);
+        assert!(resp.entries.is_empty());
+        assert!(resp.log_path.ends_with("services.jsonl"));
+    }
+
+    #[test]
+    fn parses_started_failed_stopped_entries() {
+        let (_dir, root) = setup();
+        write_services_log(
+            &root,
+            &[
+                r#"{"ts":"2026-04-30T10:00:00Z","kind":"started","peer_name":"alpha","pid":1234,"port":8421}"#,
+                r#"{"ts":"2026-04-30T10:05:00Z","kind":"failed","peer_name":"beta","reason":"port-conflict: port 8422 already bound"}"#,
+                r#"{"ts":"2026-04-30T10:10:00Z","kind":"stopped","peer_name":"alpha","pid":1234}"#,
+            ],
+        );
+        let resp = read_services_log(&root, 50);
+        assert_eq!(resp.total_entries, 3);
+        assert_eq!(resp.entries.len(), 3);
+        // Newest-first.
+        assert_eq!(resp.entries[0].kind, "stopped");
+        assert_eq!(resp.entries[0].peer_name, "alpha");
+        assert_eq!(resp.entries[0].pid, Some(1234));
+        assert_eq!(resp.entries[1].kind, "failed");
+        assert_eq!(resp.entries[1].peer_name, "beta");
+        assert!(resp.entries[1]
+            .reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("port-conflict"));
+        assert_eq!(resp.entries[2].kind, "started");
+        assert_eq!(resp.entries[2].port, Some(8421));
+    }
+
+    #[test]
+    fn malformed_lines_skipped_but_counted_in_total() {
+        let (_dir, root) = setup();
+        write_services_log(
+            &root,
+            &[
+                r#"{"ts":"2026-04-30T10:00:00Z","kind":"started","peer_name":"a","pid":1,"port":8421}"#,
+                r#"not-json-at-all"#,
+                r#"{"missing":"ts","kind":"failed","peer_name":"b"}"#,
+                r#"{"ts":"not-a-date","kind":"stopped","peer_name":"c","pid":2}"#,
+            ],
+        );
+        let resp = read_services_log(&root, 50);
+        assert_eq!(resp.total_entries, 4);
+        assert_eq!(resp.entries.len(), 1);
+        assert_eq!(resp.entries[0].peer_name, "a");
+    }
+
+    #[test]
+    fn services_log_limit_clamps_and_returns_newest_first() {
+        let (_dir, root) = setup();
+        let mut lines: Vec<String> = Vec::new();
+        for i in 0..10u32 {
+            lines.push(format!(
+                r#"{{"ts":"2026-04-30T{:02}:00:00Z","kind":"started","peer_name":"peer-{}","pid":{},"port":{}}}"#,
+                i,
+                i,
+                1000 + i,
+                8421 + i
+            ));
+        }
+        let line_refs: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+        write_services_log(&root, &line_refs);
+
+        let resp = read_services_log(&root, 3);
+        assert_eq!(resp.total_entries, 10);
+        assert_eq!(resp.entries.len(), 3);
+        assert_eq!(resp.entries[0].peer_name, "peer-9");
+        assert_eq!(resp.entries[1].peer_name, "peer-8");
+        assert_eq!(resp.entries[2].peer_name, "peer-7");
+    }
+
+    #[test]
+    fn services_log_round_trip_through_append_helpers() {
+        // Integration: the on-disk file the helpers write should be
+        // readable by the reader without manual format coordination.
+        let (_dir, root) = setup();
+        crate::services::log_service_started(&root, "alpha", 1234, 8421);
+        crate::services::log_service_failed(
+            &root,
+            "beta",
+            "port-conflict: port 8422 already bound",
+            None,
+        );
+        crate::services::log_service_stopped(&root, "alpha", 1234);
+        let resp = read_services_log(&root, 50);
+        assert_eq!(resp.total_entries, 3);
+        assert_eq!(resp.entries.len(), 3);
+        // Newest-first; the stopped event is last appended.
+        assert_eq!(resp.entries[0].kind, "stopped");
+        assert_eq!(resp.entries[0].peer_name, "alpha");
+        assert_eq!(resp.entries[1].kind, "failed");
+        assert_eq!(resp.entries[1].peer_name, "beta");
+        // No PID on a port-conflict pre-spawn failure.
+        assert_eq!(resp.entries[1].pid, None);
+        assert_eq!(resp.entries[2].kind, "started");
+        assert_eq!(resp.entries[2].port, Some(8421));
+    }
+
+    #[test]
+    fn append_creates_parent_directories_when_absent() {
+        // Regression guard: helpers should create
+        // `<project>/.claude/brain/` if the operator has a fresh
+        // project tree without those directories yet.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().to_path_buf();
+        // No .claude/brain pre-existing.
+        crate::services::log_service_started(&root, "gamma", 1, 8421);
+        let resp = read_services_log(&root, 50);
+        assert!(resp.present);
+        assert_eq!(resp.entries.len(), 1);
+        assert_eq!(resp.entries[0].peer_name, "gamma");
     }
 }

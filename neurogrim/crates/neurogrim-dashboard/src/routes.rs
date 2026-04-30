@@ -217,6 +217,14 @@ pub fn router(state: AppState) -> Router {
             "/api/brains/:brain_id/logs/score-history",
             get(brain_logs_score_history),
         )
+        // v4.3 S15-C-3 expansion follow-on: services.jsonl source
+        // for the Logs page (the 6th and final source). The on-disk
+        // ledger is appended by the start/stop/readiness-watcher
+        // handlers; this endpoint reads it.
+        .route(
+            "/api/brains/:brain_id/logs/services",
+            get(brain_logs_services),
+        )
         // v4.2 S14-S-6 v1: secrets-management UI surface. List
         // is read-only; set + delete gated behind
         // --allow-mutations. Values flow over the HTTPS listener
@@ -1746,6 +1754,13 @@ async fn brain_peer_start(
     if let Err(r) = require_mutations(&state) {
         return r;
     }
+    // Capture the parent brain's project_root so we can append
+    // service-lifecycle events to its services.jsonl ledger. Cheap
+    // call (BrainTree is preloaded at AppState construction).
+    let parent_project_root = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b.project_root.clone(),
+        Err(r) => return r,
+    };
     let peer = match resolve_peer(&state, &brain_id, &peer_name).await {
         Ok(p) => p,
         Err(r) => return r,
@@ -1790,6 +1805,12 @@ async fn brain_peer_start(
     // and watch a child fail at bind. TOCTOU-vulnerable on purpose;
     // the readiness watcher catches the race.
     if !neurogrim_core::ports::try_bind(port) {
+        crate::services::log_service_failed(
+            &parent_project_root,
+            &peer.peer_name,
+            &format!("port-conflict: port {port} already bound"),
+            None,
+        );
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(ServiceErrorDto::new(
@@ -1930,6 +1951,7 @@ async fn brain_peer_start(
     let registry_clone = state.service_registry.clone();
     let events_clone = state.events.clone();
     let peer_name_clone = peer.peer_name.clone();
+    let parent_root_clone = parent_project_root.clone();
     tokio::spawn(async move {
         run_readiness_watcher(
             registry_clone,
@@ -1938,6 +1960,7 @@ async fn brain_peer_start(
             pid,
             port,
             child_arc,
+            parent_root_clone,
         )
         .await;
     });
@@ -1962,6 +1985,9 @@ async fn brain_peer_start(
 ///
 /// `child` is a clone of the Arc that the registry holds, so this
 /// watcher can `try_wait` without going through the registry's lock.
+// `parent_project_root` is the parent brain's project_root, used to
+// append terminal service-lifecycle events to its services.jsonl
+// ledger.
 async fn run_readiness_watcher(
     registry: std::sync::Arc<crate::services::ServiceRegistry>,
     events: Option<tokio::sync::broadcast::Sender<DashboardEvent>>,
@@ -1969,6 +1995,7 @@ async fn run_readiness_watcher(
     pid: u32,
     port: u16,
     child: std::sync::Arc<tokio::sync::Mutex<tokio::process::Child>>,
+    parent_project_root: std::path::PathBuf,
 ) {
     const POLL_INTERVAL: Duration = Duration::from_millis(250);
     const READINESS_TIMEOUT: Duration = Duration::from_secs(5);
@@ -1985,14 +2012,21 @@ async fn run_readiness_watcher(
         if child_exited {
             // Drop the registry entry (cleanup is idempotent).
             registry.remove(&peer_name).await;
+            let reason = format!(
+                "spawned process for peer '{peer_name}' exited during startup; \
+                 check the log under <peer_root>/.claude/brain/logs/{peer_name}.log"
+            );
+            crate::services::log_service_failed(
+                &parent_project_root,
+                &peer_name,
+                &reason,
+                Some(pid),
+            );
             broadcast_service_event(
                 &events,
                 DashboardEvent::ServiceFailed {
                     peer_name: peer_name.clone(),
-                    reason: format!(
-                        "spawned process for peer '{peer_name}' exited during startup; \
-                         check the log under <peer_root>/.claude/brain/logs/{peer_name}.log"
-                    ),
+                    reason,
                 },
             );
             return;
@@ -2001,6 +2035,12 @@ async fn run_readiness_watcher(
         // Then: has the port become bound? `try_bind` returns false
         // when something is listening on it — most likely our child.
         if !neurogrim_core::ports::try_bind(port) {
+            crate::services::log_service_started(
+                &parent_project_root,
+                &peer_name,
+                pid,
+                port,
+            );
             broadcast_service_event(
                 &events,
                 DashboardEvent::ServiceStarted {
@@ -2018,15 +2058,22 @@ async fn run_readiness_watcher(
             if let Some(handle) = registry.remove(&peer_name).await {
                 let _ = handle.child.lock().await.start_kill();
             }
+            let reason = format!(
+                "readiness timeout: peer '{peer_name}' did not bind port {port} \
+                 within {}s",
+                READINESS_TIMEOUT.as_secs()
+            );
+            crate::services::log_service_failed(
+                &parent_project_root,
+                &peer_name,
+                &reason,
+                Some(pid),
+            );
             broadcast_service_event(
                 &events,
                 DashboardEvent::ServiceFailed {
                     peer_name: peer_name.clone(),
-                    reason: format!(
-                        "readiness timeout: peer '{peer_name}' did not bind port {port} \
-                         within {}s",
-                        READINESS_TIMEOUT.as_secs()
-                    ),
+                    reason,
                 },
             );
             return;
@@ -2044,6 +2091,14 @@ async fn brain_peer_stop(
     if let Err(r) = require_mutations(&state) {
         return r;
     }
+    // Capture the parent brain's project_root for the services.jsonl
+    // append before peer resolution so a failure to look up the peer
+    // (already-removed, registry edited mid-flight) doesn't lose the
+    // log line we'd want to emit on terminal-state transitions.
+    let parent_project_root = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b.project_root.clone(),
+        Err(r) => return r,
+    };
     // resolve_brain validates the brain_id; unknown brain → 404.
     if let Err(r) = resolve_peer(&state, &brain_id, &peer_name).await {
         return r;
@@ -2071,11 +2126,18 @@ async fn brain_peer_stop(
     // on Windows. `a2a-serve` has no graceful-shutdown work, so
     // unconditional kill is fine.
     if let Err(e) = handle.child.lock().await.kill().await {
+        let reason = format!("failed to kill child pid={pid}: {e}");
+        crate::services::log_service_failed(
+            &parent_project_root,
+            &peer_name,
+            &reason,
+            Some(pid),
+        );
         broadcast_service_event(
             &state.events,
             DashboardEvent::ServiceFailed {
                 peer_name: peer_name.clone(),
-                reason: format!("failed to kill child pid={pid}: {e}"),
+                reason,
             },
         );
         return (
@@ -2088,6 +2150,7 @@ async fn brain_peer_stop(
             .into_response();
     }
 
+    crate::services::log_service_stopped(&parent_project_root, &peer_name, pid);
     broadcast_service_event(
         &state.events,
         DashboardEvent::ServiceStopped {
@@ -2741,6 +2804,23 @@ async fn brain_logs_score_history(
     };
     let limit = q.limit.unwrap_or(crate::logs::DEFAULT_LIMIT);
     let resp = crate::logs::read_score_history(&brain.project_root, limit);
+    Json(resp).into_response()
+}
+
+/// `GET /api/brains/:brain_id/logs/services?limit=N` — recent
+/// service-lifecycle events from `<project>/.claude/brain/services.jsonl`.
+/// S15-C-3 expansion follow-on: closes the sixth Logs source.
+async fn brain_logs_services(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+    Query(q): Query<LogsLimitQuery>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let limit = q.limit.unwrap_or(crate::logs::DEFAULT_LIMIT);
+    let resp = crate::logs::read_services_log(&brain.project_root, limit);
     Json(resp).into_response()
 }
 

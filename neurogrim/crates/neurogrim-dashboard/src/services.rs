@@ -211,6 +211,174 @@ pub fn broadcast_event(
     }
 }
 
+// ── services.jsonl persistence (S15-C-3 expansion follow-on) ─────────────
+
+/// One on-disk row in `<project>/.claude/brain/services.jsonl`.
+///
+/// Append-only ledger of terminal service-lifecycle events (started
+/// / failed / stopped). The transient "starting" state is NOT logged
+/// — only the resolved outcome lands on disk so the timeline reads
+/// as a sequence of facts rather than wishes.
+///
+/// Used by both:
+/// - `crate::logs::read_services_log` (Logs page source)
+/// - Future v5 work: dashboard-restart recovery (re-attach to
+///   already-running peers by reading the most-recent `started`
+///   that has no matching `stopped`).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct ServiceLogEntry {
+    /// RFC3339 timestamp of the event.
+    pub ts: String,
+    /// One of: `"started"` | `"failed"` | `"stopped"`.
+    pub kind: String,
+    pub peer_name: String,
+    /// PID of the spawned child. Present on `started` + `stopped`;
+    /// `None` on `failed` when the spawn itself didn't yield a PID
+    /// (port-conflict pre-spawn, etc.).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub pid: Option<u32>,
+    /// Bound port. Present on `started`; `None` on `failed` /
+    /// `stopped` (where it would be redundant or unknown).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub port: Option<u16>,
+    /// Failure reason for `failed` entries (port conflict, readiness
+    /// timeout, kill failure, etc.). `None` on success outcomes.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub reason: Option<String>,
+}
+
+/// On-disk path for the services ledger.
+pub fn services_log_path(project_root: &std::path::Path) -> PathBuf {
+    project_root
+        .join(".claude")
+        .join("brain")
+        .join("services.jsonl")
+}
+
+/// Append a single line to `<project>/.claude/brain/services.jsonl`.
+///
+/// Best-effort: failures (parent dir missing, disk full, permissions)
+/// are logged via `tracing` but NOT propagated. Service lifecycle
+/// must complete even if the audit ledger can't be written;
+/// otherwise a degraded filesystem could cascade into operators
+/// being unable to start/stop their peers.
+///
+/// Single-line JSONL appends are atomic on POSIX with `O_APPEND` and
+/// well-behaved on Windows for entries below the platform's
+/// `_PIPE_BUF`-equivalent (4 KB on most systems). Service events are
+/// well below that bound — we don't hold a write lock to serialize
+/// concurrent appends.
+pub fn append_service_event(
+    project_root: &std::path::Path,
+    entry: &ServiceLogEntry,
+) {
+    use std::io::Write;
+    let path = services_log_path(project_root);
+    if let Some(parent) = path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            tracing::warn!(
+                "services.jsonl parent dir create failed at {}: {e}",
+                parent.display()
+            );
+            return;
+        }
+    }
+    let line = match serde_json::to_string(entry) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(
+                "services.jsonl serialize failed for kind={}: {e}",
+                entry.kind
+            );
+            return;
+        }
+    };
+    let mut file = match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::warn!(
+                "services.jsonl open failed at {}: {e}",
+                path.display()
+            );
+            return;
+        }
+    };
+    if let Err(e) = writeln!(file, "{line}") {
+        tracing::warn!(
+            "services.jsonl write failed at {}: {e}",
+            path.display()
+        );
+    }
+}
+
+/// Convenience: append a `"started"` entry. Call this right before
+/// broadcasting `DashboardEvent::ServiceStarted` so the on-disk
+/// ledger and the SSE channel stay in lockstep.
+pub fn log_service_started(
+    project_root: &std::path::Path,
+    peer_name: &str,
+    pid: u32,
+    port: u16,
+) {
+    append_service_event(
+        project_root,
+        &ServiceLogEntry {
+            ts: Utc::now().to_rfc3339(),
+            kind: "started".to_string(),
+            peer_name: peer_name.to_string(),
+            pid: Some(pid),
+            port: Some(port),
+            reason: None,
+        },
+    );
+}
+
+/// Convenience: append a `"failed"` entry. Pass `pid` when known
+/// (post-spawn failures); `None` when the spawn itself didn't yield
+/// a PID (port conflict pre-spawn, etc.).
+pub fn log_service_failed(
+    project_root: &std::path::Path,
+    peer_name: &str,
+    reason: &str,
+    pid: Option<u32>,
+) {
+    append_service_event(
+        project_root,
+        &ServiceLogEntry {
+            ts: Utc::now().to_rfc3339(),
+            kind: "failed".to_string(),
+            peer_name: peer_name.to_string(),
+            pid,
+            port: None,
+            reason: Some(reason.to_string()),
+        },
+    );
+}
+
+/// Convenience: append a `"stopped"` entry.
+pub fn log_service_stopped(
+    project_root: &std::path::Path,
+    peer_name: &str,
+    pid: u32,
+) {
+    append_service_event(
+        project_root,
+        &ServiceLogEntry {
+            ts: Utc::now().to_rfc3339(),
+            kind: "stopped".to_string(),
+            peer_name: peer_name.to_string(),
+            pid: Some(pid),
+            port: None,
+            reason: None,
+        },
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
