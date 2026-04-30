@@ -51,10 +51,15 @@ pub mod backend;
 pub mod encrypted_file;
 pub mod master_key;
 pub mod os_native;
+pub mod tls;
 pub mod value;
 
 pub use backend::{SecretBackend, SecretError, SecretKey, SecretMetadata};
 pub use encrypted_file::EncryptedFileBackend;
 pub use master_key::MasterSessionKey;
 pub use os_native::OsNativeBackend;
+pub use tls::{
+    cert_fingerprint_sha256, generate_self_signed_cert, CertBundle,
+    TlsCertError,
+};
 pub use value::{EncryptedSecretValue, SecretValue};

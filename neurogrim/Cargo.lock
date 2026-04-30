@@ -1694,6 +1694,7 @@ dependencies = [
  "neurogrim-dashboard",
  "neurogrim-ecosystem",
  "neurogrim-mcp",
+ "neurogrim-secrets",
  "neurogrim-sensory",
  "reqwest 0.12.28",
  "rmcp",
@@ -1804,17 +1805,20 @@ name = "neurogrim-secrets"
 version = "3.5.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chacha20poly1305",
  "chrono",
  "hex",
  "keyring",
  "pbkdf2",
  "rand 0.8.6",
+ "rcgen",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thiserror",
+ "time",
  "tracing",
  "zeroize",
 ]
@@ -2085,6 +2089,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pem"
+version = "3.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d30c53c26bc5b31a98cd02d20f25a7c8567146caf63ed593a9d87b2775291be"
+dependencies = [
+ "base64 0.22.1",
+ "serde_core",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2253,7 +2267,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.3",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2343,6 +2357,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
 dependencies = [
  "rand_core 0.9.5",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75e669e5202259b5314d1ea5397316ad400819437857b90861765f24c4cf80a2"
+dependencies = [
+ "pem",
+ "ring",
+ "rustls-pki-types",
+ "time",
+ "yasna",
 ]
 
 [[package]]
@@ -4381,6 +4408,15 @@ checksum = "1123fd5b3197a2de22c3f41904d82ee680577c634b8d2cbb56e61d0b5ed312d5"
 dependencies = [
  "nom 7.1.3",
  "thiserror",
+]
+
+[[package]]
+name = "yasna"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
+dependencies = [
+ "time",
 ]
 
 [[package]]

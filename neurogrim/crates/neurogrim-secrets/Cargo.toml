@@ -43,6 +43,20 @@ rand = { workspace = true }
 # Hex encoding for serializing nonce/salt/ciphertext into the
 # v1 file format.
 hex = "0.4"
+# v4.2 S14-S-4.5 — self-signed TLS cert generation for the
+# dashboard's secret-management endpoints. Pure Rust, no
+# OpenSSL dependency. Pinned to compatible-semver "0.13" — the
+# 0.x line is stable enough that breaking changes are
+# documented in CHANGELOG; we'll absorb minor fixes.
+rcgen = "0.13"
+# v4.2 S14-S-4.5 — used by `cert_der_from_pem_file` to round-trip
+# already-saved cert PEMs back to DER for fingerprint comparison.
+# Already in the lockfile transitively via rcgen + jsonschema.
+base64 = "0.22"
+# v4.2 S14-S-4.5 — `time::OffsetDateTime` for cert validity
+# bounds. Already pulled in by rcgen; declaring directly so we
+# don't hold our hands behind our back when rcgen bumps.
+time = "0.3"
 
 [dev-dependencies]
 tempfile = "3"

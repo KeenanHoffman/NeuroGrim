@@ -33,6 +33,9 @@ neurogrim-sensory = { workspace = true }
 neurogrim-mcp = { workspace = true }
 neurogrim-a2a = { workspace = true }
 neurogrim-ecosystem = { workspace = true }
+# v4.2 S14-S-4.5 — secrets crate for `neurogrim secrets tls-cert`
+# subcommands (cert generation, persistence, fingerprinting).
+neurogrim-secrets = { workspace = true }
 # v3.4 dashboard — `neurogrim ui` invokes the dashboard server here.
 neurogrim-dashboard = { workspace = true }
 webbrowser = { workspace = true }

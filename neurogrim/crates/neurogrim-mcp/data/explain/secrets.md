@@ -16,7 +16,7 @@ ship in follow-up sessions.
 
 | Layer | Where | What this crate provides |
 |---|---|---|
-| **Wire** | TCP between browser and dashboard | TLS on secret endpoints (S14-S-4.5; **deferred**) |
+| **Wire** | TCP between browser and dashboard | TLS via self-signed cert (S14-S-4.5 v1: cert lifecycle; v2: HTTPS server binding **deferred**) |
 | **Process boundary** | JSON in/out | dashboard zeroizes request buffers (paired with S-4.5) |
 | **In-memory** | runtime values | `EncryptedSecretValue` + `MasterSessionKey` (this stage) |
 | **At-rest** | OS / disk | `OsNativeBackend` or `EncryptedFileBackend` (this stage) |
@@ -129,6 +129,62 @@ the Approvals UI page (`/brains/:id/approvals`). The agent calls
 
 Adopters can downgrade per-secret to `Notify` for low-sensitivity
 public APIs via the registry's `autonomy.action_types` override.
+
+<!-- anchor: tls-cert -->
+## TLS on the dashboard's secret endpoints (S14-S-4.5)
+
+The dashboard's secret-management surface (`/api/brains/:id/
+secrets/...`) carries plaintext secret values over the wire on
+the operator's request. Loopback-only deployments make this
+safe in practice; defense-in-depth + multi-host deployments
+motivate TLS.
+
+### v1 — cert lifecycle (this stage)
+
+```bash
+# One-time setup: generate a self-signed ECDSA P-256 cert
+# valid for 5 years. SAN includes 127.0.0.1, ::1, localhost,
+# and the brain_id. Persists cert.pem + key.pem under
+# <project>/.claude/brain/tls/.
+neurogrim secrets tls-cert generate
+
+# Inspect: print the SHA-256 fingerprint operators paste into
+# browser trust prompts. Lowercase hex, no separators.
+neurogrim secrets tls-cert fingerprint
+
+# Status (JSON): cert+key file presence, fingerprint, ready flag.
+neurogrim secrets tls-cert status
+
+# Rotate: back up existing cert/key to .bak files, generate
+# fresh. Operators re-pin the new fingerprint in the browser.
+neurogrim secrets tls-cert rotate
+```
+
+The private key is written `0600` on Unix. On Windows the
+default user-profile ACLs on `.claude/brain/tls/key.pem` are
+sufficient for single-user adopters; multi-user hosts get the
+`SecretBackend` upgrade in v2.
+
+### v2 — HTTPS server binding (deferred)
+
+The cert + key live on disk after v1, but the dashboard server
+still binds HTTP only. v2 will:
+
+- Add `axum-server` + `rustls` integration to the dashboard
+- Bind a second HTTPS listener on the configured port (default:
+  HTTP port + 1)
+- Frontend redirects `/api/brains/:id/secrets/*` paths to
+  `https://...`
+- Browser pins the cert fingerprint in localStorage on first
+  visit (TOFU pinning; valid for loopback because the attacker
+  would have to already control the host to swap the cert)
+- `tls-cert import <path>` for operator-supplied certs from a
+  real CA
+
+For now, operators wanting HTTPS on the secret surface can
+front the dashboard with a reverse proxy (nginx, caddy) that
+holds the cert. The bundled cert lifecycle gets that proxy a
+fresh cert on demand.
 
 <!-- anchor: single-use-tokens -->
 ## Single-use tokens

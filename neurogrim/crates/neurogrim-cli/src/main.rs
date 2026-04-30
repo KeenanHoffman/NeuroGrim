@@ -450,6 +450,13 @@ enum Commands {
         #[command(subcommand)]
         subcommand: commands::a2a_token::A2aTokenCmd,
     },
+
+    /// v4.2 S14-S-4.5 — secrets-management lifecycle. v1 ships
+    /// `tls-cert {generate, fingerprint, status, rotate}` for the
+    /// dashboard's secret-management endpoints. Future stories add
+    /// `secret {get, set, list, rotate}` once the CLI surface for
+    /// the SecretBackend lands.
+    Secrets(commands::secrets::Args),
 }
 
 #[tokio::main]
@@ -559,6 +566,7 @@ async fn main() -> Result<()> {
         Commands::Queue(args) => commands::queue::run(args).await,
         Commands::Domain(args) => commands::domain::run(args).await,
         Commands::Federation(args) => commands::federation::run(args).await,
+        Commands::Secrets(args) => commands::secrets::run(args).await,
     }
 }
 

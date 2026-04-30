@@ -20,6 +20,7 @@ pub mod queue;
 pub mod sca_calibrate;
 pub mod sca_review;
 pub mod score;
+pub mod secrets;
 pub mod skill;
 pub mod serve;
 pub mod test;
