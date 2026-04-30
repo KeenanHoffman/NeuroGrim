@@ -1,14 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
   CircleSlash,
   FileText,
+  HardHat,
   Info,
   Lock,
+  Network,
   Plus,
   Save,
+  ShieldAlert,
   Sliders,
   Trash2,
 } from "lucide-react";
@@ -139,24 +142,34 @@ function TabButton({
 }
 
 /**
- * S15-C-4 v1: Registry editor (domain-weights only).
+ * S15-C-4 v2: Registry editor with curated forms per section.
  *
- * v1 surfaces a slider per declared domain weight. Operators can
- * adjust weights, save, and the dashboard's PUT endpoint validates
- * via `BrainRegistry::validate()` (which checks that weights sum to
- * 1.0 ± 0.01) before atomic-write + edit-via-bus emission.
+ * v1 (shipped) ships domain weights as the single editable section
+ * + ETag-based conflict detection. v2 (this) extends with curated
+ * editors for the v4.x load-bearing sections:
  *
- * **Conflict detection:** the GET response carries a SHA-256 ETag
- * the client echoes back on PUT. When the on-disk file changed
- * between read and save, the server returns 409 Conflict and the
- * UI surfaces a "registry was edited externally" banner. The
- * operator reloads the page (loses their unsaved changes — v2 will
- * ship the 3-way merge UI).
+ * - **Weights** — slider per declared domain (v1 carryover).
+ * - **Autonomy** — per-action_type level dropdown (auto/notify/
+ *   approve/blocked); safety invariants list display. The v4.x
+ *   reframe makes this load-bearing: operators set policy here,
+ *   not in vim.
+ * - **Hats** — per-hat domain_multipliers table + description +
+ *   add/remove hat.
+ * - **Federation** — children CRUD: display_name, a2a_endpoint,
+ *   weight, enabled. Wraps v3.5 `federation rewire` flow as a CLI
+ *   pointer (full button-driven rewire is a v3 follow-on).
  *
- * **Other registry sections** (autonomy, hats, federation children,
- * domain definitions) are deferred until the schemars-driven full
- * form generator lands. For those, operators continue to use vim;
- * the dashboard still picks up changes via SSE.
+ * **Single Save semantics:** the whole registry is one editable
+ * document. Sub-tabs are projections; edits accumulate into a
+ * shared draft; one Save button validates + PUTs the whole thing.
+ * This keeps the ETag flow simple (one read, one write) and means
+ * `BrainRegistry::validate()` runs against the full draft.
+ *
+ * **Deferred to v3:** schemars-derived JSON Schema endpoint +
+ * generic form generator (handles arbitrary registry sections);
+ * 3-way merge UI on conflict (current behavior: reload-on-conflict);
+ * domain definitions / `_todo_<name>` editors; interactive rewire
+ * button (currently a CLI pointer).
  */
 function RegistryTab() {
   const brainId = useBrainId();
@@ -167,32 +180,29 @@ function RegistryTab() {
     refetchInterval: 60_000,
   });
 
-  // Local edit state for sliders; reset to server values whenever
-  // the registry refetches.
-  const [edits, setEdits] = useState<Record<string, number>>({});
+  // Whole-registry draft state. Reset to server values whenever the
+  // registry refetches. We hold the entire registry (not just the
+  // currently-edited slice) so cross-section edits accumulate
+  // cleanly and a single Save round-trips the full document.
+  const [draft, setDraft] = useState<RegistryDoc | null>(null);
   useEffect(() => {
     if (data) {
-      const config = data.registry as { config?: { domain_weights?: Record<string, number> } };
-      const weights = config.config?.domain_weights ?? {};
-      setEdits(weights);
+      setDraft(JSON.parse(JSON.stringify(data.registry)) as RegistryDoc);
     }
   }, [data]);
 
+  const [subTab, setSubTab] = useState<RegistrySubTab>("weights");
+
   const save = useMutation({
     mutationFn: async () => {
-      if (!data) throw new Error("no data loaded");
-      // Build the new registry by merging edits into a copy.
-      const next = JSON.parse(JSON.stringify(data.registry)) as {
-        config: { domain_weights: Record<string, number> };
-      };
-      next.config.domain_weights = edits;
+      if (!data || !draft) throw new Error("no data loaded");
       const url = brainApi(brainId, "registry");
       const res = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           expected_etag: data.etag,
-          registry: next,
+          registry: draft,
         }),
       });
       if (!res.ok) {
@@ -210,6 +220,19 @@ function RegistryTab() {
     },
   });
 
+  // Memoize derived flags so unrelated sub-tab edits don't churn
+  // the Save button on every keystroke.
+  const { hasChanges, sumValid } = useMemo(() => {
+    if (!data || !draft) return { hasChanges: false, sumValid: true };
+    const changes = JSON.stringify(data.registry) !== JSON.stringify(draft);
+    const weights = draft.config?.domain_weights ?? {};
+    const sum = Object.values(weights).reduce(
+      (a: number, b) => a + (typeof b === "number" ? b : 0),
+      0,
+    );
+    return { hasChanges: changes, sumValid: Math.abs(sum - 1.0) <= 0.01 };
+  }, [data, draft]);
+
   if (isLoading) {
     return (
       <Card data-testid="settings-registry-card">
@@ -217,7 +240,7 @@ function RegistryTab() {
       </Card>
     );
   }
-  if (error || !data) {
+  if (error || !data || !draft) {
     return (
       <Card data-testid="settings-registry-card">
         <CardHeader>
@@ -233,58 +256,74 @@ function RegistryTab() {
     );
   }
 
-  const config = data.registry as {
-    config?: { domain_weights?: Record<string, number> };
-  };
-  const weights = config.config?.domain_weights ?? {};
-  const domainNames = Object.keys(weights).sort();
-
-  // Compute weight sum for the validation hint (registry validation
-  // requires sum = 1.0 ± 0.01).
-  const sum = Object.values(edits).reduce((a, b) => a + b, 0);
-  const sumValid = Math.abs(sum - 1.0) <= 0.01;
-  const hasChanges = JSON.stringify(weights) !== JSON.stringify(edits);
-
   return (
     <Card data-testid="settings-registry-card">
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
           <Sliders className="h-5 w-5" />
-          Registry — domain weights
+          Registry editor
           <HelpIcon topic="scoring" anchor="domain-weights" />
         </CardTitle>
         <CardDescription>
-          Slider per declared domain. Weights must sum to 1.0 ± 0.01 to
-          pass `registry.validate()`. Other registry sections (autonomy,
-          hats, federation, domain_definitions) are still edited via
-          your text editor — the dashboard picks up changes via SSE.
+          Curated forms for the v4.x load-bearing sections. Edits
+          accumulate across sub-tabs and save as a single atomic
+          PUT — `BrainRegistry::validate()` runs server-side. The
+          schemars-driven generic form generator (for arbitrary
+          sections) is a v3 follow-on.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-xs text-muted-foreground font-mono">{data.path}</div>
-        <div className="space-y-3" data-testid="registry-domain-weight-list">
-          {domainNames.length === 0 && (
-            <div className="text-sm text-muted-foreground">
-              No domain weights declared in the registry.
-            </div>
-          )}
-          {domainNames.map((name) => (
-            <DomainWeightRow
-              key={name}
-              name={name}
-              value={edits[name] ?? 0}
-              onChange={(v) =>
-                setEdits((prev) => ({ ...prev, [name]: v }))
-              }
-            />
-          ))}
+        <div className="flex flex-wrap gap-2" data-testid="registry-subtabs">
+          <RegistrySubTabButton
+            label="Weights"
+            icon={<Sliders className="h-3.5 w-3.5" />}
+            active={subTab === "weights"}
+            onClick={() => setSubTab("weights")}
+            testid="registry-subtab-weights"
+          />
+          <RegistrySubTabButton
+            label="Autonomy"
+            icon={<ShieldAlert className="h-3.5 w-3.5" />}
+            active={subTab === "autonomy"}
+            onClick={() => setSubTab("autonomy")}
+            testid="registry-subtab-autonomy"
+          />
+          <RegistrySubTabButton
+            label="Hats"
+            icon={<HardHat className="h-3.5 w-3.5" />}
+            active={subTab === "hats"}
+            onClick={() => setSubTab("hats")}
+            testid="registry-subtab-hats"
+          />
+          <RegistrySubTabButton
+            label="Federation"
+            icon={<Network className="h-3.5 w-3.5" />}
+            active={subTab === "federation"}
+            onClick={() => setSubTab("federation")}
+            testid="registry-subtab-federation"
+          />
         </div>
+
+        {subTab === "weights" && (
+          <RegistryWeightsEditor draft={draft} setDraft={setDraft} />
+        )}
+        {subTab === "autonomy" && (
+          <RegistryAutonomyEditor draft={draft} setDraft={setDraft} />
+        )}
+        {subTab === "hats" && (
+          <RegistryHatsEditor draft={draft} setDraft={setDraft} />
+        )}
+        {subTab === "federation" && (
+          <RegistryFederationEditor draft={draft} setDraft={setDraft} />
+        )}
+
         <div className="flex items-center justify-between border-t pt-3">
           <div
             className={`text-sm ${sumValid ? "text-emerald-600" : "text-destructive"}`}
             data-testid="registry-weight-sum"
           >
-            sum: {sum.toFixed(3)}{" "}
+            weight sum: {weightSum(draft).toFixed(3)}{" "}
             {sumValid ? (
               <span className="inline-flex items-center gap-1">
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -343,6 +382,143 @@ function RegistryTab() {
   );
 }
 
+type RegistrySubTab = "weights" | "autonomy" | "hats" | "federation";
+
+/**
+ * Loose registry document shape. Curated editors operate on
+ * specific paths under `config`; everything else is preserved
+ * verbatim through the JSON.parse / JSON.stringify round-trip.
+ */
+type RegistryDoc = {
+  config?: {
+    domain_weights?: Record<string, number>;
+    autonomy?: AutonomySection;
+    hats?: Record<string, HatEntry>;
+    children?: Record<string, FederationChildEntry>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+type AutonomySection = {
+  levels?: Record<string, AutonomyLevelEntry>;
+  action_types?: Record<string, AutonomyActionTypeEntry>;
+  safety_invariants?: SafetyInvariantEntry[];
+  [key: string]: unknown;
+};
+
+type AutonomyLevelEntry = {
+  requires_approval?: boolean;
+  description?: string;
+  [key: string]: unknown;
+};
+
+type AutonomyActionTypeEntry = {
+  default_level?: string;
+  blast_radius?: string;
+  reversible?: boolean;
+  [key: string]: unknown;
+};
+
+type SafetyInvariantEntry = {
+  rule?: string;
+  enforced_level?: string;
+  description?: string;
+  [key: string]: unknown;
+};
+
+type HatEntry = {
+  description?: string;
+  domain_multipliers?: Record<string, number>;
+  [key: string]: unknown;
+};
+
+type FederationChildEntry = {
+  display_name?: string;
+  a2a_endpoint?: string;
+  agent_card_url?: string;
+  brain_path?: string;
+  interface_version?: string;
+  weight?: number;
+  enabled?: boolean;
+  depends_on?: string[];
+  [key: string]: unknown;
+};
+
+function weightSum(draft: RegistryDoc): number {
+  const weights = draft.config?.domain_weights ?? {};
+  return Object.values(weights).reduce(
+    (a: number, b) => a + (typeof b === "number" ? b : 0),
+    0,
+  );
+}
+
+function RegistrySubTabButton({
+  label,
+  icon,
+  active,
+  onClick,
+  testid,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  testid: string;
+}) {
+  return (
+    <Button
+      size="sm"
+      variant={active ? "default" : "outline"}
+      onClick={onClick}
+      data-testid={testid}
+      className="flex items-center gap-1.5"
+    >
+      {icon}
+      {label}
+    </Button>
+  );
+}
+
+// ── Weights sub-editor (v1 carryover) ────────────────────────────────────
+
+function RegistryWeightsEditor({
+  draft,
+  setDraft,
+}: {
+  draft: RegistryDoc;
+  setDraft: (next: RegistryDoc) => void;
+}) {
+  const weights = draft.config?.domain_weights ?? {};
+  const domainNames = Object.keys(weights).sort();
+
+  function updateWeight(name: string, v: number) {
+    const next = JSON.parse(JSON.stringify(draft)) as RegistryDoc;
+    next.config = next.config ?? {};
+    next.config.domain_weights = next.config.domain_weights ?? {};
+    next.config.domain_weights[name] = v;
+    setDraft(next);
+  }
+
+  return (
+    <div className="space-y-3" data-testid="registry-domain-weight-list">
+      {domainNames.length === 0 && (
+        <div className="text-sm text-muted-foreground">
+          No domain weights declared in the registry.
+        </div>
+      )}
+      {domainNames.map((name) => (
+        <DomainWeightRow
+          key={name}
+          name={name}
+          value={weights[name] ?? 0}
+          onChange={(v) => updateWeight(name, v)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function DomainWeightRow({
   name,
   value,
@@ -370,6 +546,607 @@ function DomainWeightRow({
       />
       <div className="text-xs text-muted-foreground w-16 text-right tabular-nums">
         {value.toFixed(2)}
+      </div>
+    </div>
+  );
+}
+
+// ── Autonomy sub-editor (v4.x reframe — load-bearing) ────────────────────
+
+const AUTONOMY_LEVEL_ORDER = ["auto", "notify", "approve", "blocked"];
+
+function RegistryAutonomyEditor({
+  draft,
+  setDraft,
+}: {
+  draft: RegistryDoc;
+  setDraft: (next: RegistryDoc) => void;
+}) {
+  const autonomy = draft.config?.autonomy ?? {};
+  const levels = autonomy.levels ?? {};
+  const actionTypes = autonomy.action_types ?? {};
+  const safetyInvariants = autonomy.safety_invariants ?? [];
+
+  // Level order: declared `auto/notify/approve/blocked` first (in
+  // canonical order), then anything else alphabetically. Operators
+  // can declare more levels but the canonical 4 are universally
+  // understood.
+  const declaredLevelKeys = Object.keys(levels);
+  const orderedLevels = [
+    ...AUTONOMY_LEVEL_ORDER.filter((k) => declaredLevelKeys.includes(k)),
+    ...declaredLevelKeys
+      .filter((k) => !AUTONOMY_LEVEL_ORDER.includes(k))
+      .sort(),
+  ];
+  const actionTypeNames = Object.keys(actionTypes).sort();
+
+  function updateActionTypeLevel(actionType: string, level: string) {
+    const next = JSON.parse(JSON.stringify(draft)) as RegistryDoc;
+    next.config = next.config ?? {};
+    next.config.autonomy = next.config.autonomy ?? {};
+    next.config.autonomy.action_types = next.config.autonomy.action_types ?? {};
+    next.config.autonomy.action_types[actionType] = {
+      ...(next.config.autonomy.action_types[actionType] ?? {}),
+      default_level: level,
+    };
+    setDraft(next);
+  }
+
+  if (declaredLevelKeys.length === 0 && actionTypeNames.length === 0) {
+    return (
+      <div
+        className="text-sm text-muted-foreground py-4"
+        data-testid="registry-autonomy-absent"
+      >
+        No autonomy block declared in the registry. Run{" "}
+        <code className="text-xs">neurogrim doctor</code> for the recommended
+        starter shape, or add an `autonomy:` section to the registry directly.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5" data-testid="registry-autonomy-editor">
+      <div>
+        <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+          Action types
+          <HelpIcon topic="autonomy" anchor="action-types" />
+        </h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Per-action_type default level. The MCP dispatch path
+          consults this when an agent invokes a mutation tool.
+        </p>
+        <div className="space-y-2" data-testid="registry-autonomy-action-list">
+          {actionTypeNames.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No action_types declared.
+            </div>
+          ) : (
+            actionTypeNames.map((name) => {
+              const entry = actionTypes[name] ?? {};
+              return (
+                <div
+                  key={name}
+                  className="flex items-center gap-3 py-1"
+                  data-testid={`registry-autonomy-row-${name}`}
+                >
+                  <div className="font-mono text-sm w-48 truncate">{name}</div>
+                  <select
+                    value={entry.default_level ?? ""}
+                    onChange={(e) =>
+                      updateActionTypeLevel(name, e.target.value)
+                    }
+                    className="flex-1 max-w-xs px-2 py-1 text-sm border rounded bg-background"
+                    data-testid={`registry-autonomy-level-${name}`}
+                  >
+                    {orderedLevels.map((lvl) => (
+                      <option key={lvl} value={lvl}>
+                        {lvl}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="text-xs text-muted-foreground flex gap-2">
+                    {entry.blast_radius && (
+                      <span>blast: {entry.blast_radius}</span>
+                    )}
+                    {entry.reversible !== undefined && (
+                      <span>{entry.reversible ? "reversible" : "irreversible"}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+          Levels
+          <HelpIcon topic="autonomy" anchor="levels" />
+        </h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Read-only display of the declared autonomy levels and
+          their `requires_approval` semantics. v3 adds a level
+          editor; today add new levels via the registry file.
+        </p>
+        <div className="space-y-1" data-testid="registry-autonomy-level-list">
+          {orderedLevels.map((key) => {
+            const lvl = levels[key];
+            return (
+              <div
+                key={key}
+                className="flex items-center gap-3 text-sm py-1 border-b last:border-b-0"
+                data-testid={`registry-autonomy-level-row-${key}`}
+              >
+                <div className="font-mono w-24">{key}</div>
+                <div className="w-32 text-xs">
+                  {lvl?.requires_approval ? "requires approval" : "auto-runs"}
+                </div>
+                <div className="text-xs text-muted-foreground flex-1 truncate">
+                  {lvl?.description ?? ""}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+          Safety invariants
+          <HelpIcon topic="autonomy" anchor="safety-invariants" />
+        </h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Hard floors that override per-action level (e.g.
+          destructive operations remain blocked regardless of
+          confidence). Read-only in v2 — invariants are a contract
+          surface and benefit from explicit text-editor review.
+        </p>
+        <div
+          className="space-y-1"
+          data-testid="registry-autonomy-invariants-list"
+        >
+          {safetyInvariants.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No safety invariants declared.
+            </div>
+          ) : (
+            safetyInvariants.map((inv, i) => (
+              <div
+                key={i}
+                className="text-sm py-1 border-b last:border-b-0"
+                data-testid={`registry-autonomy-invariant-${i}`}
+              >
+                <div className="font-mono">
+                  {inv.rule ?? "(unnamed)"}{" "}
+                  <span className="text-xs text-muted-foreground ml-1">
+                    → {inv.enforced_level ?? "unknown"}
+                  </span>
+                </div>
+                {inv.description && (
+                  <div className="text-xs text-muted-foreground">
+                    {inv.description}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Hats sub-editor ──────────────────────────────────────────────────────
+
+function RegistryHatsEditor({
+  draft,
+  setDraft,
+}: {
+  draft: RegistryDoc;
+  setDraft: (next: RegistryDoc) => void;
+}) {
+  const hats = draft.config?.hats ?? {};
+  const hatNames = Object.keys(hats).sort();
+  const declaredDomains = Object.keys(draft.config?.domain_weights ?? {}).sort();
+  const [newHatName, setNewHatName] = useState("");
+
+  function updateHat(name: string, mut: (entry: HatEntry) => void) {
+    const next = JSON.parse(JSON.stringify(draft)) as RegistryDoc;
+    next.config = next.config ?? {};
+    next.config.hats = next.config.hats ?? {};
+    const entry = { ...(next.config.hats[name] ?? {}) };
+    mut(entry);
+    next.config.hats[name] = entry;
+    setDraft(next);
+  }
+
+  function deleteHat(name: string) {
+    const next = JSON.parse(JSON.stringify(draft)) as RegistryDoc;
+    next.config = next.config ?? {};
+    next.config.hats = next.config.hats ?? {};
+    delete next.config.hats[name];
+    setDraft(next);
+  }
+
+  function addHat(name: string) {
+    const next = JSON.parse(JSON.stringify(draft)) as RegistryDoc;
+    next.config = next.config ?? {};
+    next.config.hats = next.config.hats ?? {};
+    next.config.hats[name] = {
+      description: "",
+      domain_multipliers: {},
+    };
+    setDraft(next);
+    setNewHatName("");
+  }
+
+  const trimmedNew = newHatName.trim();
+  const newNameValid =
+    trimmedNew.length > 0 &&
+    /^[a-z][a-z0-9-]{0,40}$/.test(trimmedNew) &&
+    !hats[trimmedNew];
+
+  return (
+    <div className="space-y-4" data-testid="registry-hats-editor">
+      <p className="text-xs text-muted-foreground">
+        Per-hat domain multipliers bias the unified score when an
+        operator or agent narrates `--hat &lt;name&gt;`. Multipliers
+        above 1.0 amplify; below 1.0 dampen. Hats can only narrow
+        attention, not loosen the cultural floor (see{" "}
+        <code className="text-xs">neurogrim explain hat</code>).
+      </p>
+      <div className="space-y-3" data-testid="registry-hats-list">
+        {hatNames.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No hats declared. Add one below to start biasing scores
+            for a decision-making lens.
+          </div>
+        ) : (
+          hatNames.map((name) => (
+            <HatRow
+              key={name}
+              name={name}
+              entry={hats[name] ?? {}}
+              declaredDomains={declaredDomains}
+              onUpdate={(mut) => updateHat(name, mut)}
+              onDelete={() => deleteHat(name)}
+            />
+          ))
+        )}
+      </div>
+      <div className="border-t pt-3 space-y-2">
+        <label className="block text-sm font-medium">Add a hat</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="kebab-case-name"
+            value={newHatName}
+            onChange={(e) => setNewHatName(e.target.value)}
+            className="flex-1 max-w-xs px-2 py-1 text-sm border rounded font-mono"
+            data-testid="registry-hat-new-name"
+          />
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => addHat(trimmedNew)}
+            disabled={!newNameValid}
+            data-testid="registry-hat-add-button"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add hat
+          </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Lowercase letters + digits + hyphens; must start with a letter.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HatRow({
+  name,
+  entry,
+  declaredDomains,
+  onUpdate,
+  onDelete,
+}: {
+  name: string;
+  entry: HatEntry;
+  declaredDomains: string[];
+  onUpdate: (mut: (entry: HatEntry) => void) => void;
+  onDelete: () => void;
+}) {
+  const multipliers = entry.domain_multipliers ?? {};
+  return (
+    <div
+      className="border rounded p-3 space-y-3"
+      data-testid={`registry-hat-row-${name}`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="font-mono text-sm font-medium">{name}</div>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={onDelete}
+          data-testid={`registry-hat-delete-${name}`}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1" />
+          Remove
+        </Button>
+      </div>
+      <div>
+        <label className="block text-xs text-muted-foreground mb-1">
+          Description
+        </label>
+        <input
+          type="text"
+          value={entry.description ?? ""}
+          onChange={(e) =>
+            onUpdate((next) => {
+              next.description = e.target.value;
+            })
+          }
+          className="w-full px-2 py-1 text-sm border rounded"
+          data-testid={`registry-hat-desc-${name}`}
+        />
+      </div>
+      <div>
+        <div className="text-xs text-muted-foreground mb-1">
+          Domain multipliers (0–5)
+        </div>
+        <div className="space-y-1">
+          {declaredDomains.length === 0 ? (
+            <div className="text-xs text-muted-foreground italic">
+              No domains declared in registry.
+            </div>
+          ) : (
+            declaredDomains.map((dom) => {
+              const mult = multipliers[dom] ?? 1.0;
+              return (
+                <div
+                  key={dom}
+                  className="flex items-center gap-2"
+                  data-testid={`registry-hat-${name}-mult-${dom}`}
+                >
+                  <div className="font-mono text-xs w-44 truncate">{dom}</div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={5}
+                    step={0.1}
+                    value={mult}
+                    onChange={(e) =>
+                      onUpdate((next) => {
+                        next.domain_multipliers =
+                          next.domain_multipliers ?? {};
+                        next.domain_multipliers[dom] = parseFloat(
+                          e.target.value,
+                        );
+                      })
+                    }
+                    className="flex-1"
+                    data-testid={`registry-hat-${name}-slider-${dom}`}
+                  />
+                  <div className="text-xs text-muted-foreground w-12 text-right tabular-nums">
+                    {mult.toFixed(1)}×
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Federation children sub-editor ───────────────────────────────────────
+
+function RegistryFederationEditor({
+  draft,
+  setDraft,
+}: {
+  draft: RegistryDoc;
+  setDraft: (next: RegistryDoc) => void;
+}) {
+  const children = draft.config?.children ?? {};
+  const childNames = Object.keys(children).sort();
+  const [newChildName, setNewChildName] = useState("");
+
+  function updateChild(name: string, mut: (e: FederationChildEntry) => void) {
+    const next = JSON.parse(JSON.stringify(draft)) as RegistryDoc;
+    next.config = next.config ?? {};
+    next.config.children = next.config.children ?? {};
+    const entry = { ...(next.config.children[name] ?? {}) };
+    mut(entry);
+    next.config.children[name] = entry;
+    setDraft(next);
+  }
+
+  function deleteChild(name: string) {
+    const next = JSON.parse(JSON.stringify(draft)) as RegistryDoc;
+    next.config = next.config ?? {};
+    next.config.children = next.config.children ?? {};
+    delete next.config.children[name];
+    setDraft(next);
+  }
+
+  function addChild(name: string) {
+    const next = JSON.parse(JSON.stringify(draft)) as RegistryDoc;
+    next.config = next.config ?? {};
+    next.config.children = next.config.children ?? {};
+    next.config.children[name] = {
+      display_name: name,
+      a2a_endpoint: "",
+      interface_version: "1",
+      weight: 1.0,
+      enabled: true,
+    };
+    setDraft(next);
+    setNewChildName("");
+  }
+
+  const trimmedNew = newChildName.trim();
+  const newNameValid =
+    trimmedNew.length > 0 &&
+    /^[a-z][a-z0-9-]{0,40}$/.test(trimmedNew) &&
+    !children[trimmedNew];
+
+  return (
+    <div className="space-y-4" data-testid="registry-federation-editor">
+      <p className="text-xs text-muted-foreground">
+        A2A peer Brains. Adopters use{" "}
+        <code className="text-xs">neurogrim federation rewire --child &lt;name&gt;</code>{" "}
+        to reconcile a child's persisted port with this registry; the
+        button-driven flow ships in v3.
+      </p>
+      <div className="space-y-3" data-testid="registry-federation-list">
+        {childNames.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No children declared.
+          </div>
+        ) : (
+          childNames.map((name) => (
+            <FederationChildRow
+              key={name}
+              name={name}
+              entry={children[name] ?? {}}
+              onUpdate={(mut) => updateChild(name, mut)}
+              onDelete={() => deleteChild(name)}
+            />
+          ))
+        )}
+      </div>
+      <div className="border-t pt-3 space-y-2">
+        <label className="block text-sm font-medium">Add a child</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="kebab-case-name"
+            value={newChildName}
+            onChange={(e) => setNewChildName(e.target.value)}
+            className="flex-1 max-w-xs px-2 py-1 text-sm border rounded font-mono"
+            data-testid="registry-federation-new-name"
+          />
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => addChild(trimmedNew)}
+            disabled={!newNameValid}
+            data-testid="registry-federation-add-button"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add child
+          </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Adds a stub entry — set the a2a_endpoint to point at the
+          child's running peer.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FederationChildRow({
+  name,
+  entry,
+  onUpdate,
+  onDelete,
+}: {
+  name: string;
+  entry: FederationChildEntry;
+  onUpdate: (mut: (e: FederationChildEntry) => void) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className="border rounded p-3 space-y-2"
+      data-testid={`registry-federation-row-${name}`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="font-mono text-sm font-medium">{name}</div>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={onDelete}
+          data-testid={`registry-federation-delete-${name}`}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1" />
+          Remove
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">
+            Display name
+          </label>
+          <input
+            type="text"
+            value={entry.display_name ?? ""}
+            onChange={(e) =>
+              onUpdate((next) => {
+                next.display_name = e.target.value;
+              })
+            }
+            className="w-full px-2 py-1 text-sm border rounded"
+            data-testid={`registry-federation-display-${name}`}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">
+            A2A endpoint
+          </label>
+          <input
+            type="text"
+            value={entry.a2a_endpoint ?? ""}
+            onChange={(e) =>
+              onUpdate((next) => {
+                next.a2a_endpoint = e.target.value;
+              })
+            }
+            placeholder="http://127.0.0.1:8421/a2a/v1/"
+            className="w-full px-2 py-1 text-sm border rounded font-mono"
+            data-testid={`registry-federation-endpoint-${name}`}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">
+            Weight (0–1)
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={1}
+            step={0.05}
+            value={entry.weight ?? 1.0}
+            onChange={(e) =>
+              onUpdate((next) => {
+                next.weight = parseFloat(e.target.value);
+              })
+            }
+            className="w-32 px-2 py-1 text-sm border rounded tabular-nums"
+            data-testid={`registry-federation-weight-${name}`}
+          />
+        </div>
+        <div className="flex items-end">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={entry.enabled ?? true}
+              onChange={(e) =>
+                onUpdate((next) => {
+                  next.enabled = e.target.checked;
+                })
+              }
+              data-testid={`registry-federation-enabled-${name}`}
+            />
+            <span>Enabled</span>
+          </label>
+        </div>
       </div>
     </div>
   );

@@ -6,10 +6,12 @@ The Command Post is v4.3's reframe — the dashboard becomes the
 touch JSON files for routine work; they use forms, tables, and
 curated views. Edits emit on the bus so agents observe.
 
-This topic covers v4.3's foundation stories. The registry editor
-(C-4 — load-bearing), custom pages (C-6), edit-via-bus integration
-(C-7), inline help (C-8), and mobile-responsive breakpoints (C-9)
-land in subsequent stages.
+This topic covers v4.3's foundation stories. As of v4.3 session 3,
+the registry editor (C-4 v1 weights + v2 autonomy/hats/federation),
+custom pages (C-6 v1), edit-via-bus integration (C-7 v1), and
+inline help (C-8 v3) are shipped. Mobile-responsive breakpoints
+(C-9) and the schemars-driven generic form generator (C-4 v3) are
+the remaining deferred polish.
 
 ## What's in v4.3 v1 (this stage)
 
@@ -27,19 +29,28 @@ Domains, Federation, Skills, Publish gates, Approvals):
   publish-gates + approvals sources; future stories add invocation-
   ledger, score-history, services.jsonl, and `_neurogrim/notifications`.
 
-- **Settings** (`/brains/:id/settings`) — read-only YAML viewers
-  for `culture.yaml`, `queue-config.yaml`, plus a pointer to the
-  Publish gates page. Editors land with C-4 + later expansion.
+- **Settings** (`/brains/:id/settings`) — five tabs:
+  - **Registry** (C-4 v1+v2) — sub-tabbed curated editors for
+    domain weights, autonomy action_types, hats with multipliers,
+    and federation children. Single ETag-protected Save round-trips
+    the whole registry; `BrainRegistry::validate()` runs server-side.
+  - **Custom pages** (C-6 v1) — add/delete custom named pages.
+  - **Culture** — read-only viewer (culture is a contract, not
+    a setting).
+  - **Queue config** — read-only viewer (editor lands with the
+    queue backend selector).
+  - **Publish gates** — pointer to the dedicated `/publish-gates`
+    page.
 
 ## What's deferred
 
 | Story | Why deferred |
 |---|---|
-| **C-4** registry editor | 8-day load-bearing story. `schemars` form generator + 3-way merge UI for concurrent edits. Lands in session 2. |
-| **C-6** operator-defined custom pages | Add-page modal + dynamic widget grid + sidebar uniformity with built-ins. Session 2. |
-| **C-7** edit-via-bus integration | Every UI mutation emits on `_neurogrim/config-changes`. Pairs with C-4's editor surface. Session 2. |
-| **C-8** inline help | `?` icons next to each settings field linking to relevant explain-topic anchors. Adds anchors to all 15 topics. Session 2. |
-| **C-9** mobile-responsive breakpoints | Audit each page at 375px viewport; collapse sidebar at <768px. Session 2 polish. |
+| **C-4 v3** schemars-driven generic form generator | Useful for adopters declaring custom registry sections we don't ship curated forms for. Curated forms (v2) cover the in-tree sections operators actually edit; the generator is the long tail. |
+| **C-4 v3** 3-way merge UI on ETag conflict | v1 ships ETag detection + reload-on-conflict banner. The merge UI is value-add when concurrent operator edits become common — today's single-operator usage rarely hits it. |
+| **C-4 v3** domain definitions / `_todo_<name>` editor | Less frequently-edited surface; benefits from text-editor review more than form fields. |
+| **C-6 v2** custom-page widget gallery | v1 ships name + delete; widget picker integration with the v3.4 catalog is the v2 work. |
+| **C-9** mobile-responsive breakpoints | Audit each page at 375px viewport; collapse sidebar at <768px. Best paired with operator visual review. |
 
 <!-- anchor: multi-page-schema -->
 ## Multi-page schema (v2)
@@ -79,46 +90,44 @@ runtime derivation is actually exercised.
 ## CLI parity invariant
 
 Per S15 epic refinement, **every UI mutation maps to a documented
-CLI command**. Today's read-only viewers don't introduce any new
-surface. When C-4 lands, each form on the Settings page maps to a
-CLI invocation:
+CLI surface**. Each form on the Registry editor (C-4 v1+v2) has a
+CLI equivalent — adopters who prefer text-editor edits can skip the
+dashboard entirely; the file system stays the source of truth.
 
-| UI form | CLI equivalent |
+| UI form | CLI / file-edit equivalent |
 |---|---|
-| Domain weight slider | `domain weight` subcommand (future) |
-| Add federation peer | `neurogrim federation register --name <name> --path <path>` |
-| Edit autonomy action_type | `autonomy set` subcommand (future) |
+| Domain weight slider | Edit `config.domain_weights.<name>` in `brain-registry.json` |
+| Autonomy action_type level dropdown | Edit `config.autonomy.action_types.<name>.default_level` |
+| Hat domain multiplier slider | Edit `config.hats.<hat>.domain_multipliers.<domain>` |
+| Federation child CRUD | `neurogrim federation register --name <name> --path <path>` (add); edit `config.children.<name>` (modify); remove the entry (delete) |
+| Federation rewire | `neurogrim federation rewire --child <name>` (CLI today; button-driven flow is C-4 v3) |
 | Add domain | `neurogrim domain new <name>` (existing) |
-
-Adopters who prefer the CLI workflow can ignore the dashboard
-entirely; the file system stays the source of truth.
 
 ## Inspectability discipline
 
-The Settings page is the **read-only window** into config files.
-The on-disk YAML remains the canonical authority. The dashboard
-pulls from disk on each refresh; an operator's `vim` edit shows
-up in the dashboard within 30 seconds (the page's refetch
-interval). The reverse direction — dashboard edits flowing to disk
-— lands with C-4's editor.
+The on-disk JSON/YAML remains the canonical authority. The
+dashboard pulls from disk on each refresh; an operator's `vim`
+edit shows up in the dashboard within 30 seconds via SSE-driven
+refetch. Dashboard edits flow back to disk through the C-4 v1+v2
+PUT path — atomic temp-file-rename with ETag-protected concurrency.
 
-Adopters can `tail -f .claude/brain/dashboard-pages.json` to
-watch their changes propagate, the same way they can `tail -f`
-any other Brain artifact.
+Adopters can `tail -f .claude/brain/dashboard-pages.json` (or
+`.claude/brain-registry.json`) to watch their changes propagate,
+the same way they can `tail -f` any other Brain artifact.
 
 <!-- anchor: edit-via-bus -->
-## Edit-via-bus design (C-7 preview)
+## Edit-via-bus design (C-7)
 
-Once C-4 + C-7 ship, every UI mutation will emit on
-`_neurogrim/config-changes` with this payload:
+Every UI mutation emits on `_neurogrim/config-changes` with this
+payload (v1 minimal — v2 will add keypath-level diffs):
 
 ```json
 {
-  "action_type": "registry_edit | layout_change | secret_added | gate_added",
-  "before": <serialized prior state>,
-  "after": <serialized new state>,
+  "action_type": "registry_edit | layout_change | layout_reset | page_added | page_removed | approval_resolved",
   "operator": "<from $NEUROGRIM_OPERATOR>",
-  "timestamp": "<RFC3339>"
+  "timestamp": "<RFC3339>",
+  "brain_id": "<id>",
+  "summary": "<one-line human-readable summary>"
 }
 ```
 
@@ -127,18 +136,20 @@ real-time — the substrate for "agent reacts when operator changes
 the autonomy block" workflows. No polling; SSE-pushed via the
 v4.1 bus.
 
-## Conflict detection (C-4 preview)
+## Conflict detection (C-4 v1)
 
 Two operators edit the same registry section concurrently — UI A
-loads version N, UI B loads version N, both Save. Without
-detection, last-writer-wins silently overwrites. C-4 ships
-ETag-style versioning + a 3-way merge UI when the server detects
-the file's checksum changed between read and save.
+loads version N, UI B loads version N, both Save. C-4 v1 ships
+ETag-style versioning: the GET response carries a SHA-256 fingerprint
+of the file bytes; PUT echoes it back. The server rejects with 409
+Conflict + `code: "etag-conflict"` when the on-disk fingerprint
+differs.
 
-For v1 (today), the on-disk YAML is single-writer in practice;
-operators using `vim` shouldn't have concurrent UI sessions to the
-same Brain. The conflict UI lands when concurrent editing becomes
-plausible (multi-operator deployments are an S16+ concern).
+The v1 mitigation is a "Reload" button on the conflict banner —
+the operator loses unsaved changes. The 3-way merge UI is a v3
+follow-on; today's single-operator workflow rarely hits it
+because `vim` users typically don't have concurrent UI sessions
+to the same Brain.
 
 ## See also
 

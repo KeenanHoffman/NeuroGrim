@@ -23,6 +23,7 @@ schema validation as of v3.3.
 }
 ```
 
+<!-- anchor: levels -->
 ### 1. Levels
 
 A closed set of **four** autonomy levels, ordered from least to most
@@ -39,6 +40,7 @@ The `levels` block in the registry SHOULD declare all four with
 `description` + `requires_approval`. They're foundational; agents
 inspect this when reasoning about whether to act.
 
+<!-- anchor: action-types -->
 ### 2. Action types
 
 A vocabulary of action classes the Brain reasons about. Each entry:
@@ -70,6 +72,7 @@ A vocabulary of action classes the Brain reasons about. Each entry:
 `default_level` is the floor that applies UNLESS a `safety_invariant`
 raises it.
 
+<!-- anchor: safety-invariants -->
 ### 3. Safety invariants
 
 An invariant **raises the autonomy floor** for matching action types.

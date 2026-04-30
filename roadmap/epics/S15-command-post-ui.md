@@ -109,27 +109,29 @@ Filter chips per source. Click a row → drill into the originating widget. Toas
 - [ ] Toast system uses the v3.6 backlog item brought forward
 - [ ] vitest covers the integration
 
-### S15-C-4: Built-in Settings page — registry editor (8 days, the load-bearing one) — 🟡 PARTIAL (domain-weights editor + ETag conflict detection shipped; full schemars form generator + autonomy/hats/federation editors + 3-way merge UI deferred to v2)
+### S15-C-4: Built-in Settings page — registry editor (8 days, the load-bearing one) — 🟡 PARTIAL (v1: domain-weights + ETag conflict detection shipped; v2: curated autonomy / hats / federation editors shipped; v3 deferred: schemars-driven generic form generator + 3-way merge UI + domain-definitions editor)
 
 **What:** Curated forms for each section of `brain-registry.json`:
 
-- **Domain weights:** slider per domain (0.0–1.0) with preview unified-score impact
-- **Domain definitions:** principle text edit; `_todo_<name>` authoring intent
-- **Autonomy:** per-action_type level dropdown (Auto/Notify/Approve/Blocked); safety invariants list editor
-- **Hats:** declare/remove; multipliers; description editing
-- **Federation children:** add/remove peers; v3.5 `federation rewire` action exposed as a button
+- **Domain weights:** slider per domain (0.0–1.0) with preview unified-score impact ✅ v1
+- **Autonomy:** per-action_type level dropdown (auto/notify/approve/blocked); levels + safety invariants displayed ✅ v2
+- **Hats:** declare/remove; per-domain multipliers; description editing ✅ v2
+- **Federation children:** add/remove peers; CRUD on display_name / a2a_endpoint / weight / enabled; rewire as CLI pointer ✅ v2
+- **Domain definitions:** principle text edit; `_todo_<name>` authoring intent ⏳ v3
 
 Schema source: Rust struct → JSON Schema (auto-generate via `schemars` crate, already in workspace deps) → form generator on the frontend. Save flow: validate → write atomically → emit `RegistryEdited` on `_neurogrim/config-changes` queue.
 
 **Conflict detection:** if registry changed externally between load and save, surface a 3-way merge UI.
 
+**v2 architectural choice:** the spec called for "curated form per section (not raw JSON Schema rendering)". v2 ships hand-built curated forms for the v4.x load-bearing sections (autonomy, hats, federation) — those benefit most from operator-friendly UX and are the immediate value. The schemars-driven generic generator (for arbitrary registry sections) becomes v3 work — useful when adopters declare custom sections we don't ship forms for, less useful for the in-tree sections where curated UX wins.
+
 **Done when:**
-- [ ] `schemars` integration emits JSON Schema for `BrainConfig` etc.
-- [ ] Form generator on frontend handles object/array/string/number/boolean/enum
-- [ ] Each section has a curated form (not raw JSON Schema rendering — operators get domain-specific UX)
-- [ ] Validation on save uses existing `registry.validate()` + helpful error surfacing
-- [ ] Conflict detection ships with diff UI
-- [ ] vitest covers form behaviors + conflict resolution
+- [x] Each section has a curated form (not raw JSON Schema rendering — operators get domain-specific UX) *(v2 — autonomy / hats / federation)*
+- [x] Validation on save uses existing `registry.validate()` + helpful error surfacing *(v1 — server-side via `BrainRegistry::from_json` + `registry.validate()`)*
+- [x] vitest covers form behaviors + conflict resolution *(v2 — 9 new sub-tab tests; v1 — etag-conflict test)*
+- [ ] `schemars` integration emits JSON Schema for `BrainConfig` etc. *(v3 — gated by adding `JsonSchema` derive across `BrainConfig` + sub-structs)*
+- [ ] Form generator on frontend handles object/array/string/number/boolean/enum *(v3 — pairs with the schemars piece above)*
+- [ ] Conflict detection ships with diff UI *(v3 — current behavior: reload-on-conflict via the etag mismatch banner from v1)*
 
 ### S15-C-5: Built-in Settings page — other configs (4 days) — 🟡 PARTIAL (read-only viewers for culture + queue-config + publish-gates pointer shipped; editors deferred until C-4's form generator + S14-S-6's passphrase flow land)
 
