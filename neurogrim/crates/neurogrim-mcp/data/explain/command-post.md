@@ -6,12 +6,12 @@ The Command Post is v4.3's reframe — the dashboard becomes the
 touch JSON files for routine work; they use forms, tables, and
 curated views. Edits emit on the bus so agents observe.
 
-This topic covers v4.3's foundation stories. As of v4.3 session 3,
+This topic covers v4.3's foundation stories. As of v4.3 session 4,
 the registry editor (C-4 v1 weights + v2 autonomy/hats/federation),
-custom pages (C-6 v1), edit-via-bus integration (C-7 v1), and
-inline help (C-8 v3) are shipped. Mobile-responsive breakpoints
-(C-9) and the schemars-driven generic form generator (C-4 v3) are
-the remaining deferred polish.
+custom pages (C-6 v1 CRUD + v2 widget gallery integration),
+edit-via-bus integration (C-7 v1), and inline help (C-8 v3) are
+shipped. Mobile-responsive breakpoints (C-9) and the schemars-driven
+generic form generator (C-4 v3) are the remaining deferred polish.
 
 ## What's in v4.3 v1 (this stage)
 
@@ -34,7 +34,12 @@ Domains, Federation, Skills, Publish gates, Approvals):
     domain weights, autonomy action_types, hats with multipliers,
     and federation children. Single ETag-protected Save round-trips
     the whole registry; `BrainRegistry::validate()` runs server-side.
-  - **Custom pages** (C-6 v1) — add/delete custom named pages.
+  - **Custom pages** (C-6 v1+v2) — add/delete custom named pages.
+    The page itself opens at `/brains/:id/p/:pageName` with full
+    edit-mode support: Customize → add widgets via the v3.4 catalog
+    → resize / reorder / per-widget config → Save. PUTs to
+    `/api/brains/:id/dashboard-pages/:name/layout` (gated by
+    `--allow-mutations`).
   - **Culture** — read-only viewer (culture is a contract, not
     a setting).
   - **Queue config** — read-only viewer (editor lands with the
@@ -49,7 +54,7 @@ Domains, Federation, Skills, Publish gates, Approvals):
 | **C-4 v3** schemars-driven generic form generator | Useful for adopters declaring custom registry sections we don't ship curated forms for. Curated forms (v2) cover the in-tree sections operators actually edit; the generator is the long tail. |
 | **C-4 v3** 3-way merge UI on ETag conflict | v1 ships ETag detection + reload-on-conflict banner. The merge UI is value-add when concurrent operator edits become common — today's single-operator usage rarely hits it. |
 | **C-4 v3** domain definitions / `_todo_<name>` editor | Less frequently-edited surface; benefits from text-editor review more than form fields. |
-| **C-6 v2** custom-page widget gallery | v1 ships name + delete; widget picker integration with the v3.4 catalog is the v2 work. |
+| **C-6 v3** custom-page polish | v2 ships the widget gallery integration (operators compose pages through the UI). v3 follow-ons: page rename, icon picker, per-page title (vs. the kebab-case id), folder grouping at the 8-page limit. |
 | **C-9** mobile-responsive breakpoints | Audit each page at 375px viewport; collapse sidebar at <768px. Best paired with operator visual review. |
 
 <!-- anchor: multi-page-schema -->

@@ -67,6 +67,15 @@ interface LayoutEditorProps {
    *  Overview can use the in-flight edits without round-tripping
    *  through the server. */
   setWidgets: (next: WidgetSpec[]) => void;
+  /**
+   * **S15-C-6 v2:** when set, the toolbar saves to the per-custom-page
+   * endpoint (`PUT /api/brains/:id/dashboard-pages/:pageId/layout`)
+   * instead of the legacy single-page Overview endpoint
+   * (`PUT /api/brains/:id/dashboard-layout`). The Reset-to-default
+   * button is hidden because custom pages have no posture-aware
+   * default to fall back to.
+   */
+  pageId?: string;
 }
 
 // Widget catalog (WIDGET_CATALOG) + helpers (widgetMeta,
@@ -79,6 +88,7 @@ export function LayoutEditorToolbar({
   setIsEditing,
   widgets,
   setWidgets,
+  pageId,
 }: LayoutEditorProps) {
   const brainId = useBrainId();
   const queryClient = useQueryClient();
@@ -87,7 +97,11 @@ export function LayoutEditorToolbar({
 
   const saveMutation = useMutation({
     mutationFn: async (next: WidgetSpec[]) => {
-      const url = brainApi(brainId, "dashboard-layout");
+      // Custom pages PUT to dashboard-pages/:pageId/layout; the
+      // legacy Overview endpoint stays as dashboard-layout.
+      const url = pageId
+        ? `${brainApi(brainId, "dashboard-pages")}/${encodeURIComponent(pageId)}/layout`
+        : brainApi(brainId, "dashboard-layout");
       const res = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -97,8 +111,12 @@ export function LayoutEditorToolbar({
       return res.json();
     },
     onSuccess: () => {
+      // Invalidate the right query — Overview's layout cache is
+      // separate from the multi-page config cache.
       queryClient.invalidateQueries({
-        queryKey: ["dashboard-layout", brainId],
+        queryKey: pageId
+          ? ["dashboard-pages", brainId]
+          : ["dashboard-layout", brainId],
       });
       setIsEditing(false);
     },
@@ -106,6 +124,11 @@ export function LayoutEditorToolbar({
 
   const resetMutation = useMutation({
     mutationFn: async () => {
+      // Reset is only meaningful for the Overview's posture-aware
+      // default; custom pages have no default to fall back to. The
+      // button is hidden when pageId is set, so this branch is
+      // unreachable in that case — kept as a defensive guard.
+      if (pageId) throw new Error("reset not supported on custom pages");
       const url = brainApi(brainId, "dashboard-layout");
       const res = await fetch(url, { method: "DELETE" });
       if (!res.ok) throw new Error(`DELETE ${url} returned ${res.status}`);
@@ -211,24 +234,26 @@ export function LayoutEditorToolbar({
         <Save className="h-4 w-4 mr-1.5" />
         {saveMutation.isPending ? "Saving…" : "Save"}
       </Button>
-      <Button
-        onClick={() => {
-          if (
-            window.confirm(
-              "Reset to the posture-aware default? Your saved layout will be deleted."
-            )
-          ) {
-            resetMutation.mutate();
-          }
-        }}
-        disabled={resetMutation.isPending}
-        variant="ghost"
-        data-testid="reset-layout"
-        size="sm"
-      >
-        <RotateCcw className="h-4 w-4 mr-1.5" />
-        Reset
-      </Button>
+      {!pageId && (
+        <Button
+          onClick={() => {
+            if (
+              window.confirm(
+                "Reset to the posture-aware default? Your saved layout will be deleted."
+              )
+            ) {
+              resetMutation.mutate();
+            }
+          }}
+          disabled={resetMutation.isPending}
+          variant="ghost"
+          data-testid="reset-layout"
+          size="sm"
+        >
+          <RotateCcw className="h-4 w-4 mr-1.5" />
+          Reset
+        </Button>
+      )}
       <Button
           onClick={() => setIsEditing(false)}
           variant="ghost"

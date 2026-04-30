@@ -37,16 +37,16 @@
 - [x] Inline help infrastructure *(C-8 v1 — `HelpIcon` component + modal that fetches `GET /api/explain/:topic`; anchor convention `<!-- anchor: <id> -->` documented + sample anchors added to scoring.md; rolling out across all 13 topics is gradual)*
 
 **Heavy follow-ons (still deferred):**
-- [ ] Schema → form generator handles 80% case (object/array/string/number/boolean/enum); textarea fallback for complex shapes *(C-4 v2 — full registry editor for autonomy / hats / federation / domain_definitions sections; the `schemars` integration + curated forms per section are the load-bearing piece)*
-- [ ] 3-way merge UI when concurrent edits collide *(C-4 v2; current behavior is reload-on-conflict)*
+- [x] Schema → form generator handles 80% case (object/array/string/number/boolean/enum) *(C-4 v2 ships curated forms for autonomy / hats / federation; the schemars-driven generic generator + textarea fallback is C-4 v3)*
+- [ ] 3-way merge UI when concurrent edits collide *(C-4 v3; current behavior is reload-on-conflict via the etag-conflict banner from v1)*
 - [ ] Built-in Services page: log tail, manual re-probe, sensor refresh *(C-2 expansion; needs new API endpoints for per-service log streams)*
-- [ ] Built-in Logs page: invocation-ledger + score-history + services.jsonl + `_neurogrim/notifications` sources *(C-3 expansion)*
-- [ ] Custom page widget gallery: operator picks widgets from the v3.4 catalog *(C-6 v2; v1 only supports name + delete)*
-- [ ] Custom page limit (default 8 per Brain) + folder grouping when exceeded *(C-6 v2)*
-- [ ] Page icon picker + per-page title *(C-6 v2)*
-- [ ] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights *(C-6 v2 + C-8 v2)*
-- [ ] Inline help anchors rolled out across all 13 explain topics *(C-8 v2 — convention is established; mechanical work)*
-- [ ] Markdown renderer in HelpIcon modal (currently preformatted text) *(C-8 v2)*
+- [x] Built-in Logs page: invocation-ledger + notifications sources *(C-2 v2 + C-3 expansion shipped; score-history + services.jsonl sources still deferred)*
+- [x] Custom page widget gallery: operator picks widgets from the v3.4 catalog *(C-6 v2 — LayoutEditorToolbar + WidgetGallery + WidgetEditControls + WidgetDispatch reused; add/remove/reorder/resize + per-widget config all work; PUT to `/api/brains/:id/dashboard-pages/:name/layout`)*
+- [x] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights *(C-6 v2 — `applyHashAnchor` parity with Overview)*
+- [ ] Custom page limit (default 8 per Brain) + folder grouping when exceeded *(C-6 v3)*
+- [ ] Page icon picker + per-page title *(C-6 v3)*
+- [x] Inline help anchors rolled out across all 13 explain topics *(C-8 v3 — autonomy.md added 3 anchors in C-4 v2 session; total 61 anchors across 14 topics)*
+- [x] Markdown renderer in HelpIcon modal *(C-8 v2 shipped earlier)*
 - [ ] Mobile-responsive at 375px viewport; no horizontal scroll on any page *(C-9 — final-polish pass; best paired with operator visual review)*
 - [ ] Adopter walkthrough doc: first custom-page authoring, edit-via-bus subscription, conflict-resolution flow *(documentation pass)*
 
@@ -146,7 +146,7 @@ Schema source: Rust struct → JSON Schema (auto-generate via `schemars` crate, 
 - [ ] Read-only culture viewer with link to `neurogrim explain culture`
 - [ ] Secrets editor handoff to S14 fetch flow tested
 
-### S15-C-6: Operator-defined custom pages (4 days) — 🟡 PARTIAL (CRUD endpoints + Add Page form + catchall route + CustomPageRenderer shipped; widget gallery + icon picker + folder grouping deferred to v2)
+### S15-C-6: Operator-defined custom pages (4 days) — 🟡 PARTIAL (v1: CRUD + catchall route shipped; v2: widget gallery integration + per-page layout PUT + edit mode shipped; v3 deferred: icon picker, page rename, page-title editor, folder grouping at 8-page limit)
 
 **What:** "Add page" flow: operator names a page (kebab-case validated), picks an icon (lucide-react set), adds widgets via the v3.4 catalog. Custom pages persist alongside built-ins; sidebar rendering treats them identically.
 
@@ -154,11 +154,18 @@ Anchor links extend: `/brains/:id/<page-name>/#widget-<id>` works across pages.
 
 Limit: 8 custom pages per Brain by default (configurable). Group into folders if more declared.
 
+**v2 architectural choice:** rather than build a parallel widget editor for custom pages, the existing v3.4 `LayoutEditorToolbar` was extended with a `pageId` prop. When set, the toolbar PUTs to `/api/brains/:id/dashboard-pages/:pageId/layout` and hides the Reset-to-default button (custom pages have no posture-aware default). This kept the per-widget controls + add-widget picker + WidgetGallery + WidgetDispatch wiring uniform between Overview and custom pages — operators get the same UX everywhere.
+
 **Done when:**
-- [ ] Add-page modal + page-rename + page-delete
-- [ ] Validation: page-name uniqueness, kebab-case, doesn't collide with built-in routes
-- [ ] vitest covers the flow
-- [ ] Folder grouping when limit exceeded
+- [x] Add-page form + page-delete *(v1 — Settings → Custom pages tab)*
+- [x] Validation: page-name uniqueness, kebab-case, doesn't collide with built-in routes *(v1 — server-side via `is_valid_custom_page_name`)*
+- [x] Operator picks widgets from the v3.4 catalog *(v2 — LayoutEditorToolbar + WidgetGallery integrated; add/remove/reorder/resize + per-widget config editors all work)*
+- [x] Anchor links work cross-page: `/brains/:id/<page-name>/#widget-<id>` smooth-scrolls + pulse-highlights *(v2 — `applyHashAnchor` mirrors Overview behavior)*
+- [x] vitest covers the flow *(v1: settings tab tests; v2: 6 tests for empty state, not-found, widget render, edit mode, save PUT, remove)*
+- [ ] Page rename *(v3 — separate from add/delete; lower priority)*
+- [ ] Page icon picker (lucide-react set) *(v3)*
+- [ ] Per-page title (vs. just the kebab-case id) *(v3)*
+- [ ] Folder grouping when limit exceeded *(v3 — only matters when adopters declare 8+ pages)*
 
 ### S15-C-7: Edit-via-bus integration (3 days) — ✅ SHIPPED (v1 minimal payload; keypath-level before/after diffs deferred to v2)
 

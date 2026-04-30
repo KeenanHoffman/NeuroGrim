@@ -46,7 +46,7 @@ use crate::state::AppState;
 use crate::types::{
     AgentCardExcerptDto, ApprovalRequestView, ApprovalResolutionView, ApprovalsPageResponse,
     BrainListItemDto, BrainsListResponse, ConfigFileResponse, CreateCustomPageRequest,
-    CustomPageMutationResponse, DomainDetailResponse,
+    CustomPageLayoutRequest, CustomPageMutationResponse, DomainDetailResponse,
     DomainListItemDto, DomainSignalDto, DomainsListResponse, FederationResponse, FindingDto,
     HatDto, HatsResponse, HealthResponse, HistoryPointDto, OverviewResponse, PeerDto,
     PeerStatusDto, PublishGateLedgerView, PublishGateView, PublishGatesPageResponse,
@@ -188,6 +188,15 @@ pub fn router(state: AppState) -> Router {
             "/api/brains/:brain_id/dashboard-pages/:name",
             axum::routing::post(brain_dashboard_pages_create)
                 .delete(brain_dashboard_pages_delete),
+        )
+        // v4.3 S15-C-6 v2: per-custom-page widget layout save. Lets
+        // operators compose their own dashboards through the UI rather
+        // than hand-editing dashboard-pages.json. Body matches the
+        // v3.4 dashboard-layout PUT (a list of WidgetSpec); the URL
+        // scopes the write to a single page in the v2 config.
+        .route(
+            "/api/brains/:brain_id/dashboard-pages/:name/layout",
+            axum::routing::put(brain_dashboard_pages_save_layout),
         )
         // v4.3 S15-C-8 v1: explain topic content for the inline-help
         // HelpIcon. Brain-agnostic (the topics ship with the binary,
@@ -2926,6 +2935,105 @@ async fn brain_dashboard_pages_delete(
     Json(CustomPageMutationResponse { ok: true, name }).into_response()
 }
 
+/// `PUT /api/brains/:brain_id/dashboard-pages/:name/layout` — save
+/// the widget list for a single custom page. S15-C-6 v2.
+///
+/// **Why a per-page endpoint vs. extending the catch-all
+/// dashboard-pages PUT:** scoping to a single page keeps the wire
+/// payload small (one widget array, not the whole multi-page
+/// config), and lets the page-aware `LayoutChanged` event invalidate
+/// only the affected page in TanStack Query — pages stay independent
+/// even when several are open in tabs.
+///
+/// Validations:
+/// - Page name must already exist in `dashboard-pages.json`. Use
+///   `POST /api/brains/:id/dashboard-pages/:name` to create.
+/// - Built-in pages aren't editable here (Overview's layout has its
+///   own dedicated `/dashboard-layout` endpoint; Services / Logs /
+///   Settings / Approvals / Publish gates are React components, not
+///   widget layouts).
+/// - Atomic write via `pages::save_dashboard_pages`.
+///
+/// Gated by `--allow-mutations`.
+async fn brain_dashboard_pages_save_layout(
+    State(state): State<AppState>,
+    AxumPath((brain_id, name)): AxumPath<(String, String)>,
+    Json(body): Json<CustomPageLayoutRequest>,
+) -> Response {
+    if !state.mutations_allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "mutations-disabled",
+                "code": "mutations-disabled",
+                "hint": "start the dashboard with --allow-mutations to enable custom-page editing",
+            })),
+        )
+            .into_response();
+    }
+    if crate::pages::DashboardPagesConfig::is_builtin(&name) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "built-in page layouts are not editable here",
+                "code": "builtin-protected",
+                "hint": "Overview uses /api/brains/:id/dashboard-layout; Services / Logs / Settings / Approvals / Publish gates are React components, not widget layouts",
+                "got": name,
+            })),
+        )
+            .into_response();
+    }
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let mut cfg = crate::pages::read_dashboard_pages(&brain.project_root, &brain_id);
+    if !cfg.pages.contains_key(&name) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "no such custom page",
+                "code": "page-not-found",
+                "hint": "POST /api/brains/:id/dashboard-pages/:name first to create the page",
+                "got": name,
+            })),
+        )
+            .into_response();
+    }
+    let widget_count = body.widgets.len();
+    cfg.pages.insert(name.clone(), body.widgets);
+    if let Err(e) = crate::pages::save_dashboard_pages(&brain.project_root, &cfg) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("save failed: {e}")
+            })),
+        )
+            .into_response();
+    }
+    if let Some(tx) = &state.events {
+        let _ = tx.send(crate::events::DashboardEvent::LayoutChanged);
+    }
+    // S15-C-7: emit on the config-changes queue.
+    emit_config_change(
+        &state,
+        &brain_id,
+        "layout_change",
+        format!(
+            "custom page '{}' layout saved with {} widget(s)",
+            name, widget_count
+        ),
+        &brain.project_root,
+    )
+    .await;
+    Json(serde_json::json!({
+        "ok": true,
+        "name": name,
+        "widget_count": widget_count,
+    }))
+    .into_response()
+}
+
 // ── S15-C-4 v1: registry editor ─────────────────────────────────────────
 
 /// `GET /api/brains/:brain_id/registry` — return the parsed
@@ -3931,5 +4039,181 @@ mod tests {
         assert!(v["self_brain"]["label"].is_string());
         assert_eq!(v["peers"], serde_json::json!([]));
         assert_eq!(v["registry_schema_version"], "2");
+    }
+
+    // ── S15-C-6 v2: per-custom-page widget layout PUT ───────────────
+
+    /// Helper: build a state with `mutations_allowed = true` and a
+    /// pre-existing custom page in dashboard-pages.json.
+    fn make_state_with_custom_page(
+        tmp: &tempfile::TempDir,
+        page_name: &str,
+    ) -> (AppState, String) {
+        let (mut state, brain_id) =
+            make_state_with_brain(tmp, "alpha", serde_json::Value::Null);
+        state.mutations_allowed = true;
+        // Seed dashboard-pages.json with the named custom page.
+        let mut cfg = crate::pages::DashboardPagesConfig::default_for(&brain_id);
+        cfg.pages.insert(page_name.to_string(), Vec::new());
+        if !cfg.page_order.contains(&page_name.to_string()) {
+            cfg.page_order.push(page_name.to_string());
+        }
+        crate::pages::save_dashboard_pages(tmp.path(), &cfg).unwrap();
+        (state, brain_id)
+    }
+
+    #[tokio::test]
+    async fn save_layout_returns_403_when_mutations_disabled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) = make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        // mutations_allowed defaults to false from AppState::new.
+        let app = router(state);
+        let body = serde_json::json!({ "widgets": [] });
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!(
+                "/api/brains/{brain_id}/dashboard-pages/my-page/layout"
+            ))
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["code"], "mutations-disabled");
+    }
+
+    #[tokio::test]
+    async fn save_layout_rejects_builtin_page_names() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut state, brain_id) =
+            make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        state.mutations_allowed = true;
+        let app = router(state);
+        let body = serde_json::json!({ "widgets": [] });
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!(
+                "/api/brains/{brain_id}/dashboard-pages/overview/layout"
+            ))
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["code"], "builtin-protected");
+        assert_eq!(v["got"], "overview");
+    }
+
+    #[tokio::test]
+    async fn save_layout_returns_404_when_page_not_declared() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut state, brain_id) =
+            make_state_with_brain(&tmp, "alpha", serde_json::Value::Null);
+        state.mutations_allowed = true;
+        // Note: NO dashboard-pages.json on disk; the page doesn't exist.
+        let app = router(state);
+        let body = serde_json::json!({ "widgets": [] });
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!(
+                "/api/brains/{brain_id}/dashboard-pages/never-declared/layout"
+            ))
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["code"], "page-not-found");
+    }
+
+    #[tokio::test]
+    async fn save_layout_round_trips_widgets_through_dashboard_pages_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) = make_state_with_custom_page(&tmp, "my-page");
+        let app = router(state);
+        let body = serde_json::json!({
+            "widgets": [
+                {
+                    "id": "w1",
+                    "widget_type": "score-gauge",
+                    "size": "third",
+                    "title": null,
+                    "config": {}
+                },
+                {
+                    "id": "w2",
+                    "widget_type": "markdown-note",
+                    "size": "full",
+                    "title": "Notes",
+                    "config": { "content": "hello world" }
+                }
+            ]
+        });
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!(
+                "/api/brains/{brain_id}/dashboard-pages/my-page/layout"
+            ))
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let body_text = String::from_utf8_lossy(&body_bytes);
+        assert_eq!(status, StatusCode::OK, "body was: {body_text}");
+        let v: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["name"], "my-page");
+        assert_eq!(v["widget_count"], 2);
+
+        // Re-read dashboard-pages.json and confirm the widgets persisted.
+        let cfg = crate::pages::read_dashboard_pages(tmp.path(), &brain_id);
+        let widgets = cfg.pages.get("my-page").expect("page persisted");
+        assert_eq!(widgets.len(), 2);
+        assert_eq!(widgets[0].id, "w1");
+        assert_eq!(widgets[1].id, "w2");
+        assert_eq!(widgets[1].widget_type, "markdown-note");
+    }
+
+    #[tokio::test]
+    async fn save_layout_overwrites_prior_widget_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (state, brain_id) = make_state_with_custom_page(&tmp, "my-page");
+        // Seed a widget so the overwrite is visible.
+        let mut cfg = crate::pages::read_dashboard_pages(tmp.path(), &brain_id);
+        cfg.pages.insert(
+            "my-page".to_string(),
+            vec![crate::layout::WidgetSpec {
+                id: "old".to_string(),
+                widget_type: "identity".to_string(),
+                size: "full".to_string(),
+                title: None,
+                config: serde_json::json!({}),
+            }],
+        );
+        crate::pages::save_dashboard_pages(tmp.path(), &cfg).unwrap();
+
+        let app = router(state);
+        let body = serde_json::json!({ "widgets": [] });
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!(
+                "/api/brains/{brain_id}/dashboard-pages/my-page/layout"
+            ))
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let after = crate::pages::read_dashboard_pages(tmp.path(), &brain_id);
+        assert_eq!(after.pages.get("my-page").map(|v| v.len()), Some(0));
     }
 }

@@ -539,6 +539,19 @@ pub struct CustomPageMutationResponse {
     pub name: String,
 }
 
+/// Request body of `PUT /api/brains/:brain_id/dashboard-pages/:name/layout`.
+///
+/// **S15-C-6 v2:** lets operators save a custom page's widget list
+/// from the dashboard. Same shape as the v3.4 single-page
+/// `DashboardLayoutRequest` (a list of `WidgetSpec`s); the only
+/// difference is the URL path scopes the write to a specific
+/// custom page within the v2 multi-page config.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../bindings/")]
+pub struct CustomPageLayoutRequest {
+    pub widgets: Vec<crate::layout::WidgetSpec>,
+}
+
 // ── Registry editor (S15-C-4 v1) ─────────────────────────────────────────
 
 /// Response body of `GET /api/brains/:brain_id/registry` — full
