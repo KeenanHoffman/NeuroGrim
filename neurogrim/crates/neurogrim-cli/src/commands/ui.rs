@@ -47,6 +47,16 @@ pub async fn run(
     eprintln!("✦ NeuroGrim Dashboard");
     eprintln!("  Registry:  {}", registry_path);
     eprintln!("  Listening: {}", url);
+
+    // S14-S-4.5 v2: surface the HTTPS URL when the operator has
+    // run `neurogrim secrets tls-cert generate`. Mirrors the
+    // dashboard's runtime decision so what the operator sees here
+    // matches what the server actually binds.
+    if neurogrim_dashboard::tls_serve::tls_files_present(&project_root) {
+        let https_port = neurogrim_dashboard::tls_serve::https_port_for(resolved_port);
+        eprintln!("  Listening: https://{bind}:{https_port}/  (S14-S-4.5 v2)");
+    }
+
     if allow_mutations {
         eprintln!("  Mutations: ENABLED (--allow-mutations) — service start/stop available");
     } else {

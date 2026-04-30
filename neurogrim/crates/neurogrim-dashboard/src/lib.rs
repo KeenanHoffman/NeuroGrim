@@ -38,6 +38,7 @@ pub mod routes;
 pub mod services;
 pub mod skills;
 pub mod state;
+pub mod tls_serve;
 pub mod types;
 
 pub use routes::router;
@@ -58,6 +59,15 @@ use std::path::Path;
 /// Spawns the filesystem watcher so SSE clients connected to
 /// `/api/events` receive live updates when CMDBs, the registry,
 /// the invocation ledger, or the dashboard layout change.
+///
+/// **HTTPS (v4.2 S14-S-4.5 v2):** when cert + key files exist
+/// at `<project>/.claude/brain/tls/{cert,key}.pem` (placed there
+/// by `neurogrim secrets tls-cert generate`), this function also
+/// binds an HTTPS listener on `addr.port + 1` serving the same
+/// router. HTTP and HTTPS share state; the frontend chooses HTTPS
+/// for secret-management routes via its own client logic. When
+/// the cert files don't exist, only HTTP binds — backward
+/// compatible with adopters who haven't run `tls-cert generate`.
 pub async fn serve(
     addr: SocketAddr,
     registry_path: String,
@@ -83,11 +93,54 @@ pub async fn serve(
     let project_root = std::fs::canonicalize(&project_root_normalized)
         .unwrap_or(project_root_normalized);
 
-    let events_tx = events::spawn_watcher(project_root);
+    let events_tx = events::spawn_watcher(project_root.clone());
     let state = AppState::with_events(registry_path, events_tx, allow_mutations);
     let app = routes::router(state);
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+
+    // Probe for the TLS files BEFORE binding so we know whether to
+    // log the HTTPS port. Loading is async (axum-server's
+    // RustlsConfig::from_pem_file reads + parses the PEMs); we do
+    // it once up front and clone the resolved config into the
+    // HTTPS task.
+    let tls_config = tls_serve::load_rustls_config(&project_root).await?;
+
+    let http_listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("neurogrim dashboard listening on http://{}", addr);
-    axum::serve(listener, app).await?;
+
+    match tls_config {
+        Some(config) => {
+            let https_addr = tls_serve::https_addr_for(&addr);
+            tracing::info!(
+                "neurogrim dashboard listening on https://{} (S14-S-4.5 v2; \
+                 secret-management endpoints prefer this listener)",
+                https_addr
+            );
+            // Spawn HTTP + HTTPS concurrently. tokio::try_join
+            // exits on the first error; both servers are pinned to
+            // their respective listeners and don't return on
+            // success (axum::serve blocks until shutdown).
+            let app_https = app.clone();
+            let http_task = async move {
+                axum::serve(http_listener, app)
+                    .await
+                    .map_err(anyhow::Error::from)
+            };
+            let https_task = async move {
+                axum_server::bind_rustls(https_addr, config)
+                    .serve(app_https.into_make_service())
+                    .await
+                    .map_err(anyhow::Error::from)
+            };
+            tokio::try_join!(http_task, https_task)?;
+        }
+        None => {
+            tracing::info!(
+                "neurogrim dashboard: no TLS cert at {}; HTTPS listener \
+                 disabled. Run `neurogrim secrets tls-cert generate` to enable.",
+                project_root.join(".claude/brain/tls").display()
+            );
+            axum::serve(http_listener, app).await?;
+        }
+    }
     Ok(())
 }

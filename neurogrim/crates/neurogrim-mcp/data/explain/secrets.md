@@ -16,7 +16,7 @@ ship in follow-up sessions.
 
 | Layer | Where | What this crate provides |
 |---|---|---|
-| **Wire** | TCP between browser and dashboard | TLS via self-signed cert (S14-S-4.5 v1: cert lifecycle; v2: HTTPS server binding **deferred**) |
+| **Wire** | TCP between browser and dashboard | TLS via self-signed cert (S14-S-4.5 v1: cert lifecycle; v2: HTTPS server binding via axum-server + rustls; v3 deferred: frontend redirect + browser TOFU pinning + path-level enforcement) |
 | **Process boundary** | JSON in/out | dashboard zeroizes request buffers (paired with S-4.5) |
 | **In-memory** | runtime values | `EncryptedSecretValue` + `MasterSessionKey` (this stage) |
 | **At-rest** | OS / disk | `OsNativeBackend` or `EncryptedFileBackend` (this stage) |
@@ -165,26 +165,45 @@ default user-profile ACLs on `.claude/brain/tls/key.pem` are
 sufficient for single-user adopters; multi-user hosts get the
 `SecretBackend` upgrade in v2.
 
-### v2 — HTTPS server binding (deferred)
+### v2 — HTTPS server binding (this stage)
 
-The cert + key live on disk after v1, but the dashboard server
-still binds HTTP only. v2 will:
+The cert + key live on disk after v1; v2 wires the runtime so the
+dashboard binds an HTTPS listener serving the same router as
+HTTP. When `<project>/.claude/brain/tls/{cert,key}.pem` exist,
+`neurogrim ui` binds:
 
-- Add `axum-server` + `rustls` integration to the dashboard
-- Bind a second HTTPS listener on the configured port (default:
-  HTTP port + 1)
-- Frontend redirects `/api/brains/:id/secrets/*` paths to
-  `https://...`
-- Browser pins the cert fingerprint in localStorage on first
-  visit (TOFU pinning; valid for loopback because the attacker
-  would have to already control the host to swap the cert)
-- `tls-cert import <path>` for operator-supplied certs from a
-  real CA
+- HTTP on `<bind>:<port>` (existing)
+- HTTPS on `<bind>:<port + 1>` (new — same app, TLS-wrapped)
 
-For now, operators wanting HTTPS on the secret surface can
-front the dashboard with a reverse proxy (nginx, caddy) that
-holds the cert. The bundled cert lifecycle gets that proxy a
-fresh cert on demand.
+```
+✦ NeuroGrim Dashboard
+  Listening: http://127.0.0.1:8420/
+  Listening: https://127.0.0.1:8421/  (S14-S-4.5 v2)
+```
+
+When cert files are absent, only HTTP binds — backwards-compat
+for adopters who haven't run `tls-cert generate`.
+
+Implementation: `axum-server` + `rustls` (ring crypto provider).
+Both servers share state (`AppState`) so SSE channels, the bus,
+and the cache are coherent across listeners.
+
+### v3 — UX hardening (deferred)
+
+The remaining v3 work that closes the secret-management loop:
+
+- **Frontend HTTPS routing** — the React app picks the HTTPS URL
+  for `/api/brains/:id/secrets/*` fetches automatically.
+- **Browser TOFU fingerprint pinning** — first visit captures the
+  cert fingerprint to localStorage; subsequent visits verify it
+  hasn't changed under the operator. (Valid on loopback because
+  swapping the cert requires already controlling the host.)
+- **Path-level enforcement** — server rejects HTTP requests to
+  `/api/brains/:id/secrets/*` once the UI redirect is in place.
+- **`tls-cert import <path>`** — load operator-supplied certs
+  from a real CA (production deployments fronted by a reverse
+  proxy). The bundled cert lifecycle handles the dev-loopback
+  case end-to-end.
 
 <!-- anchor: single-use-tokens -->
 ## Single-use tokens
