@@ -500,6 +500,13 @@ function TlsBanner() {
   if (!status) return null;
 
   // Case 1: HTTPS available but we're on HTTP — show "switch" banner.
+  // S14-S-4.5 v4: in production the HTTP listener auto-redirects
+  // GET /brains/<id>/secrets to HTTPS, so this banner is reachable
+  // only as a fallback (e.g., redirect didn't fire because of a
+  // browser extension blocking 307s, or the dashboard was started
+  // mid-page-load without HTTPS). We keep the banner for defense in
+  // depth — operators get a manual switch path even when auto-
+  // redirect is bypassed.
   if (status.https_available && status.https_port && !onHttps) {
     const url = httpsUrlForCurrentPage(status.https_port);
     return (
@@ -514,13 +521,15 @@ function TlsBanner() {
               HTTPS is available — switch for secret writes
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Secret writes (POST / DELETE) over HTTP are rejected
-              with{" "}
-              <code className="text-xs">426 Upgrade Required</code>.
-              Click below to switch to the HTTPS listener; your
-              browser will warn about the self-signed cert the
-              first time — accept it and the fingerprint gets
-              pinned for subsequent visits.
+              Normally the dashboard auto-redirects this page to
+              HTTPS (S14-S-4.5 v4). If you're seeing this banner the
+              redirect didn't fire — secret writes (POST / DELETE)
+              over HTTP are rejected with{" "}
+              <code className="text-xs">426 Upgrade Required</code>,
+              so click below to switch manually. Your browser will
+              warn about the self-signed cert the first time;
+              accept it and the fingerprint gets pinned for
+              subsequent visits.
             </p>
             {status.fingerprint_sha256 && (
               <p className="text-xs text-muted-foreground mt-1 font-mono break-all">

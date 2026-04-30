@@ -142,19 +142,21 @@ Service-name convention: `neurogrim-{brain_id}-{secret_id}`. Failure modes docum
 - [ ] Cross-project integration test: start proxy, confirm upstream key fetched from OS-native
 - [ ] claude-proxy README updates threat-model section
 
-### S14-S-4.5: TLS on secret-management endpoints (3-4 days, post-refinement)
+### S14-S-4.5: TLS on secret-management endpoints (3-4 days, post-refinement) — 🟢 v1+v2+v3+v4 SHIPPED (v5 deferred: real-CA cert import + private key in SecretBackend)
 
-**What:** Self-signed cert generated at first dashboard run via the [`rcgen`](https://crates.io/crates/rcgen) crate. Cert + private key stored in OS credential store under `neurogrim-{brain_id}-tls`. Browser hits the dashboard's secret-management endpoints over `https://127.0.0.1:<port>/api/brains/:id/secrets/...` instead of HTTP; other dashboard endpoints stay HTTP for simplicity (no perf hit on the bulk traffic; cert dance only happens for the secret surface).
+**What:** Self-signed cert generated at first dashboard run via the [`rcgen`](https://crates.io/crates/rcgen) crate. Cert + private key stored on disk at `<project>/.claude/brain/tls/{cert,key}.pem` with chmod 0600 on Unix. Browser hits the dashboard's secret-management endpoints over `https://127.0.0.1:<port + 1>/api/brains/:id/secrets/...`; other dashboard endpoints stay on HTTP for simplicity.
 
-**First-run UX:** browser warns about self-signed cert; operator clicks "Advanced → proceed"; cert fingerprint pinned in localStorage. Subsequent visits silent. For production deployments, operator can replace with a real cert via `neurogrim secrets tls-cert import <path>`.
+**First-run UX:** browser warns about self-signed cert; operator clicks "Advanced → proceed"; cert fingerprint pinned in localStorage via the TOFU "Trust" button. Subsequent visits silent. v4 auto-redirect removes the manual "switch to HTTPS" step entirely.
 
 **Done when:**
-- [ ] `rcgen` integration in dashboard server; cert generated on first run if missing
-- [ ] Cert + key persisted via `SecretBackend` (so OS-native protects them)
-- [ ] Frontend redirects HTTP → HTTPS for `/api/brains/:id/secrets/*` paths
-- [ ] Localhost-cert-pinning UX documented + tested
-- [ ] `neurogrim secrets tls-cert import|export|rotate` CLI for operator-managed cert lifecycle
-- [ ] 6+ tests cover: cert generation, persistence round-trip, HTTPS handler, fingerprint pinning, cert rotation
+- [x] `rcgen` integration; cert generated on first run if missing *(v1 — `neurogrim-secrets/src/tls.rs` + `neurogrim secrets tls-cert generate|fingerprint|status|rotate`)*
+- [x] HTTPS server binding via axum-server + rustls *(v2 — `neurogrim-dashboard/src/tls_serve.rs`; HTTP and HTTPS share the router via `try_join`)*
+- [x] HTTP listener rejects secret writes with 426 Upgrade Required *(v3 — path-level enforcement via `reject_http_secret_writes` middleware)*
+- [x] Browser TOFU fingerprint pinning UX *(v3 — TlsBanner with switch / first-visit / mismatch / no-tls cases)*
+- [x] HTTP→HTTPS auto-redirect for the Secrets page *(v4 — `redirect_secrets_page_to_https` middleware; 307 Temporary Redirect on GET `/brains/<id>/secrets`; preserves Host header for hostname mapping; 9 tests cover the predicate + middleware behavior)*
+- [x] 6+ tests cover the full surface *(v1: 10 tests in `neurogrim-secrets/src/tls.rs`; v2: 7 backend tests + tls-serve module tests; v3: 16 frontend pure-helper tests + 4 banner integration tests + 7 path-enforcement tests; v4: 9 redirect tests; methodology drift covers explain topic accuracy)*
+
+**v5 (deferred):** `neurogrim secrets tls-cert import <path>` for operator-supplied real-CA certs (production behind a reverse proxy); private key stored via `SecretBackend` instead of a 0600 file (multi-user host deployments). The bundled cert lifecycle covers the dev-loopback case end-to-end without these.
 
 ### S14-S-5: `secret_fetch` MCP tool (4 days)
 

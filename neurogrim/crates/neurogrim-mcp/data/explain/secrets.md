@@ -16,7 +16,7 @@ ship in follow-up sessions.
 
 | Layer | Where | What this crate provides |
 |---|---|---|
-| **Wire** | TCP between browser and dashboard | TLS via self-signed cert (S14-S-4.5 v1: cert lifecycle; v2: HTTPS server binding via axum-server + rustls; v3: HTTPS banner + browser TOFU fingerprint pinning + 426 path-level enforcement on the HTTP listener) |
+| **Wire** | TCP between browser and dashboard | TLS via self-signed cert (S14-S-4.5 v1: cert lifecycle; v2: HTTPS server binding via axum-server + rustls; v3: HTTPS banner + browser TOFU fingerprint pinning + 426 path-level enforcement on the HTTP listener; v4: HTTP→HTTPS auto-redirect for the Secrets page) |
 | **Process boundary** | JSON in/out | dashboard zeroizes request buffers (paired with S-4.5) |
 | **In-memory** | runtime values | `EncryptedSecretValue` + `MasterSessionKey` (this stage) |
 | **At-rest** | OS / disk | `OsNativeBackend` or `EncryptedFileBackend` (this stage) |
@@ -196,10 +196,12 @@ Closes the secret-management security loop:
   fingerprint_sha256 }` so the Secrets page can render the right
   banner without trying to introspect the browser's cert
   acceptance state directly.
-- **HTTPS banner on the Secrets page** — when on HTTP and HTTPS
-  is available, the page surfaces a "Switch to HTTPS" banner
-  with the expected fingerprint. When no TLS is configured, a
-  hint points operators at `tls-cert generate`.
+- **HTTPS banner on the Secrets page** — defense-in-depth
+  fallback when an operator somehow lands on the page over HTTP
+  (the auto-redirect added in v4 normally prevents this). Shows
+  a "Switch to HTTPS" button with the expected fingerprint.
+  When no TLS is configured, a hint points operators at
+  `tls-cert generate`.
 - **Browser TOFU fingerprint pinning** — first visit on HTTPS
   shows a "Trust this fingerprint" banner with the cert SHA-256.
   Operator compares it to the browser's "View certificate"
@@ -210,12 +212,38 @@ Closes the secret-management security loop:
 - **HTTP listener rejects secret writes** — when both HTTP +
   HTTPS are bound, the HTTP listener returns
   `426 Upgrade Required` for POST/DELETE on
-  `/api/brains/:id/secrets/*` (GET stays available so the page
-  can render and surface the banner). Adopters who haven't run
-  `tls-cert generate` see no enforcement — HTTP-only deployments
-  keep working.
+  `/api/brains/:id/secrets/*` (GET stays available so agents
+  hitting the API for metadata keep working over HTTP).
+  Adopters who haven't run `tls-cert generate` see no
+  enforcement — HTTP-only deployments keep working.
 
-### v4 — deferred
+### v4 — auto-redirect HTTP → HTTPS for the Secrets page (this stage)
+
+When both HTTP and HTTPS are bound, the HTTP listener now
+auto-redirects GET requests on `/brains/<id>/secrets` to the
+HTTPS equivalent with a `307 Temporary Redirect`. Removes a
+manual click from the operator workflow — they no longer have to
+read the "switch to HTTPS" banner and re-type the URL with
+port +1.
+
+The redirect targets only the **page route** (`/brains/<id>/secrets`),
+not the **API route** (`/api/brains/<id>/secrets/*`). Agents
+hitting GET on the API for metadata keep working over HTTP;
+writes still get the existing `426 Upgrade Required` from v3.
+This separation:
+
+- Keeps agent-driven scripting working without needing to follow
+  redirects.
+- Keeps the human-facing page UX seamless.
+- Matches the security model: HTTP is fine for read-only metadata
+  but never for value writes.
+
+`307` rather than `301`: browsers cache `301` permanently, which
+would survive a `tls-cert rotate` or a dashboard restart without
+HTTPS. `307` re-checks each visit so the redirect status follows
+the dashboard's actual config.
+
+### v5 — deferred
 
 - **`tls-cert import <path>`** — load operator-supplied certs
   from a real CA (production deployments fronted by a reverse
@@ -223,10 +251,6 @@ Closes the secret-management security loop:
   case end-to-end.
 - **Storing the private key in `SecretBackend`** instead of a
   `0600` file (relevant for multi-user host deployments).
-- **Auto-redirect** from HTTP to HTTPS for `/secrets` paths.
-  v3 ships a "Switch to HTTPS" button rather than auto-redirect
-  because the first-visit cert acceptance is an operator
-  decision, not a server-side one.
 
 <!-- anchor: single-use-tokens -->
 ## Single-use tokens

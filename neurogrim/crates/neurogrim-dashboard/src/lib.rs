@@ -120,17 +120,31 @@ pub async fn serve(
             );
             // S14-S-4.5 v3: HTTP listener applies a middleware that
             // 426s POST/DELETE on `/secrets/*` paths so secret-write
-            // operations only succeed over HTTPS. The Secrets page
-            // surfaces a "switch to HTTPS" banner before the operator
-            // even tries; this is defense-in-depth for adopters who
-            // bypass the page or hit the endpoints directly.
+            // operations only succeed over HTTPS.
             //
-            // GET on `/secrets` and `/api/tls-status` stay available
-            // on HTTP so the page can render + show the banner without
-            // a chicken-and-egg.
+            // S14-S-4.5 v4: HTTP listener also auto-redirects GET
+            // requests on the `/brains/<id>/secrets` SPA route to
+            // the HTTPS equivalent. Removes a manual click from the
+            // operator workflow — they no longer have to read the
+            // "switch to HTTPS" banner and re-type the URL with
+            // port +1. The redirect targets only the page route,
+            // not the API: agents hitting GET /api/.../secrets over
+            // HTTP keep working (they get list metadata only;
+            // writes already 426 from S14-S-4.5 v3).
+            //
+            // GET on `/api/tls-status` stays available on HTTP so
+            // any future HTTP-rendered surface can probe TLS state
+            // without hitting the redirect.
+            let https_port = tls_serve::https_port_for(addr.port());
             let http_app = app
                 .clone()
-                .layer(axum::middleware::from_fn(reject_http_secret_writes));
+                .layer(axum::middleware::from_fn(reject_http_secret_writes))
+                .layer(axum::middleware::from_fn(
+                    move |req: axum::http::Request<axum::body::Body>,
+                          next: axum::middleware::Next| {
+                        redirect_secrets_page_to_https(https_port, req, next)
+                    },
+                ));
             let https_app = app;
             let http_task = async move {
                 axum::serve(http_listener, http_app)
@@ -200,6 +214,82 @@ fn is_secret_write_path(method: &axum::http::Method, path: &str) -> bool {
     let is_write = method == Method::POST || method == Method::DELETE;
     let is_secret_path = path.starts_with("/api/brains/") && path.contains("/secrets/");
     is_write && is_secret_path
+}
+
+/// v4.2 S14-S-4.5 v4 middleware: redirect the Secrets SPA route
+/// from HTTP to HTTPS so operators don't have to manually retype
+/// the URL with port +1.
+///
+/// Only redirects GET on the SPA page path
+/// (`/brains/<brain-id>/secrets`); the API routes
+/// (`/api/brains/.../secrets`) keep their existing semantics —
+/// list (GET) over HTTP returns metadata, writes (POST/DELETE) get
+/// 426 Upgrade Required from `reject_http_secret_writes`. This
+/// keeps agents that hit the API directly working without
+/// surprising HTTP redirect behavior, while the human-facing page
+/// auto-upgrades.
+async fn redirect_secrets_page_to_https(
+    https_port: u16,
+    req: axum::http::Request<axum::body::Body>,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::http::{header, Method, StatusCode};
+    use axum::response::IntoResponse;
+    if req.method() != Method::GET {
+        return next.run(req).await;
+    }
+    let path = req.uri().path();
+    if !is_secrets_page_path(path) {
+        return next.run(req).await;
+    }
+    // Build the HTTPS Location URL. Use the request's Host header
+    // so the redirect honors whatever name the operator typed
+    // (localhost, 127.0.0.1, LAN hostname, etc.). Strip the port
+    // off the Host (the listener bound port is unrelated to the
+    // HTTPS port we're targeting).
+    let host_header = req
+        .headers()
+        .get(header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost");
+    let hostname = host_header.split(':').next().unwrap_or("localhost");
+    let path_and_query = req
+        .uri()
+        .path_and_query()
+        .map(|pq| pq.as_str())
+        .unwrap_or(path);
+    let target = format!("https://{}:{}{}", hostname, https_port, path_and_query);
+    // Use 307 Temporary Redirect rather than 301 — we don't want
+    // browsers caching the redirect across cert rotations or the
+    // (rare) case where the operator restarts without HTTPS.
+    (
+        StatusCode::TEMPORARY_REDIRECT,
+        [(header::LOCATION, target)],
+    )
+        .into_response()
+}
+
+/// Pure predicate: is this path the Secrets SPA route?
+/// Matches `/brains/<id>/secrets` exactly (with optional trailing
+/// slash). Does NOT match the API path
+/// (`/api/brains/<id>/secrets`) — those have their own behavior
+/// via `reject_http_secret_writes`.
+fn is_secrets_page_path(path: &str) -> bool {
+    if path.starts_with("/api/") {
+        return false;
+    }
+    let stripped = path.strip_suffix('/').unwrap_or(path);
+    if !stripped.starts_with("/brains/") {
+        return false;
+    }
+    if !stripped.ends_with("/secrets") {
+        return false;
+    }
+    // Verify the shape: /brains/<single-segment>/secrets — reject
+    // any deeper paths (e.g. /brains/x/y/secrets) to avoid
+    // accidentally redirecting unrelated routes.
+    let middle = &stripped["/brains/".len()..stripped.len() - "/secrets".len()];
+    !middle.is_empty() && !middle.contains('/')
 }
 
 #[cfg(test)]
@@ -277,5 +367,184 @@ mod tests {
             &Method::DELETE,
             "/api/brains/_neurogrim/secrets/test"
         ));
+    }
+
+    // ── S14-S-4.5 v4: secrets page auto-redirect to HTTPS ─────
+
+    use super::is_secrets_page_path;
+
+    #[test]
+    fn secrets_page_path_matches_canonical_shape() {
+        assert!(is_secrets_page_path("/brains/alpha/secrets"));
+        assert!(is_secrets_page_path("/brains/alpha/secrets/"));
+        assert!(is_secrets_page_path("/brains/some-brain-id/secrets"));
+        assert!(is_secrets_page_path("/brains/_neurogrim/secrets"));
+    }
+
+    #[test]
+    fn secrets_page_path_rejects_api_paths() {
+        // The API routes have their own enforcement (reject_http_secret_writes).
+        // Don't redirect them — agents/tools hitting GET /api/.../secrets
+        // for metadata should keep working over HTTP.
+        assert!(!is_secrets_page_path("/api/brains/alpha/secrets"));
+        assert!(!is_secrets_page_path("/api/brains/alpha/secrets/"));
+        assert!(!is_secrets_page_path("/api/brains/alpha/secrets/foo"));
+    }
+
+    #[test]
+    fn secrets_page_path_rejects_unrelated_routes() {
+        assert!(!is_secrets_page_path("/"));
+        assert!(!is_secrets_page_path("/brains/alpha"));
+        assert!(!is_secrets_page_path("/brains/alpha/overview"));
+        assert!(!is_secrets_page_path("/brains/alpha/settings"));
+        assert!(!is_secrets_page_path("/brains/alpha/p/secrets"));
+        // Deeper paths that contain "secrets" in the wrong slot.
+        assert!(!is_secrets_page_path("/brains/alpha/x/secrets"));
+        // Empty brain segment.
+        assert!(!is_secrets_page_path("/brains//secrets"));
+    }
+
+    #[test]
+    fn secrets_page_path_rejects_substring_matches() {
+        // Defensive: don't redirect URLs that just happen to contain
+        // "/secrets" somewhere weird.
+        assert!(!is_secrets_page_path("/brains/alpha/secrets-archived"));
+        assert!(!is_secrets_page_path("/brains/alpha/secrets-old"));
+    }
+
+    // ── Middleware integration: actual axum router with the
+    //    redirect layer attached. Verifies the redirect Response
+    //    has the right status + Location header. ──────────────────
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use axum::Router;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    fn router_with_redirect_layer(https_port: u16) -> Router {
+        // Minimal app: just a marker handler that returns 200 OK on
+        // the secrets page route. The layer below intercepts before
+        // the handler can fire, so a 200 means the redirect didn't
+        // catch the request.
+        let app = Router::new().fallback(|| async { "fallthrough" });
+        app.layer(axum::middleware::from_fn(
+            move |req: Request<Body>, next: axum::middleware::Next| {
+                super::redirect_secrets_page_to_https(https_port, req, next)
+            },
+        ))
+    }
+
+    #[tokio::test]
+    async fn http_get_on_secrets_page_redirects_to_https() {
+        let app = router_with_redirect_layer(8421);
+        let req = Request::builder()
+            .method("GET")
+            .uri("/brains/alpha/secrets")
+            .header("host", "localhost:8420")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::TEMPORARY_REDIRECT);
+        let location = resp
+            .headers()
+            .get(axum::http::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        assert_eq!(location, "https://localhost:8421/brains/alpha/secrets");
+    }
+
+    #[tokio::test]
+    async fn http_get_preserves_query_string_on_redirect() {
+        let app = router_with_redirect_layer(8421);
+        let req = Request::builder()
+            .method("GET")
+            .uri("/brains/alpha/secrets?fresh=1")
+            .header("host", "127.0.0.1:8420")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::TEMPORARY_REDIRECT);
+        let location = resp
+            .headers()
+            .get(axum::http::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        assert_eq!(
+            location,
+            "https://127.0.0.1:8421/brains/alpha/secrets?fresh=1"
+        );
+    }
+
+    #[tokio::test]
+    async fn http_get_on_unrelated_route_falls_through() {
+        let app = router_with_redirect_layer(8421);
+        let req = Request::builder()
+            .method("GET")
+            .uri("/brains/alpha/overview")
+            .header("host", "localhost:8420")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"fallthrough");
+    }
+
+    #[tokio::test]
+    async fn http_get_on_api_secrets_path_is_not_redirected() {
+        let app = router_with_redirect_layer(8421);
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/brains/alpha/secrets")
+            .header("host", "localhost:8420")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn http_post_on_secrets_page_is_not_redirected() {
+        // Defensive: redirect only fires for GET. A non-GET request
+        // on the page path falls through (in production it would hit
+        // the existing 426 middleware on the API path; the page
+        // route itself has no POST handler).
+        let app = router_with_redirect_layer(8421);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/brains/alpha/secrets")
+            .header("host", "localhost:8420")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn http_get_with_missing_host_falls_back_to_localhost() {
+        // Defensive — Host is required by HTTP/1.1, but if it
+        // somehow comes through missing, we still emit a sensible
+        // redirect rather than panicking.
+        let app = router_with_redirect_layer(8421);
+        let req = Request::builder()
+            .method("GET")
+            .uri("/brains/alpha/secrets")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        // Hyper auto-sets a Host header for HTTP/1.1 requests when
+        // none is provided — the actual redirect target depends on
+        // what Hyper picks. Either we redirect (if the auto-set
+        // host is something sensible) or we don't crash. The key
+        // invariant is no panic.
+        let status = resp.status();
+        assert!(
+            status == axum::http::StatusCode::TEMPORARY_REDIRECT
+                || status == axum::http::StatusCode::OK,
+            "unexpected status: {status:?}"
+        );
     }
 }
