@@ -7,6 +7,7 @@ read it before composing or editing a layout for a Brain you're
 working on. For the dashboard's overall surface (the five pages,
 SSE updates, theme, etc.), see `neurogrim explain ui`.
 
+<!-- anchor: when-needed -->
 ## When you need this
 
 An agent typically reaches for layout authoring in one of three
@@ -28,6 +29,7 @@ moments:
    inherit the layout, so authoring once produces reusable
    ergonomics.
 
+<!-- anchor: file-shape -->
 ## File location + shape
 
 `<brain>/.claude/brain/dashboard-layout.json`. JSON object with
@@ -65,6 +67,7 @@ Each widget has:
 - `config` — widget-specific. Each type's required fields are
   documented below. Pass `{}` for widgets that take no config.
 
+<!-- anchor: widget-catalog -->
 ## Widget catalog (v3.4)
 
 | Widget type | Reads | Required config | Notes |
@@ -90,6 +93,7 @@ Each widget has:
 - **`quarter`** — best for 4 same-kind cards in one row (e.g.,
   4 child-Brain `domain-card`s in a federation parent's layout).
 
+<!-- anchor: patterns -->
 ## Common patterns
 
 ### Pattern 1 — Weighted Brain (single project)
@@ -149,6 +153,7 @@ Lead with the operationally-critical domains, then the medium-
 touch signals. The framing note doubles as documentation for
 anyone evaluating the methodology against this real-world use.
 
+<!-- anchor: edit-mode -->
 ## Edit mode workflow
 
 The dashboard ships an in-page editor — operators don't have to

@@ -22,7 +22,11 @@ export type DashboardEvent =
   | { kind: "service_starting"; peer_name: string; pid: number; port: number }
   | { kind: "service_started"; peer_name: string; pid: number; port: number }
   | { kind: "service_stopped"; peer_name: string; pid: number }
-  | { kind: "service_failed"; peer_name: string; reason: string };
+  | { kind: "service_failed"; peer_name: string; reason: string }
+  // v4.3 S15-C-2 v3 — Logs-page sources surface as live events.
+  | { kind: "publish_gate_ledger_appended" }
+  | { kind: "approval_resolved" }
+  | { kind: "notification_published" };
 
 /**
  * Wire the dashboard to its live-update channel.
@@ -118,11 +122,15 @@ export function useDashboardEvents(): ConnectionStatus {
 
 function normalize(raw: unknown): DashboardEvent | null {
   if (typeof raw === "string") {
-    // Unit variants: "registry_changed", "skill_invoked", "layout_changed".
+    // Unit variants emit as bare strings via serde's external
+    // tagging (no inner data). v4.3 S15-C-2 v3 added three more.
     if (
       raw === "registry_changed" ||
       raw === "skill_invoked" ||
-      raw === "layout_changed"
+      raw === "layout_changed" ||
+      raw === "publish_gate_ledger_appended" ||
+      raw === "approval_resolved" ||
+      raw === "notification_published"
     ) {
       return { kind: raw };
     }
@@ -218,6 +226,24 @@ function invalidate(
       // waiting for the 30s refetchInterval.
       qc.invalidateQueries({ queryKey: ["federation"] });
       qc.invalidateQueries({ queryKey: ["services"] });
+      break;
+    // v4.3 S15-C-2 v3 — Logs-page sources gain live SSE
+    // invalidation. The Logs page already refetches every 30s;
+    // these invalidations pull the next render forward to ~1s.
+    case "publish_gate_ledger_appended":
+      // Logs page's publish-gates source + the dedicated
+      // Publish Gates page both read this ledger.
+      qc.invalidateQueries({ queryKey: ["logs-publish-gates"] });
+      qc.invalidateQueries({ queryKey: ["publish-gates"] });
+      break;
+    case "approval_resolved":
+      // Approvals page + Logs page's approvals source both
+      // consume the same approval-resolutions JSONL.
+      qc.invalidateQueries({ queryKey: ["approvals"] });
+      qc.invalidateQueries({ queryKey: ["logs-approvals"] });
+      break;
+    case "notification_published":
+      qc.invalidateQueries({ queryKey: ["logs-notifications"] });
       break;
   }
 }

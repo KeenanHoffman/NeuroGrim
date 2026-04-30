@@ -6,6 +6,7 @@ This document is a curated tour. Run `neurogrim --help` for the
 authoritative list, or `neurogrim <command> --help` for any one
 command's full flag set.
 
+<!-- anchor: introspection -->
 ## Family 1: Introspection — "what's here"
 
 | Command | Purpose |
@@ -24,6 +25,7 @@ command's full flag set.
 Default starting point for an unfamiliar Brain:
 `neurogrim agent --prose && neurogrim doctor`.
 
+<!-- anchor: authoring -->
 ## Family 2: Authoring — "make me one of these"
 
 | Command | Purpose |
@@ -38,6 +40,7 @@ Authoring commands are idempotent and follow consistent UX:
 kebab-case validated names, `--force` to overwrite, "next steps"
 output pointing at follow-on commands.
 
+<!-- anchor: execution -->
 ## Family 3: Execution — "do the thing"
 
 | Command | Purpose |
@@ -59,6 +62,7 @@ output pointing at follow-on commands.
 Sensor invocation pattern: `neurogrim sensory <name> --project-root . > .claude/<name>-cmdb.json`.
 This is how CMDBs are refreshed in CI or pre-commit hooks.
 
+<!-- anchor: bookkeeping -->
 ## Family 4: Bookkeeping — "record what happened"
 
 | Command | Purpose |
@@ -73,6 +77,7 @@ These commands feed the calibration substrate that distinguishes
 "the Brain says X" from "X is real" — the empirical layer that
 turns advisory signals into weighted ones over time.
 
+<!-- anchor: aliases -->
 ## Aliases
 
 Several commands have grimoire-themed visible aliases:
@@ -110,6 +115,7 @@ remains read-only and the Start/Stop buttons hide entirely.
 Spawned services survive a dashboard restart by design (matches
 the "leave running" power-user preference).
 
+<!-- anchor: mcp-vs-cli -->
 ## Two invocation modes: MCP and CLI
 
 NeuroGrim exposes its scoring tools two ways:

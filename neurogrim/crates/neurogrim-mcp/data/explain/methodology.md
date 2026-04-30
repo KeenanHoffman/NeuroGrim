@@ -10,6 +10,7 @@ If you're an agent reading this, you've entered a NeuroGrim project.
 This document teaches you the conceptual model. To see what *this*
 specific Brain currently looks like, run `neurogrim agent --prose`.
 
+<!-- anchor: drift-problem -->
 ## The drift problem
 
 Codebases drift. Tests rot, dependencies stale, security postures
@@ -24,6 +25,7 @@ recommends action when something drifts (governance). The agent's
 job is to act on the Brain's signals; the Brain's job is to keep
 the signals current and honest.
 
+<!-- anchor: five-piece-overlay -->
 ## The five-piece overlay
 
 A Brain consists of five layered concerns:
@@ -58,6 +60,7 @@ A Brain consists of five layered concerns:
    a tree of Brains report a single ecosystem score. See
    `neurogrim explain federation`.
 
+<!-- anchor: for-agents -->
 ## Why this matters for agents
 
 When you act on a project, you have two options:

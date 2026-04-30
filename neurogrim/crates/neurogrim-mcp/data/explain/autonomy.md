@@ -12,6 +12,7 @@ directly. The CLI does not yet ship a declarative subcommand
 (`autonomy add-invariant <rule>`); see also `neurogrim doctor` for
 schema validation as of v3.3.
 
+<!-- anchor: three-pieces -->
 ## The three pieces
 
 ```json
@@ -99,6 +100,7 @@ Each entry:
 Use `minimum_level` for "this action is OK to do, just always check first."
 Use `enforced_level` for "this action MUST never auto-execute, period."
 
+<!-- anchor: examples -->
 ## Worked examples
 
 ### Adding a project-specific safety invariant
@@ -149,6 +151,7 @@ neurogrim agent --prose      # current declared posture is summarized
 neurogrim validate           # registry-shape check
 ```
 
+<!-- anchor: mistakes -->
 ## Common mistakes
 
 - **Forgetting `description`** — this field is recommended on all three pieces (action_types, safety_invariants). Operators reading the registry six months later need to know **why** a rule exists. `doctor` warns when missing.

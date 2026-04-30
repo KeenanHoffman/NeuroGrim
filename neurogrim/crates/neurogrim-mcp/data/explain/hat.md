@@ -19,6 +19,7 @@ To see this Brain's declared hats:
 neurogrim agent --prose
 ```
 
+<!-- anchor: declared-hats -->
 ## The 8 declared hats
 
 NeuroGrim ships 8 hat profiles, defined in
@@ -41,6 +42,7 @@ prose summarizing the Brain's state through that hat's bias. Run
 `neurogrim narrate --hat visionary` on the same Brain — same data,
 different priority surface.
 
+<!-- anchor: when-to-wear -->
 ## When to wear a hat
 
 - **Before reviewing a plan**: `--hat adversary` (find weaknesses)
@@ -71,6 +73,7 @@ contracts. When operating under a declared hat, an agent should:
    adversary first; then Wear Hat: incident-commander to plan
    mitigation").
 
+<!-- anchor: add-hat -->
 ## Adding a new hat
 
 Hats live in `registry.config.hats` and as

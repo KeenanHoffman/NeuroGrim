@@ -149,6 +149,47 @@ describe("useDashboardEvents", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["logs-invocations"] });
   });
 
+  // ── S15-C-2 v3: Logs-page sources surface as live SSE events ──
+
+  it("invalidates publish-gates queries on publish_gate_ledger_appended", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const customWrapper = ({ children }: { children: ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+    renderHook(() => useDashboardEvents(), { wrapper: customWrapper });
+    act(() => FakeEventSource.last!.emitOpen());
+    act(() =>
+      FakeEventSource.last!.emitMessage('"publish_gate_ledger_appended"'),
+    );
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["logs-publish-gates"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["publish-gates"] });
+  });
+
+  it("invalidates approvals queries on approval_resolved", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const customWrapper = ({ children }: { children: ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+    renderHook(() => useDashboardEvents(), { wrapper: customWrapper });
+    act(() => FakeEventSource.last!.emitOpen());
+    act(() => FakeEventSource.last!.emitMessage('"approval_resolved"'));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["approvals"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["logs-approvals"] });
+  });
+
+  it("invalidates logs-notifications query on notification_published", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const customWrapper = ({ children }: { children: ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+    renderHook(() => useDashboardEvents(), { wrapper: customWrapper });
+    act(() => FakeEventSource.last!.emitOpen());
+    act(() => FakeEventSource.last!.emitMessage('"notification_published"'));
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["logs-notifications"],
+    });
+  });
+
   it("invalidates dashboard-layout on layout_changed", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidate = vi.spyOn(qc, "invalidateQueries");

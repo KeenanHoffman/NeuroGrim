@@ -84,6 +84,20 @@ pub enum DashboardEvent {
         peer_name: String,
         reason: String,
     },
+    /// v4.3 S15-C-2 v3 — a publish-gate-ledger row was appended.
+    /// Frontend invalidates the Logs page's publish-gates query
+    /// so a `neurogrim publish-gate run` shows up within a
+    /// second instead of waiting for the 30s refetch.
+    PublishGateLedgerAppended,
+    /// v4.3 S15-C-2 v3 — an approval-resolutions row was
+    /// appended. Frontend invalidates Approvals + the Logs
+    /// page's approvals query so an operator's approve/deny
+    /// reflects across both surfaces immediately.
+    ApprovalResolved,
+    /// v4.3 S15-C-2 v3 — a `_neurogrim/notifications` row was
+    /// appended. Frontend invalidates the Logs page's
+    /// notifications query.
+    NotificationPublished,
 }
 
 /// Classify a filesystem path into a `DashboardEvent`. Paths are
@@ -108,6 +122,19 @@ pub fn classify_event(path: &Path, project_root: &Path) -> Option<DashboardEvent
     }
     if rel_str == ".claude/brain/dashboard-layout.json" {
         return Some(DashboardEvent::LayoutChanged);
+    }
+    // v4.3 S15-C-2 v3 — Logs-page sources surface as live SSE
+    // events instead of waiting for the 30s refetch interval.
+    if rel_str == ".claude/brain/publish-gate-ledger.jsonl" {
+        return Some(DashboardEvent::PublishGateLedgerAppended);
+    }
+    if rel_str == ".claude/brain/queues/_neurogrim/approvals.jsonl"
+        || rel_str == ".claude/brain/queues/_neurogrim/approval-resolutions.jsonl"
+    {
+        return Some(DashboardEvent::ApprovalResolved);
+    }
+    if rel_str == ".claude/brain/queues/_neurogrim/notifications.jsonl" {
+        return Some(DashboardEvent::NotificationPublished);
     }
     if let Some(file_name) = rel.file_name().and_then(|n| n.to_str()) {
         // `.claude/<domain>-cmdb.json` lives directly under
@@ -251,6 +278,76 @@ mod tests {
             classify_event(&path, &root),
             Some(DashboardEvent::LayoutChanged)
         );
+    }
+
+    // ── S15-C-2 v3: Logs-page sources surface as live events ──
+
+    #[test]
+    fn classifies_publish_gate_ledger_append() {
+        let root = PathBuf::from("/proj");
+        let path =
+            PathBuf::from("/proj/.claude/brain/publish-gate-ledger.jsonl");
+        assert_eq!(
+            classify_event(&path, &root),
+            Some(DashboardEvent::PublishGateLedgerAppended)
+        );
+    }
+
+    #[test]
+    fn classifies_approvals_queue_append() {
+        let root = PathBuf::from("/proj");
+        let path = PathBuf::from(
+            "/proj/.claude/brain/queues/_neurogrim/approvals.jsonl",
+        );
+        assert_eq!(
+            classify_event(&path, &root),
+            Some(DashboardEvent::ApprovalResolved)
+        );
+    }
+
+    #[test]
+    fn classifies_approval_resolutions_queue_append() {
+        let root = PathBuf::from("/proj");
+        let path = PathBuf::from(
+            "/proj/.claude/brain/queues/_neurogrim/approval-resolutions.jsonl",
+        );
+        assert_eq!(
+            classify_event(&path, &root),
+            Some(DashboardEvent::ApprovalResolved)
+        );
+    }
+
+    #[test]
+    fn classifies_notifications_queue_append() {
+        let root = PathBuf::from("/proj");
+        let path = PathBuf::from(
+            "/proj/.claude/brain/queues/_neurogrim/notifications.jsonl",
+        );
+        assert_eq!(
+            classify_event(&path, &root),
+            Some(DashboardEvent::NotificationPublished)
+        );
+    }
+
+    #[test]
+    fn ignores_other_queue_topics() {
+        // Adopter-defined topics under `_neurogrim/` shouldn't
+        // exist (the namespace is reserved). Defensive: even if
+        // one did, we don't classify it as an approval/notification
+        // — only the documented topic names trigger the
+        // corresponding event.
+        let root = PathBuf::from("/proj");
+        let path = PathBuf::from(
+            "/proj/.claude/brain/queues/_neurogrim/random.jsonl",
+        );
+        assert_eq!(classify_event(&path, &root), None);
+        // Adopter topics under their own scope also stay quiet at
+        // the SSE level — those use the bus's own per-topic
+        // broadcast channel via /api/brains/:id/queues/<topic>/events.
+        let other = PathBuf::from(
+            "/proj/.claude/brain/queues/pc-state/alerts.jsonl",
+        );
+        assert_eq!(classify_event(&other, &root), None);
     }
 
     #[test]

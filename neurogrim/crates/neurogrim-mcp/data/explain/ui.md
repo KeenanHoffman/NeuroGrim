@@ -11,6 +11,7 @@ of itself but does not mutate registry, CMDBs, or ledgers.
 Mutations (sensor refresh, registry edits, ledger pruning) are
 gated behind a `--allow-mutations` flag planned for v3.5.
 
+<!-- anchor: run-it -->
 ## Run it
 
 ```bash
@@ -34,6 +35,7 @@ didn't launch (instead of letting `webbrowser` hang). Inside
 WSL it routes through `cmd.exe /c start` so the URL opens in
 the Windows host browser.
 
+<!-- anchor: multi-brain -->
 ## Multi-Brain navigation
 
 The dashboard is federation-aware. The host registry's transitive
@@ -49,6 +51,7 @@ process, full federation tree — the ecosystem brain's homepage
 becomes a launching point into the children with substantive
 weighted scores.
 
+<!-- anchor: homepage -->
 ## Customizable homepage
 
 The Overview page is composed from a per-Brain widget layout
@@ -133,6 +136,7 @@ A "Showing the default layout" banner appears when the layout
 came from the synthesized default (no file on disk) so
 operators know customization is a thing they can do.
 
+<!-- anchor: pages -->
 ## What you see — the five pages
 
 ### Overview (`/`)
@@ -192,6 +196,7 @@ When `.claude/brain/invocation-ledger.jsonl` doesn't exist
 explaining how to set up the ledger and classifies every skill
 as `no-ledger`.
 
+<!-- anchor: sse -->
 ## Live updates — SSE under the hood
 
 The dashboard subscribes to `/api/events` (Server-Sent Events)
@@ -211,6 +216,7 @@ If the filesystem watcher couldn't start, the page falls back
 to polling and the dot shows `static` — pages refresh on tab
 focus or manual reload.
 
+<!-- anchor: hat-lens -->
 ## The hat lens
 
 A dropdown in the sidebar lists every hat declared in
@@ -229,6 +235,7 @@ via the sun/moon button in the sidebar footer. The selection
 persists in `localStorage` under `neurogrim:theme` and falls
 back to the OS-level preference on first load.
 
+<!-- anchor: surface -->
 ## When to use which surface
 
 | Audience / task | Surface |

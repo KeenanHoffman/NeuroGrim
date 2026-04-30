@@ -11,6 +11,7 @@ a CEO.
 This document covers when to federate, how peer relationships
 work, and the read-only sibling pattern.
 
+<!-- anchor: model -->
 ## The model
 
 Brains are **peers at the protocol level** (spec §13). One Brain
@@ -45,6 +46,7 @@ The ecosystem Brain reaches python-starter via NeuroGrim — a
 two-hop fractal-composition example. To see this Brain's federation
 peers, run `neurogrim agent --prose`.
 
+<!-- anchor: read-only-siblings -->
 ## Read-only siblings
 
 A **read-only sibling** is a peer Brain registered with `read_only:
@@ -68,6 +70,7 @@ Common reasons to use read-only siblings:
 - Cross-team observability (your Brain can watch your peer's
   Brain without their Brain having to trust yours)
 
+<!-- anchor: add-peer -->
 ## Adding a federation peer
 
 The automated path:
@@ -98,6 +101,7 @@ To verify discoverability:
 neurogrim a2a-discover http://localhost:<port>/a2a/v1/
 ```
 
+<!-- anchor: a2a-scoring -->
 ## Scoring with A2A children
 
 For the parent to actually aggregate child scores, declare each
