@@ -130,10 +130,24 @@ pub fn classify_event(path: &Path, project_root: &Path) -> Option<DashboardEvent
     if rel_str == ".claude/brain-registry.json" {
         return Some(DashboardEvent::RegistryChanged);
     }
-    if rel_str == ".claude/brain/score-history.json" {
+    // SQLite WAL file is written first on each append; the main
+    // .sqlite file is updated on checkpoint. Watch both so the
+    // frontend gets the SSE notification on the first write.
+    if rel_str == ".claude/brain/score-history.json"
+        || rel_str
+            == ".claude/brain/queues/_neurogrim/score-snapshots.sqlite"
+        || rel_str
+            == ".claude/brain/queues/_neurogrim/score-snapshots.sqlite-wal"
+    {
         return Some(DashboardEvent::ScoreChanged { domain: None });
     }
-    if rel_str == ".claude/brain/invocation-ledger.jsonl" {
+    // Canonical JSONL (shell-hook target) AND SQLite bus topic
+    // (materialized view) both trigger the SkillInvoked event so the
+    // frontend invalidates regardless of which fires first.
+    if rel_str == ".claude/brain/invocation-ledger.jsonl"
+        || rel_str == ".claude/brain/queues/_neurogrim/skill-invocations.sqlite"
+        || rel_str == ".claude/brain/queues/_neurogrim/skill-invocations.sqlite-wal"
+    {
         return Some(DashboardEvent::SkillInvoked);
     }
     if rel_str == ".claude/brain/dashboard-layout.json" {
@@ -152,7 +166,14 @@ pub fn classify_event(path: &Path, project_root: &Path) -> Option<DashboardEvent
     if rel_str == ".claude/brain/queues/_neurogrim/notifications.jsonl" {
         return Some(DashboardEvent::NotificationPublished);
     }
-    if rel_str == ".claude/brain/services.jsonl" {
+    // SQLite WAL file changes first on each append; main .sqlite
+    // updates on checkpoint. Watch both so the frontend gets the
+    // SSE notification on the first write. Legacy .jsonl path kept
+    // for projects mid-migration.
+    if rel_str == ".claude/brain/services.jsonl"
+        || rel_str == ".claude/brain/queues/_neurogrim/services.sqlite"
+        || rel_str == ".claude/brain/queues/_neurogrim/services.sqlite-wal"
+    {
         return Some(DashboardEvent::ServicesLogAppended);
     }
     if rel_str == ".claude/brain/queue-config.yaml" {

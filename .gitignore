@@ -18,6 +18,12 @@
 # PostToolUse hook at scripts/record-skill-invocation.sh. Per-deployment
 # runtime state; append-only JSONL.
 .claude/brain/invocation-ledger.jsonl
+# v4.4 (2026-04-30) — bus topic SQLite stores: score-snapshots,
+# services, skill-invocations, plus the v4.5 metrics TSDB. All
+# per-deployment runtime state; created on first scoring run +
+# rebuilt from canonical sources where applicable.
+.claude/brain/queues/
+.claude/brain/services.jsonl
 # v4.0 S12-G-2 — `neurogrim test` quiet wrapper persists per-failure
 # entries and rotates older entries to the archive. Both are
 # per-deployment runtime state; failure history is local-only.

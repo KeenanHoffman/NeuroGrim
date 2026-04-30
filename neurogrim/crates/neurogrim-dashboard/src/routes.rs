@@ -81,6 +81,86 @@ impl ScoreQuery {
     }
 }
 
+// ── Tiny shared helpers ─────────────────────────────────────────────────
+
+/// Build a `500 Internal Server Error` response with the standard
+/// `{"error": "<msg>"}` body. Collapses the otherwise-repeated
+/// `(StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": ...})))
+/// .into_response()` shape used across handlers.
+fn internal_error(msg: impl Into<String>) -> Response {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({ "error": msg.into() })),
+    )
+        .into_response()
+}
+
+/// Read a JSON file, stripping any UTF-8 BOM, into a `serde_json::Value`.
+/// Returns `None` on read or parse failure (non-fatal — callers project
+/// optional fields out of the value with their own `.and_then` chains).
+fn read_json_value(path: &Path) -> Option<serde_json::Value> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(s.trim_start_matches('\u{FEFF}')).ok())
+}
+
+/// Load the host Brain's context and run an async build closure.
+/// Collapses the cache-error scaffolding shared by every legacy
+/// single-Brain endpoint (`overview`, `domains_list`,
+/// `domain_detail`, `federation`).
+///
+/// The closure takes the loaded context as `Arc<BrainContext>` (by
+/// value) so it can hold it across `.await` points without lifetime
+/// gymnastics. Inside the closure, deref the Arc with `&ctx` —
+/// auto-deref-coercion gives `&BrainContext` for the build_* fns.
+/// Sync build paths still need `async move { ... }` to satisfy the
+/// `Future` bound.
+async fn with_host_context<F, Fut, R>(
+    state: &AppState,
+    hat: Option<String>,
+    build: F,
+) -> Response
+where
+    F: FnOnce(std::sync::Arc<BrainContext>) -> Fut,
+    Fut: std::future::Future<Output = R>,
+    R: IntoResponse,
+{
+    match state
+        .cache
+        .load_or_get(&state.registry_path, hat, None)
+        .await
+    {
+        Ok(ctx) => build(ctx).await.into_response(),
+        Err(e) => internal_error(format!("failed to load BrainContext: {e:#}")),
+    }
+}
+
+/// Resolve a Brain by id, load its context, and run an async build
+/// closure. Federation-aware analogue of `with_host_context`.
+async fn with_brain_context<F, Fut, R>(
+    state: &AppState,
+    brain_id: &str,
+    hat: Option<String>,
+    build: F,
+) -> Response
+where
+    F: FnOnce(std::sync::Arc<BrainContext>) -> Fut,
+    Fut: std::future::Future<Output = R>,
+    R: IntoResponse,
+{
+    let brain = match resolve_brain(state, brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let registry = brain.registry_path.to_string_lossy().to_string();
+    match state.cache.load_or_get(&registry, hat, None).await {
+        Ok(ctx) => build(ctx).await.into_response(),
+        Err(e) => internal_error(format!(
+            "failed to load BrainContext for '{brain_id}': {e:#}"
+        )),
+    }
+}
+
 /// Frontend bundle embedded at compile time. Built by `npm run build`
 /// in `frontend/`. Empty during Phase 0 setup until the frontend has
 /// been built at least once — `static_handler` falls back to an
@@ -250,9 +330,28 @@ pub fn router(state: AppState) -> Router {
             "/api/brains/:brain_id/approvals/:action_id/resolve",
             axum::routing::post(brain_approvals_resolve),
         )
+        // ---- v4.5 Plumbing page (TSDB observability) ----
+        .route(
+            "/api/brains/:brain_id/plumbing/overview",
+            get(plumbing_overview),
+        )
+        .route(
+            "/api/brains/:brain_id/plumbing/metrics/series",
+            get(plumbing_list_series),
+        )
+        .route(
+            "/api/brains/:brain_id/plumbing/metrics/:name",
+            get(plumbing_query_series),
+        )
         // ---- Live updates ----
         .route("/api/events", get(events_sse))
         .fallback(static_handler)
+        // v4.5 — universal request-duration instrumentation. Records
+        // `request_duration_ms{path, status}` for every handler.
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            crate::instrumentation::record_request_duration,
+        ))
         .with_state(state)
 }
 
@@ -306,24 +405,10 @@ async fn overview(
     State(state): State<AppState>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let ctx = match state
-        .cache
-        .load_or_get(&state.registry_path, query.resolved_hat(), None)
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext: {e:#}")
-                })),
-            )
-                .into_response();
-        }
-    };
-
-    Json(build_overview(&ctx)).into_response()
+    with_host_context(&state, query.resolved_hat(), |ctx| async move {
+        Json(build_overview(&ctx))
+    })
+    .await
 }
 
 /// Pure conversion: BrainContext → OverviewResponse. Extracted so
@@ -469,23 +554,10 @@ async fn domains_list(
     State(state): State<AppState>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let ctx = match state
-        .cache
-        .load_or_get(&state.registry_path, query.resolved_hat(), None)
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext: {e:#}")
-                })),
-            )
-                .into_response();
-        }
-    };
-    Json(build_domains_list(&ctx)).into_response()
+    with_host_context(&state, query.resolved_hat(), |ctx| async move {
+        Json(build_domains_list(&ctx))
+    })
+    .await
 }
 
 fn build_domains_list(ctx: &BrainContext) -> DomainsListResponse {
@@ -543,14 +615,7 @@ fn build_domains_list(ctx: &BrainContext) -> DomainsListResponse {
                 .get(name)
                 .and_then(|def| def.scoring_source.as_ref())
                 .and_then(|src| src.path.as_ref())
-                .and_then(|rel| {
-                    let full = ctx.project_root.join(rel);
-                    std::fs::read_to_string(&full).ok()
-                })
-                .and_then(|s| {
-                    let trimmed = s.trim_start_matches('\u{FEFF}');
-                    serde_json::from_str::<serde_json::Value>(trimmed).ok()
-                })
+                .and_then(|rel| read_json_value(&ctx.project_root.join(rel)))
                 .and_then(|v| {
                     v.get("meta")
                         .and_then(|m| m.get("updated_at"))
@@ -588,33 +653,19 @@ async fn domain_detail(
     AxumPath(name): AxumPath<String>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let ctx = match state
-        .cache
-        .load_or_get(&state.registry_path, query.resolved_hat(), None)
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
+    with_host_context(&state, query.resolved_hat(), |ctx| async move {
+        match build_domain_detail(&ctx, &name) {
+            Some(detail) => Json(detail).into_response(),
+            None => (
+                StatusCode::NOT_FOUND,
                 Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext: {e:#}")
+                    "error": format!("domain '{name}' not in registry")
                 })),
             )
-                .into_response();
+                .into_response(),
         }
-    };
-
-    match build_domain_detail(&ctx, &name) {
-        Some(detail) => Json(detail).into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({
-                "error": format!("domain '{name}' not in registry")
-            })),
-        )
-            .into_response(),
-    }
+    })
+    .await
 }
 
 fn build_domain_detail(ctx: &BrainContext, name: &str) -> Option<DomainDetailResponse> {
@@ -657,12 +708,7 @@ fn build_domain_detail(ctx: &BrainContext, name: &str) -> Option<DomainDetailRes
         .unwrap_or_else(|| format!(".claude/{name}-cmdb.json"));
     let cmdb_full = ctx.project_root.join(&cmdb_path_rel);
 
-    let cmdb_json: Option<serde_json::Value> = std::fs::read_to_string(&cmdb_full)
-        .ok()
-        .and_then(|s| {
-            let trimmed = s.trim_start_matches('\u{FEFF}').to_string();
-            serde_json::from_str(&trimmed).ok()
-        });
+    let cmdb_json: Option<serde_json::Value> = read_json_value(&cmdb_full);
 
     let findings: Vec<FindingDto> = cmdb_json
         .as_ref()
@@ -781,26 +827,17 @@ const PEER_TCP_TIMEOUT: Duration = Duration::from_millis(1000);
 /// becomes a real issue we'd switch to `tokio::spawn` + `join_all`,
 /// but introducing `futures` here for 1-3 calls would be premature.
 async fn federation(State(state): State<AppState>) -> Response {
-    let ctx = match state
-        .cache
-        .load_or_get(&state.registry_path, None, None)
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext: {e:#}")
-                })),
-            )
-                .into_response();
-        }
-    };
-    Json(build_federation(&ctx).await).into_response()
+    let metrics = state.metrics.clone();
+    with_host_context(&state, None, |ctx| async move {
+        Json(build_federation(&ctx, metrics.as_ref()).await)
+    })
+    .await
 }
 
-async fn build_federation(ctx: &BrainContext) -> FederationResponse {
+async fn build_federation(
+    ctx: &BrainContext,
+    metrics: Option<&neurogrim_core::metrics::MetricsHandle>,
+) -> FederationResponse {
     let registry = &ctx.registry;
 
     let label = if !registry.meta.description.is_empty() {
@@ -877,10 +914,21 @@ async fn build_federation(ctx: &BrainContext) -> FederationResponse {
         } else if transport == "a2a" {
             // Best-effort probe. Failures are reported as
             // `unreachable` with a short message; they never break
-            // the page render.
+            // the page render. Records `peer_probe_ms{peer, outcome}`
+            // so federation reachability becomes a time-series.
             match endpoint_str.as_deref().and_then(|s| Url::parse(s).ok()) {
                 Some(endpoint) => {
-                    probe_peer(&client, &endpoint, agent_card_url.as_ref()).await
+                    let probe_start = std::time::Instant::now();
+                    let result =
+                        probe_peer(&client, &endpoint, agent_card_url.as_ref()).await;
+                    if let Some(m) = metrics {
+                        let duration_ms = probe_start.elapsed().as_secs_f64() * 1000.0;
+                        let tags = neurogrim_core::metrics::Tags::new()
+                            .with("peer", name.as_str())
+                            .with("outcome", result.0.kind.as_str());
+                        m.record("peer_probe_ms", &tags, duration_ms);
+                    }
+                    result
                 }
                 None => (
                     PeerStatusDto {
@@ -1280,28 +1328,10 @@ async fn brain_overview(
     AxumPath(brain_id): AxumPath<String>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let brain = match resolve_brain(&state, &brain_id) {
-        Ok(b) => b,
-        Err(r) => return r,
-    };
-    let registry = brain.registry_path.to_string_lossy().to_string();
-    let ctx = match state
-        .cache
-        .load_or_get(&registry, query.resolved_hat(), None)
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
-                })),
-            )
-                .into_response();
-        }
-    };
-    Json(build_overview(&ctx)).into_response()
+    with_brain_context(&state, &brain_id, query.resolved_hat(), |ctx| async move {
+        Json(build_overview(&ctx))
+    })
+    .await
 }
 
 async fn brain_domains_list(
@@ -1309,28 +1339,10 @@ async fn brain_domains_list(
     AxumPath(brain_id): AxumPath<String>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let brain = match resolve_brain(&state, &brain_id) {
-        Ok(b) => b,
-        Err(r) => return r,
-    };
-    let registry = brain.registry_path.to_string_lossy().to_string();
-    let ctx = match state
-        .cache
-        .load_or_get(&registry, query.resolved_hat(), None)
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
-                })),
-            )
-                .into_response();
-        }
-    };
-    Json(build_domains_list(&ctx)).into_response()
+    with_brain_context(&state, &brain_id, query.resolved_hat(), |ctx| async move {
+        Json(build_domains_list(&ctx))
+    })
+    .await
 }
 
 async fn brain_domain_detail(
@@ -1338,65 +1350,31 @@ async fn brain_domain_detail(
     AxumPath((brain_id, name)): AxumPath<(String, String)>,
     Query(query): Query<ScoreQuery>,
 ) -> Response {
-    let brain = match resolve_brain(&state, &brain_id) {
-        Ok(b) => b,
-        Err(r) => return r,
-    };
-    let registry = brain.registry_path.to_string_lossy().to_string();
-    let ctx = match state
-        .cache
-        .load_or_get(&registry, query.resolved_hat(), None)
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
+    let brain_id_for_msg = brain_id.clone();
+    with_brain_context(&state, &brain_id, query.resolved_hat(), |ctx| async move {
+        match build_domain_detail(&ctx, &name) {
+            Some(d) => Json(d).into_response(),
+            None => (
+                StatusCode::NOT_FOUND,
                 Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
+                    "error": format!("domain '{name}' not in '{brain_id_for_msg}' registry"),
                 })),
             )
-                .into_response();
+                .into_response(),
         }
-    };
-    match build_domain_detail(&ctx, &name) {
-        Some(d) => Json(d).into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({
-                "error": format!("domain '{name}' not in '{brain_id}' registry"),
-            })),
-        )
-            .into_response(),
-    }
+    })
+    .await
 }
 
 async fn brain_federation(
     State(state): State<AppState>,
     AxumPath(brain_id): AxumPath<String>,
 ) -> Response {
-    let brain = match resolve_brain(&state, &brain_id) {
-        Ok(b) => b,
-        Err(r) => return r,
-    };
-    let registry = brain.registry_path.to_string_lossy().to_string();
-    let ctx = match state
-        .cache
-        .load_or_get(&registry, None, None)
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
-                })),
-            )
-                .into_response();
-        }
-    };
-    Json(build_federation(&ctx).await).into_response()
+    let metrics = state.metrics.clone();
+    with_brain_context(&state, &brain_id, None, |ctx| async move {
+        Json(build_federation(&ctx, metrics.as_ref()).await)
+    })
+    .await
 }
 
 async fn brain_skills(
@@ -1691,13 +1669,9 @@ async fn resolve_peer(
         .load_or_get(&registry_path, None, None)
         .await
         .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("failed to load BrainContext for '{brain_id}': {e:#}")
-                })),
-            )
-                .into_response()
+            internal_error(format!(
+                "failed to load BrainContext for '{brain_id}': {e:#}"
+            ))
         })?;
 
     let children = ctx
@@ -2246,6 +2220,191 @@ async fn brain_ports(
 /// without events), the endpoint returns a single `data: disabled`
 /// keepalive and stays open — clients fall back to polling but their
 /// EventSource doesn't reconnect-loop.
+// ── v4.5 Plumbing page handlers ─────────────────────────────────────────
+
+/// `GET /api/brains/:id/plumbing/overview` — top-level summary
+/// suitable for the Plumbing page header. Returns lightweight
+/// counters from each substrate: TSDB cardinality, queue topic
+/// count, and per-substrate disk size where cheap to compute.
+async fn plumbing_overview(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let metrics_total = state
+        .metrics
+        .as_ref()
+        .and_then(|m| m.total_points().ok())
+        .unwrap_or(0);
+    let metrics_size = state
+        .metrics
+        .as_ref()
+        .and_then(|m| m.size_bytes().ok())
+        .unwrap_or(0);
+    let metrics_series_count = state
+        .metrics
+        .as_ref()
+        .and_then(|m| m.list_series().ok())
+        .map(|v| v.len() as u64)
+        .unwrap_or(0);
+    let queues_dir = brain
+        .project_root
+        .join(".claude")
+        .join("brain")
+        .join("queues");
+    let queues_size = directory_size_bytes(&queues_dir).unwrap_or(0);
+
+    Json(serde_json::json!({
+        "metrics": {
+            "enabled": state.metrics.is_some(),
+            "series_count": metrics_series_count,
+            "total_points": metrics_total,
+            "size_bytes": metrics_size,
+        },
+        "queues": {
+            "size_bytes": queues_size,
+        },
+    }))
+    .into_response()
+}
+
+/// `GET /api/brains/:id/plumbing/metrics/series` — list every
+/// recorded metric series with summary stats. Powers the Plumbing
+/// page's Metrics tab landing view.
+async fn plumbing_list_series(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let _brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let series = match state.metrics.as_ref() {
+        Some(m) => match m.list_series() {
+            Ok(v) => v,
+            Err(e) => return internal_error(format!("metrics list_series: {e}")),
+        },
+        None => vec![],
+    };
+    Json(serde_json::json!({ "series": series })).into_response()
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MetricsQueryParams {
+    /// Lookback window in seconds. Defaults to 30 days.
+    #[serde(default = "default_window_seconds")]
+    pub window_s: i64,
+    /// Aggregation: `avg | sum | min | max | count | last | none`.
+    /// Defaults to `none` (raw points).
+    #[serde(default)]
+    pub agg: Option<String>,
+    /// Bucket size in seconds for aggregation. Defaults to 1 day
+    /// when agg is set; ignored when agg is `none`.
+    pub bucket_s: Option<i64>,
+    /// Optional tag filter `domain=test-health` etc. Repeatable.
+    /// Encoded as `tag=k:v` in the query string for simplicity.
+    #[serde(default)]
+    pub tag: Vec<String>,
+    /// Hard cap on returned points. Default 5000.
+    #[serde(default = "default_metrics_limit")]
+    pub limit: usize,
+}
+
+fn default_window_seconds() -> i64 {
+    60 * 60 * 24 * 30
+}
+
+fn default_metrics_limit() -> usize {
+    5000
+}
+
+/// `GET /api/brains/:id/plumbing/metrics/:name?window_s=...&agg=...&bucket_s=...&tag=k:v`
+async fn plumbing_query_series(
+    State(state): State<AppState>,
+    AxumPath((brain_id, name)): AxumPath<(String, String)>,
+    Query(params): Query<MetricsQueryParams>,
+) -> Response {
+    use neurogrim_core::metrics::{Aggregate, Query as MQuery};
+
+    let _brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let metrics = match state.metrics.as_ref() {
+        Some(m) => m,
+        None => {
+            return Json(serde_json::json!({
+                "name": name,
+                "points": [],
+                "warning": "metrics store not initialized for this dashboard session",
+            }))
+            .into_response()
+        }
+    };
+
+    let since = chrono::Utc::now() - chrono::Duration::seconds(params.window_s.max(60));
+    let mut q = MQuery::new(name.clone(), since).limit(params.limit.min(50_000).max(1));
+    for entry in &params.tag {
+        if let Some((k, v)) = entry.split_once(':') {
+            q = q.filter(k, v);
+        }
+    }
+    if let Some(agg_str) = params.agg.as_deref() {
+        let agg = match agg_str {
+            "avg" => Some(Aggregate::Avg),
+            "sum" => Some(Aggregate::Sum),
+            "min" => Some(Aggregate::Min),
+            "max" => Some(Aggregate::Max),
+            "count" => Some(Aggregate::Count),
+            "last" => Some(Aggregate::Last),
+            "none" | "" => None,
+            _ => None,
+        };
+        if let Some(a) = agg {
+            let bucket = params.bucket_s.unwrap_or(60 * 60 * 24).max(1);
+            q = q.aggregate(a, chrono::Duration::seconds(bucket));
+        }
+    }
+
+    let points = match metrics.query(&q) {
+        Ok(p) => p,
+        Err(e) => return internal_error(format!("metrics query: {e}")),
+    };
+    Json(serde_json::json!({
+        "name": name,
+        "since": since.to_rfc3339(),
+        "point_count": points.len(),
+        "points": points,
+    }))
+    .into_response()
+}
+
+/// Recursive directory size sum. Best-effort — silently treats any
+/// metadata error as 0. Used by the Plumbing overview to report
+/// approximate substrate disk consumption without a stat-walk loop
+/// at every call site.
+fn directory_size_bytes(dir: &std::path::Path) -> Option<u64> {
+    let mut total: u64 = 0;
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let meta = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.is_dir() {
+            if let Some(n) = directory_size_bytes(&entry.path()) {
+                total = total.saturating_add(n);
+            }
+        } else {
+            total = total.saturating_add(meta.len());
+        }
+    }
+    Some(total)
+}
+
 async fn events_sse(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
@@ -2560,6 +2719,7 @@ async fn brain_queue_publish(
                 .into_response();
         }
     };
+    crate::instrumentation::record_bus_publish(&state, &written.topic, "dashboard");
     Json(QueuePublishResponse {
         id: written.id.to_string(),
         topic: written.topic,
@@ -2672,6 +2832,8 @@ pub async fn emit_config_change_with_diff(
         tracing::warn!(
             "edit-via-bus emit failed for action_type={action_type}: {e}"
         );
+    } else {
+        crate::instrumentation::record_bus_publish(state, CONFIG_CHANGES_TOPIC, "dashboard");
     }
 }
 

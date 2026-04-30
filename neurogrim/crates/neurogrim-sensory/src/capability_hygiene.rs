@@ -1563,39 +1563,55 @@ struct InvocationIndex {
     total_invocations: usize,
 }
 
-/// Read `{root}/.claude/brain/invocation-ledger.jsonl` into an index of
-/// per-skill usage. Tolerates missing file, missing fields, and malformed
-/// lines (each is silently skipped, never panics).
+/// Read the `_neurogrim/skill-invocations` SQLite bus topic into an
+/// index of per-skill usage. The topic is lazily caught up from
+/// `{root}/.claude/brain/invocation-ledger.jsonl` (the canonical
+/// shell-hook target) on every call — see
+/// `neurogrim_core::skill_invocations`. Tolerates missing files,
+/// missing fields, and malformed payloads (each silently skipped).
 fn read_invocation_ledger(
     root: &Path,
     now: chrono::DateTime<chrono::Utc>,
 ) -> InvocationIndex {
     use chrono::Duration;
+    use neurogrim_core::queue_backend::QueueBackend;
+    use neurogrim_core::skill_invocations;
 
     let mut index = InvocationIndex::default();
-    let path = root.join(".claude").join("brain").join("invocation-ledger.jsonl");
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(_) => return index,
+
+    let backend = match skill_invocations::ingest_and_open(root) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!("capability-hygiene: skill-invocations ingest failed: {e}");
+            return index;
+        }
     };
+    let total = backend.len().unwrap_or(0);
+    if total == 0 {
+        return index;
+    }
 
     let default_cutoff = now - Duration::days(DEAD_WINDOW_DAYS_DEFAULT);
     let rare_cutoff = now - Duration::days(DEAD_WINDOW_DAYS_RARE);
 
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
+    // Read all messages — the rare-window scan is unbounded by design.
+    // SQLite full-table read is materially faster than the JSONL parse
+    // it replaces (no string-line splitting, no per-line JSON parse).
+    let msgs = match backend.read_from(1, total as usize) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!("capability-hygiene: skill-invocations read_from failed: {e}");
+            return index;
         }
-        let parsed: Value = match serde_json::from_str(line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let name = match parsed.get("name").and_then(|v| v.as_str()) {
+    };
+
+    for stored in msgs {
+        let v = &stored.message.payload;
+        let name = match v.get("name").and_then(|x| x.as_str()) {
             Some(n) => n.to_string(),
             None => continue,
         };
-        let ts_str = match parsed.get("ts").and_then(|v| v.as_str()) {
+        let ts_str = match v.get("ts").and_then(|x| x.as_str()) {
             Some(t) => t,
             None => continue,
         };

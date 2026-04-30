@@ -92,79 +92,107 @@ pub struct InvocationLedgerResponse {
 /// Read the invocation ledger and return the most-recent `limit`
 /// entries (newest-first).
 ///
+/// Reads from the `_neurogrim/skill-invocations` SQLite bus topic,
+/// which is lazily caught up from the canonical
+/// `invocation-ledger.jsonl` (the shell hook's append target) on
+/// each call. See `neurogrim_core::skill_invocations` for the
+/// hybrid pattern rationale.
+///
 /// Invariants:
 ///
-/// - Missing file → `present: false`, empty entries, `total_entries: 0`.
-/// - Malformed lines → silently skipped from the entries vector,
-///   but `total_entries` reflects every non-empty line (helps
-///   operators detect drift between ledger size and parseable
-///   lines).
+/// - JSONL absent + SQLite empty → `present: false`, no entries.
+/// - JSONL malformed lines → silently skipped from `entries`. The
+///   `total_entries` count reflects what's parseable (i.e., what's
+///   in SQLite), not the raw JSONL line count — drift visibility
+///   moved to operator inspection of the JSONL via `cat`.
 /// - `limit` clamped to `[1, MAX_LIMIT]`.
 pub fn read_invocation_ledger(
     project_root: &Path,
     limit: usize,
 ) -> InvocationLedgerResponse {
-    let ledger_path = project_root
-        .join(".claude")
-        .join("brain")
-        .join("invocation-ledger.jsonl");
+    use neurogrim_core::queue_backend::QueueBackend;
+    use neurogrim_core::skill_invocations;
 
     let limit = limit.clamp(1, MAX_LIMIT);
+    let sqlite_path = skill_invocations::topic_sqlite_path(project_root);
+    let jsonl_path = skill_invocations::jsonl_path(project_root);
 
-    let text = match std::fs::read_to_string(&ledger_path) {
-        Ok(t) => t,
-        Err(_) => {
+    // If neither the SQLite topic nor the canonical JSONL exists,
+    // the project has never recorded a skill invocation.
+    if !sqlite_path.exists() && !jsonl_path.exists() {
+        return InvocationLedgerResponse {
+            ledger_path: jsonl_path.to_string_lossy().to_string(),
+            present: false,
+            total_entries: 0,
+            entries: vec![],
+        };
+    }
+
+    let backend = match skill_invocations::ingest_and_open(project_root) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!("skill-invocations ingest_and_open failed: {e}");
             return InvocationLedgerResponse {
-                ledger_path: ledger_path.to_string_lossy().to_string(),
-                present: false,
+                ledger_path: jsonl_path.to_string_lossy().to_string(),
+                present: true,
                 total_entries: 0,
                 entries: vec![],
             };
         }
     };
 
-    let mut total_entries: u32 = 0;
-    let mut parsed: Vec<(DateTime<Utc>, InvocationLedgerEntry)> = vec![];
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
+    let total = backend.len().unwrap_or(0);
+    // Bounded read: take the last `limit` rows (SQLite ROWID is
+    // monotonic from 1; if total > limit, start at total - limit + 1).
+    let start_offset = if total > limit as u64 {
+        total - limit as u64 + 1
+    } else {
+        1
+    };
+    let msgs = match backend.read_from(start_offset, limit) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!("skill-invocations read_from failed: {e}");
+            return InvocationLedgerResponse {
+                ledger_path: jsonl_path.to_string_lossy().to_string(),
+                present: true,
+                total_entries: total as u32,
+                entries: vec![],
+            };
         }
-        total_entries = total_entries.saturating_add(1);
-        let v: serde_json::Value = match serde_json::from_str(line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let ts_str = match v.get("ts").and_then(|x| x.as_str()) {
-            Some(t) => t,
-            None => continue,
-        };
-        let ts = match DateTime::parse_from_rfc3339(ts_str) {
-            Ok(t) => t.with_timezone(&Utc),
-            Err(_) => continue,
-        };
-        let entry = InvocationLedgerEntry {
-            ts: ts_str.to_string(),
-            entry_type: v
-                .get("type")
-                .and_then(|x| x.as_str())
-                .unwrap_or("skill")
-                .to_string(),
-            name: v
-                .get("name")
-                .and_then(|x| x.as_str())
-                .map(|s| s.to_string()),
-            session_id: v
-                .get("session_id")
-                .and_then(|x| x.as_str())
-                .map(|s| s.to_string()),
-            invocation_id: v
-                .get("invocation_id")
-                .and_then(|x| x.as_str())
-                .map(|s| s.to_string()),
-        };
-        parsed.push((ts, entry));
-    }
+    };
+
+    let mut parsed: Vec<(DateTime<Utc>, InvocationLedgerEntry)> = msgs
+        .iter()
+        .filter_map(|m| {
+            let v = &m.message.payload;
+            let ts_str = v.get("ts").and_then(|x| x.as_str())?;
+            let ts = DateTime::parse_from_rfc3339(ts_str)
+                .ok()?
+                .with_timezone(&Utc);
+            let entry = InvocationLedgerEntry {
+                ts: ts_str.to_string(),
+                entry_type: v
+                    .get("type")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("skill")
+                    .to_string(),
+                name: v
+                    .get("name")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string()),
+                session_id: v
+                    .get("session_id")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string()),
+                invocation_id: v
+                    .get("invocation_id")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string()),
+            };
+            Some((ts, entry))
+        })
+        .collect();
 
     // Newest-first.
     parsed.sort_by(|a, b| b.0.cmp(&a.0));
@@ -173,16 +201,16 @@ pub fn read_invocation_ledger(
         parsed.into_iter().map(|(_, e)| e).collect();
 
     InvocationLedgerResponse {
-        ledger_path: ledger_path.to_string_lossy().to_string(),
+        ledger_path: sqlite_path.to_string_lossy().to_string(),
         present: true,
-        total_entries,
+        total_entries: total as u32,
         entries,
     }
 }
 
-// ── S15-C-3 expansion: score-history reader ──────────────────────────────
+// ── S15-C-3 expansion: score-history reader (migrated to bus SQLite) ─────
 
-/// One snapshot from `<project>/.claude/brain/score-history.json`,
+/// One snapshot from the `_neurogrim/score-snapshots` bus topic,
 /// projected to a Logs-timeline shape: just the unified score plus
 /// a delta against the prior snapshot. Per-domain detail lives in
 /// the Domains pages — the Logs reader stays terse so a Brain
@@ -205,15 +233,19 @@ pub struct ScoreHistoryEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../bindings/")]
 pub struct ScoreHistoryResponse {
-    /// Resolved on-disk path. Helps operators correlate the timeline
-    /// with their score-history.json.
+    /// Resolved on-disk path. Points to the SQLite bus topic file
+    /// (`.claude/brain/queues/_neurogrim/score-snapshots.sqlite`)
+    /// for projects running the current binary, or to the legacy
+    /// `score-history.json` for projects that haven't scored yet
+    /// under the new binary.
     pub history_path: String,
-    /// True when the file exists. False = empty timeline (the Brain
-    /// has never been scored).
+    /// True when the backing store exists. False = empty timeline
+    /// (the Brain has never been scored).
     pub present: bool,
-    /// Total snapshots parsed before the limit was applied. Surfaces
-    /// "history has 700 snapshots; we returned the most recent 50"
-    /// telemetry without forcing the operator to inspect the file.
+    /// Total snapshots in the store before the limit was applied.
+    /// Surfaces "history has 700 snapshots; we returned the most
+    /// recent 50" telemetry without forcing the operator to inspect
+    /// the file.
     pub total_entries: u32,
     /// Entries newest-first, capped at the request's limit. The
     /// `delta` field is computed against the chronologically-prior
@@ -224,36 +256,164 @@ pub struct ScoreHistoryResponse {
 }
 
 /// Read the score history and return the most-recent `limit` snapshots
-/// (newest-first), each annotated with the delta against its
-/// chronologically-prior snapshot.
+/// newest-first. Primary source is the `_neurogrim/score-snapshots`
+/// SQLite bus topic; falls back to the legacy `score-history.json` for
+/// projects that haven't yet run `neurogrim score` under the current
+/// binary.
 ///
-/// Invariants:
+/// Reads `limit + 1` rows so the oldest entry in the returned window
+/// has a real delta (computed against the row just before the window),
+/// then drops the extra row from the response.
 ///
-/// - Missing file → `present: false`, empty entries.
-/// - Malformed file (not a JSON array, parse error) → `present:
-///   true` (the file was found) with empty entries; operators see
-///   the path in the response and can investigate. Drift signal
-///   without aborting the whole page.
-/// - `limit` clamped to `[1, MAX_LIMIT]`.
-/// - Snapshot ordering: the on-disk history is append-only (oldest
-///   first); we sort by `scored_at` defensively before computing
-///   deltas.
-pub fn read_score_history(
-    project_root: &Path,
-    limit: usize,
-) -> ScoreHistoryResponse {
+/// - Returns `present: false` when neither backing store exists.
+/// - Returns `present: true, entries: []` for an empty or corrupt store.
+/// - `limit` is clamped to `[1, MAX_LIMIT]`.
+pub fn read_score_history(project_root: &Path, limit: usize) -> ScoreHistoryResponse {
+    let limit = limit.clamp(1, MAX_LIMIT);
+    let sqlite_path = project_root
+        .join(".claude")
+        .join("brain")
+        .join("queues")
+        .join("_neurogrim")
+        .join("score-snapshots.sqlite");
+
+    if sqlite_path.exists() {
+        return read_score_history_sqlite(&sqlite_path, limit);
+    }
+
+    // Legacy fallback: project hasn't run `neurogrim score` under
+    // the new binary yet — read the old JSON array.
+    read_score_history_json(project_root, limit)
+}
+
+/// Read from the SQLite bus topic: efficient O(log N) seek + bounded
+/// read regardless of total history size.
+fn read_score_history_sqlite(sqlite_path: &Path, limit: usize) -> ScoreHistoryResponse {
+    use neurogrim_core::queue_backend::{QueueBackend, SqliteBackend};
+
+    let history_path = sqlite_path.to_string_lossy().to_string();
+
+    let backend = match SqliteBackend::open(sqlite_path) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!("score-snapshots SQLite open failed: {e}");
+            return ScoreHistoryResponse {
+                history_path,
+                present: true,
+                total_entries: 0,
+                entries: vec![],
+            };
+        }
+    };
+
+    let total = match backend.len() {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::warn!("score-snapshots len() failed: {e}");
+            return ScoreHistoryResponse {
+                history_path,
+                present: true,
+                total_entries: 0,
+                entries: vec![],
+            };
+        }
+    };
+
+    // Read limit+1 rows: the extra row gives us the delta prior for
+    // the oldest entry in the display window. SQLite offsets are
+    // 1-based ROWID values (AUTOINCREMENT). With N total rows and a
+    // window of `limit`, start at row N-limit so we capture one row
+    // before the window for the delta, then discard it from the
+    // response.
+    let read_count = limit + 1;
+    let start_offset = if total > limit as u64 {
+        total - limit as u64 // one row before the window
+    } else {
+        1
+    };
+    let msgs = match backend.read_from(start_offset, read_count) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!("score-snapshots read_from({start_offset}, {read_count}) failed: {e}");
+            return ScoreHistoryResponse {
+                history_path,
+                present: true,
+                total_entries: total as u32,
+                entries: vec![],
+            };
+        }
+    };
+
+    let now = Utc::now();
+    // Project payloads to (timestamp, score_i32). Skip expired entries;
+    // keep entries with null/missing score so advisory Brains appear
+    // in the timeline.
+    let mut snapshots: Vec<(DateTime<Utc>, String, Option<i32>)> = msgs
+        .iter()
+        .filter(|m| !m.message.is_expired(now))
+        .filter_map(|m| {
+            let ts_str = m.message.payload.get("scored_at")?.as_str()?;
+            let ts = DateTime::parse_from_rfc3339(ts_str)
+                .ok()?
+                .with_timezone(&Utc);
+            let score = m
+                .message
+                .payload
+                .get("score")
+                .and_then(|v| v.as_i64())
+                .map(|n| n as i32);
+            Some((ts, ts_str.to_string(), score))
+        })
+        .collect();
+
+    // Messages come back ASC from read_from; defensive sort for any
+    // clock skew in migrated historical data.
+    snapshots.sort_by(|a, b| a.0.cmp(&b.0));
+
+    // Compute deltas chronologically (oldest → newest).
+    let mut prior_score: Option<i32> = None;
+    let mut with_deltas: Vec<(DateTime<Utc>, ScoreHistoryEntry)> = snapshots
+        .into_iter()
+        .map(|(ts, ts_str, score)| {
+            let delta = match (prior_score, score) {
+                (Some(p), Some(c)) => Some(c - p),
+                _ => None,
+            };
+            prior_score = score;
+            (ts, ScoreHistoryEntry { scored_at: ts_str, score, delta })
+        })
+        .collect();
+
+    // Return newest-first, capped at limit (drops the extra "prior"
+    // row we fetched for delta computation).
+    with_deltas.sort_by(|a, b| b.0.cmp(&a.0));
+    with_deltas.truncate(limit);
+    let entries: Vec<ScoreHistoryEntry> = with_deltas.into_iter().map(|(_, e)| e).collect();
+
+    ScoreHistoryResponse {
+        history_path,
+        present: true,
+        total_entries: total as u32,
+        entries,
+    }
+}
+
+/// Legacy reader: JSON array at `.claude/brain/score-history.json`.
+/// Used as a fallback when the SQLite topic hasn't been created yet
+/// (project hasn't scored under the new binary). Reads the entire
+/// file — the O(N) path we're migrating away from.
+fn read_score_history_json(project_root: &Path, limit: usize) -> ScoreHistoryResponse {
     let history_path = project_root
         .join(".claude")
         .join("brain")
         .join("score-history.json");
-
-    let limit = limit.clamp(1, MAX_LIMIT);
+    let display_path = history_path.to_string_lossy().to_string();
 
     let text = match std::fs::read_to_string(&history_path) {
         Ok(t) => t,
         Err(_) => {
             return ScoreHistoryResponse {
-                history_path: history_path.to_string_lossy().to_string(),
+                history_path: display_path,
                 present: false,
                 total_entries: 0,
                 entries: vec![],
@@ -261,13 +421,11 @@ pub fn read_score_history(
         }
     };
 
-    // Parse to a flexible Value so unknown fields (per-domain
-    // breakdowns, future schema additions) don't fail the read.
     let parsed: serde_json::Value = match serde_json::from_str(&text) {
         Ok(v) => v,
         Err(_) => {
             return ScoreHistoryResponse {
-                history_path: history_path.to_string_lossy().to_string(),
+                history_path: display_path,
                 present: true,
                 total_entries: 0,
                 entries: vec![],
@@ -279,7 +437,7 @@ pub fn read_score_history(
         Some(a) => a,
         None => {
             return ScoreHistoryResponse {
-                history_path: history_path.to_string_lossy().to_string(),
+                history_path: display_path,
                 present: true,
                 total_entries: 0,
                 entries: vec![],
@@ -287,10 +445,6 @@ pub fn read_score_history(
         }
     };
 
-    // Project each snapshot to (scored_at, score). Skip entries
-    // missing the timestamp; missing/null scores are kept as-is so
-    // observers see "score: null" episodes in the timeline (e.g.,
-    // all-advisory Brains).
     let mut snapshots: Vec<(DateTime<Utc>, String, Option<i32>)> = vec![];
     let mut total_entries: u32 = 0;
     for entry in array {
@@ -310,14 +464,8 @@ pub fn read_score_history(
         snapshots.push((ts, ts_str.to_string(), score));
     }
 
-    // Defensive sort by timestamp — score-history.json is append-
-    // only oldest-first in practice, but treating the file as
-    // ordered would mask corruption.
     snapshots.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // Compute deltas vs. the chronologically-prior snapshot. The
-    // oldest snapshot in the *full* history has delta=None; later
-    // snapshots have delta=Some(current - prior).
     let mut prior_score: Option<i32> = None;
     let mut with_deltas: Vec<(DateTime<Utc>, ScoreHistoryEntry)> = snapshots
         .into_iter()
@@ -327,23 +475,16 @@ pub fn read_score_history(
                 _ => None,
             };
             prior_score = score;
-            let entry = ScoreHistoryEntry {
-                scored_at: ts_str,
-                score,
-                delta,
-            };
-            (ts, entry)
+            (ts, ScoreHistoryEntry { scored_at: ts_str, score, delta })
         })
         .collect();
 
-    // Newest-first, take the requested window.
     with_deltas.sort_by(|a, b| b.0.cmp(&a.0));
     with_deltas.truncate(limit);
-    let entries: Vec<ScoreHistoryEntry> =
-        with_deltas.into_iter().map(|(_, e)| e).collect();
+    let entries: Vec<ScoreHistoryEntry> = with_deltas.into_iter().map(|(_, e)| e).collect();
 
     ScoreHistoryResponse {
-        history_path: history_path.to_string_lossy().to_string(),
+        history_path: display_path,
         present: true,
         total_entries,
         entries,
@@ -354,13 +495,10 @@ pub fn read_score_history(
 
 /// Response body of `GET /api/brains/:id/logs/services`.
 ///
-/// Mirrors the on-disk JSONL ledger shape but typed + projected for
-/// the Logs page. The ledger is append-only; we re-read on each
-/// request and return the most-recent N entries newest-first. A
-/// future v5 may add streaming-read for very long histories, but
-/// services.jsonl grows much more slowly than invocation-ledger
-/// (operators don't restart peers constantly), so the simple read
-/// is sufficient.
+/// Backed by the `_neurogrim/services` SQLite bus topic since v4.4
+/// (was `services.jsonl` previously). Falls back to the legacy JSONL
+/// for projects that haven't yet emitted a service event under the
+/// new binary.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../bindings/")]
 pub struct ServicesLogResponse {
@@ -373,23 +511,99 @@ pub struct ServicesLogResponse {
 /// Read the services ledger and return the most-recent `limit`
 /// entries (newest-first).
 ///
-/// Same invariants as [`read_invocation_ledger`]:
-/// - Missing file → `present: false`, empty entries.
-/// - Malformed lines silently skipped from `entries` but counted in
+/// Primary source is the `_neurogrim/services` SQLite bus topic;
+/// falls back to the legacy `services.jsonl` for projects that
+/// haven't yet emitted a service event under the current binary.
+///
+/// Invariants:
+/// - Missing store → `present: false`, empty entries.
+/// - Malformed entries silently skipped from `entries` but counted in
 ///   `total_entries` for drift visibility.
 /// - `limit` clamped to `[1, MAX_LIMIT]`.
-pub fn read_services_log(
-    project_root: &Path,
-    limit: usize,
-) -> ServicesLogResponse {
-    let log_path = crate::services::services_log_path(project_root);
+pub fn read_services_log(project_root: &Path, limit: usize) -> ServicesLogResponse {
     let limit = limit.clamp(1, MAX_LIMIT);
+    let sqlite_path = crate::services::services_topic_sqlite_path(project_root);
+
+    if sqlite_path.exists() {
+        return read_services_log_sqlite(&sqlite_path, limit);
+    }
+
+    // Legacy fallback: project hasn't emitted a service event under
+    // the new binary yet — read the old JSONL.
+    read_services_log_jsonl(project_root, limit)
+}
+
+fn read_services_log_sqlite(sqlite_path: &Path, limit: usize) -> ServicesLogResponse {
+    use neurogrim_core::queue_backend::{QueueBackend, SqliteBackend};
+
+    let log_path = sqlite_path.to_string_lossy().to_string();
+
+    let backend = match SqliteBackend::open(sqlite_path) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!("services topic SQLite open failed: {e}");
+            return ServicesLogResponse {
+                log_path,
+                present: true,
+                total_entries: 0,
+                entries: vec![],
+            };
+        }
+    };
+    let total = backend.len().unwrap_or(0);
+
+    // Bounded read of the most recent `limit` rows.
+    let start_offset = if total > limit as u64 {
+        total - limit as u64 + 1
+    } else {
+        1
+    };
+    let msgs = match backend.read_from(start_offset, limit) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!("services topic read_from failed: {e}");
+            return ServicesLogResponse {
+                log_path,
+                present: true,
+                total_entries: total as u32,
+                entries: vec![],
+            };
+        }
+    };
+
+    let mut parsed: Vec<(DateTime<Utc>, crate::services::ServiceLogEntry)> = msgs
+        .iter()
+        .filter_map(|m| {
+            let entry: crate::services::ServiceLogEntry =
+                serde_json::from_value(m.message.payload.clone()).ok()?;
+            let ts = DateTime::parse_from_rfc3339(&entry.ts)
+                .ok()?
+                .with_timezone(&Utc);
+            Some((ts, entry))
+        })
+        .collect();
+    parsed.sort_by(|a, b| b.0.cmp(&a.0));
+    parsed.truncate(limit);
+    let entries: Vec<crate::services::ServiceLogEntry> =
+        parsed.into_iter().map(|(_, e)| e).collect();
+
+    ServicesLogResponse {
+        log_path,
+        present: true,
+        total_entries: total as u32,
+        entries,
+    }
+}
+
+fn read_services_log_jsonl(project_root: &Path, limit: usize) -> ServicesLogResponse {
+    let log_path = crate::services::services_log_path(project_root);
+    let display_path = log_path.to_string_lossy().to_string();
 
     let text = match std::fs::read_to_string(&log_path) {
         Ok(t) => t,
         Err(_) => {
             return ServicesLogResponse {
-                log_path: log_path.to_string_lossy().to_string(),
+                log_path: display_path,
                 present: false,
                 total_entries: 0,
                 entries: vec![],
@@ -421,7 +635,7 @@ pub fn read_services_log(
         parsed.into_iter().map(|(_, e)| e).collect();
 
     ServicesLogResponse {
-        log_path: log_path.to_string_lossy().to_string(),
+        log_path: display_path,
         present: true,
         total_entries,
         entries,
@@ -641,9 +855,15 @@ mod tests {
             ],
         );
         let resp = read_invocation_ledger(&root, 50);
-        // Total counts every non-empty line — drift signal.
-        assert_eq!(resp.total_entries, 4);
-        // Only the first line is parseable.
+        // Post-bus-migration: total_entries reflects rows in the
+        // SQLite topic, which holds every line that parses as JSON
+        // (including ones with bad/missing required fields). The
+        // fully-malformed `not-json-at-all` line is dropped at the
+        // ingest boundary, so total = 3 not 4. Operator drift signal
+        // for fully-malformed lines moved to direct `wc -l` inspection
+        // of the JSONL canonical store.
+        assert_eq!(resp.total_entries, 3);
+        // Only the first line is fully parseable as a ledger entry.
         assert_eq!(resp.entries.len(), 1);
         assert_eq!(resp.entries[0].name.as_deref(), Some("good"));
     }

@@ -432,9 +432,14 @@ pub async fn append_proposal_ledger(project_root: &Path, agent_output: &AgentOut
     }
 }
 
-/// Append a ScoreSnapshot derived from the current `AgentOutput` to
-/// `.claude/brain/score-history.json`. Creates the `brain/` subdir if
-/// absent. Prunes entries older than `retention_days` (default 30).
+/// Append a ScoreSnapshot derived from the current `AgentOutput` to the
+/// `_neurogrim/score-snapshots` SQLite bus topic. Creates parent dirs if
+/// absent. Sets `expires_at = now + retention_days` so the dashboard can
+/// filter without date arithmetic on read.
+///
+/// On first call for a project, auto-migrates any existing
+/// `score-history.json` into the SQLite topic so operators don't lose
+/// history when upgrading.
 ///
 /// Intended caller: user-facing commands (`score`, `health`) that represent
 /// "I'm checking in on project state right now." Not called from read-only
@@ -448,6 +453,8 @@ pub async fn append_score_history(
     agent_output: &AgentOutput,
     retention_days: u32,
 ) {
+    use neurogrim_core::queue::{QueueMessage, SCORE_SNAPSHOTS_TOPIC};
+    use neurogrim_core::queue_backend::{QueueBackend, SqliteBackend};
     use neurogrim_core::types::{ScoreSnapshot, SnapshotDomain};
 
     let scored_at = agent_output
@@ -479,30 +486,92 @@ pub async fn append_score_history(
         tracing::warn!("cannot create {:?}: {e}; skipping history write", brain_dir);
         return;
     }
-    let history_path = brain_dir.join("score-history.json");
 
-    let mut history: Vec<ScoreSnapshot> = match tokio::fs::read_to_string(&history_path).await {
-        Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
-        Err(_) => Vec::new(),
+    // SQLite path: .claude/brain/queues/_neurogrim/score-snapshots.sqlite
+    let sqlite_path = brain_dir
+        .join("queues")
+        .join("_neurogrim")
+        .join("score-snapshots.sqlite");
+    if let Some(parent) = sqlite_path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            tracing::warn!("cannot create {:?}: {e}; skipping history write", parent);
+            return;
+        }
+    }
+
+    // One-time migration: if SQLite doesn't exist yet, seed it from the
+    // legacy score-history.json so operators don't lose history.
+    let needs_migration = !sqlite_path.exists();
+    let mut backend = match SqliteBackend::open(&sqlite_path) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!("score-snapshots backend open failed: {e}; history append dropped");
+            return;
+        }
     };
-    history.push(snapshot);
+    if needs_migration {
+        let json_path = brain_dir.join("score-history.json");
+        migrate_score_history_json(&mut backend, &json_path, retention_days);
+    }
 
-    // Retention pruning. Non-atomic read-modify-write; acceptable for
-    // single-user CLI use. A file lock is follow-on work.
-    let cutoff = Utc::now() - chrono::Duration::days(retention_days as i64);
-    history.retain(|s| s.scored_at >= cutoff);
+    let payload = match serde_json::to_value(&snapshot) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!("cannot serialize score snapshot: {e}; history append dropped");
+            return;
+        }
+    };
+    let expires = Utc::now() + chrono::Duration::days(retention_days as i64);
+    let msg = QueueMessage::new(SCORE_SNAPSHOTS_TOPIC, payload).with_expires_at(expires);
+    if let Err(e) = backend.append(&msg) {
+        tracing::warn!("score snapshot append to bus failed: {e}");
+    }
+}
 
-    match serde_json::to_string_pretty(&history) {
-        Ok(json) => {
-            if let Err(e) = tokio::fs::write(&history_path, json).await {
-                tracing::warn!(
-                    "cannot write {:?}: {e}; history append dropped",
-                    history_path
-                );
+/// Migrate a legacy `score-history.json` into `backend`. Each JSON entry
+/// becomes one bus message with `expires_at = None` (historical entries are
+/// kept indefinitely; future entries carry the caller's retention policy).
+/// Silent on missing / unreadable JSON — the SQLite will just start fresh.
+fn migrate_score_history_json(
+    backend: &mut neurogrim_core::queue_backend::SqliteBackend,
+    json_path: &std::path::Path,
+    retention_days: u32,
+) {
+    use neurogrim_core::queue::{QueueMessage, SCORE_SNAPSHOTS_TOPIC};
+    use neurogrim_core::queue_backend::QueueBackend;
+
+    let text = match std::fs::read_to_string(json_path) {
+        Ok(t) => t,
+        Err(_) => return, // no legacy file — nothing to migrate
+    };
+    let entries: Vec<serde_json::Value> = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(retention_days as i64);
+    let mut migrated = 0usize;
+    for entry in entries {
+        // Skip entries older than the caller's retention window.
+        let scored_at = entry
+            .get("scored_at")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<chrono::DateTime<chrono::Utc>>().ok());
+        if let Some(ts) = scored_at {
+            if ts < cutoff {
+                continue;
             }
         }
-        Err(e) => {
-            tracing::warn!("cannot serialize score history: {e}; history append dropped");
+        let msg = QueueMessage::new(SCORE_SNAPSHOTS_TOPIC, entry);
+        if let Err(e) = backend.append(&msg) {
+            tracing::warn!("score history migration: append failed for entry {migrated}: {e}");
+            break;
         }
+        migrated += 1;
+    }
+    if migrated > 0 {
+        tracing::info!(
+            "score history migrated {migrated} entries from {} to SQLite bus topic",
+            json_path.display()
+        );
     }
 }

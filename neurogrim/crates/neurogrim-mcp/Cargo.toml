@@ -30,7 +30,7 @@ colored = { workspace = true }
 # (was in neurogrim-cli). The dashboard server (neurogrim-dashboard)
 # and the CLI both call into context here, so the dep moves to mcp.
 url = { workspace = true }
-neurogrim-core = { workspace = true }
+neurogrim-core = { workspace = true, features = ["sqlite"] }
 neurogrim-sensory = { workspace = true }
 neurogrim-ecosystem = { workspace = true }
 # v4.2 S14-S-5 — secret_fetch MCP tool wraps the secrets backend.

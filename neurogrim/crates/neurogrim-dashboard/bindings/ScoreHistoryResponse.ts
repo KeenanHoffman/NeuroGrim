@@ -6,19 +6,23 @@ import type { ScoreHistoryEntry } from "./ScoreHistoryEntry";
  */
 export type ScoreHistoryResponse = { 
 /**
- * Resolved on-disk path. Helps operators correlate the timeline
- * with their score-history.json.
+ * Resolved on-disk path. Points to the SQLite bus topic file
+ * (`.claude/brain/queues/_neurogrim/score-snapshots.sqlite`)
+ * for projects running the current binary, or to the legacy
+ * `score-history.json` for projects that haven't scored yet
+ * under the new binary.
  */
 history_path: string, 
 /**
- * True when the file exists. False = empty timeline (the Brain
- * has never been scored).
+ * True when the backing store exists. False = empty timeline
+ * (the Brain has never been scored).
  */
 present: boolean, 
 /**
- * Total snapshots parsed before the limit was applied. Surfaces
- * "history has 700 snapshots; we returned the most recent 50"
- * telemetry without forcing the operator to inspect the file.
+ * Total snapshots in the store before the limit was applied.
+ * Surfaces "history has 700 snapshots; we returned the most
+ * recent 50" telemetry without forcing the operator to inspect
+ * the file.
  */
 total_entries: number, 
 /**

@@ -1720,6 +1720,87 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
+### B-33: Federation peer-probe parallelization — CANDIDATE (perf, v4.4+)
+
+**Problem.** [`build_federation`](../crates/neurogrim-dashboard/src/routes.rs) iterates declared peers and `await`s each `probe_peer` sequentially. With `PEER_PROBE_TIMEOUT = 1500ms`, N peers and any unreachable, wall-clock = sum-of-timeouts. Measured 2200 ms with 2 peers (one unreachable) on 2026-04-30 — see `data/dashboard-perf-baseline-2026-04-30.md`. Federation page is the worst single-issue UX latency in the dashboard.
+
+**Plan when:** anytime — no preconditions. Estimated 30-60 minutes including tests.
+
+**Dependencies.** None.
+
+**Adversarial note.** A doc comment in routes.rs explicitly punts on this with "with the realistic peer count of 1-3 the worst-case latency is < 5 s". Real-world measurement contradicts this once a peer is unreachable. Reverse the decision — `tokio::spawn` + `futures::future::join_all` is ~10 lines.
+
+---
+
+### B-34: Stat-validated CMDB cache — CANDIDATE (perf, v4.4+)
+
+**Problem.** Every `/domains/:name` request calls `read_json_value(&cmdb_full)` from disk. With 9 domains, the Overview page does ~180 ms of repeated parse work per warm-cache load — CMDBs change rarely (only when a sensor runs). Pre-TSDB measurement on 2026-04-30 (`data/dashboard-perf-baseline-2026-04-30.md`) shows 15-25 ms per call when BrainContext is otherwise hot.
+
+**Plan when:** after B-33 (bigger latency win first).
+
+**Approach.** Replace `read_json_value` with a global `JsonFileCache` keyed by `PathBuf`. Each entry: `{ value: serde_json::Value, mtime: SystemTime }`. On read: `stat()` the file (~10 µs); if mtime unchanged, return `Arc::clone` of cached value. Filesystem watcher events evict eagerly. Diff-applied invalidation (the B-29 TSDB pull-friend) layers on later if profiling demands.
+
+**Dependencies.** None — orthogonal to TSDB work.
+
+---
+
+### B-35: Granular `ScoreChanged` cache invalidation — CANDIDATE (perf, v4.4+)
+
+**Problem.** [`cache.rs:96`](../crates/neurogrim-dashboard/src/cache.rs) wipes the entire BrainContext cache on any `ScoreChanged` event, even though the event carries `domain: Option<String>`. After a single domain's CMDB write, every page navigation triggers full BrainContext rebuilds for every domain. Aggravated by the v4.4 score-snapshots SQLite migration (more `ScoreChanged` events fire because the WAL file is watched).
+
+**Plan when:** after B-34 (CMDB cache is broader win); B-35 is the multiplicative effect on top.
+
+**Approach.** Per-cache-entry tagging by domain dependency, or simpler: keep BrainContext entries cached and recompute only the affected domain's score. The latter requires `BrainContext` to support partial refresh — small refactor.
+
+**Dependencies.** None.
+
+---
+
+### B-36: TSDB primitive + Plumbing UI — EPIC (v4.5)
+
+**Vision.** A first-class time-series store inside NeuroGrim, narrowly scoped to its mental model: pre-declared metric series with bounded tag dimensions, ingested automatically from existing bus topics, queryable via a small typed API. Plus a "Plumbing" page that surfaces NeuroGrim's internal substrate (TSDB, queue topics, SQLite stores, watchers, A2A connections) as observable + actionable operator surface.
+
+**Why now.** Trajectory is currently impoverished — score-history is one number per run, skill-invocations are events not series, performance regressions are invisible (we built the v4.4 dogfood without measuring before/after). Capability-hygiene has windowed counts where it wants decay slopes. The TSDB closes a recurring half-implementation pattern across many features.
+
+**4 iterations** (see `data/dashboard-perf-baseline-2026-04-30.md` for context):
+
+1. **TSDB primitive + Plumbing skeleton** (~5-7 days).
+   - `neurogrim_core::metrics` module, SQLite-backed at `.claude/brain/queues/_neurogrim/metrics.sqlite`.
+   - Bus subscriber: `_neurogrim/score-snapshots` → `domain_score{domain=...}` series.
+   - Read API + REST endpoint: `GET /api/brains/:id/metrics/:name?window=30d&agg=avg&bucket=1d`.
+   - Plumbing page (frontend): two tabs — **Metrics** (registered series, cardinality, recent ingest) and **Queues** (existing queue listing promoted to dedicated tab with subscriber + activity metadata).
+   - Day-one user-visible feature: per-domain score sparklines on the Domains page.
+   - Universally-useful pre-instrumentation lands here too: `request_duration{path, status}`, `cache_event{cache, kind}`, `peer_probe{peer, outcome}`, `scoring_run{phase}`, `bus_publish{topic, backend}`.
+
+2. **Auto-ingest expansion + Storage/Watchers tabs** (~3 days).
+   - Subscribers for `_neurogrim/skill-invocations` and `_neurogrim/services`.
+   - Plumbing tabs: **Storage** (SQLite files, sizes, last vacuum) and **Watchers** (paths, last classification, event volume).
+   - Capability-hygiene migrates to TSDB-backed decay queries.
+
+3. **Operator actions + retention policy** (~3 days).
+   - Plumbing actions: vacuum, replay, export to JSONL, manual ingest.
+   - Retention: 90 days native + 1 year hourly downsample + indefinite daily downsample. Background compaction.
+
+4. **Reports + cross-Brain (later, pull-when-needed).**
+   - Weekly digest from TSDB queries.
+   - Ecosystem Brain queries children's TSDB over A2A.
+   - Anomaly detection over stored series.
+
+**Dependencies.** Bus infrastructure (S13), SQLite backend (already in tree).
+
+**Adversarial notes.**
+- Cardinality budgets matter from day one. Pre-declared tag shapes (not freeform Prometheus-style labels) keep the implementation simple AND prevent operator footguns.
+- Retention policy must be in scope for iteration 3, not deferred — operators won't notice it's missing until the SQLite file is multi-GB.
+- "Inspectable as files" methodology: SQLite isn't `cat`-friendly, so iteration 1 ships a `neurogrim metrics export <name> --since X` CLI that dumps to JSONL on demand.
+- Dashboard self-monitoring (`request_duration` on every handler) is universal pre-instrumentation worth landing in iteration 1, not iteration 2 — otherwise the very work shipping the TSDB might regress without being noticed.
+
+**Out-of-scope (don't get pulled in).**
+- Full PromQL-equivalent query language. Stick to typed Rust API + a few query primitives.
+- Multi-tenant cardinality controls. Single-Brain instance per process.
+- Push gateway / external scraping. Bus-driven ingest only.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

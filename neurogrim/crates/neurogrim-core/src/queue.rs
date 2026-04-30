@@ -57,6 +57,27 @@ use uuid::Uuid;
 /// starting with this string.
 pub const RESERVED_PREFIX: &str = "_neurogrim/";
 
+/// System topic for score snapshots. Backed by SQLite (see
+/// `queue-config.yaml`); each append is one `ScoreSnapshot` payload.
+/// The dashboard and trajectory tool read from this topic. Legacy
+/// `score-history.json` is migrated on first write/read.
+pub const SCORE_SNAPSHOTS_TOPIC: &str = "_neurogrim/score-snapshots";
+
+/// System topic for service lifecycle events (peer Brain start /
+/// stop / failure). SQLite-backed; the dashboard's Logs page reads
+/// from this topic. Legacy `services.jsonl` is migrated on first
+/// write/read.
+pub const SERVICES_TOPIC: &str = "_neurogrim/services";
+
+/// System topic for skill invocations (Skill tool calls + Read of
+/// SKILL.md files). Backed by SQLite as a materialized view of the
+/// canonical `invocation-ledger.jsonl` (which the PostToolUse shell
+/// hook continues to write — bash can't write SQLite directly). The
+/// dashboard Logs page and `capability-hygiene` sensor read from this
+/// topic; `crate::skill_invocations::ingest_and_open` lazily syncs
+/// the JSONL into SQLite on every read.
+pub const SKILL_INVOCATIONS_TOPIC: &str = "_neurogrim/skill-invocations";
+
 // ── Public types ──────────────────────────────────────────────────────
 
 /// Single message on the bus. Mirrors the schema sketched in the S13

@@ -23,7 +23,7 @@ tokio = { workspace = true }
 rmcp = { workspace = true }
 schemars = { workspace = true }
 tracing = { workspace = true }
-neurogrim-core = { workspace = true }
+neurogrim-core = { workspace = true, features = ["sqlite"] }
 
 # Supply-chain SCA (E-SC-2): native lockfile parsing + OSV.dev HTTPS
 # client + RustSec advisory-db TOML parsing. No external scanner

@@ -632,12 +632,10 @@ pub async fn run(
         .unwrap_or_else(|| PathBuf::from("brain"));
     tokio::fs::create_dir_all(&brain_dir).await?;
 
-    // Write empty ledger files
-    for ledger_file in &[
-        "score-history.json",
-        "incident-ledger.json",
-        "proposal-ledger.json",
-    ] {
+    // Write empty ledger files (score-history.json is no longer
+    // scaffolded — score snapshots are now stored in the SQLite bus
+    // topic `_neurogrim/score-snapshots` and created on first score run)
+    for ledger_file in &["incident-ledger.json", "proposal-ledger.json"] {
         let ledger_path = brain_dir.join(ledger_file);
         if !ledger_path.exists() {
             tokio::fs::write(&ledger_path, "[]").await?;

@@ -4,12 +4,9 @@ import type { ServiceLogEntry } from "./ServiceLogEntry";
 /**
  * Response body of `GET /api/brains/:id/logs/services`.
  *
- * Mirrors the on-disk JSONL ledger shape but typed + projected for
- * the Logs page. The ledger is append-only; we re-read on each
- * request and return the most-recent N entries newest-first. A
- * future v5 may add streaming-read for very long histories, but
- * services.jsonl grows much more slowly than invocation-ledger
- * (operators don't restart peers constantly), so the simple read
- * is sufficient.
+ * Backed by the `_neurogrim/services` SQLite bus topic since v4.4
+ * (was `services.jsonl` previously). Falls back to the legacy JSONL
+ * for projects that haven't yet emitted a service event under the
+ * new binary.
  */
 export type ServicesLogResponse = { log_path: string, present: boolean, total_entries: number, entries: Array<ServiceLogEntry>, };

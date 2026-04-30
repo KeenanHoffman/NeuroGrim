@@ -31,6 +31,7 @@ pub mod brains;
 pub mod bus;
 pub mod cache;
 pub mod events;
+pub mod instrumentation;
 pub mod json_diff;
 pub mod layout;
 pub mod logs;
@@ -117,6 +118,31 @@ pub async fn serve(
         });
     }
 
+    // v4.5 — auto-ingest the `_neurogrim/score-snapshots` bus topic
+    // into the TSDB. Each snapshot's payload carries one unified score
+    // plus per-domain breakdowns; we record one point per domain so
+    // each becomes its own time-series for trajectory visualization.
+    //
+    // On startup, backfill from the existing SQLite topic so operators
+    // see history immediately — the topic itself is the authoritative
+    // record from the v4.4 dogfood, and idempotent re-ingest is fine
+    // because the metrics store is just-created.
+    if let Some(metrics) = state.metrics.clone() {
+        let bus = state.bus.clone();
+        let backfill_root = project_root.clone();
+        tokio::spawn(async move {
+            // One-time backfill from the topic's persistent storage.
+            backfill_score_snapshots_into_metrics(&bus, &backfill_root, &metrics).await;
+            // Then subscribe for ongoing publishes.
+            let mut rx = bus
+                .subscribe(neurogrim_core::queue::SCORE_SNAPSHOTS_TOPIC)
+                .await;
+            while let Ok(msg) = rx.recv().await {
+                ingest_score_snapshot_payload(&metrics, &msg.payload);
+            }
+        });
+    }
+
     // Probe for the TLS files BEFORE binding so we know whether to
     // log the HTTPS port + plumb it into AppState so handlers can
     // decide whether to enforce HTTPS for secret-write paths.
@@ -192,6 +218,90 @@ pub async fn serve(
         }
     }
     Ok(())
+}
+
+/// v4.5 — One-time backfill: replay every existing message in
+/// `_neurogrim/score-snapshots` into the metrics store on dashboard
+/// startup. Idempotent because the metrics store is fresh on each
+/// process start (no incremental ingest tracking yet — iteration 3
+/// adds a watermark sidecar table).
+///
+/// Errors are silently logged: backfill is a "nice to have" on first
+/// load, not a correctness requirement. Live publishes will continue
+/// populating the store.
+async fn backfill_score_snapshots_into_metrics(
+    bus: &bus::BusState,
+    project_root: &std::path::Path,
+    metrics: &neurogrim_core::metrics::MetricsHandle,
+) {
+    use neurogrim_core::queue::SCORE_SNAPSHOTS_TOPIC;
+
+    let handle = match bus.backend_for(project_root, SCORE_SNAPSHOTS_TOPIC).await {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::warn!("metrics backfill: backend_for failed: {e}");
+            return;
+        }
+    };
+    let total = match handle.len() {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::warn!("metrics backfill: len() failed: {e}");
+            return;
+        }
+    };
+    if total == 0 {
+        return;
+    }
+    let msgs = match handle.read_from(1, total as usize) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!("metrics backfill: read_from failed: {e}");
+            return;
+        }
+    };
+    for stored in &msgs {
+        ingest_score_snapshot_payload(metrics, &stored.message.payload);
+    }
+    tracing::info!(
+        "metrics backfill: ingested {} score-snapshot messages into TSDB",
+        msgs.len()
+    );
+}
+
+/// Helper: project a single score-snapshot payload into the TSDB.
+/// Records `brain_score` (unified), `domain_score{domain=...}`, and
+/// `domain_confidence{domain=...}` data points stamped with the
+/// snapshot's `scored_at` timestamp (falls back to `now` if the
+/// payload's timestamp can't be parsed — drift signal).
+fn ingest_score_snapshot_payload(
+    metrics: &neurogrim_core::metrics::MetricsHandle,
+    payload: &serde_json::Value,
+) {
+    use neurogrim_core::metrics::Tags;
+
+    let scored_at = payload
+        .get("scored_at")
+        .and_then(|v| v.as_str())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .unwrap_or_else(chrono::Utc::now);
+
+    if let Some(score) = payload.get("score").and_then(|v| v.as_i64()) {
+        metrics.record_at("brain_score", &Tags::new(), score as f64, scored_at);
+    }
+    if let Some(domains) = payload.get("domains").and_then(|d| d.as_object()) {
+        for (name, dom) in domains {
+            if let Some(s) = dom.get("score").and_then(|v| v.as_i64()) {
+                let tags = Tags::new().with("domain", name.as_str());
+                metrics.record_at("domain_score", &tags, s as f64, scored_at);
+            }
+            if let Some(c) = dom.get("confidence").and_then(|v| v.as_i64()) {
+                let tags = Tags::new().with("domain", name.as_str());
+                metrics.record_at("domain_confidence", &tags, c as f64, scored_at);
+            }
+        }
+    }
 }
 
 /// v4.2 S14-S-4.5 v3 middleware: reject POST/DELETE requests to

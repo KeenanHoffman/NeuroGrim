@@ -62,6 +62,11 @@ struct Entry {
 
 pub struct BrainContextCache {
     inner: Arc<RwLock<HashMap<CacheKey, Entry>>>,
+    /// v4.5 — optional metrics handle. When set, every load_or_get
+    /// records a `cache_event{cache="brain_context", kind=hit|miss}`
+    /// data point and every event-driven invalidation records
+    /// `kind=invalidate`. None in tests that don't care.
+    metrics: Option<neurogrim_core::metrics::MetricsHandle>,
 }
 
 impl std::fmt::Debug for BrainContextCache {
@@ -80,11 +85,22 @@ impl BrainContextCache {
     /// watcher disabled), the cache still works — entries just
     /// expire on the TTL alone.
     pub fn new(events: Option<&broadcast::Sender<DashboardEvent>>) -> Self {
+        Self::new_with_metrics(events, None)
+    }
+
+    /// v4.5 — explicit constructor that takes an optional metrics handle.
+    /// `new()` defaults to no metrics (tests + the legacy `AppState::new`
+    /// constructor). `AppState::with_events` calls this directly.
+    pub fn new_with_metrics(
+        events: Option<&broadcast::Sender<DashboardEvent>>,
+        metrics: Option<neurogrim_core::metrics::MetricsHandle>,
+    ) -> Self {
         let inner: Arc<RwLock<HashMap<CacheKey, Entry>>> =
             Arc::new(RwLock::new(HashMap::new()));
 
         if let Some(tx) = events {
             let inner_clone = Arc::clone(&inner);
+            let metrics_clone = metrics.clone();
             let mut rx = tx.subscribe();
             tokio::spawn(async move {
                 while let Ok(event) = rx.recv().await {
@@ -95,6 +111,12 @@ impl BrainContextCache {
                         DashboardEvent::RegistryChanged
                         | DashboardEvent::ScoreChanged { .. } => {
                             inner_clone.write().await.clear();
+                            if let Some(m) = &metrics_clone {
+                                let tags = neurogrim_core::metrics::Tags::new()
+                                    .with("cache", "brain_context")
+                                    .with("kind", "invalidate");
+                                m.record("cache_event", &tags, 1.0);
+                            }
                             tracing::debug!("BrainContext cache cleared via SSE event");
                         }
                         // Skill / layout / service-lifecycle / Logs-
@@ -117,7 +139,7 @@ impl BrainContextCache {
             });
         }
 
-        Self { inner }
+        Self { inner, metrics }
     }
 
     /// Get a cached `BrainContext` if fresh, otherwise load it.
@@ -140,10 +162,12 @@ impl BrainContextCache {
             let guard = self.inner.read().await;
             if let Some(entry) = guard.get(&key) {
                 if entry.inserted_at.elapsed() < CACHE_TTL {
+                    self.record_event("hit");
                     return Ok(Arc::clone(&entry.ctx));
                 }
             }
         }
+        self.record_event("miss");
 
         // Slow path: load fresh.
         let ctx = BrainContext::load(registry_path, hat, persona).await?;
@@ -161,6 +185,17 @@ impl BrainContextCache {
         );
 
         Ok(arc)
+    }
+
+    /// Internal helper: record a `cache_event{cache="brain_context",
+    /// kind=...}` data point. No-op when no metrics handle is wired.
+    fn record_event(&self, kind: &str) {
+        if let Some(m) = &self.metrics {
+            let tags = neurogrim_core::metrics::Tags::new()
+                .with("cache", "brain_context")
+                .with("kind", kind);
+            m.record("cache_event", &tags, 1.0);
+        }
     }
 
     /// Test/diagnostic helper: number of currently-cached entries.

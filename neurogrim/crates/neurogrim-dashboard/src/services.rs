@@ -248,7 +248,9 @@ pub struct ServiceLogEntry {
     pub reason: Option<String>,
 }
 
-/// On-disk path for the services ledger.
+/// On-disk path for the legacy services ledger. Kept for backward
+/// compatibility with projects that haven't yet emitted a service
+/// event under the new (SQLite-bus) writer.
 pub fn services_log_path(project_root: &std::path::Path) -> PathBuf {
     project_root
         .join(".claude")
@@ -256,7 +258,18 @@ pub fn services_log_path(project_root: &std::path::Path) -> PathBuf {
         .join("services.jsonl")
 }
 
-/// Append a single line to `<project>/.claude/brain/services.jsonl`.
+/// On-disk path for the SQLite-backed services bus topic.
+pub fn services_topic_sqlite_path(project_root: &std::path::Path) -> PathBuf {
+    project_root
+        .join(".claude")
+        .join("brain")
+        .join("queues")
+        .join("_neurogrim")
+        .join("services.sqlite")
+}
+
+/// Append a service lifecycle event to the `_neurogrim/services`
+/// SQLite bus topic.
 ///
 /// Best-effort: failures (parent dir missing, disk full, permissions)
 /// are logged via `tracing` but NOT propagated. Service lifecycle
@@ -264,54 +277,97 @@ pub fn services_log_path(project_root: &std::path::Path) -> PathBuf {
 /// otherwise a degraded filesystem could cascade into operators
 /// being unable to start/stop their peers.
 ///
-/// Single-line JSONL appends are atomic on POSIX with `O_APPEND` and
-/// well-behaved on Windows for entries below the platform's
-/// `_PIPE_BUF`-equivalent (4 KB on most systems). Service events are
-/// well below that bound — we don't hold a write lock to serialize
-/// concurrent appends.
+/// On first call for a project, auto-migrates any existing
+/// `services.jsonl` into the SQLite topic so operators don't lose
+/// audit history when upgrading.
 pub fn append_service_event(
     project_root: &std::path::Path,
     entry: &ServiceLogEntry,
 ) {
-    use std::io::Write;
-    let path = services_log_path(project_root);
-    if let Some(parent) = path.parent() {
+    use neurogrim_core::queue::{QueueMessage, SERVICES_TOPIC};
+    use neurogrim_core::queue_backend::{QueueBackend, SqliteBackend};
+
+    let sqlite_path = services_topic_sqlite_path(project_root);
+    if let Some(parent) = sqlite_path.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
             tracing::warn!(
-                "services.jsonl parent dir create failed at {}: {e}",
+                "services topic parent dir create failed at {}: {e}",
                 parent.display()
             );
             return;
         }
     }
-    let line = match serde_json::to_string(entry) {
-        Ok(s) => s,
+
+    let needs_migration = !sqlite_path.exists();
+    let mut backend = match SqliteBackend::open(&sqlite_path) {
+        Ok(b) => b,
         Err(e) => {
             tracing::warn!(
-                "services.jsonl serialize failed for kind={}: {e}",
+                "services topic backend open failed at {}: {e}",
+                sqlite_path.display()
+            );
+            return;
+        }
+    };
+    if needs_migration {
+        let json_path = services_log_path(project_root);
+        migrate_services_jsonl(&mut backend, &json_path);
+    }
+
+    let payload = match serde_json::to_value(entry) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(
+                "services event serialize failed for kind={}: {e}",
                 entry.kind
             );
             return;
         }
     };
-    let mut file = match std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-    {
-        Ok(f) => f,
-        Err(e) => {
-            tracing::warn!(
-                "services.jsonl open failed at {}: {e}",
-                path.display()
-            );
-            return;
-        }
-    };
-    if let Err(e) = writeln!(file, "{line}") {
+    let msg = QueueMessage::new(SERVICES_TOPIC, payload);
+    if let Err(e) = backend.append(&msg) {
         tracing::warn!(
-            "services.jsonl write failed at {}: {e}",
-            path.display()
+            "services event append to bus failed at {}: {e}",
+            sqlite_path.display()
+        );
+    }
+}
+
+/// Migrate the legacy `services.jsonl` into the SQLite bus topic.
+/// Called once on first write per project. Silent on missing /
+/// unreadable JSONL — the topic just starts fresh.
+fn migrate_services_jsonl(
+    backend: &mut neurogrim_core::queue_backend::SqliteBackend,
+    json_path: &std::path::Path,
+) {
+    use neurogrim_core::queue::{QueueMessage, SERVICES_TOPIC};
+    use neurogrim_core::queue_backend::QueueBackend;
+
+    let text = match std::fs::read_to_string(json_path) {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+    let mut migrated = 0usize;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let entry: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let msg = QueueMessage::new(SERVICES_TOPIC, entry);
+        if let Err(e) = backend.append(&msg) {
+            tracing::warn!("services migration: append failed for entry {migrated}: {e}");
+            break;
+        }
+        migrated += 1;
+    }
+    if migrated > 0 {
+        tracing::info!(
+            "services log migrated {migrated} entries from {} to SQLite bus topic",
+            json_path.display()
         );
     }
 }

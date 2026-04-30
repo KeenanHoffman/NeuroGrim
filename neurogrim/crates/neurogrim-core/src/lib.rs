@@ -75,10 +75,14 @@ pub mod ecosystem;
 pub mod governance;
 pub mod learning;
 pub mod ports;
+#[cfg(feature = "sqlite")]
+pub mod metrics;
 pub mod queue;
 pub mod queue_backend;
 pub mod queue_config;
 pub mod registry;
+#[cfg(feature = "sqlite")]
+pub mod skill_invocations;
 pub mod scoring;
 pub mod trajectory;
 pub mod types;

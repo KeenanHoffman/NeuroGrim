@@ -297,10 +297,11 @@ fn score_outputs_numeric_score_for_minimal_project() {
 #[test]
 fn score_appends_to_score_history() {
     // Two invocations of `neurogrim score` against the same registry
-    // should produce a score-history.json with 2 entries. Regression
-    // guard for Session 6's principle #12 wire-up: the history file
-    // lives at `.claude/brain/score-history.json` and grows on each
-    // score/health invocation.
+    // should produce 2 entries in the `_neurogrim/score-snapshots`
+    // SQLite bus topic. Regression guard for the score-history
+    // persistence path: the topic lives at
+    // `.claude/brain/queues/_neurogrim/score-snapshots.sqlite`
+    // and grows on each `score`/`health` invocation.
     let tmp = TempDir::new().unwrap();
     let claude_dir = tmp.path().join(".claude");
     std::fs::create_dir_all(&claude_dir).unwrap();
@@ -373,34 +374,40 @@ fn score_appends_to_score_history() {
     );
     assert_eq!(code2, 0, "second score exit failed. stderr={stderr2}");
 
-    // Assert the history file exists and has 2 entries
-    let history_path = claude_dir.join("brain").join("score-history.json");
+    // Assert the SQLite bus topic exists and has 2 entries
+    use neurogrim_core::queue_backend::{QueueBackend, SqliteBackend};
+    let sqlite_path = claude_dir
+        .join("brain")
+        .join("queues")
+        .join("_neurogrim")
+        .join("score-snapshots.sqlite");
     assert!(
-        history_path.is_file(),
-        "expected {history_path:?} to exist after two score invocations"
+        sqlite_path.is_file(),
+        "expected {sqlite_path:?} to exist after two score invocations"
     );
-    let history_raw = std::fs::read_to_string(&history_path).unwrap();
-    let history: Vec<Value> = serde_json::from_str(&history_raw)
-        .unwrap_or_else(|e| panic!("history not parseable: {e}; raw={history_raw}"));
+    let backend = SqliteBackend::open(&sqlite_path)
+        .expect("score-snapshots SQLite should be openable");
+    let total = backend.len().expect("len() should succeed");
     assert_eq!(
-        history.len(),
-        2,
-        "expected 2 snapshot entries; got {}. raw={history_raw}",
-        history.len()
+        total, 2,
+        "expected 2 snapshot entries in SQLite topic; got {total}"
     );
-    // Each entry should have score + scored_at + domains
-    for (i, entry) in history.iter().enumerate() {
+    let msgs = backend
+        .read_from(1, 10)
+        .expect("read_from should succeed");
+    for (i, stored) in msgs.iter().enumerate() {
+        let payload = &stored.message.payload;
         assert!(
-            entry.get("score").is_some(),
-            "entry {i} missing score field: {entry}"
+            payload.get("score").is_some(),
+            "entry {i} missing score field: {payload}"
         );
         assert!(
-            entry.get("scored_at").is_some(),
-            "entry {i} missing scored_at field: {entry}"
+            payload.get("scored_at").is_some(),
+            "entry {i} missing scored_at field: {payload}"
         );
         assert!(
-            entry.get("domains").is_some(),
-            "entry {i} missing domains field: {entry}"
+            payload.get("domains").is_some(),
+            "entry {i} missing domains field: {payload}"
         );
     }
 }

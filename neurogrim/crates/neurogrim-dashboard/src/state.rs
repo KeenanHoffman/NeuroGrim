@@ -7,6 +7,7 @@
 //! can resolve the URL's `brain_id` to a registry path without
 //! re-walking the federation on every request.
 
+use neurogrim_core::metrics::MetricsHandle;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -65,6 +66,12 @@ pub struct AppState {
     /// "switch to HTTPS" banner; route handlers consult it to
     /// decide whether to enforce HTTPS for secret-write paths.
     pub https_port: Option<u16>,
+    /// v4.5 — local time-series store. Records `request_duration`,
+    /// `cache_event`, `peer_probe`, `scoring_run`, `bus_publish` plus
+    /// auto-ingested series from bus topics. Plumbing page surfaces
+    /// the registered series + cardinality + recent activity.
+    /// `None` only in tests that don't care about metrics.
+    pub metrics: Option<MetricsHandle>,
 }
 
 impl AppState {
@@ -90,6 +97,7 @@ impl AppState {
             service_registry: Arc::new(ServiceRegistry::new()),
             bus,
             https_port: None,
+            metrics: None,
         }
     }
 
@@ -103,8 +111,23 @@ impl AppState {
         mutations_allowed: bool,
     ) -> Self {
         let brains = BrainTree::discover(Path::new(&registry_path));
-        let cache = BrainContextCache::new(Some(&events));
-        let bus = BusState::from_project_root(&derive_project_root(&registry_path));
+        let project_root = derive_project_root(&registry_path);
+        let bus = BusState::from_project_root(&project_root);
+        // Open the metrics store. Failure here is non-fatal — the
+        // dashboard still works, instrumentation just no-ops via the
+        // `Option<MetricsHandle>` checks at every call site.
+        let metrics = match MetricsHandle::open(&project_root) {
+            Ok(h) => Some(h),
+            Err(e) => {
+                tracing::warn!(
+                    "metrics store open failed at {:?}: {e} — \
+                     instrumentation disabled for this session",
+                    project_root
+                );
+                None
+            }
+        };
+        let cache = BrainContextCache::new_with_metrics(Some(&events), metrics.clone());
         Self {
             registry_path: Arc::new(registry_path),
             brains: Arc::new(brains),
@@ -114,6 +137,7 @@ impl AppState {
             service_registry: Arc::new(ServiceRegistry::new()),
             bus,
             https_port: None,
+            metrics,
         }
     }
 }
