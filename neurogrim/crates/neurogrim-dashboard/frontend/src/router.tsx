@@ -17,6 +17,7 @@ import { CustomPageRenderer } from "@/components/custom-pages/CustomPageRenderer
 import { FederationPage } from "@/components/federation/FederationPage";
 import { LogsPage } from "@/components/logs/LogsPage";
 import { PublishGatesPage } from "@/components/publish-gates/PublishGatesPage";
+import { SecretsPage } from "@/components/secrets/SecretsPage";
 import { ServicesPage } from "@/components/services/ServicesPage";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { SkillsPage } from "@/components/skills/SkillsPage";
@@ -132,6 +133,16 @@ const brainSettingsRoute = createRoute({
   component: SettingsPage,
 });
 
+/** v4.2 S14-S-6 v1 — built-in Secrets page. Lists declared
+ * secrets from `secret-refs.yaml` with backend-stored status;
+ * operators set / rotate / delete values via a modal. Values
+ * NEVER displayed back. */
+const brainSecretsRoute = createRoute({
+  getParentRoute: () => brainsLayoutRoute,
+  path: "secrets",
+  component: SecretsPage,
+});
+
 /** v4.3 S15-C-6 — catchall route for operator-defined custom pages.
  * URL shape `/brains/$brainId/p/$pageName` — the `p/` prefix
  * disambiguates from built-in routes so adopters can name custom
@@ -157,6 +168,7 @@ const routeTree = rootRoute.addChildren([
     brainServicesRoute,
     brainLogsRoute,
     brainSettingsRoute,
+    brainSecretsRoute,
     brainCustomPageRoute,
   ]),
 ]);

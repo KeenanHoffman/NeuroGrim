@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "@tanstack/react-router";
 import {
   Brain,
+  KeyRound,
   LayoutDashboard,
   Layers,
   Network,
@@ -33,6 +34,7 @@ interface NavItem {
     | "/brains/$brainId/approvals"
     | "/brains/$brainId/services"
     | "/brains/$brainId/logs"
+    | "/brains/$brainId/secrets"
     | "/brains/$brainId/settings";
   /** Path suffix used by `isActive` to compare against the
    *  currently-rendered pathname (`""` for the brain root). */
@@ -89,6 +91,12 @@ const NAV: NavItem[] = [
     suffix: "/logs",
     label: "Logs",
     icon: <ScrollText className="h-4 w-4" />,
+  },
+  {
+    to: "/brains/$brainId/secrets",
+    suffix: "/secrets",
+    label: "Secrets",
+    icon: <KeyRound className="h-4 w-4" />,
   },
   {
     to: "/brains/$brainId/settings",

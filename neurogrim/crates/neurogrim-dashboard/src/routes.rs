@@ -196,6 +196,20 @@ pub fn router(state: AppState) -> Router {
             "/api/brains/:brain_id/logs/invocation-ledger",
             get(brain_logs_invocation_ledger),
         )
+        // v4.2 S14-S-6 v1: secrets-management UI surface. List
+        // is read-only; set + delete gated behind
+        // --allow-mutations. Values flow over the HTTPS listener
+        // (S14-S-4.5 v2) when cert files are present; values
+        // are NEVER returned by any endpoint.
+        .route(
+            "/api/brains/:brain_id/secrets",
+            get(brain_secrets_list),
+        )
+        .route(
+            "/api/brains/:brain_id/secrets/:secret_id",
+            axum::routing::post(brain_secrets_set)
+                .delete(brain_secrets_delete),
+        )
         .route(
             "/api/brains/:brain_id/approvals/:action_id/resolve",
             axum::routing::post(brain_approvals_resolve),
@@ -2602,6 +2616,130 @@ async fn brain_logs_invocation_ledger(
     let limit = q.limit.unwrap_or(crate::logs::DEFAULT_LIMIT);
     let resp = crate::logs::read_invocation_ledger(&brain.project_root, limit);
     Json(resp).into_response()
+}
+
+// ── S14-S-6 v1: secrets-management UI surface ──────────────────────────
+
+/// `GET /api/brains/:brain_id/secrets` — list declared secrets
+/// + their backend-stored status. Read-only; values are NEVER
+/// included in the response.
+async fn brain_secrets_list(
+    State(state): State<AppState>,
+    AxumPath(brain_id): AxumPath<String>,
+) -> Response {
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    let resp = crate::secrets_api::build_secrets_list(&brain_id, &brain.project_root);
+    Json(resp).into_response()
+}
+
+/// `POST /api/brains/:brain_id/secrets/:secret_id` — set or rotate
+/// a secret's value. Body: `{"value": "<plaintext>"}`. The server
+/// consumes the value into a zeroizing `SecretValue` immediately
+/// + writes to the OS-native backend. Gated behind
+/// `--allow-mutations`. Value is NEVER echoed in the response.
+async fn brain_secrets_set(
+    State(state): State<AppState>,
+    AxumPath((brain_id, secret_id)): AxumPath<(String, String)>,
+    Json(body): Json<crate::secrets_api::SetSecretRequest>,
+) -> Response {
+    if !state.mutations_allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "mutations are disabled",
+                "code": "mutations-disabled",
+                "hint": "start the dashboard with --allow-mutations to enable secret writes"
+            })),
+        )
+            .into_response();
+    }
+    let brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    if let Err(msg) = crate::secrets_api::ensure_declared(&brain.project_root, &secret_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": msg,
+                "code": "undeclared-secret",
+            })),
+        )
+            .into_response();
+    }
+    if body.value.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "value must not be empty",
+                "code": "empty-value",
+            })),
+        )
+            .into_response();
+    }
+    // `body.value` is moved into `set_secret`, which moves it
+    // into a zeroizing `SecretValue`. After this line the
+    // plaintext exists only inside the SecretValue (and its
+    // ciphertext form once written to the backend).
+    match crate::secrets_api::set_secret(&brain_id, &secret_id, body.value) {
+        Ok(updated_at) => Json(crate::secrets_api::SetSecretResponse {
+            brain_id,
+            secret_id,
+            updated_at,
+        })
+        .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("secret write failed: {e}"),
+                "code": "backend-error",
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// `DELETE /api/brains/:brain_id/secrets/:secret_id` — remove a
+/// stored secret value. Gated behind `--allow-mutations`. The
+/// manifest entry stays in `secret-refs.yaml`; only the backend
+/// value is removed. Idempotent.
+async fn brain_secrets_delete(
+    State(state): State<AppState>,
+    AxumPath((brain_id, secret_id)): AxumPath<(String, String)>,
+) -> Response {
+    if !state.mutations_allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "mutations are disabled",
+                "code": "mutations-disabled",
+            })),
+        )
+            .into_response();
+    }
+    let _brain = match resolve_brain(&state, &brain_id) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    match crate::secrets_api::delete_secret(&brain_id, &secret_id) {
+        Ok(removed) => Json(crate::secrets_api::DeleteSecretResponse {
+            brain_id,
+            secret_id,
+            removed,
+        })
+        .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("secret delete failed: {e}"),
+                "code": "backend-error",
+            })),
+        )
+            .into_response(),
+    }
 }
 
 // ── S15-C-6 v1: custom-pages CRUD ───────────────────────────────────────

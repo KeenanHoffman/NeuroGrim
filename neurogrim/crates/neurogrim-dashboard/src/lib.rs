@@ -35,6 +35,7 @@ pub mod layout;
 pub mod logs;
 pub mod pages;
 pub mod routes;
+pub mod secrets_api;
 pub mod services;
 pub mod skills;
 pub mod state;
