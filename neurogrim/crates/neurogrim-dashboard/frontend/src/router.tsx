@@ -11,6 +11,7 @@ import type { BrainsListResponse } from "@bindings/BrainsListResponse";
 import { AppShell } from "@/components/layout/AppShell";
 import { ToastProvider } from "@/components/ui/toast";
 import { OverviewPage } from "@/components/overview/OverviewPage";
+import { PlumbingPage } from "@/components/plumbing/PlumbingPage";
 import { DomainsPage } from "@/components/domains/DomainsPage";
 import { DomainDetailPage } from "@/components/domains/DomainDetailPage";
 import { ApprovalsPage } from "@/components/approvals/ApprovalsPage";
@@ -141,6 +142,16 @@ const brainSettingsRoute = createRoute({
   component: SettingsPage,
 });
 
+/** v4.5 / B-36 iteration 1 — Plumbing page. Surfaces the TSDB
+ * (registered series, cardinality, recent points) + bus topics
+ * (message counts, size, age). Operator window into NeuroGrim's
+ * own substrate. */
+const brainPlumbingRoute = createRoute({
+  getParentRoute: () => brainsLayoutRoute,
+  path: "plumbing",
+  component: PlumbingPage,
+});
+
 /** v4.2 S14-S-6 v1 — built-in Secrets page. Lists declared
  * secrets from `secret-refs.yaml` with backend-stored status;
  * operators set / rotate / delete values via a modal. Values
@@ -177,6 +188,7 @@ const routeTree = rootRoute.addChildren([
     brainLogsRoute,
     brainSettingsRoute,
     brainSecretsRoute,
+    brainPlumbingRoute,
     brainCustomPageRoute,
   ]),
 ]);

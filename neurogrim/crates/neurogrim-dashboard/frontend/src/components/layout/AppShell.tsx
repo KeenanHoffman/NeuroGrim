@@ -12,6 +12,7 @@ import {
   Server,
   Settings,
   ShieldCheck,
+  Wrench,
   Moon,
   Sun,
   Menu,
@@ -40,7 +41,8 @@ interface NavItem {
     | "/brains/$brainId/services"
     | "/brains/$brainId/logs"
     | "/brains/$brainId/secrets"
-    | "/brains/$brainId/settings";
+    | "/brains/$brainId/settings"
+    | "/brains/$brainId/plumbing";
   /** Path suffix used by `isActive` to compare against the
    *  currently-rendered pathname (`""` for the brain root). */
   suffix: string;
@@ -108,6 +110,12 @@ const NAV: NavItem[] = [
     suffix: "/settings",
     label: "Settings",
     icon: <Settings className="h-4 w-4" />,
+  },
+  {
+    to: "/brains/$brainId/plumbing",
+    suffix: "/plumbing",
+    label: "Plumbing",
+    icon: <Wrench className="h-4 w-4" />,
   },
 ];
 
