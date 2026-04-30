@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -15,6 +15,7 @@ import {
   TrendingDown,
   TrendingUp,
   Minus,
+  X,
   XCircle,
 } from "lucide-react";
 import type { PublishGatesPageResponse } from "@bindings/PublishGatesPageResponse";
@@ -71,16 +72,26 @@ import { brainApi, useBrainId } from "@/lib/useBrain";
  * changes to the underlying ledgers (`useDashboardEvents` hook
  * mounted in AppShell).
  *
+ * **Per-row drill-down** — click any row to open a modal with the
+ * full original record. Each source has a curated detail view
+ * (publish-gate exit codes + error_detail, approvals decision
+ * metadata, invocation session/invocation ids, notification full
+ * payload, score-history per-snapshot detail, services lifecycle
+ * reason). The raw payload also renders as pretty-printed JSON
+ * below the curated fields so operators can copy any field for
+ * external investigation.
+ *
  * **Deferred:**
  *
- * - **Per-row drill-down** — click a row → see the full payload
- *   (publish-gate stdout/stderr, full notification body, full
- *   score-history snapshot with per-domain breakdown, etc.) in a
- *   side sheet.
+ * - **Toast notifications** — surface new events while the
+ *   operator is on a different page.
  */
 export function LogsPage() {
   const brainId = useBrainId();
   const [filter, setFilter] = useState<LogSource | "all">("all");
+  // S15-C-3 polish: per-row drill-down. Tracks the currently-open
+  // detail modal entry; null means no modal.
+  const [selected, setSelected] = useState<LogEntry | null>(null);
 
   const { data: gates } = useQuery({
     queryKey: ["logs-publish-gates", brainId],
@@ -231,12 +242,19 @@ export function LogsPage() {
               </TableHeader>
               <TableBody>
                 {entries.map((e) => (
-                  <LogRow key={e.id} entry={e} />
+                  <LogRow
+                    key={e.id}
+                    entry={e}
+                    onSelect={() => setSelected(e)}
+                  />
                 ))}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
+      )}
+      {selected && (
+        <LogDetailModal entry={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -258,6 +276,13 @@ interface LogEntry {
   subject: string;
   outcome: string;
   actor: string | null;
+  /**
+   * Original record from the source. Carried so the drill-down
+   * modal can render full per-source detail without a second
+   * fetch. Typed loosely (`unknown`) because each source has a
+   * different shape; the detail renderer narrows by `source`.
+   */
+  payload: unknown;
 }
 
 function aggregate(
@@ -278,6 +303,7 @@ function aggregate(
         subject: e.gate_id,
         outcome: e.status,
         actor: e.operator,
+        payload: e,
       });
     }
   }
@@ -290,6 +316,7 @@ function aggregate(
         subject: r.action_id,
         outcome: r.decision,
         actor: r.operator,
+        payload: r,
       });
     }
     for (const p of approvals.pending) {
@@ -300,6 +327,7 @@ function aggregate(
         subject: p.action_id,
         outcome: "pending",
         actor: null,
+        payload: p,
       });
     }
   }
@@ -316,6 +344,7 @@ function aggregate(
         subject: e.name ?? "(no name)",
         outcome: "invoked",
         actor: e.session_id ? truncate(e.session_id, 8) : null,
+        payload: e,
       });
     }
   }
@@ -343,6 +372,7 @@ function aggregate(
         subject,
         outcome: severity,
         actor: null,
+        payload: m,
       });
     }
   }
@@ -363,6 +393,7 @@ function aggregate(
         subject,
         outcome: e.kind, // "started" | "failed" | "stopped"
         actor: e.pid !== null && e.pid !== undefined ? `pid ${e.pid}` : null,
+        payload: e,
       });
     }
   }
@@ -398,6 +429,7 @@ function aggregate(
         subject,
         outcome,
         actor: null,
+        payload: e,
       });
     }
   }
@@ -467,9 +499,28 @@ function EmptyState({ filter }: { filter: LogSource | "all" }) {
   );
 }
 
-function LogRow({ entry }: { entry: LogEntry }) {
+function LogRow({
+  entry,
+  onSelect,
+}: {
+  entry: LogEntry;
+  onSelect: () => void;
+}) {
   return (
-    <TableRow data-testid={`log-row-${entry.id}`}>
+    <TableRow
+      data-testid={`log-row-${entry.id}`}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        // Keyboard activation parity for screen readers + power users.
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      className="cursor-pointer hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+    >
       <TableCell className="text-xs whitespace-nowrap">
         {formatTime(entry.when)}
       </TableCell>
@@ -632,4 +683,352 @@ async function fetchServicesLog(
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url} returned ${res.status}`);
   return (await res.json()) as ServicesLogResponse;
+}
+
+/**
+ * Per-row drill-down modal. Renders source-specific curated detail
+ * fields above a pretty-printed JSON dump of the original payload.
+ *
+ * Closes via:
+ * - ESC key
+ * - Backdrop click
+ * - Close (×) button
+ *
+ * Centered modal pattern (matching SecretsPage's SetSecretModal)
+ * rather than a slide-in side sheet — operators view one entry at a
+ * time; the modal blocks the timeline so it's clear the focus has
+ * shifted. Side-sheet drift can be a v3 enhancement if comparison
+ * across entries becomes a workflow.
+ */
+function LogDetailModal({
+  entry,
+  onClose,
+}: {
+  entry: LogEntry;
+  onClose: () => void;
+}) {
+  // ESC closes. Pre-focusing the close button isn't strictly needed
+  // (the backdrop captures focus via React's portal-less render).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      data-testid="log-detail-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="bg-background border rounded-lg shadow-lg max-w-2xl w-full m-4 flex flex-col overflow-hidden max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+        data-testid={`log-detail-${entry.id}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="log-detail-title"
+      >
+        <header className="flex items-center justify-between p-4 border-b">
+          <div className="min-w-0">
+            <h2
+              id="log-detail-title"
+              className="text-lg font-bold flex items-center gap-2"
+            >
+              <SourceBadge source={entry.source} />
+              <span className="truncate">{entry.subject}</span>
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1 font-mono">
+              {entry.when}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 hover:bg-muted rounded shrink-0 ml-2"
+            aria-label="Close"
+            data-testid="log-detail-close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+          <LogDetailBody entry={entry} />
+          <PayloadJson payload={entry.payload} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Source-specific curated detail block. Falls back to a minimal
+ *  outcome-only block for unknown shapes. */
+function LogDetailBody({ entry }: { entry: LogEntry }) {
+  switch (entry.source) {
+    case "publish-gates":
+      return <PublishGatesDetail payload={entry.payload} />;
+    case "approvals":
+      return <ApprovalsDetail payload={entry.payload} outcome={entry.outcome} />;
+    case "invocations":
+      return <InvocationsDetail payload={entry.payload} />;
+    case "notifications":
+      return <NotificationsDetail payload={entry.payload} />;
+    case "score-history":
+      return <ScoreHistoryDetail payload={entry.payload} />;
+    case "services":
+      return <ServicesDetail payload={entry.payload} />;
+    default:
+      return null;
+  }
+}
+
+function DetailField({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div
+      className="grid grid-cols-[8rem_1fr] gap-2 text-sm items-baseline"
+      data-testid={`detail-field-${label.toLowerCase().replace(/\s+/g, "-")}`}
+    >
+      <div className="text-xs text-muted-foreground uppercase tracking-wider">
+        {label}
+      </div>
+      <div className={mono ? "font-mono break-all" : "break-words"}>
+        {value ?? <span className="text-muted-foreground">—</span>}
+      </div>
+    </div>
+  );
+}
+
+function PublishGatesDetail({ payload }: { payload: unknown }) {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  return (
+    <div className="space-y-1">
+      <DetailField label="Gate" value={String(p.gate_id ?? "—")} mono />
+      <DetailField label="Run id" value={String(p.run_id ?? "—")} mono />
+      <DetailField label="Type" value={String(p.gate_type ?? "—")} />
+      <DetailField label="Mode" value={String(p.mode ?? "—")} />
+      <DetailField
+        label="Started"
+        value={String(p.started_at ?? "—")}
+        mono
+      />
+      <DetailField
+        label="Completed"
+        value={p.completed_at ? String(p.completed_at) : "still running"}
+        mono
+      />
+      <DetailField label="Status" value={<OutcomeBadge outcome={String(p.status ?? "—")} />} />
+      <DetailField
+        label="Blocking"
+        value={p.blocking ? "yes" : "no"}
+      />
+      <DetailField
+        label="Exit code"
+        value={p.exit_code === null || p.exit_code === undefined ? "—" : String(p.exit_code)}
+        mono
+      />
+      <DetailField label="Operator" value={p.operator ? String(p.operator) : null} />
+      {typeof p.error_detail === "string" && p.error_detail.length > 0 && (
+        <div className="pt-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+            Error detail
+          </div>
+          <pre className="text-xs bg-muted/50 p-2 rounded whitespace-pre-wrap break-words">
+            {p.error_detail}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ApprovalsDetail({
+  payload,
+  outcome,
+}: {
+  payload: unknown;
+  outcome: string;
+}) {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  return (
+    <div className="space-y-1">
+      <DetailField
+        label="Action id"
+        value={String(p.action_id ?? "—")}
+        mono
+      />
+      <DetailField label="Decision" value={<OutcomeBadge outcome={outcome} />} />
+      {Boolean(p.tool) && (
+        <DetailField label="Tool" value={String(p.tool)} mono />
+      )}
+      {Boolean(p.action_type) && (
+        <DetailField label="Action type" value={String(p.action_type)} />
+      )}
+      {Boolean(p.requested_at) && (
+        <DetailField label="Requested" value={String(p.requested_at)} mono />
+      )}
+      {Boolean(p.decided_at) && (
+        <DetailField label="Decided" value={String(p.decided_at)} mono />
+      )}
+      <DetailField label="Operator" value={p.operator ? String(p.operator) : null} />
+    </div>
+  );
+}
+
+function InvocationsDetail({ payload }: { payload: unknown }) {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  return (
+    <div className="space-y-1">
+      <DetailField
+        label="Skill"
+        value={p.name ? String(p.name) : "(no name)"}
+        mono
+      />
+      <DetailField label="Type" value={String(p.entry_type ?? "skill")} />
+      <DetailField
+        label="Timestamp"
+        value={String(p.ts ?? "—")}
+        mono
+      />
+      <DetailField
+        label="Session id"
+        value={p.session_id ? String(p.session_id) : null}
+        mono
+      />
+      <DetailField
+        label="Invocation id"
+        value={p.invocation_id ? String(p.invocation_id) : null}
+        mono
+      />
+    </div>
+  );
+}
+
+function NotificationsDetail({ payload }: { payload: unknown }) {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  const msgPayload = (p.payload ?? {}) as Record<string, unknown>;
+  return (
+    <div className="space-y-1">
+      <DetailField label="Message id" value={String(p.id ?? "—")} mono />
+      <DetailField
+        label="Topic"
+        value={String(p.topic ?? "_neurogrim/notifications")}
+        mono
+      />
+      <DetailField label="Priority" value={String(p.priority ?? "normal")} />
+      <DetailField
+        label="Produced at"
+        value={String(p.produced_at ?? "—")}
+        mono
+      />
+      {typeof msgPayload.kind === "string" && (
+        <DetailField label="Kind" value={msgPayload.kind} />
+      )}
+      {typeof msgPayload.severity === "string" && (
+        <DetailField
+          label="Severity"
+          value={<OutcomeBadge outcome={msgPayload.severity} />}
+        />
+      )}
+    </div>
+  );
+}
+
+function ScoreHistoryDetail({ payload }: { payload: unknown }) {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  const scoreLabel =
+    p.score === null || p.score === undefined
+      ? "N/A (advisory-only)"
+      : String(p.score);
+  let deltaLabel: React.ReactNode = "first snapshot";
+  if (p.delta !== null && p.delta !== undefined) {
+    const n = Number(p.delta);
+    if (n > 0) deltaLabel = `+${n}`;
+    else if (n < 0) deltaLabel = String(n);
+    else deltaLabel = "±0";
+  }
+  return (
+    <div className="space-y-1">
+      <DetailField label="Scored at" value={String(p.scored_at ?? "—")} mono />
+      <DetailField label="Unified score" value={scoreLabel} mono />
+      <DetailField label="Delta" value={deltaLabel} mono />
+      <p className="text-xs text-muted-foreground pt-2">
+        Per-domain scores for this snapshot live on the Domains page;
+        the Logs reader projects only the unified score to keep the
+        timeline terse.
+      </p>
+    </div>
+  );
+}
+
+function ServicesDetail({ payload }: { payload: unknown }) {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  return (
+    <div className="space-y-1">
+      <DetailField label="Peer" value={String(p.peer_name ?? "—")} mono />
+      <DetailField
+        label="Outcome"
+        value={<OutcomeBadge outcome={String(p.kind ?? "—")} />}
+      />
+      <DetailField label="Timestamp" value={String(p.ts ?? "—")} mono />
+      <DetailField
+        label="PID"
+        value={
+          p.pid === null || p.pid === undefined ? null : String(p.pid)
+        }
+        mono
+      />
+      <DetailField
+        label="Port"
+        value={
+          p.port === null || p.port === undefined ? null : String(p.port)
+        }
+        mono
+      />
+      {typeof p.reason === "string" && p.reason.length > 0 && (
+        <div className="pt-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+            Reason
+          </div>
+          <pre className="text-xs bg-muted/50 p-2 rounded whitespace-pre-wrap break-words">
+            {p.reason}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Pretty-prints the original payload as JSON below the curated
+ *  detail block. Lets operators copy any field for external
+ *  investigation, and surfaces fields the curated view doesn't
+ *  highlight (especially for adopter-defined notification payloads). */
+function PayloadJson({ payload }: { payload: unknown }) {
+  const text = useMemo(() => {
+    try {
+      return JSON.stringify(payload, null, 2);
+    } catch {
+      return String(payload);
+    }
+  }, [payload]);
+  return (
+    <details className="border rounded" data-testid="log-detail-raw-payload">
+      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/40 select-none">
+        Raw payload
+      </summary>
+      <pre className="text-xs bg-muted/30 p-3 overflow-x-auto whitespace-pre-wrap break-words max-h-[40vh] overflow-y-auto">
+        {text}
+      </pre>
+    </details>
+  );
 }

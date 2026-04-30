@@ -32,10 +32,16 @@ Domains, Federation, Skills, Publish gates, Approvals):
   score-history snapshots (each annotated with the delta against
   the chronologically-prior score), and service lifecycle events
   (started / failed / stopped). Filter chips narrow per source.
-  Refreshes every 30 seconds + SSE-driven live updates. Service
-  events are written to `<project>/.claude/brain/services.jsonl`
-  by the start / stop / readiness-watcher handlers, durable across
-  dashboard restarts.
+  Click any row to open a drill-down modal that surfaces the full
+  per-source record — publish-gate exit codes + error_detail,
+  approval decision metadata, invocation session id, notification
+  full payload, score-history detail, services lifecycle reason —
+  plus a pretty-printed raw payload below the curated fields so
+  operators can copy any field for external investigation. Refreshes
+  every 30 seconds + SSE-driven live updates. Service events are
+  written to `<project>/.claude/brain/services.jsonl` by the start
+  / stop / readiness-watcher handlers, durable across dashboard
+  restarts.
 
 - **Settings** (`/brains/:id/settings`) — five tabs:
   - **Registry** (C-4 v1+v2) — sub-tabbed curated editors for

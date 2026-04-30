@@ -633,6 +633,191 @@ describe("LogsPage", () => {
     expect(screen.getByText("alpha (port 8421)")).toBeInTheDocument();
   });
 
+  // ── Per-row drill-down modal (S15-C-3 polish) ─────────────────
+
+  it("clicking a row opens the drill-down modal with the entry's curated detail", async () => {
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "r-detail",
+            gate_id: "tests-pass",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-30T18:00:00Z",
+            completed_at: "2026-04-30T18:00:01Z",
+            status: "failed",
+            blocking: true,
+            operator: "alice",
+            exit_code: 1,
+            error_detail: "AssertionError: 3 tests failed",
+          },
+        ],
+      },
+      approvals: { pending: [], recent_resolutions: [] },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    // Modal not open initially.
+    expect(screen.queryByTestId("log-detail-backdrop")).toBeNull();
+    // Click the row.
+    fireEvent.click(screen.getByText("tests-pass"));
+    // Modal opens; curated fields surface key publish-gate metadata.
+    expect(
+      await screen.findByTestId("log-detail-backdrop"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("detail-field-gate")).toBeInTheDocument();
+    expect(screen.getByTestId("detail-field-run-id")).toBeInTheDocument();
+    expect(screen.getByTestId("detail-field-exit-code")).toBeInTheDocument();
+    // The error_detail surfaces in both the curated <pre> AND the
+    // raw payload JSON dump — getAllByText handles both.
+    expect(
+      screen.getAllByText(/AssertionError/).length,
+    ).toBeGreaterThanOrEqual(1);
+    // Raw payload disclosure is collapsed by default but present.
+    expect(screen.getByTestId("log-detail-raw-payload")).toBeInTheDocument();
+  });
+
+  it("close button dismisses the drill-down modal", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: {
+        pending: [],
+        recent_resolutions: [
+          {
+            action_id: "a-x",
+            decision: "approve",
+            operator: "alice",
+            decided_at: "2026-04-30T17:00:00Z",
+          },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    fireEvent.click(screen.getByText("a-x"));
+    await screen.findByTestId("log-detail-backdrop");
+    fireEvent.click(screen.getByTestId("log-detail-close"));
+    expect(screen.queryByTestId("log-detail-backdrop")).toBeNull();
+  });
+
+  it("backdrop click dismisses the drill-down modal", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: {
+        pending: [],
+        recent_resolutions: [
+          {
+            action_id: "a-y",
+            decision: "deny",
+            operator: "bob",
+            decided_at: "2026-04-30T17:00:00Z",
+          },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    fireEvent.click(screen.getByText("a-y"));
+    const backdrop = await screen.findByTestId("log-detail-backdrop");
+    fireEvent.click(backdrop);
+    expect(screen.queryByTestId("log-detail-backdrop")).toBeNull();
+  });
+
+  it("ESC key dismisses the drill-down modal", async () => {
+    mockFetch({
+      "publish-gates": {
+        manifest_present: true,
+        manifest_error: null,
+        gates: [],
+        recent_ledger: [
+          {
+            run_id: "r-esc",
+            gate_id: "esc-test",
+            gate_type: "automated",
+            mode: "full",
+            started_at: "2026-04-30T18:00:00Z",
+            completed_at: null,
+            status: "passed",
+            blocking: true,
+            operator: null,
+            exit_code: 0,
+            error_detail: null,
+          },
+        ],
+      },
+      approvals: { pending: [], recent_resolutions: [] },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    fireEvent.click(screen.getByText("esc-test"));
+    await screen.findByTestId("log-detail-backdrop");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("log-detail-backdrop")).toBeNull();
+  });
+
+  it("score-history drill-down shows scored_at + delta + advisory hint", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: { topic: "_neurogrim/notifications", messages: [], next_offset: 0 },
+      "score-history": {
+        history_path: "/x/score-history.json",
+        present: true,
+        total_entries: 1,
+        entries: [
+          { scored_at: "2026-04-30T17:00:00Z", score: 82, delta: 4 },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    fireEvent.click(screen.getByText("score 82 (+4)"));
+    await screen.findByTestId("log-detail-backdrop");
+    expect(screen.getByTestId("detail-field-scored-at")).toBeInTheDocument();
+    expect(screen.getByTestId("detail-field-unified-score")).toBeInTheDocument();
+    expect(screen.getByTestId("detail-field-delta")).toBeInTheDocument();
+    expect(screen.getByText(/Per-domain scores/)).toBeInTheDocument();
+  });
+
+  it("services drill-down surfaces the failure reason for failed events", async () => {
+    mockFetch({
+      "publish-gates": { manifest_present: false, manifest_error: null, gates: [], recent_ledger: [] },
+      approvals: { pending: [], recent_resolutions: [] },
+      "invocation-ledger": { ledger_path: "/x", present: false, total_entries: 0, entries: [] },
+      notifications: { topic: "_neurogrim/notifications", messages: [], next_offset: 0 },
+      "score-history": { history_path: "/x", present: false, total_entries: 0, entries: [] },
+      "logs/services": {
+        log_path: "/x/services.jsonl",
+        present: true,
+        total_entries: 1,
+        entries: [
+          {
+            ts: "2026-04-30T17:00:00Z",
+            kind: "failed",
+            peer_name: "beta",
+            pid: null,
+            port: null,
+            reason: "port-conflict: port 8422 already bound",
+          },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByTestId("logs-timeline");
+    fireEvent.click(screen.getByText("beta"));
+    await screen.findByTestId("log-detail-backdrop");
+    // The reason renders as a multi-line preformatted block, so it
+    // appears twice — once in the curated detail's "Reason" pre + once
+    // in the raw payload below. getAllByText handles both.
+    const matches = screen.getAllByText(/port-conflict: port 8422/);
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+  });
+
   it("sorts entries newest first", async () => {
     mockFetch({
       "publish-gates": {
