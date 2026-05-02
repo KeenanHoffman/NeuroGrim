@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "v5-scoring-baseline",
+  "purpose": "V5-MOD-1's adversary BLOCKING perf-gate (per v5-roadmap.md §Adversary verdict) requires that scoring round-trip latency stay within 5% of this baseline. V5-FOUND-1 captures the baseline; V5-MOD-1's dyn-dispatch implementation reads it and fails-loud if regressed.",
+  "captured_at": "2026-05-02T07:38:00Z",
+  "captured_by": "V5-FOUND-1 Phase 5",
+  "captured_against": {
+    "project": "NeuroGrim",
+    "registry": ".claude/brain-registry.json",
+    "host": "Windows 11 Home, MSI laptop, 8 GB RAM (representative dev workstation)",
+    "git_sha_baseline": "e518708",
+    "git_sha_baseline_short_note": "Phase 4 commit; Phase 5's context.rs instrumentation was applied to the working tree at capture time but the scoring path itself (build_scorecard → build_agent_output) is bit-identical to what e518708 committed.",
+    "build_profile": "debug (cargo build, dev profile, unoptimized + debuginfo)"
+  },
+  "stage_context": {
+    "v5_entry_status": "pinned 2026-05-01 (concurrent with in-flight v4.x S15/S16 work, per operator pin recorded in v5-roadmap.md §v5 Entry Decision Tracker)",
+    "s15_status": "PLANNED — not yet shipped",
+    "s16_status": "v4.5 S16-M-1 iter 1 in flight (Plumbing page)",
+    "pre_s15_ship_note": "This baseline is captured pre-S15-ship. The v5 gate-lift commit (NeuroGrim 1378915) explicitly noted: 'if S15 ships scoring-path-affecting changes before V5-MOD-1 runs, the baseline must be re-captured.' The recapture-trigger files are listed under recapture_required_if_changes_to below."
+  },
+  "recapture_required_if_changes_to": [
+    "neurogrim/crates/neurogrim-mcp/src/server.rs (BrainServer::run_scoring — MCP-server scoring entry point)",
+    "neurogrim/crates/neurogrim-mcp/src/context.rs (BrainContext::load — CLI-direct scoring entry point)",
+    "neurogrim/crates/neurogrim-core/src/scoring.rs (build_scorecard, unified_score)",
+    "neurogrim/crates/neurogrim-core/src/registry.rs (BrainRegistry, scoring source dispatch — V5-MOD-1's target)",
+    "neurogrim/crates/neurogrim-core/src/agent_output.rs (build_agent_output)",
+    "neurogrim/crates/neurogrim-core/src/correlation.rs (evaluate_condition, evaluate_incident_patterns)",
+    "neurogrim/crates/neurogrim-core/src/trajectory.rs (compute_trajectory)"
+  ],
+  "capture_protocol": {
+    "warmup_runs": 5,
+    "warmup_treatment": "ledger cleared after warmup; warmup runs are NOT in the measured distribution",
+    "measured_runs": 30,
+    "command": "NEUROGRIM_DIAG=1 ./neurogrim/target/debug/neurogrim.exe score --plain",
+    "extracted_via": "neurogrim diag report --kind scoring --json",
+    "filter_applied": "kind=scoring (single name: score.pipeline.run)"
+  },
+  "distribution_ms": {
+    "name": "score.pipeline.run",
+    "count": 30,
+    "p50_ms": 16,
+    "p95_ms": 18,
+    "p99_ms": 18,
+    "max_ms": 18,
+    "min_ms_observed": "(not exported by diag report v1; tightness inferred from p50=16 → max=18 — a 2 ms total spread)"
+  },
+  "v5_mod_1_perf_gate": {
+    "rule": "V5-MOD-1's dyn-dispatch implementation MUST keep scoring round-trip p95_ms ≤ 5% above this baseline's p95_ms.",
+    "baseline_p95_ms": 18,
+    "ceiling_p95_ms": 19,
+    "ceiling_calculation": "round_up(baseline_p95_ms * 1.05) = round_up(18.9) = 19",
+    "comparison_protocol": "Re-run the same capture protocol against the V5-MOD-1 branch (same build_profile + same registry + same host class). If the new p95_ms exceeds 19 ms, V5-MOD-1 fails the perf-gate; revisit dispatch pattern (generic-bounded vs `dyn`) before continuing Theme B — per v5-roadmap.md §Adversary verdict (🔴 Blocking concerns)."
+  },
+  "caveats": [
+    "DEBUG BUILD: numbers are higher than a release build would produce (Rust debug typically 2-5x slower than release on hot paths). A future release-build baseline (likely captured at v5 close-out) gives more representative production numbers; the V5-MOD-1 comparison is valid as long as both baseline and target use the SAME build profile.",
+    "SINGLE HOST: captured on one Windows 11 / MSI laptop. Cross-platform variance not characterized. V5-MOD-1's perf comparison should run on the same host class to factor out hardware noise.",
+    "TIGHT DISTRIBUTION: 30 runs spread only 2 ms (16-18); the workload is small (NeuroGrim's own registry, ~19 domains) and the scoring path is currently fast. Larger registries (e.g., LaaS at 16 domains + heavy CMDBs) could shift the distribution; treat this baseline as the lower bound on acceptable latency."
+  ],
+  "cross_references": {
+    "v5_roadmap": "roadmap/v5-roadmap.md (§Adversary verdict, §v5 Entry Decision Tracker)",
+    "v5_foundation_epic": "roadmap/epics/v5-foundation.md (V5-FOUND-1 §Done when — final checkbox)",
+    "v5_modular_conversions_epic": "roadmap/epics/v5-modular-conversions.md (V5-MOD-1 §Done when — perf-gate)",
+    "implementation_plan": ".claude/plans/v5-found-1-diagnostic-monitor.md (§Phase 5)",
+    "ledger_schema": "neurogrim/crates/neurogrim-core/data/schemas/diagnostics-ledger-v1.schema.json"
+  }
+}

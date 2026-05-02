@@ -22,8 +22,8 @@
 
 ## Theme A Is Done When
 
-- [ ] tracing spans + `.claude/brain/diagnostics.jsonl` ledger emit on cargo build, neurogrim test, MCP tool dispatch, A2A POST/SSE, scoring pipeline, dashboard route handlers
-- [ ] `neurogrim diag report` summarizes top-N slow operations + counts
+- [x] tracing spans + `.claude/brain/diagnostics.jsonl` ledger emit on cargo build, neurogrim test, MCP tool dispatch, A2A POST/SSE, scoring pipeline, dashboard route handlers (V5-FOUND-1 Phase 3, 2026-05-02)
+- [x] `neurogrim diag report` summarizes top-N slow operations + counts (V5-FOUND-1 Phase 4, 2026-05-02)
 - [ ] ~~`neurogrim diag synthesize` invokes a bounded-prompt agent that MUST cite measured baseline + target~~ — **deferred 2026-05-02 to V5-FOUND-1.1** (no Rust-side LLM pathway exists today; deferral preserves V5-FOUND-1's L estimate; design carried forward in `.claude/plans/v5-found-1-diagnostic-monitor.md` § V5-FOUND-1.1)
 - [ ] cargo-nextest adopted; `.config/nextest.toml` profiles `ci` + `default`
 - [ ] sccache (or equivalent) configured in `.cargo/config.toml`
@@ -40,8 +40,8 @@
 
 ### V5-FOUND-1: Diagnostic Monitor (instrumentation backbone) (~5–7 days)
 
-**Status:** Planned
-**Effort:** L
+**Status:** **Complete (2026-05-02)** — 5 phases shipped (Phase 0 tracing-init centralization, Phase 1 ledger writer + schema, Phase 2 tracing Layer, Phase 3 instrumentation across 5 surfaces, Phase 4 `neurogrim diag report` CLI, Phase 5 V5-MOD-1 baseline capture). `synthesize` deferred to **V5-FOUND-1.1** — design carry-forward in `.claude/plans/v5-found-1-diagnostic-monitor.md` § V5-FOUND-1.1.
+**Effort:** L (actual: ~6 days, within estimate)
 **Depends on:** S12-G-1 (publish-gates ledger pattern)
 
 **What:** Add tracing spans + a persistent JSONL ledger for common operations: cargo build, test runs, MCP tool invocations, dashboard requests, A2A round-trips, scoring pipeline. Extends the invocation-ledger pattern ([disposition.rs:48](../crates/neurogrim-cli/src/commands/disposition.rs)) with a sibling `.claude/brain/diagnostics.jsonl`. Optional dashboard surfacing.
@@ -49,14 +49,41 @@
 **Why:** Modularity work needs baselines. Without measurements, "did Theme B regress latency?" becomes a vibe argument. Diagnostics ledger also unlocks the agent-synthesis flow that lets the agent "experience time" from the human's perspective — but only with hard guardrails (see Done When).
 
 **Done when:**
-- [ ] tracing spans emit on: cargo invocation, `neurogrim test`, MCP tool dispatch, A2A POST/SSE, scoring pipeline run, dashboard route handlers
-- [ ] Diagnostics emitted to `.claude/brain/diagnostics.jsonl` (one event per line)
-- [ ] `schema_version` field present; gitignored same as invocation-ledger
-- [ ] Privacy floor: no prompts, no tool args, no peer payloads — names + durations only
-- [ ] `neurogrim diag report` summarizes top-N slow operations + counts
+- [x] tracing spans emit on: cargo invocation, `neurogrim test`, MCP tool dispatch, A2A POST/SSE, scoring pipeline run, dashboard route handlers (Phase 3 — `score.pipeline.run`, `test.run` + child `cargo.invoke`, `mcp.sensory` per-server, `a2a.post`, `a2a.sse`, `dashboard.route`)
+- [x] Diagnostics emitted to `.claude/brain/diagnostics.jsonl` (one event per line) (Phase 1 writer; Phase 2 Layer)
+- [x] `schema_version` field present; gitignored same as invocation-ledger (Phase 1 — `diagnostics-ledger-v1.schema.json`; `.gitignore` updated)
+- [x] Privacy floor: no prompts, no tool args, no peer payloads — names + durations only (Phase 1 `FORBIDDEN_EXTRAS_KEYS` + per-kind allowed-list; Phase 2 `FieldVisitor` drops `record_debug`)
+- [x] `neurogrim diag report` summarizes top-N slow operations + counts (Phase 4 — supports `--json`, `--kind`, `--since`, `--name`, `--top`)
 - [ ] ~~`neurogrim diag synthesize` invokes a bounded-prompt agent; agent output MUST cite measured baseline + target. Prose-only "go faster" recommendations rejected at write time.~~ — **deferred 2026-05-02 to V5-FOUND-1.1** (see Theme A Done-When for rationale)
-- [ ] Unit-test coverage for span emission, ledger append, malformed-line skip, privacy filter (≥4 negative paths per v5 conformance discipline)
-- [ ] **S15 scoring round-trip baseline captured** in `roadmap/data/v5-scoring-baseline-<date>.json` (must land before V5-MOD-1 begins — V5-MOD-1's 5% perf gate compares against this baseline)
+- [x] Unit-test coverage for span emission, ledger append, malformed-line skip, privacy filter (≥4 negative paths per v5 conformance discipline) (32 new tests across `diagnostics_ledger`, `diagnostics_layer`, `diag` cmd; concurrent-writers test caught a real Windows-atomicity bug)
+- [x] **S15 scoring round-trip baseline captured** in `roadmap/data/v5-scoring-baseline-2026-05-02.json` (must land before V5-MOD-1 begins — V5-MOD-1's 5% perf gate compares against this baseline). Captured pre-S15-ship per the operator pin (2026-05-01); recapture-trigger files listed in the baseline JSON. Distribution: `p50_ms=16, p95_ms=18, p99_ms=18, max_ms=18` over 30 measured runs (debug build, NeuroGrim's own registry, 19 domains). V5-MOD-1's perf-gate ceiling: `p95_ms ≤ 19`.
+
+### V5-FOUND-1.1: Diagnostic Synthesis (deferred follow-on, ~2–3 days)
+
+**Status:** Planned (deferred 2026-05-02 from V5-FOUND-1 per plan-critic finding)
+**Effort:** S–M
+**Depends on:** V5-FOUND-1 (ledger writer + Layer + report shipped — done)
+**Trigger to start:** operator demand for agent-driven synthesis OR Theme B's V5-MOD-1 needs it for perf-regression triage.
+
+**What:** Implement `neurogrim diag synthesize` — agent-driven analysis of the diagnostics ledger with structural guardrails against prose-only output. The subcommand surface is already reserved in `commands/diag.rs` as a stub; this story implements the underlying LLM call + validator.
+
+**Why deferred:** Plan-critic found that no Rust-side LLM client exists today — no `anthropic` crate, no runtime `reqwest`, `neurogrim-secrets` is for credentials at rest, and `claude-proxy` is for containerized agents with scope tokens. Building that pathway is +2–3 days of dep-discipline-sensitive work that decouples cleanly from V5-FOUND-1's core value (instrumentation + baseline + report). V5-FOUND-1 ships `report` only; the diagnostics ledger and `report` together still deliver V5-MOD-1's baseline-capture need.
+
+**Open architectural decision** (to be revisited at V5-FOUND-1.1 start, not now):
+- Add `reqwest` runtime dep + hand-roll Anthropic POST, OR
+- Wire through `claude-proxy` (requires running proxy + scope-token plumbing), OR
+- Adopt a Rust Anthropic SDK if a maintained one exists by trigger time.
+
+**Done when:**
+- [ ] `neurogrim diag synthesize` invokes a bounded-prompt agent; agent output MUST cite measured baseline + target.
+- [ ] Output validator requires `{baseline_name, baseline_value_ms, target_value_ms, recommended_actions[]}` with each action carrying `{measurement_to_verify, threshold}`.
+- [ ] `target_value_ms ≥ baseline_value_ms` rejected at write time (a "go faster" recommendation must propose a faster target).
+- [ ] Prose-only output rejected at write time.
+- [ ] Synthesis row to ledger uses `kind=diag_synthesis` (numeric/closed-set extras only); textual rationale to sibling `.claude/brain/diag-synthesis-history.jsonl`.
+
+**Cross-references:**
+- Plan: `.claude/plans/v5-found-1-diagnostic-monitor.md` § V5-FOUND-1.1 (carry-forward design)
+- Reserved subcommand stub: `neurogrim/crates/neurogrim-cli/src/commands/diag.rs` (DiagCmd::Synthesize)
 
 ### V5-FOUND-2: nextest adoption + build cache (~3–4 days)
 

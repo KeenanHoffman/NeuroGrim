@@ -46,6 +46,21 @@ impl BrainContext {
         hat: Option<String>,
         human_persona: Option<String>,
     ) -> Result<Self> {
+        // V5-FOUND-1 Phase 3 step 1 (CLI pathway): scoring pipeline
+        // instrumentation. Same span name as the MCP-server pathway
+        // (run_scoring in server.rs:132) so both converge under
+        // EventKind::Scoring in the ledger. Extras are filled in
+        // via span.record() after build_agent_output completes.
+        // The Layer is a no-op when NEUROGRIM_DIAG is unset, so
+        // this adds zero overhead in production.
+        let span = tracing::info_span!(
+            "score.pipeline.run",
+            domains_count = tracing::field::Empty,
+            score = tracing::field::Empty,
+            confidence = tracing::field::Empty,
+        );
+        let _entered = span.enter();
+
         let json = tokio::fs::read_to_string(registry_path).await?;
         let registry = BrainRegistry::from_json(&json)?;
         registry.validate()?;
@@ -176,6 +191,14 @@ impl BrainContext {
             hat,
             human_persona,
         );
+
+        // V5-FOUND-1 Phase 3 step 1 (CLI pathway): record scoring
+        // extras for the diagnostics-layer entry. Same fields as the
+        // server.rs pathway so V5-MOD-1's perf-gate sees a unified
+        // distribution regardless of which entry point ran.
+        span.record("domains_count", agent_output.domains.len() as i64);
+        span.record("score", agent_output.score as i64);
+        span.record("confidence", agent_output.unified_confidence as i64);
 
         Ok(BrainContext {
             registry,
