@@ -7,7 +7,7 @@
 //!
 //! ## What's here
 //!
-//! - **[`registry`]** — `BrainRegistry`, `DomainDefinition`, `ScoringSource`:
+//! - **[`registry`]** — `BrainRegistry`, `DomainDefinition`, `ScoringSourceConfig`:
 //!   the parsed shape of `brain-registry.json`.
 //! - **[`scoring`]** — `Scorecard`, `build_scorecard`, `unified_confidence`:
 //!   per-domain → unified-score aggregation with confidence weighting and

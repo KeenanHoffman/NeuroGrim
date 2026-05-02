@@ -112,7 +112,7 @@ pub struct BrainConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DomainDefinition {
     #[serde(default)]
-    pub scoring_source: Option<ScoringSource>,
+    pub scoring_source: Option<ScoringSourceConfig>,
     #[serde(default)]
     pub floor: Option<FloorConfig>,
     #[serde(default)]
@@ -131,8 +131,21 @@ pub struct DomainDefinition {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
+/// Per-domain scoring-source configuration (the "what should we read"
+/// part of a domain). The "how to read it" part is the
+/// [`crate::scoring_source::ScoringSource`] trait (V5-MOD-1, 2026-05-02);
+/// each `source_type` string here corresponds to a registered
+/// `ScoringSource` factory.
+///
+/// **Renamed in v5.0.0** (V5-MOD-1 Phase 0): previously named
+/// `ScoringSource` (a struct). The trait introduced in V5-MOD-1 Phase 1
+/// took the bare name; this config struct gained the `Config` suffix
+/// to disambiguate. Downstream crates that imported
+/// `neurogrim_core::registry::ScoringSource` must update to
+/// `ScoringSourceConfig` (semver-major break, intentional at the v5
+/// boundary).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScoringSource {
+pub struct ScoringSourceConfig {
     #[serde(rename = "type")]
     pub source_type: String,
     #[serde(default)]

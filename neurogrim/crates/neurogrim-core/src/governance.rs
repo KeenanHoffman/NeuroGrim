@@ -544,7 +544,7 @@ mod tests {
     // build_domain_recommendations tests
     // -----------------------------------------------------------------------
 
-    use crate::registry::{BrainConfig, DomainDefinition, ScoringSource};
+    use crate::registry::{BrainConfig, DomainDefinition, ScoringSourceConfig};
     use crate::types::{Confidence, DomainScore, Score, Scorecard, Weight};
     use chrono::Utc;
 

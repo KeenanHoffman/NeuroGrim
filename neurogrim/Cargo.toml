@@ -13,7 +13,13 @@ members = [
 ]
 
 [workspace.package]
-version = "4.0.0"
+# v5.0.0 (V5-MOD-1 Phase 0, 2026-05-02): semver-major bump for the
+# `ScoringSource` rename. The struct in registry.rs is now
+# `ScoringSourceConfig`; the unqualified name `ScoringSource` is
+# reserved for the trait introduced in V5-MOD-1 Phase 1.
+# Downstream consumers importing `neurogrim_core::registry::ScoringSource`
+# must update to `ScoringSourceConfig`. Operator pin 2026-05-02.
+version = "5.0.0"
 edition = "2021"
 authors = ["Keenan Hoffman"]
 license = "MIT"
@@ -34,6 +40,10 @@ serde_yaml = "0.9"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
+# V5-MOD-1 Phase 0 (2026-05-02) — promoted from per-crate dep in
+# neurogrim-a2a so neurogrim-core's ScoringSource trait can use the
+# same macro convention.
+async-trait = "0.1"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
@@ -120,10 +130,10 @@ flate2 = "1"
 # Both `path` and `version` are required for `cargo publish` to resolve
 # intra-workspace deps from crates.io. Keep versions in lock-step with
 # `workspace.package.version` above.
-neurogrim-core = { path = "crates/neurogrim-core", version = "4.0.0" }
-neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "4.0.0" }
-neurogrim-secrets = { path = "crates/neurogrim-secrets", version = "4.0.0" }
-neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "4.0.0" }
-neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "4.0.0" }
-neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "4.0.0" }
-neurogrim-dashboard = { path = "crates/neurogrim-dashboard", version = "4.0.0" }
+neurogrim-core = { path = "crates/neurogrim-core", version = "5.0.0" }
+neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "5.0.0" }
+neurogrim-secrets = { path = "crates/neurogrim-secrets", version = "5.0.0" }
+neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "5.0.0" }
+neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "5.0.0" }
+neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "5.0.0" }
+neurogrim-dashboard = { path = "crates/neurogrim-dashboard", version = "5.0.0" }

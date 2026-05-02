@@ -287,7 +287,7 @@ async fn load_cmdb_data(
 /// should log + fall through to `no_file_score`.
 async fn load_a2a_domain(
     domain_key: &str,
-    src: &neurogrim_core::registry::ScoringSource,
+    src: &neurogrim_core::registry::ScoringSourceConfig,
 ) -> Option<CmdbData> {
     use neurogrim_core::ecosystem::{ChildEntry, ChildTransport};
     use neurogrim_ecosystem::invoke_child;
