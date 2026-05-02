@@ -230,4 +230,30 @@ mod tests {
         assert_eq!(factory.source_type_name(), A2A_SOURCE_TYPE);
         assert_eq!(source.source_type_name(), A2A_SOURCE_TYPE);
     }
+
+    /// V5-MOD-1 Phase 5: the A2A factory must pass the
+    /// cross-crate conformance suite published in
+    /// `neurogrim_core::scoring_source_conformance`. Built-in
+    /// factories' conformance is the baseline that third-party
+    /// plugin authors compare their impls against.
+    #[tokio::test]
+    async fn a2a_factory_passes_full_conformance_suite() {
+        use neurogrim_core::scoring_source_conformance::run_factory_conformance;
+        use tempfile::TempDir;
+        let factory = A2aSourceFactory;
+        let dir = TempDir::new().unwrap();
+        let report = run_factory_conformance(&factory, dir.path()).await;
+        assert!(
+            report.all_passed(),
+            "{}/{} conformance tests failed for A2aSourceFactory: {:#?}",
+            report.failures().len(),
+            report.total(),
+            report.failures()
+        );
+        assert!(
+            report.total() >= 8,
+            "conformance suite must have ≥8 tests; got {}",
+            report.total()
+        );
+    }
 }

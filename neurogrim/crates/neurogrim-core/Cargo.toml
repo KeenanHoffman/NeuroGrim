@@ -36,6 +36,12 @@ tracing = { workspace = true }
 # proven Box<dyn> dispatch). Promoted to workspace.dependencies in
 # Phase 0 so neurogrim-core can reference it via workspace = true.
 async-trait = { workspace = true }
+# V5-MOD-1 Phase 5 (2026-05-02) — promoted from dev-dep to
+# runtime because `scoring_source_conformance` uses
+# `tokio::spawn` + `tokio::time::timeout` in its public API
+# (the conformance suite that third-party ScoringSource impls
+# call to verify they honor the contract).
+tokio = { workspace = true }
 # v3.5.0 ports module — random pick from IANA dynamic range with
 # deterministic-seeded test path. 0.8.x for SeedableRng::from_entropy.
 rand = { workspace = true }
@@ -62,8 +68,10 @@ proptest = { workspace = true }
 # V5-MOD-1 Phase 1 (2026-05-02) — `#[tokio::test]` for the
 # `Box<dyn ScoringSource>` async-dispatch validation in
 # `scoring_source::tests`. Phase 2 + Phase 5 (conformance suite)
-# rely on this too.
-tokio = { workspace = true }
+# rely on this too. Note: tokio also appears in [dependencies]
+# above (Phase 5 promotion) — `cargo` correctly merges; this
+# dev-dep entry is harmless redundancy that documents the
+# test-only origin of the inclusion.
 # E-B2-2 C3: tempfile-backed integration tests for the
 # calibration-ledger writer (atomic write + read roundtrip,
 # malformed-line skip, fold-reconstruct). Same posture as
