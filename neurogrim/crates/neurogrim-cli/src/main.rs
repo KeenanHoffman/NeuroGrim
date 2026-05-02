@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 
 mod commands;
 mod output;
+mod tracing_init;
 
 #[derive(Parser)]
 #[command(name = "neurogrim")]
@@ -462,6 +463,13 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // V5-FOUND-1 Phase 0: centralized tracing-subscriber init.
+    // Subcommands MUST NOT call `tracing_subscriber::fmt().try_init()`
+    // themselves — see crates/neurogrim-cli/src/tracing_init.rs.
+    tracing_init::setup_tracing(tracing_init::TracingOpts {
+        enable_diag: std::env::var("NEUROGRIM_DIAG").is_ok(),
+    });
 
     match cli.command {
         Commands::Score {

@@ -12,12 +12,8 @@ use url::Url;
 
 /// Entry point for the `a2a-discover` subcommand.
 pub async fn run(peer_url: String) -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .try_init();
+    // Tracing init is centralized in main.rs (V5-FOUND-1 Phase 0);
+    // do not call `tracing_subscriber::fmt().try_init()` here.
 
     let url = Url::parse(&peer_url).with_context(|| format!("invalid peer URL {peer_url:?}"))?;
 

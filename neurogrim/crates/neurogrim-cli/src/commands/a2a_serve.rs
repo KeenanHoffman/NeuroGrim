@@ -170,14 +170,8 @@ pub async fn run(
     require_bearer: bool,
     token_store_path: Option<String>,
 ) -> Result<()> {
-    // Initialize tracing with a sane default if the caller didn't. No-op if
-    // already set by a higher layer — `try_init` swallows the second init.
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .try_init();
+    // Tracing init is centralized in main.rs (V5-FOUND-1 Phase 0);
+    // do not call `tracing_subscriber::fmt().try_init()` here.
 
     // v3.5.0 port-precedence rule:
     // 1. CLI --port wins (Some) — don't touch ports.json
