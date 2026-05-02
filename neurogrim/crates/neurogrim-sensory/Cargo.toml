@@ -25,26 +25,34 @@ schemars = { workspace = true }
 tracing = { workspace = true }
 neurogrim-core = { workspace = true, features = ["sqlite"] }
 
+# V5-MOD-2 Phase 0 (2026-05-02) — heavy sensor-specific deps marked
+# `optional = true` so Phase 4's per-sensor cargo-feature gates can
+# carve them out cleanly. The placeholder feature `_phase0-all-deps`
+# (see [features] below) activates them all by default, preserving
+# v4 behavior. Phase 4 replaces that placeholder with per-sensor
+# feature gates (`sensor-supply-chain-sca = ["dep:cargo-lock", ...]`
+# etc.) that map heavy deps to the sensors that need them.
+
 # Supply-chain SCA (E-SC-2): native lockfile parsing + OSV.dev HTTPS
 # client + RustSec advisory-db TOML parsing. No external scanner
 # binaries (per the 2026-04-24 locked decision — Trivy was the
 # LiteLLM attack vector; we do not shell out to scanners).
-cargo-lock = { workspace = true }
-toml = { workspace = true }
-semver = { workspace = true }
-yarn-lock-parser = { workspace = true }
+cargo-lock = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
+semver = { workspace = true, optional = true }
+yarn-lock-parser = { workspace = true, optional = true }
 # reqwest is crate-locally pinned here to match `neurogrim-a2a`'s
 # TLS posture (rustls-tls-native-roots — reads the OS trust store,
 # supports enterprise / private CAs, avoids OpenSSL in Docker images).
 # Keep in lock-step with `crates/neurogrim-a2a/Cargo.toml`.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
-sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"], optional = true }
+sha2 = { version = "0.10", optional = true }
 # Supply-chain vigilance E-SC-5: opt-in tarball-fetch + safe
 # extraction for binary_reproducibility + exfil_indicator. Off by
 # default; activated by NEUROGRIM_VIGILANCE_REPRO=1 +
 # NEUROGRIM_VIGILANCE_EXFIL=1 respectively.
-tar = { workspace = true }
-flate2 = { workspace = true }
+tar = { workspace = true, optional = true }
+flate2 = { workspace = true, optional = true }
 
 # E-B2-3 C5 — `capability_hygiene::score_hat_contracts` validates persona-hat
 # YAML frontmatter against `hat-contract-v1.schema.json` (the schema is the
@@ -53,7 +61,21 @@ flate2 = { workspace = true }
 # share the same JSON-Schema (draft-07) machinery the integration tests use.
 # Single dependency; no new transitive surface beyond what already shipped
 # in dev-deps.
-jsonschema = "0.17"
+jsonschema = { version = "0.17", optional = true }
+
+[features]
+# V5-MOD-2 Phase 0 (2026-05-02) — placeholder feature activates all
+# optional heavy deps so v4 behavior is preserved while the trait
+# refactor lands across Phases 1-3. Phase 4 replaces this single
+# bucket with per-sensor feature gates that map heavy deps to the
+# specific sensors that need them; the placeholder feature is then
+# removed, and `default` becomes the per-sensor feature list.
+default = ["_phase0-all-deps"]
+_phase0-all-deps = [
+    "dep:cargo-lock", "dep:toml", "dep:semver",
+    "dep:yarn-lock-parser", "dep:reqwest", "dep:sha2",
+    "dep:tar", "dep:flate2", "dep:jsonschema",
+]
 
 [dev-dependencies]
 # Tier-A sensor behavioral fixtures — each analyze_* runs against a

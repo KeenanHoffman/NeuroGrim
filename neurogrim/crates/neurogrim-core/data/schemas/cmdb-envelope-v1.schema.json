@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/KeenanHoffman/LSP-Brains/schemas/cmdb-envelope-v1.schema.json",
+  "title": "CMDB Meta Envelope v1",
+  "description": "Every CMDB file written by a sensory tool MUST include this envelope. The meta block enables the Brain to detect schema versions, compute confidence from age, and identify the producing tool.\n\nVENDORED COPY (V5-MOD-2 Phase 0, 2026-05-02). The canonical source of truth is in the LSP-Brains repository at `D:/Brains/LSP-Brains/schemas/cmdb-envelope-v1.schema.json` (or wherever LSP-Brains is checked out alongside NeuroGrim). The local copy here lets `neurogrim_core::sensor_conformance` validate sensor output without a path-dep on the spec repo. Drift between this copy and the canonical schema is detected by `cargo xtask schema-drift-check`. When the spec ships a v2 schema, mirror the change here + bump the file name (cmdb-envelope-v2.schema.json) + update the conformance suite's loader.",
+  "type": "object",
+  "required": ["meta", "score", "updated_at"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["schema_version", "updated_at", "updated_by"],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "description": "CMDB schema version. Current: '1'.",
+          "const": "1"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp of when this snapshot was taken."
+        },
+        "updated_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the tool that wrote this CMDB (e.g., 'check-test-health', 'jira-sensory')."
+        },
+        "source": {
+          "type": "string",
+          "description": "Human-readable description of the external source observed."
+        }
+      },
+      "additionalProperties": false
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Health score for this domain (0 = worst, 100 = best)."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp. Duplicates meta.updated_at for flat access by the scoring engine."
+    },
+    "findings": {
+      "type": "array",
+      "description": "Array of observation findings. Structure is domain-specific.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Identifier for this finding."
+          },
+          "status": {
+            "type": "string",
+            "description": "Result of the check (e.g., 'found', 'missing', 'pass', 'fail')."
+          },
+          "points": {
+            "type": "integer",
+            "description": "Score contribution of this finding."
+          },
+          "detail": {
+            "type": "string",
+            "description": "Human-readable explanation."
+          }
+        }
+      }
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Optional sensor-supplied confidence in [0,100]. When absent, the Brain computes confidence by age-decay from meta.updated_at (spec §4.4 exponential-decay model). When present, the envelope value takes precedence — sensors with their own freshness signal (e.g., cache-age, registry-fetch staleness) MAY emit this directly. Added in spec v2.7 (Brains-2.0 E-B2-1)."
+    }
+  },
+  "additionalProperties": true
+}
