@@ -12,7 +12,7 @@ use neurogrim_core::scoring::{build_scorecard, CmdbData};
 use neurogrim_core::trajectory::compute_trajectory;
 use neurogrim_core::types::ScoreSnapshot;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
@@ -69,42 +69,29 @@ impl BrainServer {
     }
 
     async fn load_cmdb_from_disk(&self) -> HashMap<String, CmdbData> {
+        // V5-MOD-1 Phase 3 (2026-05-02): converged with the
+        // CLI-direct dispatch site at `context::load_cmdb_data`.
+        // Both routes now resolve through the global
+        // ScoringSourceRegistry. The MCP-server cache previously
+        // handled only `cmdb` source_types; the registry-based
+        // dispatch handles `cmdb` + `a2a` + `function` plus any
+        // third-party-registered factories — a strict superset of
+        // v4 behavior. Method retained on BrainServer for the
+        // `cmdb_cache` write below at line ~155.
+        let source_registry = crate::scoring_source_registry::default_registry();
         let mut data = HashMap::new();
         for (domain_key, def) in &self.registry.config.domain_definitions {
-            if let Some(ref source) = def.scoring_source {
-                if source.source_type == "cmdb" {
-                    if let Some(ref cmdb_path) = source.path {
-                        let full_path = self.project_root.join(cmdb_path);
-                        if let Ok(json_str) = tokio::fs::read_to_string(&full_path).await {
-                            let json_str = json_str.trim_start_matches('\u{FEFF}');
-                            if let Ok(cmdb) = serde_json::from_str::<serde_json::Value>(json_str) {
-                                let sf = source.score_field.as_deref().unwrap_or("score");
-                                let uf = source.updated_at_field.as_deref().unwrap_or("updated_at");
-                                if let (Some(score), Some(ts_str)) = (
-                                    cmdb.get(sf).and_then(|v| v.as_u64()),
-                                    cmdb.get(uf).and_then(|v| v.as_str()),
-                                ) {
-                                    if let Ok(ts) = ts_str.parse::<DateTime<Utc>>() {
-                                        // Optional envelope-supplied confidence
-                                        // (E-B2-1, spec §3.8). When present,
-                                        // takes precedence over age-decay.
-                                        let confidence = cmdb
-                                            .get("confidence")
-                                            .and_then(|v| v.as_u64())
-                                            .map(|n| n.min(100) as u8);
-                                        data.insert(
-                                            domain_key.clone(),
-                                            CmdbData {
-                                                score: score.min(100) as u8,
-                                                updated_at: ts,
-                                                confidence,
-                                            },
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
+            if let Some(ref src) = def.scoring_source {
+                let Some(factory) = source_registry.get(&src.source_type) else {
+                    tracing::warn!(
+                        "domain {domain_key}: unknown scoring_source.type {:?}; ignoring",
+                        src.source_type
+                    );
+                    continue;
+                };
+                let source = factory.build();
+                if let Some(cmdb) = source.load(domain_key, src, &self.project_root).await {
+                    data.insert(domain_key.clone(), cmdb);
                 }
             }
         }

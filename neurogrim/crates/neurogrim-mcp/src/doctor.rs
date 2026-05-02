@@ -147,11 +147,39 @@ pub fn check_principle_map_alignment(reg: &BrainRegistry) -> Vec<Finding> {
 // --- Check 4: every scoring_source.path resolves to a readable file --
 
 pub fn check_cmdb_paths(reg: &BrainRegistry, project_root: &Path) -> Vec<Finding> {
+    // V5-MOD-1 Phase 3 (2026-05-02): consult the registry to
+    // (a) emit a finding when source_type is unknown — declares
+    // a registration gap to the operator — and (b) skip the
+    // path-existence check for non-cmdb source types (a2a /
+    // function don't have local paths). The cmdb-specific path
+    // discipline below is preserved verbatim.
+    let source_registry = crate::scoring_source_registry::default_registry();
     let mut findings = Vec::new();
     for (k, def) in &reg.config.domain_definitions {
         let Some(src) = def.scoring_source.as_ref() else {
             continue;
         };
+        // V5-MOD-1 addition: warn loudly if the source_type isn't
+        // registered. v4 silently coerced unknown types via the
+        // tracing::warn in the dispatch path; doctor surfaces the
+        // gap to the operator at validation time.
+        if !source_registry.has(&src.source_type) {
+            findings.push(Finding::warn(
+                "cmdb-paths",
+                format!(
+                    "domain '{k}' has unknown scoring_source.type {:?} \
+                     (no factory registered; scoring will fall back to no_file_score). \
+                     Known source types: {}",
+                    src.source_type,
+                    source_registry
+                        .registered_names()
+                        .copied()
+                        .collect::<Vec<&'static str>>()
+                        .join(", ")
+                ),
+            ));
+            continue;
+        }
         if src.source_type.as_str() != "cmdb" {
             // a2a / function sources don't have local paths.
             continue;

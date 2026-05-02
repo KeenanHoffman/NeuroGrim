@@ -212,69 +212,39 @@ async fn load_cmdb_data(
     registry: &BrainRegistry,
     project_root: &Path,
 ) -> HashMap<String, CmdbData> {
+    // V5-MOD-1 Phase 3 (2026-05-02): the prior string-match
+    // dispatch on `source_type` ∈ {cmdb, a2a, function} is
+    // replaced by registry-based factory dispatch. Each domain's
+    // ScoringSourceConfig is resolved via the global registry
+    // (cmdb + function from neurogrim-core; a2a from
+    // neurogrim-ecosystem). Unknown source_types log a warn and
+    // skip — same semantics as the old `other => warn` arm. The
+    // cmdb / a2a / function semantics are bit-identical via the
+    // verbatim ports in V5-MOD-1 Phase 2.
+    let source_registry = crate::scoring_source_registry::default_registry();
     let mut data = HashMap::new();
     for (dk, def) in &registry.config.domain_definitions {
         if let Some(ref src) = def.scoring_source {
-            match src.source_type.as_str() {
-                "cmdb" => {
-                    if let Some(ref p) = src.path {
-                        let full = project_root.join(p);
-                        if let Ok(s) = tokio::fs::read_to_string(&full).await {
-                            // Strip UTF-8 BOM if present (PowerShell writes BOM with -Encoding UTF8)
-                            let s = s.trim_start_matches('\u{FEFF}');
-                            if let Ok(cmdb) = serde_json::from_str::<serde_json::Value>(s) {
-                                let sf = src.score_field.as_deref().unwrap_or("score");
-                                let uf = src.updated_at_field.as_deref().unwrap_or("updated_at");
-                                if let (Some(score), Some(ts_str)) = (
-                                    cmdb.get(sf).and_then(|v| v.as_u64()),
-                                    cmdb.get(uf).and_then(|v| v.as_str()),
-                                ) {
-                                    if let Ok(ts) = ts_str.parse::<DateTime<Utc>>() {
-                                        // Optional envelope-supplied confidence
-                                        // (E-B2-1, spec §3.8). When present,
-                                        // takes precedence over age-decay; when
-                                        // absent, aggregator falls back to
-                                        // exponential_decay(updated_at, ...).
-                                        let confidence = cmdb
-                                            .get("confidence")
-                                            .and_then(|v| v.as_u64())
-                                            .map(|n| n.min(100) as u8);
-                                        data.insert(
-                                            dk.clone(),
-                                            CmdbData {
-                                                score: score.min(100) as u8,
-                                                updated_at: ts,
-                                                confidence,
-                                            },
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                "a2a" => {
-                    // Spec §9 fractal composition: fetch the child Brain's
-                    // current AgentOutput via A2A and use its unified score
-                    // as this domain's raw score. Failures (unreachable peer,
-                    // bad URL, version mismatch) fall through to `no_file_score`
-                    // — same semantics as a missing CMDB file.
-                    if let Some(env) = load_a2a_domain(dk, src).await {
-                        data.insert(dk.clone(), env);
-                    } else {
-                        tracing::debug!(
-                            "a2a scoring source for domain {dk} unresolved; \
-                             scoring pipeline will fall back to no_file_score"
-                        );
-                    }
-                }
-                "function" => {
-                    // Implementation-specific scoring functions — handled
-                    // elsewhere in the pipeline, not via CmdbData. No-op here.
-                }
-                other => {
-                    tracing::warn!("domain {dk}: unknown scoring_source.type {other:?}; ignoring");
-                }
+            let Some(factory) = source_registry.get(&src.source_type) else {
+                tracing::warn!(
+                    "domain {dk}: unknown scoring_source.type {:?}; ignoring",
+                    src.source_type
+                );
+                continue;
+            };
+            let source = factory.build();
+            if let Some(cmdb) = source.load(dk, src, project_root).await {
+                data.insert(dk.clone(), cmdb);
+            } else if src.source_type == "a2a" {
+                // Preserve the v4 debug-log breadcrumb specifically
+                // for the a2a path (operators rely on it for
+                // troubleshooting unresolved fractal-composition
+                // children). cmdb / function paths log their own
+                // warns inside the impl when relevant.
+                tracing::debug!(
+                    "a2a scoring source for domain {dk} unresolved; \
+                     scoring pipeline will fall back to no_file_score"
+                );
             }
         }
     }
@@ -285,67 +255,12 @@ async fn load_cmdb_data(
 /// `neurogrim_ecosystem::invoke_child` so there's only one A2A-client
 /// implementation in the tree. Returns None if anything fails; caller
 /// should log + fall through to `no_file_score`.
-async fn load_a2a_domain(
-    domain_key: &str,
-    src: &neurogrim_core::registry::ScoringSourceConfig,
-) -> Option<CmdbData> {
-    use neurogrim_core::ecosystem::{ChildEntry, ChildTransport};
-    use neurogrim_ecosystem::invoke_child;
-
-    let endpoint_str = src.endpoint.as_ref()?;
-    let endpoint = match url::Url::parse(endpoint_str) {
-        Ok(u) => u,
-        Err(e) => {
-            tracing::warn!("domain {domain_key}: bad A2A endpoint {endpoint_str:?}: {e}");
-            return None;
-        }
-    };
-    let interface_version = src
-        .interface_version
-        .clone()
-        .unwrap_or_else(|| "1".to_string());
-
-    let entry = ChildEntry {
-        id: domain_key.to_string(),
-        display_name: None,
-        transport: ChildTransport::A2A {
-            a2a_endpoint: endpoint,
-            agent_card_url: None,
-        },
-        depends_on: Vec::new(),
-        weight: 1.0,
-        interface_version,
-        enabled: true,
-    };
-
-    // AgentOutput.scored_at is a String (RFC3339); parse into DateTime<Utc>.
-    // Fall back to Utc::now() if the peer sent an unparseable timestamp —
-    // the fetch itself was synchronous so "now" is honest.
-    match invoke_child(&entry).await {
-        Ok(agent_output) => {
-            let ts = agent_output
-                .scored_at
-                .parse::<DateTime<Utc>>()
-                .unwrap_or_else(|_| Utc::now());
-            // E-B2-1 reader-fallback: AgentOutput does not yet carry
-            // unified_confidence (lands in C6). Until then, A2A peer
-            // freshness is solely from updated_at decay. After C6 this
-            // becomes Some(agent_output.unified_confidence).
-            Some(CmdbData {
-                score: agent_output.score,
-                updated_at: ts,
-                confidence: None,
-            })
-        }
-        Err(e) => {
-            tracing::warn!(
-                "domain {domain_key}: A2A fetch failed ({e}); \
-                 falling back to no_file_score"
-            );
-            None
-        }
-    }
-}
+// V5-MOD-1 Phase 3 (2026-05-02): the prior `load_a2a_domain`
+// helper was moved verbatim into
+// `neurogrim_ecosystem::scoring_source::A2aSource::load`
+// (Phase 2). The dispatch site at `load_cmdb_data` above now
+// resolves through the global ScoringSourceRegistry, so
+// `load_a2a_domain` is no longer called from this crate.
 
 async fn load_raw_cmdbs(
     registry: &BrainRegistry,
