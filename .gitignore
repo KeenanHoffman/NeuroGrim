@@ -18,6 +18,13 @@
 # PostToolUse hook at scripts/record-skill-invocation.sh. Per-deployment
 # runtime state; append-only JSONL.
 .claude/brain/invocation-ledger.jsonl
+# v5 V5-FOUND-1 (2026-05-02) — Diagnostics ledger emitted by the
+# tracing Layer for timed operations (build/test/cargo/scoring/
+# mcp_dispatch/a2a_post/a2a_sse/dashboard_route). Schema at
+# neurogrim/crates/neurogrim-core/data/schemas/diagnostics-ledger-v1.schema.json.
+# Per-deployment runtime state; never commit. Privacy floor enforced
+# at write time (no prompts/args/payloads/free-text).
+.claude/brain/diagnostics.jsonl
 # v4.4 (2026-04-30) — bus topic SQLite stores: score-snapshots,
 # services, skill-invocations, plus the v4.5 metrics TSDB. All
 # per-deployment runtime state; created on first scoring run +

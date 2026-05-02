@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/KeenanHoffman/LSP-Brains/schemas/diagnostics-ledger-v1.schema.json",
+  "title": "Diagnostics Ledger Entry v1",
+  "description": "Validates a single entry in the high-frequency append-only diagnostics ledger at `.claude/brain/diagnostics.jsonl` (V5-FOUND-1 Phase 1). Each entry captures one timed operation across a closed-set of `kind`s (build, test, cargo, scoring, mcp_dispatch, a2a_post, a2a_sse, dashboard_route, diag_synthesis). The `extras` object is a closed positive list per `kind` (e.g., `mcp_dispatch.extras = {server_name, tool_count, fail_count}` only); `additionalProperties: false` everywhere is the structural enforcement. Privacy floor (V5-FOUND-1 plan, mirrors invocation-ledger discipline at docs/invocation-ledger.md): the ledger never carries free-text from prompts, tool args, peer payloads, request bodies, or operator notes. The forbidden-key floor lives in code (neurogrim-core/src/diagnostics_ledger.rs FORBIDDEN_EXTRAS_KEYS); the schema enforces it indirectly via `additionalProperties: false` + per-kind closed lists. The ledger is per-deployment runtime state (gitignored same as invocation-ledger). v1 is LOCAL only; A2A propagation deferred per the same posture as invocation-ledger Q7. Schema version is locked at 1; future v2 schemas (additive only per charter discipline) require bumping `schema_version` so v1 readers detect the mismatch deterministically.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "ts_start",
+    "duration_ms",
+    "kind",
+    "name",
+    "outcome",
+    "depth",
+    "extras"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Diagnostics-ledger schema version. Forward-compat per E4-7: v2 (additive only) requires bumping this const so v1 consumers detect the version mismatch deterministically."
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID-v4 identifying this event uniquely. Used as the target of `parent_event_id` for nested spans (e.g., a `cargo` event whose parent is a `test` event)."
+    },
+    "ts_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp at span enter. Monotonic ordering across a single ledger is the writer's responsibility (multi-writer cases use POSIX O_APPEND atomicity for ≤PIPE_BUF lines, same as the calibration-ledger convention)."
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Span duration in whole milliseconds, span-close minus span-enter. Sub-millisecond spans round to 0 — a v2 may add `duration_us` for finer resolution; v1 readers tolerate this via additive promotion."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "build",
+        "test",
+        "cargo",
+        "scoring",
+        "mcp_dispatch",
+        "a2a_post",
+        "a2a_sse",
+        "dashboard_route",
+        "diag_synthesis"
+      ],
+      "description": "Closed-set discriminator for the surface this event was emitted from. `build` reserved for future cargo-build instrumentation; `test` covers `neurogrim test` runs; `cargo` covers child cargo subprocess invocations (V5-FOUND-1 Phase 3 step 2 folds cargo timing under test as a child span via `parent_event_id`); `scoring` covers the `run_scoring` end-to-end path in neurogrim-mcp; `mcp_dispatch` covers per-server MCP sensory invocations (per-server granularity in V5-FOUND-1 per plan-critic; per-tool deferred to v5.5); `a2a_post`/`a2a_sse` cover A2A peer interactions; `dashboard_route` covers axum route handlers; `diag_synthesis` is reserved for V5-FOUND-1.1 (deferred follow-on)."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Span name within the kind. Stable identifier emitted from instrumented code (e.g., `score_pipeline.run` for kind=scoring; `mcp.sensory.<server_name>` for kind=mcp_dispatch). Parsed by `neurogrim diag report` for top-N grouping. v1 does NOT enforce a per-kind closed name set in the schema — names are documented per kind in the diagnostics_ledger.rs module."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["ok", "err", "timeout", "cancelled"],
+      "description": "Closed-set outcome enum. `ok` = span completed normally. `err` = span raised/returned an error. `timeout` = span was cut off by a timeout guard. `cancelled` = span was cancelled by the parent (e.g., Ctrl+C, dropped future). Adding values requires a v2 schema bump."
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Span nesting depth (0 = top-level). Captured at span-enter from the tracing-subscriber Layer (V5-FOUND-1 Phase 2). Useful for filtering (e.g., `diag report --depth 0` for top-level only) without traversing parent_event_id chains."
+    },
+    "parent_event_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "UUID-v4 of the parent span's `event_id`, or null for top-level spans. Enables hierarchical reconstruction (e.g., a cargo subprocess as a child of a `neurogrim test` invocation). Strict referential integrity is the writer's responsibility; the schema validates one row at a time."
+    },
+    "extras": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Closed positive list of additional fields per `kind`. The writer in `neurogrim-core/src/diagnostics_ledger.rs` enforces both (a) the FORBIDDEN_EXTRAS_KEYS privacy floor (no `prompt`, `args`, `payload`, `text`, `body`, `note`, `comment`, `reason`) and (b) the per-kind allowed-keys list (see `allowed_extras_for(kind)`). All extras values are numeric, boolean, or short closed-set strings — never free text. The properties below are the union of all allowed keys across all kinds; per-kind validity is enforced in code rather than via JSON Schema if/then/else (which is harder to maintain and tools-vary on support).",
+      "properties": {
+        "test_count": { "type": "integer", "minimum": 0, "description": "kind=test: total tests run." },
+        "fail_count": { "type": "integer", "minimum": 0, "description": "kind=test or kind=mcp_dispatch: failed tests / failed tool dispatches." },
+        "ignored_count": { "type": "integer", "minimum": 0, "description": "kind=test: ignored tests." },
+        "cmd": { "type": "string", "description": "kind=cargo: cargo subcommand invoked (e.g., `test`, `build`, `nextest run`). Closed-set of cargo invocations — never a free-form shell command." },
+        "exit_code": { "type": "integer", "description": "kind=cargo: subprocess exit code." },
+        "domains_count": { "type": "integer", "minimum": 0, "description": "kind=scoring: number of domains in the registry." },
+        "score": { "type": "number", "description": "kind=scoring: unified score (0-100 or null sentinel)." },
+        "confidence": { "type": "number", "description": "kind=scoring: unified confidence (0-100)." },
+        "server_name": { "type": "string", "description": "kind=mcp_dispatch: MCP sensory server name (closed-set per registry)." },
+        "tool_count": { "type": "integer", "minimum": 0, "description": "kind=mcp_dispatch: tools invoked on this server in this dispatch." },
+        "peer_id_hash": { "type": "string", "description": "kind=a2a_post or kind=a2a_sse: stable hash of the peer URL (never the URL itself; never bearer/auth content)." },
+        "status_code": { "type": "integer", "description": "kind=a2a_post, kind=a2a_sse, or kind=dashboard_route: HTTP status code." },
+        "route_name": { "type": "string", "description": "kind=dashboard_route: closed-set route identifier (e.g., `score`, `agent`, `health`) — never the raw URL path." },
+        "target": { "type": "string", "description": "kind=build: build target identifier (reserved; not yet instrumented in V5-FOUND-1 Phase 3)." },
+        "baseline_value_ms": { "type": "integer", "minimum": 0, "description": "kind=diag_synthesis: measured baseline duration (V5-FOUND-1.1 deferred)." },
+        "target_value_ms": { "type": "integer", "minimum": 0, "description": "kind=diag_synthesis: target duration the agent recommends improving toward (V5-FOUND-1.1 deferred)." },
+        "action_count": { "type": "integer", "minimum": 0, "description": "kind=diag_synthesis: number of recommended actions in the synthesis (V5-FOUND-1.1 deferred)." }
+      }
+    }
+  }
+}

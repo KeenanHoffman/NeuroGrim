@@ -27,6 +27,11 @@
 //!   feedback loop (principle #4).
 //! - **[`calibration_ledger`]** — Brains-2.0 §17 per-domain calibration
 //!   meta-observer plumbing.
+//! - **[`diagnostics_ledger`]** — V5-FOUND-1 Phase 1 append-only ledger
+//!   for timed-operation diagnostics events. Schema at
+//!   `data/schemas/diagnostics-ledger-v1.schema.json`; structural privacy
+//!   floor (forbidden-extras-keys + per-kind allowed-extras list)
+//!   enforced at write time.
 //! - **[`ports`]** — v3.5.0 per-project random port allocator. Picks two
 //!   ports (dashboard + a2a) from the IANA dynamic range, persists the
 //!   choice to `.claude/brain/ports.json`, idempotent on subsequent reads.
@@ -71,6 +76,7 @@ pub mod awareness;
 pub mod calibration_ledger;
 pub mod confidence;
 pub mod correlation;
+pub mod diagnostics_ledger;
 pub mod ecosystem;
 pub mod governance;
 pub mod learning;
