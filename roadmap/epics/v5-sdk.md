@@ -1,7 +1,7 @@
 # Epic: v5 SDK Extraction (Theme C)
 
 **Theme:** C
-**Release:** v5 (entry decide-later; sequenced after Theme B)
+**Release:** v5 (entry pinned 2026-05-01; this epic is gated on Theme B close — see `v5-roadmap.md` §"v5 Entry Decision Tracker")
 **Status:** PLANNED (drafted 2026-05-01)
 **Priority:** Stabilization — extracts the trait surface from Theme B as a versioned contract
 **Goal:** Stand up `neurogrim-sdk` as a thin re-export crate of the stable contract types from Theme B. Versioned independently from `neurogrim-core` with semver discipline — core can break internals, SDK cannot break trait shapes without major-version bump. Conformance suites distributed via the SDK as `#[cfg(feature = "conformance")]` test fixtures.

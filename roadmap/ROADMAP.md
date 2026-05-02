@@ -68,7 +68,7 @@ BACKLOG B-16..B-19 (all CANDIDATE). None require stage changes.
 Stages are sequential but overlapping. Each stage must produce a working system, not just
 scaffolding.
 
-**v5 pre-plan (themed, drafted 2026-05-01):** post-Stage-15 modularity push — Theme A diagnostics + test speed, Theme B three modular conversions (scoring source / sensor / queue backend), Theme C SDK extraction, Theme D composition guide + VISION/spec alignment. Stage numbers assigned at backlog-merge time (decision: open-ended staging). v4/v5 timing decide-later — pinned when S13/S14 status crystallizes. Master roadmap: `v5-roadmap.md`. v5.5/v6 successor pipeline (trimmed items with explicit triggers): BACKLOG B-37..B-45.
+**v5 pre-plan (themed, drafted 2026-05-01; entry pinned 2026-05-01):** modularity push — Theme A diagnostics + test speed (active — V5-FOUND-1 starting), Theme B three modular conversions (scoring source / sensor / queue backend; gated on Theme A close), Theme C SDK extraction, Theme D composition guide + VISION/spec alignment. Stage numbers assigned at backlog-merge time (decision: open-ended staging). v4/v5 timing **pinned 2026-05-01** by operator pin (third re-evaluation trigger fired same-day) — Theme A runs concurrently with in-flight v4.x S15/S16 work because V5-FOUND-1 is additive instrumentation. Theme B remains gated. Master roadmap: `v5-roadmap.md` (canonical Decision Tracker in §"v5 Entry Decision Tracker"). v5.5/v6 successor pipeline (trimmed items with explicit triggers): BACKLOG B-37..B-45.
 
 **Revision history:** Stages 2-5 restructured on 2026-04-09 after adversary review of
 Stage 1 implementation lessons. See `.claude/plans/north-star-adversary-review.md` for full

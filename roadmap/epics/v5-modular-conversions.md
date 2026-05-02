@@ -1,7 +1,7 @@
 # Epic: v5 Modular Conversions (Theme B)
 
 **Theme:** B
-**Release:** v5 (entry decide-later; sequenced after Theme A)
+**Release:** v5 (entry pinned 2026-05-01; this epic is **gated on Theme A close** plus a re-check of the concurrent-v4.x-work risk before V5-MOD-1's 5% perf-gate runs — see `v5-roadmap.md` §"v5 Entry Decision Tracker")
 **Status:** PLANNED (drafted 2026-05-01)
 **Priority:** Core scope of v5 — three high-leverage trait conversions; "everything is an interface" was rejected as wider scope
 **Goal:** Convert three highest-leverage seams to trait + factory pattern. `ScoringSource` becomes `Box<dyn ScoringSource>` with factory registry; `Sensor` trait converts the existing sensors with cargo-feature-gate discovery (dynamic loading deferred to v5.5); `QueueBackend` factory replaces `BackendHandle` enum. Each ships a conformance suite.

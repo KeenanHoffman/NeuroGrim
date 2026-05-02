@@ -1,11 +1,11 @@
 # v5 Roadmap — "Everything is Lego" (adversary-reviewed)
 
 **Span:** Themes A–D (Foundation, Modular Conversions, SDK Extraction, Coherence) — stage numbers assigned at backlog-merge time
-**Approved on:** 2026-05-01 via three strategic decisions (stage shape: open-ended; adversary trim: partial with successor pipeline; v4/v5 timing: decide-later)
+**Approved on:** 2026-05-01 via three strategic decisions (stage shape: open-ended; adversary trim: partial with successor pipeline; v4/v5 timing: pinned 2026-05-01 — same-day operator pin overrode the default "decide-later" stance — see §"v5 Entry Decision Tracker")
 **Posture:** **adversary hat** worn throughout — adversarial review baked into every theme; trimmed items pre-scheduled in the v5.5/v6 successor pipeline (BACKLOG B-37..B-45) rather than rejected.
 **Pre-plan source:** `C:\Users\koff0\.claude\plans\i-would-like-you-curried-milner.md`
 
-> **Why themes rather than pre-counted stages:** the user chose "open-ended staging — let stages be sized by epics, not pre-counted." Each theme groups 1–4 epics that share dependencies; themes are sequential. How many themes map to how many stages is a backlog-merge decision once v5 entry pins after S15 lands.
+> **Why themes rather than pre-counted stages:** the user chose "open-ended staging — let stages be sized by epics, not pre-counted." Each theme groups 1–4 epics that share dependencies; themes are sequential. How many themes map to how many stages is a backlog-merge decision; v5 entry pinned 2026-05-01 (concurrent with in-flight v4.x S15/S16 work) — see §"v5 Entry Decision Tracker" for the revised reference points the V5-MOD-1 perf gate now uses.
 
 ---
 
@@ -35,7 +35,7 @@ Four themes make this work, in this order:
 | **C** | **SDK Extraction** | V5-SDK-1..2 | ~2–3 weeks | Theme B |
 | **D** | **Coherence + Docs** | V5-DOC-1..2 | ~2 weeks | Theme C |
 
-Theme order is firm; intra-theme epic order is firm. Concurrent v4.x + v5 work is **not pursued by default** — Stage 15 changes UI surfaces v5 might re-touch.
+Theme order is firm; intra-theme epic order is firm. The pre-plan default was "concurrent v4.x + v5 work is not pursued" because Stage 15 changes UI surfaces v5 might re-touch — the operator **explicitly waived this default on 2026-05-01** to begin V5-FOUND-1 (Diagnostic Monitor) concurrently with in-flight S15 / S16 work. V5-FOUND-1 is the safest concurrent epic because it adds tracing instrumentation (additive — does not modify scoring or UI surfaces). Theme B (modular conversions) remains gated on Theme A close + a re-check of the concurrent-work risk before V5-MOD-1's perf-gate runs.
 
 ---
 
@@ -208,22 +208,26 @@ Each entry has explicit triggers per the user's "partial trim with successor pip
 
 **Question:** When does v5 work begin?
 
-**Locked decision (2026-05-01):** **decide-later.** v5 starts after Stage 15 (Command Post UI) lands; concurrent v4.x + v5 work is not pursued by default. Each v5 epic file repeats this gate as `**⛔ DO NOT START before Stage 15...**` at the top.
+**Locked decision (2026-05-01, revised same-day):** **pinned 2026-05-01.** v5 Theme A (V5-FOUND-1 Diagnostic Monitor) begins **concurrently** with in-flight v4.x work (S15 Command Post UI / S16 Plumbing). The original pre-plan stance was "concurrent v4.x + v5 work is not pursued by default"; the operator has explicitly waived that default — v5 entry was pinned by the third re-evaluation trigger ("Operator explicitly asks to pin a v5 entry date") on the same day the pre-plan was approved.
 
-**Re-evaluation triggers** (any of these fires → revisit this decision):
+**Trigger that fired:** Operator explicit pin (2026-05-01).
+
+**Re-evaluation triggers (kept on file for future stage transitions):**
 - Stage 15 (S15-C-1..9) ships and v4.3 publishes through the gate pipeline.
 - S13/S14 status crystallizes (no longer mid-flight; either complete or post-mortem'd).
-- Operator explicitly asks to pin a v5 entry date.
+- Operator explicitly asks to pin a v5 entry date. ← **fired 2026-05-01**
 
-**Decision owner:** project maintainer (single-operator today). Ecosystem-Brain agents may surface re-evaluation prompts via the diagnostics ledger if they observe Stage 15 closure.
+**Concurrent-work implications recorded at pin time:**
+- **V5-MOD-1 performance gate** — the original adversary BLOCKING concern referenced "S15 baseline." Because v5 begins pre-S15-ship, the baseline V5-FOUND-1 captures will be against the current main branch state (pre-S15-ship), not post-S15-ship state. V5-FOUND-1's done-when criterion ("S15 scoring round-trip baseline captured in `roadmap/data/v5-scoring-baseline-<date>.json`") and V5-MOD-1's perf-gate ("scoring round-trip latency unchanged within 5% of S15 baseline") both inherit this revised reference point. If S15 ships UI changes that materially alter the scoring path before V5-MOD-1 runs, V5-FOUND-1 may need to re-capture the baseline at that point.
+- **Stage-numbering** — v5 epics still use the `V5-` prefix until backlog-merge time. Stage rows in `ROADMAP.md` are added when individual themes pin to stage numbers; the open-ended-staging decision still holds.
+
+**Decision owner:** project maintainer (single-operator today). Ecosystem-Brain agents may surface re-evaluation prompts via the diagnostics ledger if they observe Stage 15 closure or any of the other triggers.
 
 **Where this decision lives** (single-source-of-truth: this section):
 - This section (canonical statement; update here when triggers fire).
 - `ROADMAP.md` "v5 pre-plan" callout (cross-reference).
-- Each v5 epic file's `Depends on:` line referencing S15.
+- Each v5 epic file's `Release:` line and (for `v5-foundation.md`) gate banner.
 - Pre-plan source: `C:\Users\koff0\.claude\plans\i-would-like-you-curried-milner.md` §9.
-
-**When triggers fire**, this section gets updated with the new locked decision (e.g., "v5 entry pinned to <date>; Theme A starts on <date>"). Until that update lands, the decision remains "decide-later" and no v5 epic should start.
 
 ---
 

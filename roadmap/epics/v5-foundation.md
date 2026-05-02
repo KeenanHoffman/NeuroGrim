@@ -1,7 +1,7 @@
 # Epic: v5 Foundation — Diagnostics + Test Speed (Theme A)
 
 **Theme:** A
-**Release:** v5 (entry decide-later; targets after S15 lands)
+**Release:** v5 (entry **pinned 2026-05-01**; concurrent with in-flight v4.x S15/S16 work per operator pin — see `v5-roadmap.md` §"v5 Entry Decision Tracker")
 **Status:** PLANNED (drafted 2026-05-01)
 **Priority:** Foundation — must ship before Theme B because modular-conversion work needs measurements
 **Goal:** Land tracing-based diagnostics, cargo-nextest adoption, sccache, per-test coverage as opt-in build mode, and a minimal `TestRunner` trait. After Theme A: dev loop is fast, agent can synthesize bottlenecks with measured baselines + targets, and we have data to validate Theme B's modularity claims.
@@ -16,7 +16,7 @@
 **Master roadmap:** `roadmap/v5-roadmap.md`
 **Pre-plan source:** `C:\Users\koff0\.claude\plans\i-would-like-you-curried-milner.md`
 
-> **⛔ DO NOT START before Stage 15 (Command Post UI) ships.** Per pre-plan §10 step 5, v5 work is gated on S15 closure. The v5 Entry Decision Tracker in `v5-roadmap.md` records re-evaluation triggers; it must show "pinned" before V5-FOUND-1 begins.
+> **✅ ENTRY PINNED 2026-05-01 — Theme A active, V5-FOUND-1 begins concurrently with in-flight v4.x (S15 Command Post UI / S16 Plumbing).** The operator waived the original pre-plan default ("concurrent v4.x + v5 work is not pursued") via the third re-evaluation trigger in `v5-roadmap.md` §"v5 Entry Decision Tracker". V5-FOUND-1 is the safest concurrent starter because it adds tracing instrumentation (additive — does not modify scoring or UI surfaces). The "S15 scoring round-trip baseline" Done-When item now references the **current main-branch state at baseline-capture time** (not post-S15-ship state); V5-MOD-1's 5%-perf gate inherits this revised reference point. If S15 ships scoring-path-affecting changes before V5-MOD-1 runs, the baseline must be re-captured at that point.
 
 ---
 

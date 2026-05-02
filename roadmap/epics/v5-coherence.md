@@ -1,7 +1,7 @@
 # Epic: v5 Coherence + Docs (Theme D)
 
 **Theme:** D
-**Release:** v5 (entry decide-later; sequenced after Theme C)
+**Release:** v5 (entry pinned 2026-05-01; this epic is gated on Theme C close — see `v5-roadmap.md` §"v5 Entry Decision Tracker")
 **Status:** PLANNED (drafted 2026-05-01)
 **Priority:** Closure — docs describe shipped reality; written last
 **Goal:** Author the modular composition guide from real recipes; update LSP-Brains spec §9 + §F to reflect SDK trait shapes; add VISION principle #20 ("Pluggability is justified by use, not aspiration"); preserve culture-coherence byte-identity across all four `.claude/culture.yaml` copies.
