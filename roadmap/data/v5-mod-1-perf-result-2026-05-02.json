@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "v5-mod-1-perf-result",
+  "purpose": "Formal V5-MOD-1 Phase 4 perf-gate result. Compares the post-Phase-3 dispatch (Box<dyn ScoringSource> via factory registry) against the V5-FOUND-1 baseline ceiling p95_ms ≤ 19. Captured 2026-05-02 same host class as the baseline.",
+  "captured_at": "2026-05-02T15:55:00Z",
+  "captured_by": "V5-MOD-1 Phase 4 perf-gate verification",
+  "captured_against": {
+    "project": "NeuroGrim",
+    "registry": ".claude/brain-registry.json",
+    "host": "Windows 11 Home, MSI laptop, 8 GB RAM (same host class as the baseline)",
+    "git_sha_at_capture": "c7afaa1",
+    "build_profile": "debug (cargo build, dev profile, unoptimized + debuginfo) — matches baseline build profile"
+  },
+  "compared_against_baseline": "roadmap/data/v5-scoring-baseline-2026-05-02.json",
+  "ceiling_rule": "p95_ms ≤ 19 (5% above baseline p95=18, rounded up)",
+  "verdict": "FAIL",
+  "verdict_summary": "Box<dyn ScoringSource> dispatch + #[async_trait] future-boxing per domain produces a reproducible p95 regression of +6 to +10 ms over the V5-FOUND-1 baseline. All three independent 30-sample captures exceed the p95_ms ≤ 19 ceiling. The plan's 🔴 BLOCKING perf-gate fires; Theme B halts pending architectural decision.",
+  "captures": [
+    {
+      "label": "capture-1",
+      "warmup_runs": 5,
+      "measured_runs": 30,
+      "p50_ms": 17,
+      "p95_ms": 21,
+      "p99_ms": 26,
+      "max_ms": 26,
+      "p95_passes_gate": false
+    },
+    {
+      "label": "capture-2",
+      "warmup_runs": 5,
+      "measured_runs": 30,
+      "p50_ms": 18,
+      "p95_ms": 24,
+      "p99_ms": 28,
+      "max_ms": 28,
+      "p95_passes_gate": false
+    },
+    {
+      "label": "capture-3",
+      "warmup_runs": 5,
+      "measured_runs": 30,
+      "p50_ms": 18,
+      "p95_ms": 28,
+      "p99_ms": 29,
+      "max_ms": 29,
+      "p95_passes_gate": false
+    }
+  ],
+  "summary_statistics": {
+    "p95_min": 21,
+    "p95_max": 28,
+    "p95_average": 24.3,
+    "all_three_above_ceiling": true,
+    "regression_pct_p95_average_vs_baseline": 35,
+    "absolute_regression_p95_ms_average": 6.3
+  },
+  "regression_diagnosis": {
+    "likely_dominant_factor": "async_trait future-boxing — every ScoringSource::load(...) call allocates a Pin<Box<dyn Future>> via the #[async_trait] macro. Across 19 domains per scoring run, that's 19 heap allocations + 19 dynamic dispatches that the v4 string-match dispatch did NOT do (the v4 path inlined each arm).",
+    "secondary_factors": [
+      "Per-domain Box::new(factory.build()) heap allocation (~1µs × 19 = ~20µs total)",
+      "Per-domain HashMap lookup on registry.get(source_type) (~50ns × 19 = ~1µs total)",
+      "Per-domain virtual dispatch on source.load(...) (~10ns × 19 = ~200ns total)"
+    ],
+    "absolute_magnitude": "p95 regression is ~6 ms over a ~18 ms baseline. In absolute terms scoring is still under 30 ms p95. Real-world impact is unmeasurable for typical scoring cadence (<1 Hz). The gate fails on RELATIVE terms (5% threshold), not on production-meaningfulness."
+  },
+  "fallback_options": [
+    {
+      "id": "A",
+      "label": "Implement plan-documented fallback: generic-bounded + small enum for built-ins",
+      "what": "Define `enum BuiltinScoringSource { Cmdb, A2a, Function }` with inlined `match` dispatch. Built-ins skip Box<dyn> entirely. The `ScoringSource` trait remains for third-party impls (which pay the dyn cost when used).",
+      "estimated_effort": "1-2 days",
+      "tradeoff": "Two dispatch paths (built-in vs third-party). Adds enum maintenance burden. Closes the gate fully (built-ins go through inlined enum; zero overhead).",
+      "preserves_modularity": true,
+      "preserves_perf_gate": true
+    },
+    {
+      "id": "B",
+      "label": "Cache built sources in the registry (HashMap<&str, Box<dyn ScoringSource>>)",
+      "what": "Keep current architecture; eliminate the per-call factory.build() Box::new by caching built sources. Future-boxing on load() calls remains.",
+      "estimated_effort": "0.5 day",
+      "tradeoff": "Smaller refactor. Likely closes ~30% of the gap (eliminates Box::new but not future-boxing). Probably NOT enough to pass the strict 5% ceiling — likely brings p95 from 24-28 down to 21-25. Still fails.",
+      "preserves_modularity": true,
+      "preserves_perf_gate": false
+    },
+    {
+      "id": "C",
+      "label": "Synchronous trait split: SyncScoringSource + AsyncScoringSource",
+      "what": "Built-ins (cmdb + function) implement a sync trait (no future-boxing). A2A implements an async trait (boxed; pays the cost when used). Two-trait architecture; registry holds Box<dyn> of either kind.",
+      "estimated_effort": "1.5 days",
+      "tradeoff": "Cleaner than option A in some ways (no enum to maintain). But complicates the trait surface (callers need to know which trait their source impls). Equivalent to A in perf — built-ins skip the future-boxing.",
+      "preserves_modularity": true,
+      "preserves_perf_gate": true
+    },
+    {
+      "id": "D",
+      "label": "Accept the regression with documented operator justification",
+      "what": "The 5% ceiling was conservative; the absolute regression (+6ms p95) is unmeasurable for real scoring cadence (<1 Hz). Document the trade-off, mark the gate as 'waived per operator pin', proceed to V5-MOD-2/3 with the current Box<dyn> architecture.",
+      "estimated_effort": "0 (commit-message-only change to v5-modular-conversions.md)",
+      "tradeoff": "Clean modularity, simple architecture, but breaks the strict adversary BLOCKING gate. Sets precedent for future perf-gate waivers. The gate exists to prevent unbounded slow drift; waiving on the FIRST failure invites future creep.",
+      "preserves_modularity": true,
+      "preserves_perf_gate": false
+    }
+  ],
+  "recommendation": "Operator pin required. Plan-critic's 🔴 BLOCKING posture suggests Option A (the plan-documented fallback) — it's the path the plan explicitly named when authoring the gate. Options B/C are alternatives; D is a deliberate gate waiver. Plan recommends NOT-D unless real-world latency budgets demand simplicity (which they don't here — scoring is sub-30ms even with the regression).",
+  "cross_references": {
+    "v5_roadmap_adversary_gate": "roadmap/v5-roadmap.md (§Adversary verdict — 🔴 Blocking concerns)",
+    "v5_mod_1_plan": ".claude/plans/v5-mod-1-scoring-source-trait.md (§ Phase 4 + Risks)",
+    "v5_found_1_baseline": "roadmap/data/v5-scoring-baseline-2026-05-02.json",
+    "phase_3_commit": "c7afaa1 v5 V5-MOD-1 Phase 3: route 3 dispatch sites through ScoringSourceRegistry"
+  }
+}
