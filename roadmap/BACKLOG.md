@@ -1662,6 +1662,8 @@ LLM-as-judge until explicitly justified otherwise.
 
 **Adversarial note.** Coverage maps go stale; cross-crate edges are fragile; "what tests does my change affect" is harder than it sounds because integration tests touch filesystem + spawn subprocesses. Per AskUserQuestion 2026-04-29, deferred in favor of marking slow benchmarks `#[ignore]` first. Revisit only when the simple intervention proves insufficient.
 
+**Now planned as:** V5-FOUND-3 (Theme A epic `epics/v5-foundation.md`) — adversary-reviewed, scoped as a test-selection feature (NOT a Brain domain). Promotion to a Brain domain is tracked separately as B-44 (v6 horizon). When V5-FOUND-3 ships, this entry flips to `ABSORBED into V5-FOUND-3`.
+
 ---
 
 ### B-29: Cloud secret backends (Azure KV, GCP Secret Manager, AWS) — CANDIDATE (v4.x-deferred)
@@ -1798,6 +1800,126 @@ LLM-as-judge until explicitly justified otherwise.
 - Full PromQL-equivalent query language. Stick to typed Rust API + a few query primitives.
 - Multi-tenant cardinality controls. Single-Brain instance per process.
 - Push gateway / external scraping. Bus-driven ingest only.
+
+---
+
+### B-37: V5.5-MOD-DASH — Dashboard widget plugin trait — CANDIDATE (v5.5 successor)
+
+**Problem.** v5 ships SDK + 3 modular conversions (scoring source, sensor, queue backend) but does NOT make dashboard widgets pluggable. v3.4 widget catalogue is hardcoded React + a fixed Rust schema. Custom dashboards (per-domain views, customer-specific layouts) require forking. Pre-plan source: `C:\Users\koff0\.claude\plans\i-would-like-you-curried-milner.md` §5a.
+
+**Plan when:**
+1. AND: V5-DOC-1 (composition guide) ships AND v5 SDK has ≥1 month of soak.
+2. AND: ≥1 customer signal for custom widget capability (not aspirational demand).
+
+**Dependencies.** V5-SDK-2 (conformance suite pattern), v3.4 widget catalogue stable.
+
+**Adversarial note.** High cost — frontend plugin loader = Wasm or React.lazy + schema generator. The temptation to ship "easy custom dashboards" before the demand signal is exactly what v5's adversary lens rejected. Hold the line: trigger on real demand, not enthusiasm.
+
+---
+
+### B-38: V5.5-MOD-MCP — MCP tool plugin loading (dynamic) — CANDIDATE (v5.5 successor)
+
+**Problem.** v5 ships sensor plugins via cargo-feature gates (compile-time, static). MCP tools remain compile-time-only. Adopters who want to add MCP tools without forking core need a dynamic loading path. Pre-plan source: §5a.
+
+**Plan when:**
+1. AND: V5-MOD-2 sensory plugin static-feature pattern proves stable for ≥6 months in production.
+2. AND: ≥1 adopter explicitly asks for ship-without-recompile MCP tools.
+
+**Dependencies.** V5-MOD-2 (the cdylib + libloading pattern proven first on sensors), V5-SDK-2 (conformance harness for plugin tools).
+
+**Adversarial note.** Medium cost. cdylib + libloading risks: ABI churn, panic safety, sandboxing. Generalize from sensors only after sensors prove the pattern is safe in production. The static-only sensor approach was deliberately conservative — preserve the discipline.
+
+---
+
+### B-39: V5.5-MOD-TX — Transport runtime selection — CANDIDATE (v5.5 successor)
+
+**Problem.** A2A `Transport` trait already exists ([transport.rs:56](../crates/neurogrim-a2a/src/transport.rs)) with `HttpSseTransport` (real) + `JsonRpcTransport` (stub). Today the Brain hardcodes HTTP+SSE. Future heterogeneous peer ecosystems (e.g., gRPC peers, JSON-RPC peers) need runtime transport selection driven by Agent Card content. Pre-plan source: §5a.
+
+**Plan when:**
+1. AND: A2A peer ecosystem grows beyond a single transport (e.g., a JSON-RPC peer ships).
+2. OR: Peer-card transport selection becomes load-bearing for cross-language federation.
+
+**Dependencies.** V5-MOD-1 (factory pattern reused), Agent Card parsing already in `neurogrim-a2a`.
+
+**Adversarial note.** Low cost. Plumbing only — Transport is already trait-based. The reason it's not a v5 epic is that there's no real selection use-case yet. Becomes a small follow-up to V5-MOD-1 once a real heterogeneous peer ships.
+
+---
+
+### B-40: V5.5-MOD-DYN — Dynamic .so/.dll plugin loading (sensors) — CANDIDATE (v5.5 successor)
+
+**Problem.** v5 sensor discovery is via cargo-feature gates (compile-time, static). Some adopters may want to ship sensors without recompiling core (third-party closed-source sensors, hot-swap during dev). Pre-plan source: §5a.
+
+**Plan when:**
+1. AND: V5-MOD-2 cargo-feature pattern hits real limits (e.g., adopter must distribute closed-source sensor; recompile-per-add becomes a developer-experience pain).
+2. AND: ≥1 customer asks specifically for ship-without-recompile.
+
+**Dependencies.** V5-MOD-2 (must prove static feature pattern works first), `cdylib` + `libloading` infrastructure decisions, sandboxing model.
+
+**Adversarial note.** High cost: stability risk, sandboxing concerns, ABI churn, panic-safety across the FFI boundary. Do NOT pursue speculatively — wait for cargo-feature pattern to actually hit limits. Trigger is "real adopter pain," not "hypothetical adopter convenience."
+
+---
+
+### B-41: V6-DOM-CUSTOM — Per-domain custom CMDB types — CANDIDATE (v6 horizon)
+
+**Problem.** Today's CMDB shapes are hardcoded per-domain in `scored_domains` schema. Some adopters may want domain-specific CMDB shapes (e.g., a `compliance` domain that ships its own CMDB schema beyond the standard fields). Pre-plan source: `C:\Users\koff0\.claude\plans\i-would-like-you-curried-milner.md` §5b.
+
+**Plan when:** AND: Customer requests domain-specific CMDB shapes beyond `scored_domains` standard fields.
+
+**Dependencies.** v5 SDK (extension pattern for trait surfaces), schema-evolution discipline.
+
+**Adversarial note.** Medium cost. Adds JSON-schema validation complexity. No customer signal exists today — fail fast if added before signal arrives.
+
+---
+
+### B-42: V6-AGENT-CARD-V2 — Agent-card versioning trait — CANDIDATE (v6 horizon)
+
+**Problem.** A2A Agent Card v1 is locked. Future v2 cards may need to coexist with v1 at runtime (federation crossing protocol versions). Today's string version-checks suffice; trait-based versioning is overkill until v2 actually exists. Pre-plan source: §5b.
+
+**Plan when:** AND: A2A v2 cards must coexist with v1 at runtime (federation crossing versions).
+
+**Dependencies.** A2A v2 spec drafted (LSP-Brains side); `neurogrim-a2a` v2 transport added.
+
+**Adversarial note.** Low cost. String version-checks work fine until v2 ships. Adding versioning trait pre-emptively is the kind of premature abstraction v5 explicitly rejected.
+
+---
+
+### B-43: V6-TRAJ-MODEL — Trajectory model abstraction — CANDIDATE (v6 horizon)
+
+**Problem.** [`trajectory.rs`](../crates/neurogrim-core/src/trajectory.rs) ships a single algorithm (velocity + acceleration + classification). Customer might want a custom trajectory classifier (e.g., domain-specific weighted, ML-based). Pre-plan source: §5b.
+
+**Plan when:** AND: Customer requests a custom trajectory classifier (no current request).
+
+**Dependencies.** Trajectory algorithm has ≥6 months of production data; competing models exist or are credibly proposed.
+
+**Adversarial note.** Medium cost. Today's single algorithm has no competing models. v5 explicitly rejected this as premature abstraction. Fail-fast trigger: real customer ask, not internal speculation.
+
+---
+
+### B-44: V6-DOM-COV — Per-test coverage as Brain domain (promotion from feature) — CANDIDATE (v6 horizon)
+
+**Problem.** v5 V5-FOUND-3 ships per-test coverage as a test-selection *feature* (symbol→test map persisted at `.claude/brain/test-coverage-map.jsonl`). The map could be promoted to a Brain *domain* that scores test-suite blast radius coverage. Pre-plan source: §5b.
+
+**Plan when:**
+1. AND: V5-FOUND-3 symbol→test map is ≥6 months mature.
+2. AND: Map demonstrates predictive value for "blast radius" worth scoring as a domain (false-positive / false-negative measurements available).
+
+**Dependencies.** V5-FOUND-3 shipped + soaked; domain promotion process (S10).
+
+**Adversarial note.** Map first, score later. v5 explicitly rejected "per-test coverage as a domain" because the map is useful before the score is. Promote only if predictive value is measured, not assumed.
+
+---
+
+### B-45: V6-DOM-DIAG — Diagnostic synthesis as Brain domain — CANDIDATE (v6 horizon)
+
+**Problem.** v5 V5-FOUND-1 ships diagnostic synthesis as a `neurogrim diag synthesize` agent flow. The synthesized recommendations could be promoted to a Brain *domain* (`diag-readiness`?) that scores how well-instrumented the project is. Pre-plan source: §5b.
+
+**Plan when:**
+1. AND: V5-FOUND-1 agent's bottleneck recommendations prove valuable enough that scoring/calibration adds net value beyond raw read.
+2. AND: Diagnostics ledger is ≥6 months mature with real bottleneck-resolution traces.
+
+**Dependencies.** V5-FOUND-1 shipped + soaked; domain promotion process (S10).
+
+**Adversarial note.** Read first, score later. v5 explicitly rejected this as premature. The agent reads diagnostics — it does not need a domain. Promote only if calibration delivers measurable value beyond plain read.
 
 ---
 
