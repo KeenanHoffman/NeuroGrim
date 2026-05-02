@@ -25,6 +25,13 @@ schemars = { workspace = true }
 tracing = { workspace = true }
 neurogrim-core = { workspace = true, features = ["sqlite"] }
 
+# V5-MOD-2 Phase 2 (2026-05-02) — `Sensor` trait impl macro for the
+# 21 built-in factories in `sensor_impls.rs`. Same convention as
+# every existing async-trait usage in the workspace (Transport,
+# ScoringSource, etc.); promoted to workspace.dependencies in
+# V5-MOD-1 Phase 0.
+async-trait = { workspace = true }
+
 # V5-MOD-2 Phase 0 (2026-05-02) — heavy sensor-specific deps marked
 # `optional = true` so Phase 4's per-sensor cargo-feature gates can
 # carve them out cleanly. The placeholder feature `_phase0-all-deps`
