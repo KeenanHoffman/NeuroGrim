@@ -43,6 +43,21 @@ async fn invoke_single_server(
     config: &SensoryServerConfig,
     project_root: &str,
 ) -> anyhow::Result<Vec<SensoryResult>> {
+    // V5-FOUND-1 Phase 3 step 3: per-server MCP dispatch span.
+    // Per plan-critic, V5-FOUND-1 uses per-server granularity
+    // (`mcp.sensory`, with `server_name` in extras); per-tool
+    // granularity (`mcp.tool.<tool_name>`) is deferred to v5.5.
+    // The schema's allowed extras for kind=mcp_dispatch are
+    // {server_name, tool_count, fail_count} — NEVER tool args or
+    // tool responses, per the privacy floor.
+    let mcp_span = tracing::info_span!(
+        "mcp.sensory",
+        server_name = name,
+        tool_count = tracing::field::Empty,
+        fail_count = tracing::field::Empty,
+    );
+    let _mcp_entered = mcp_span.enter();
+
     let command = config
         .command
         .as_deref()
@@ -75,10 +90,13 @@ async fn invoke_single_server(
     tracing::info!("Server '{}' offers {} tools", name, tools_resp.tools.len());
 
     let mut results = Vec::new();
+    let mut tool_count: i64 = 0;
+    let mut fail_count: i64 = 0;
     for tool in &tools_resp.tools {
         if !tool.name.starts_with("check_") {
             continue;
         }
+        tool_count += 1;
         let domain = tool
             .name
             .strip_prefix("check_")
@@ -109,9 +127,17 @@ async fn invoke_single_server(
                     }
                 }
             }
-            Err(e) => tracing::warn!("Tool {} failed: {}", tool.name, e),
+            Err(e) => {
+                fail_count += 1;
+                tracing::warn!("Tool {} failed: {}", tool.name, e);
+            }
         }
     }
+
+    // V5-FOUND-1 Phase 3 step 3: record per-server counters before
+    // the span drops. Schema-allowed extras only.
+    mcp_span.record("tool_count", tool_count);
+    mcp_span.record("fail_count", fail_count);
 
     Ok(results)
 }

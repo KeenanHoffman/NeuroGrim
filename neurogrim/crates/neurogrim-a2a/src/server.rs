@@ -304,6 +304,22 @@ async fn post_task(
     State(server): State<TaskServer>,
     Json(envelope): Json<A2aEnvelope>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    // V5-FOUND-1 Phase 3 step 4: A2A POST instrumentation.
+    // Span name `a2a.post` is mapped to EventKind::A2aPost. Schema-
+    // allowed extras for kind=a2a_post are {peer_id_hash, status_code}
+    // ONLY — never the envelope body, never the message_id (could be
+    // request-correlated externally). peer_id_hash is left Empty in
+    // v1 because the v1 envelope contract doesn't carry peer
+    // identity at this layer; the auth_middleware sees the bearer
+    // token but we deliberately don't link them here. status_code
+    // is recorded on every return path before exit.
+    let a2a_span = tracing::info_span!(
+        "a2a.post",
+        peer_id_hash = tracing::field::Empty,
+        status_code = tracing::field::Empty,
+    );
+    let _entered = a2a_span.enter();
+
     // ---- Idempotency check (spec §13.3 step 5) ----
     {
         let idem = server.idempotency.read().await;
@@ -318,6 +334,7 @@ async fn post_task(
             let task_id = uuid::Uuid::new_v4().to_string();
             let mut tasks = server.tasks.write().await;
             tasks.insert(task_id.clone(), cached.clone());
+            a2a_span.record("status_code", StatusCode::ACCEPTED.as_u16() as i64);
             return Ok((
                 StatusCode::ACCEPTED,
                 Json(serde_json::json!({ "task_id": task_id, "idempotent_replay": true })),
@@ -327,6 +344,7 @@ async fn post_task(
 
     // ---- Envelope validation ----
     if envelope.schema_version != "1" {
+        a2a_span.record("status_code", StatusCode::BAD_REQUEST.as_u16() as i64);
         return Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
@@ -342,6 +360,7 @@ async fn post_task(
         Some(h) => h,
         None => {
             // Spec G.8: "Message_type not in accepts" => 405.
+            a2a_span.record("status_code", StatusCode::METHOD_NOT_ALLOWED.as_u16() as i64);
             return Err((
                 StatusCode::METHOD_NOT_ALLOWED,
                 Json(serde_json::json!({
@@ -357,6 +376,7 @@ async fn post_task(
         Ok(resp) => resp,
         Err(e) => {
             tracing::warn!(%message_id, error = %e, "A2A handler failed");
+            a2a_span.record("status_code", StatusCode::INTERNAL_SERVER_ERROR.as_u16() as i64);
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": e.to_string() })),
@@ -375,6 +395,7 @@ async fn post_task(
         tasks.insert(task_id.clone(), response);
     }
 
+    a2a_span.record("status_code", StatusCode::ACCEPTED.as_u16() as i64);
     Ok((
         StatusCode::ACCEPTED,
         Json(serde_json::json!({ "task_id": task_id })),
@@ -397,12 +418,32 @@ async fn get_task_events(
     State(server): State<TaskServer>,
     Path(task_id): Path<String>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
+    // V5-FOUND-1 Phase 3 step 4: A2A SSE instrumentation.
+    // Span name `a2a.sse` is mapped to EventKind::A2aSse. Schema-
+    // allowed extras for kind=a2a_sse are {peer_id_hash, status_code}
+    // ONLY — never the SSE event payload (the envelope body). v1
+    // emits a single terminal SSE event so the span captures the
+    // emission boundary; long-running pending-task SSE would warrant
+    // per-event timing, which is a v5.5 follow-on.
+    let sse_span = tracing::info_span!(
+        "a2a.sse",
+        peer_id_hash = tracing::field::Empty,
+        status_code = tracing::field::Empty,
+    );
+    let _entered = sse_span.enter();
+
     // v1 implementation: if the task is complete, emit the terminal envelope
     // as a single SSE event and close. If not, return 404 — we don't track
     // pending tasks because handlers run synchronously (see module docs).
     let envelope = {
         let tasks = server.tasks.read().await;
-        tasks.get(&task_id).cloned().ok_or(StatusCode::NOT_FOUND)?
+        match tasks.get(&task_id).cloned() {
+            Some(env) => env,
+            None => {
+                sse_span.record("status_code", StatusCode::NOT_FOUND.as_u16() as i64);
+                return Err(StatusCode::NOT_FOUND);
+            }
+        }
     };
 
     // axum 0.7 SSE API: `Event::default().data(String)`. Verified by the
@@ -410,6 +451,7 @@ async fn get_task_events(
     let event =
         Event::default().data(serde_json::to_string(&envelope).unwrap_or_else(|_| "{}".into()));
     let s = stream::iter(vec![Ok::<Event, Infallible>(event)]);
+    sse_span.record("status_code", StatusCode::OK.as_u16() as i64);
     Ok(Sse::new(s))
 }
 

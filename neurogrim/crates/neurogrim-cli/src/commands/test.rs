@@ -183,21 +183,62 @@ pub async fn run(args: Args) -> Result<()> {
         v
     };
 
+    // V5-FOUND-1 Phase 3 step 2: wrap the main test path in a
+    // `test.run` parent span; the cargo invocation is a child
+    // `cargo.invoke` span (same subprocess boundary, per plan-critic
+    // — cargo timing folds into test rather than being its own
+    // surface). Block scope so the spans drop and the diagnostics
+    // Layer's on_close fires BEFORE std::process::exit at the
+    // bottom (exit doesn't run drop). The --verbose / --e2e paths
+    // exit too quickly to instrument cleanly; their cargo invocation
+    // gets a `cargo.invoke` span only.
+
     // If verbose, just exec cargo and bail — let cargo speak.
     if args.verbose {
-        let status = Command::new("cargo")
-            .args(&cargo_args)
-            .status()
-            .with_context(|| "failed to spawn cargo")?;
+        let status = {
+            let cargo_span = tracing::info_span!(
+                "cargo.invoke",
+                cmd = "test",
+                exit_code = tracing::field::Empty,
+            );
+            let _ce = cargo_span.enter();
+            let s = Command::new("cargo")
+                .args(&cargo_args)
+                .status()
+                .with_context(|| "failed to spawn cargo")?;
+            cargo_span.record("exit_code", s.code().unwrap_or(-1) as i64);
+            s
+        };
         std::process::exit(status.code().unwrap_or(1));
     }
 
-    // Run cargo with output captured.
+    // Main path: parent test.run span + child cargo.invoke span,
+    // both block-scoped so spans drop (and the Layer emits) before
+    // process::exit at the bottom of the function.
+    let test_run_span = tracing::info_span!(
+        "test.run",
+        test_count = tracing::field::Empty,
+        fail_count = tracing::field::Empty,
+        ignored_count = tracing::field::Empty,
+    );
+    let _test_entered = test_run_span.enter();
+
+    // Run cargo with output captured (child span).
     eprintln!("✦ neurogrim test — running workspace tests…");
-    let output = Command::new("cargo")
-        .args(&cargo_args)
-        .output()
-        .with_context(|| "failed to spawn cargo")?;
+    let output = {
+        let cargo_span = tracing::info_span!(
+            "cargo.invoke",
+            cmd = "test",
+            exit_code = tracing::field::Empty,
+        );
+        let _ce = cargo_span.enter();
+        let o = Command::new("cargo")
+            .args(&cargo_args)
+            .output()
+            .with_context(|| "failed to spawn cargo")?;
+        cargo_span.record("exit_code", o.status.code().unwrap_or(-1) as i64);
+        o
+    };
 
     let stdout_text = String::from_utf8_lossy(&output.stdout);
     let stderr_text = String::from_utf8_lossy(&output.stderr);
@@ -248,8 +289,20 @@ pub async fn run(args: Args) -> Result<()> {
     rotate_ledger_if_needed(&ledger_path, &archive_path, args.keep_last)
         .with_context(|| "failed to rotate ledger")?;
 
-    // Mirror cargo's exit code.
-    std::process::exit(output.status.code().unwrap_or(1));
+    // V5-FOUND-1 Phase 3 step 2: record final test counts before the
+    // span drops. The Layer's on_close composes the entry from these.
+    test_run_span.record("test_count", parsed.total_tests as i64);
+    test_run_span.record("fail_count", parsed.total_failed as i64);
+    test_run_span.record("ignored_count", parsed.total_ignored as i64);
+
+    // Capture exit code, then drop the entered guard + the span so
+    // the Layer's on_close fires before std::process::exit (exit
+    // does NOT run Drop, so without explicit drops here the span
+    // would never close and no ledger entry would be written).
+    let exit_code = output.status.code().unwrap_or(1);
+    drop(_test_entered);
+    drop(test_run_span);
+    std::process::exit(exit_code);
 }
 
 /// Path to `<project>/.claude/brain/test-failures.jsonl`.

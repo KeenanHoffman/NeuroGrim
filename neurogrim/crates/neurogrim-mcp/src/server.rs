@@ -130,6 +130,22 @@ impl BrainServer {
     }
 
     async fn run_scoring(&self, hat: Option<String>, human_persona: Option<String>) -> AgentOutput {
+        // V5-FOUND-1 Phase 3 step 1: scoring pipeline instrumentation.
+        // Span name `score.pipeline.run` is in
+        // diagnostics_layer::kind_for_span_name's closed table; mapped
+        // to EventKind::Scoring. Extras are filled in via span.record()
+        // after the AgentOutput is built so domains_count/score/
+        // confidence reflect the actual outcome. The Layer is a no-op
+        // when NEUROGRIM_DIAG is unset, so this adds zero overhead in
+        // production.
+        let span = tracing::info_span!(
+            "score.pipeline.run",
+            domains_count = tracing::field::Empty,
+            score = tracing::field::Empty,
+            confidence = tracing::field::Empty,
+        );
+        let _entered = span.enter();
+
         let now = Utc::now();
         let cmdb_data = self.load_cmdb_from_disk().await;
         let history = self.load_score_history().await;
@@ -223,7 +239,7 @@ impl BrainServer {
             &self.registry.config.severity_thresholds,
         );
 
-        build_agent_output(
+        let agent_output = build_agent_output(
             &scorecard,
             &domain_variables,
             vec![],
@@ -237,7 +253,21 @@ impl BrainServer {
             None,
             hat,
             human_persona,
-        )
+        );
+
+        // V5-FOUND-1 Phase 3 step 1: record scoring extras for the
+        // diagnostics-layer entry. domains_count is the ACTIVE
+        // (non-advisory + advisory; the registry breadth) — simple
+        // size of the agent_output.domains map. score and confidence
+        // are the unified values the AgentOutput contract exposes.
+        // All three are integers, matching the ledger schema's
+        // `score` (number) + `confidence` (number) and
+        // `domains_count` (integer) extras.
+        span.record("domains_count", agent_output.domains.len() as i64);
+        span.record("score", agent_output.score as i64);
+        span.record("confidence", agent_output.unified_confidence as i64);
+
+        agent_output
     }
 }
 

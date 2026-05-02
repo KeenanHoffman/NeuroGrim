@@ -125,14 +125,30 @@ where
     Fut: std::future::Future<Output = R>,
     R: IntoResponse,
 {
-    match state
+    // V5-FOUND-1 Phase 3 step 5: dashboard route convergence span.
+    // Span name `dashboard.route` is mapped to EventKind::DashboardRoute.
+    // Schema-allowed extras for kind=dashboard_route are
+    // {route_name, status_code} — never the request body, never the
+    // response body. route_name is left Empty in v1; per-route
+    // granularity (`overview`, `domains_list`, etc.) is a v5.5
+    // follow-on once we have signal that route-level timing matters.
+    let dashboard_span = tracing::info_span!(
+        "dashboard.route",
+        route_name = tracing::field::Empty,
+        status_code = tracing::field::Empty,
+    );
+    let _entered = dashboard_span.enter();
+
+    let response = match state
         .cache
         .load_or_get(&state.registry_path, hat, None)
         .await
     {
         Ok(ctx) => build(ctx).await.into_response(),
         Err(e) => internal_error(format!("failed to load BrainContext: {e:#}")),
-    }
+    };
+    dashboard_span.record("status_code", response.status().as_u16() as i64);
+    response
 }
 
 /// Resolve a Brain by id, load its context, and run an async build
@@ -148,17 +164,33 @@ where
     Fut: std::future::Future<Output = R>,
     R: IntoResponse,
 {
+    // V5-FOUND-1 Phase 3 step 5: dashboard route convergence span
+    // (federation-aware analogue of with_host_context's
+    // instrumentation). Same extras posture: status_code captured;
+    // route_name + brain_id deferred to per-handler v5.5.
+    let dashboard_span = tracing::info_span!(
+        "dashboard.route",
+        route_name = tracing::field::Empty,
+        status_code = tracing::field::Empty,
+    );
+    let _entered = dashboard_span.enter();
+
     let brain = match resolve_brain(state, brain_id) {
         Ok(b) => b,
-        Err(r) => return r,
+        Err(r) => {
+            dashboard_span.record("status_code", r.status().as_u16() as i64);
+            return r;
+        }
     };
     let registry = brain.registry_path.to_string_lossy().to_string();
-    match state.cache.load_or_get(&registry, hat, None).await {
+    let response = match state.cache.load_or_get(&registry, hat, None).await {
         Ok(ctx) => build(ctx).await.into_response(),
         Err(e) => internal_error(format!(
             "failed to load BrainContext for '{brain_id}': {e:#}"
         )),
-    }
+    };
+    dashboard_span.record("status_code", response.status().as_u16() as i64);
+    response
 }
 
 /// Frontend bundle embedded at compile time. Built by `npm run build`
