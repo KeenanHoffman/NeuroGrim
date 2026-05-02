@@ -51,6 +51,21 @@
 - [ ] Workspace `Cargo.toml` lists `neurogrim-sdk` as workspace member
 - [ ] Initial version `0.1.0` published; CHANGELOG documents the contract
 
+#### V5-MOD-1 hand-off note (added 2026-05-02 at V5-MOD-1 close-out)
+
+V5-MOD-1 ships **two distinct types** in the `ScoringSource` namespace; only one is SDK-stable. V5-SDK-1 implementers must keep them straight:
+
+| Type | Path | SDK re-export? | Why |
+|---|---|---|---|
+| `ScoringSource` **trait** | `neurogrim_core::scoring_source::ScoringSource` | **YES** | Stable contract; behavior third-party plugins implement. V5-SDK-2 conformance fixture tests this. |
+| `ScoringSourceFactory` **trait** | `neurogrim_core::scoring_source::ScoringSourceFactory` | **YES** | Pairs with the source trait; how registration works. |
+| `ScoringSourceRegistry` | `neurogrim_core::scoring_source::ScoringSourceRegistry` | **YES** | Public registration API third-party crates call at startup. |
+| `ScoringSourceConfig` **struct** | `neurogrim_core::registry::ScoringSourceConfig` | **NO** | Serde shape bound to `brain-registry.json` schema; can drift independently of the trait. SDK consumers depend on the trait's behavior, not the config's serde layout. |
+
+V5-SDK-2's conformance fixture for `ScoringSource` should re-export `neurogrim_core::scoring_source_conformance::run_factory_conformance` (V5-MOD-1 Phase 5). The example crate at `examples/scoring-source-prom/` (V5-MOD-1 Phase 6) demonstrates the canonical third-party-author pattern: depend only on `neurogrim-core` (post-V5-SDK: only on `neurogrim-sdk`), implement `ScoringSource` + `ScoringSourceFactory`, run the conformance suite as an integration test. Lift its `tests/conformance.rs` verbatim into the SDK README's "writing a conformant ScoringSource" walkthrough.
+
+**Naming history note:** the `ScoringSource` struct (now `ScoringSourceConfig`) and the `ScoringSource` trait briefly collided in the V5-MOD-1 plan. Resolved by renaming the struct + accepting a semver-major bump on `neurogrim-core` (4.x → 5.0.0). LSP-Brains spec `METHODOLOGY-EVOLUTION.md` lines 1118 + 1135 carry the rename note. SDK extraction inherits the post-rename naming — consumers of the SDK will only ever see `ScoringSource` as the trait.
+
 ### V5-SDK-2: SDK conformance suites (distributed) (~3–5 days)
 
 **Status:** Planned
