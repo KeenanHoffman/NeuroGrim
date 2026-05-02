@@ -136,6 +136,23 @@ pub enum Outcome {
     Cancelled,
 }
 
+impl Outcome {
+    /// Parse a wire-string into the typed enum. Used by the
+    /// V5-FOUND-1 Phase 2 tracing Layer to interpret an `outcome`
+    /// span field (set by instrumented code via `span.record(
+    /// "outcome", "err")`). Returns `None` for unknown values; the
+    /// Layer falls back to `Ok` in that case.
+    pub fn from_str(s: &str) -> Option<Outcome> {
+        match s {
+            "ok" => Some(Outcome::Ok),
+            "err" => Some(Outcome::Err),
+            "timeout" => Some(Outcome::Timeout),
+            "cancelled" => Some(Outcome::Cancelled),
+            _ => None,
+        }
+    }
+}
+
 /// One diagnostics-ledger entry. Mirrors
 /// `diagnostics-ledger-v1.schema.json` exactly.
 ///

@@ -17,26 +17,30 @@
 //! default-env, falling back to `"info"` if unset; `fmt` layer to
 //! stderr (clap default).
 //!
+//! When `enable_diag` is `true` (Phase 2), the diagnostics
+//! [`crate::diagnostics_layer::DiagnosticsLayer`] is attached to
+//! the registry chain. Spans whose name is in the closed table at
+//! [`crate::diagnostics_layer::kind_for_span_name`] emit one
+//! ledger entry per span on close.
+//!
 //! Idempotent: `try_init()` returns `Err` rather than panicking on
 //! double-init, so a second call within the same process is a
 //! silent no-op. Subcommands invoked from `main()` therefore do
 //! not need to coordinate with each other.
 
+use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Options for centralized tracing setup.
 ///
-/// Phase 0 only carries `enable_diag` as a placeholder — the field
-/// is read but no diagnostics layer is attached yet. V5-FOUND-1
-/// Phase 2 will attach the diagnostics `Layer` when this flag is
-/// `true` (set from `NEUROGRIM_DIAG=1` env var or a top-level
-/// `--diag` CLI flag, both wired in `main()`).
+/// `enable_diag` is read from `NEUROGRIM_DIAG=1` env var (or a
+/// top-level `--diag` CLI flag in a follow-on iteration) and
+/// gates whether the diagnostics Layer is attached.
 #[derive(Debug, Default, Clone)]
 pub struct TracingOpts {
-    /// V5-FOUND-1 Phase 2 hook: when `true`, the diagnostics
-    /// `Layer` will be attached to capture spans into
-    /// `.claude/brain/diagnostics.jsonl`. Phase 0 ignores this
-    /// field; Phase 2 will read it.
+    /// When `true`, attach the diagnostics `Layer` (V5-FOUND-1
+    /// Phase 2) so mapped spans emit ledger entries to
+    /// `<project_root>/.claude/brain/diagnostics.jsonl`.
     pub enable_diag: bool,
 }
 
@@ -45,16 +49,34 @@ pub struct TracingOpts {
 /// Idempotent — second and subsequent calls within the same
 /// process are silent no-ops (`try_init` returns `Err` rather than
 /// panicking).
+///
+/// When `opts.enable_diag` is `false`, the subscriber chain is
+/// `Registry → EnvFilter → fmt` (no diag overhead). When `true`,
+/// the diagnostics Layer is appended; the ledger path is composed
+/// from the current working directory (`<cwd>/.claude/brain/
+/// diagnostics.jsonl`), matching the existing CWD-as-project-root
+/// convention used by other CLI subcommands (e.g., `disposition
+/// record --project-root .`).
 pub fn setup_tracing(opts: TracingOpts) {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info"));
     let fmt_layer = tracing_subscriber::fmt::layer();
-    // V5-FOUND-1 Phase 2 will read this and conditionally attach
-    // the diagnostics Layer here. For now the field is unused.
-    let _ = opts.enable_diag;
+
+    // Conditional diag layer: `Option<L>` implements `Layer<S>`
+    // when `L: Layer<S>` (tracing-subscriber std impl), so this
+    // is the canonical pattern for opt-in layers.
+    let diag_layer = if opts.enable_diag {
+        Some(crate::diagnostics_layer::DiagnosticsLayer::new(
+            PathBuf::from("."),
+        ))
+    } else {
+        None
+    };
+
     let _ = tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt_layer)
+        .with(diag_layer)
         .try_init();
 }
 
