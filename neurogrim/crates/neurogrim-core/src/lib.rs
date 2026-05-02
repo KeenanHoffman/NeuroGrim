@@ -37,6 +37,16 @@
 //!   Replaces the string-match in `neurogrim-mcp::context::load_cmdb_data`;
 //!   built-in factories (`cmdb`, `a2a`, `function`) ship in V5-MOD-1
 //!   Phase 2; the registry is hand-rolled (no `inventory` dep).
+//! - **[`sensor`]** — V5-MOD-2 (2026-05-02) `Sensor` trait +
+//!   `SensorFactory` + `SensorRegistry` for the pluggable sensor
+//!   dispatch. Replaces the 21-arm string match in
+//!   `neurogrim-cli/src/main.rs:599-622` (`run_sensory`). Built-in
+//!   factories live in `neurogrim-sensory` (Phase 2); dispatch
+//!   conversion in Phase 3. Same hand-rolled `HashMap` registry
+//!   substrate as `scoring_source`; differs by taking `&str` not
+//!   `&Path` (analyzer-signature parity, Fork A) and dropping the
+//!   inherent fast-path method (sensor IO at seconds-per-call,
+//!   Fork B).
 //! - **[`ports`]** — v3.5.0 per-project random port allocator. Picks two
 //!   ports (dashboard + a2a) from the IANA dynamic range, persists the
 //!   choice to `.claude/brain/ports.json`, idempotent on subsequent reads.
@@ -98,5 +108,11 @@ pub mod scoring;
 pub mod scoring_source;
 pub mod scoring_source_conformance;
 pub mod scoring_sources;
+// V5-MOD-2 Phase 1 (2026-05-02) — `Sensor` trait + `SensorFactory`
+// + `SensorRegistry` for the pluggable sensor dispatch. Replaces
+// the 21-arm string match in `neurogrim-cli/src/main.rs:599-622`
+// (`run_sensory`). Built-in factories ship in V5-MOD-2 Phase 2;
+// dispatch conversion in Phase 3.
+pub mod sensor;
 pub mod trajectory;
 pub mod types;
