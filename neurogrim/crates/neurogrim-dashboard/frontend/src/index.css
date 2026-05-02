@@ -2,6 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Brand fonts: Geist family, self-hosted, OFL 1.1 ──────────
+   Files live at frontend/public/fonts/, served by Vite + bundled
+   into dist/ which rust-embed snapshots into the binary. Sans and
+   Mono are variable fonts (one file → all weights via the
+   `font-weight: 100 900` range); Pixel variants are static. */
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/GeistVF.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/GeistMonoVF.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Geist Pixel Square';
+  src: url('/fonts/pixel/GeistPixelSquare.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Pixel Grid';
+  src: url('/fonts/pixel/GeistPixelGrid.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Pixel Circle';
+  src: url('/fonts/pixel/GeistPixelCircle.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Pixel Triangle';
+  src: url('/fonts/pixel/GeistPixelTriangle.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Pixel Line';
+  src: url('/fonts/pixel/GeistPixelLine.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
 /* v3.5.0 anchor-link pulse: brief highlight when a `#widget-<id>`
    hash is in the URL. Class added/removed by `lib/anchors.ts`. */
 @keyframes widget-pulse-anim {
@@ -20,9 +70,107 @@
   border-radius: var(--radius);
 }
 
-/* shadcn/ui CSS variables — dark theme is the default. Operators can
-   toggle to light via the theme switcher (Phase 1.5). */
+/* shadcn/ui CSS variables + NeuroGrim Design System bridge.
+   Source of truth for this binding:
+     D:/local-pc-operational-management/children/neurogrim-ide/design/dashboard/
+     (`tokens-bridge.css`, `additions.css`, README.md, tailwind-extension.md).
+   Methodology entry point: `…/docs/design-loop-domain.md` (Workflow E).
+
+   Layout:
+     · `:root` (first block) — NeuroGrim foundation tokens. Always
+       defined regardless of light/dark mode so the .ng-* additions
+       below + non-shadcn components can resolve them.
+     · `:root` (second block) — shadcn LIGHT mode defaults. Preserved
+       as-is. The NeuroGrim Design System non-negotiable is "dark only";
+       light mode is a holdover that's not bound to NeuroGrim. When
+       light mode is retired or gets a dedicated NeuroGrim authoring
+       pass, this block can go (or get its own bridge).
+     · `.dark` — shadcn DARK mode → NeuroGrim bridge. Every shadcn/ui
+       component + every `bg-background` / `text-foreground` / etc.
+       Tailwind utility resolves through this mapping. */
 @layer base {
+  /* ── NeuroGrim foundation tokens — always defined on :root ────────
+     Mirrors design/system/colors_and_type.css from the IDE child Brain.
+     HSL-component shape (`276 22% 9%`); used as `hsl(var(--bg-base))`.
+     The IDE uses fully-formed `hsl()` values for the same colors —
+     two parallel shapes by design (shadcn ergonomics on this side,
+     IDE ergonomics on the other). Drift detection lives in the IDE
+     Brain's design-loop CMDB. */
+  :root {
+    /* Score ambient (drives ambient gradients) */
+    --score-hue:        90;
+    --score-raw:        50;
+    --score-transition: 800ms ease;
+
+    /* Backgrounds — 276° aubergine pigment ramp */
+    --bg-base:        276 22%  9%;
+    --bg-elevated:    273 15% 12%;
+    --bg-surface:     260  8% 15%;
+    --bg-overlay:     265 10% 19%;
+    --bg-active:        7  8% 23%;
+
+    /* Text */
+    --text-primary:   220 15% 87%;
+    --text-secondary: 220  9% 58%;
+    --text-muted:     220  7% 38%;
+    --text-inverse:   222 18%  8%;
+
+    /* Borders */
+    --border-subtle:  222 12% 20%;
+    --border-default: 222 12% 26%;
+    --border-strong:  222 10% 34%;
+
+    /* Semantic accents */
+    --accent-blue:      213 72% 58%;
+    --accent-blue-bg:   213 50% 14%;
+    --accent-teal:      180 48% 56%;   /* primary CTAs */
+    --accent-teal-bg:   184 38% 13%;
+    --accent-green:     142 55% 46%;
+    --accent-green-bg:  142 40% 10%;
+    --accent-amber:      40 85% 56%;
+    --accent-amber-bg:   40 60% 10%;
+    --accent-red:         5 70% 56%;
+    --accent-red-bg:      5 50% 10%;
+    --accent-purple:    264 65% 62%;
+    --accent-purple-bg: 264 40% 12%;
+
+    /* Score ambient — computed from --score-hue at runtime */
+    --score-fill-start: var(--score-hue), 45%,  7%;
+    --score-fill-mid:   var(--score-hue), 35%, 10%;
+    --score-fill-end:   calc(var(--score-hue) + 15), 28%, 12%;
+    --score-glow:       var(--score-hue), 55%, 35%;
+
+    /* Radii */
+    --r-sm:   3px;
+    --r-md:   5px;
+    --r-lg:   8px;
+    --r-xl:  12px;
+    --r-pill: 100px;
+
+    /* Motion */
+    --ease-out-fast: cubic-bezier(0.2,  0,    0,    1);
+    --ease-in-fast:  cubic-bezier(1,    0,    0.8,  0);
+    --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+    --dur-instant:  80ms;
+    --dur-fast:    150ms;
+    --dur-normal:  200ms;
+    --dur-slow:    300ms;
+    --dur-score:   800ms;
+
+    /* Z-stack */
+    --z-base:       0;
+    --z-rail:      10;
+    --z-dock:      20;
+    --z-drawer:    30;
+    --z-stack:     40;
+    --z-command:  100;
+    --z-modal:    200;
+  }
+
+  /* ── shadcn LIGHT mode — preserved existing defaults ──────────────
+     Original shadcn light-mode values, kept untouched so the existing
+     theme toggle behavior survives the binding. Not bound to NeuroGrim —
+     when light mode is retired or gets its own bridge, replace here. */
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -46,34 +194,78 @@
     --radius: 0.5rem;
   }
 
+  /* ── shadcn DARK mode — NeuroGrim bridge ──────────────────────────
+     Maps shadcn variable names onto the NeuroGrim foundation tokens
+     above. Every shadcn/ui component and Tailwind utility like
+     `bg-background`, `text-foreground`, `bg-primary`, etc. resolves
+     through this when the .dark class is present on <html>. */
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    /* Surfaces — dashboard sits on the aubergine ink floor */
+    --background:             var(--bg-base);
+    --foreground:             var(--text-primary);
+
+    --card:                   var(--bg-surface);
+    --card-foreground:        var(--text-primary);
+
+    --popover:                var(--bg-overlay);
+    --popover-foreground:     var(--text-primary);
+
+    /* Primary — teal CTAs (the one chromatic call-to-action color) */
+    --primary:                var(--accent-teal);
+    --primary-foreground:     var(--bg-base);
+
+    /* Secondary — elevated panels */
+    --secondary:              var(--bg-elevated);
+    --secondary-foreground:   var(--text-primary);
+
+    /* Muted — overlay tier */
+    --muted:                  var(--bg-overlay);
+    --muted-foreground:       var(--text-muted);
+
+    /* Accent — hover/selection tint (in-focus, not primary action) */
+    --accent:                 var(--bg-active);
+    --accent-foreground:      var(--text-primary);
+
+    /* Destructive — NeuroGrim --accent-red */
+    --destructive:            var(--accent-red);
+    --destructive-foreground: var(--text-primary);
+
+    /* Borders + inputs */
+    --border:                 var(--border-default);
+    --input:                  var(--border-subtle);
+
+    /* Focus ring — teal, paired with primary CTA */
+    --ring:                   var(--accent-teal);
+
+    /* shadcn alias for radius — match NeuroGrim --r-md */
+    --radius:                 var(--r-md);
   }
 
   * {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground font-sans;
+    /* Geist OpenType features:
+       - rlig: required ligatures (always-on script support)
+       - calt: contextual alternates (spacing/glyph-context tweaks)
+       - ss01: Geist's stylistic set 1 — single-story `a`, alt `g`
+       - cv11: tweaked digit forms (Geist-specific)
+       Numbers stay proportional in body text for readability;
+       tabular alignment is opted into per-element below. */
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1, "cv11" 1;
+  }
+
+  /* Tabular numerics — every digit occupies the same width so
+     numeric table columns align cleanly. Applied to:
+     - Mono surfaces (always desired in code/data)
+     - Table cells (so numeric columns line up out of the box) */
+  code, pre, kbd, samp,
+  .font-mono,
+  table td,
+  table th,
+  [class*="tabular"] {
+    font-variant-numeric: tabular-nums;
   }
 
   /* Tell the browser which color-scheme its native UI should use.
@@ -124,5 +316,236 @@
       hsl(var(--secondary))
     );
     color: hsl(var(--secondary-foreground));
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * NeuroGrim Design System — Dashboard additions
+ *
+ * Component primitives the IDE doesn't ship that this dashboard
+ * needs. Mirrors `children/neurogrim-ide/design/dashboard/additions.css`
+ * (the source of truth in the IDE Brain). HSL-component shape;
+ * uses the foundation tokens defined on :root above.
+ *
+ * Placed in `@layer components` so Tailwind utilities can override
+ * (utilities layer is later in the cascade). Every primitive prefixed
+ * `.ng-*` to avoid collisions with shadcn classes.
+ * ───────────────────────────────────────────────────────────── */
+@layer components {
+  /* ── Tables — sortable header + zebra rows + hover ──────────────── */
+  .ng-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    color: hsl(var(--text-primary));
+    background: hsl(var(--bg-elevated));
+    border: 1px solid hsl(var(--border-subtle));
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+  .ng-table thead {
+    background: hsl(var(--bg-surface));
+    border-bottom: 1px solid hsl(var(--border-default));
+  }
+  .ng-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--text-muted));
+    user-select: none;
+    cursor: default;
+  }
+  .ng-table th[data-sortable] {
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out-fast);
+  }
+  .ng-table th[data-sortable]:hover { color: hsl(var(--text-primary)); }
+  .ng-table th[data-sort="asc"]::after  { content: " ↑"; color: hsl(var(--accent-teal)); }
+  .ng-table th[data-sort="desc"]::after { content: " ↓"; color: hsl(var(--accent-teal)); }
+  .ng-table td {
+    padding: 8px 12px;
+    border-top: 1px solid hsl(var(--border-subtle));
+    vertical-align: top;
+  }
+  .ng-table tbody tr {
+    transition: background var(--dur-fast) var(--ease-out-fast);
+  }
+  .ng-table tbody tr:nth-child(even) { background: hsl(var(--bg-base) / 0.4); }
+  .ng-table tbody tr:hover           { background: hsl(var(--bg-active) / 0.6); }
+  .ng-table tbody tr[data-selected]  { background: hsl(var(--accent-teal-bg)); }
+  .ng-table--compact td,
+  .ng-table--compact th { padding: 4px 8px; }
+
+  /* ── Filter pill ────────────────────────────────────────────────── */
+  .ng-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px 3px 10px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: hsl(var(--text-secondary));
+    background: hsl(var(--bg-elevated));
+    border: 1px solid hsl(var(--border-subtle));
+    border-radius: var(--r-pill);
+    cursor: default;
+    user-select: none;
+    transition:
+      background var(--dur-fast),
+      color var(--dur-fast),
+      border-color var(--dur-fast);
+  }
+  .ng-filter-pill:hover {
+    background: hsl(var(--bg-active));
+    color: hsl(var(--text-primary));
+    border-color: hsl(var(--border-strong));
+  }
+  .ng-filter-pill[aria-pressed="true"],
+  .ng-filter-pill--active {
+    background: hsl(var(--accent-teal-bg));
+    color: hsl(var(--accent-teal));
+    border-color: hsl(var(--accent-teal));
+  }
+  .ng-filter-pill__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ng-filter-pill__count {
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--text-muted));
+    margin-left: 2px;
+  }
+  .ng-filter-pill[aria-pressed="true"] .ng-filter-pill__count {
+    color: hsl(var(--accent-teal));
+  }
+  .ng-filter-pill__dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity var(--dur-fast), background var(--dur-fast);
+  }
+  .ng-filter-pill__dismiss:hover {
+    opacity: 1;
+    background: hsl(var(--bg-base) / 0.5);
+  }
+
+  /* ── Chart legend ───────────────────────────────────────────────── */
+  .ng-chart-legend {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 4px 0;
+    font-size: 10px;
+    color: hsl(var(--text-secondary));
+  }
+  .ng-chart-legend__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: default;
+  }
+  .ng-chart-legend__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--legend-color, hsl(var(--accent-teal)));
+    flex-shrink: 0;
+  }
+  .ng-chart-legend__dot--square { border-radius: 1px; }
+  .ng-chart-legend__dot--bar    { width: 12px; height: 3px; border-radius: 1px; }
+  .ng-chart-legend__label { letter-spacing: 0.02em; }
+  .ng-chart-legend__value {
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--text-muted));
+  }
+
+  /* ── Pagination ─────────────────────────────────────────────────── */
+  .ng-pagination {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: hsl(var(--text-secondary));
+    user-select: none;
+  }
+  .ng-pagination__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--r-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: hsl(var(--text-secondary));
+    cursor: pointer;
+    transition:
+      background var(--dur-fast),
+      color var(--dur-fast),
+      border-color var(--dur-fast);
+  }
+  .ng-pagination__btn:hover:not([disabled]) {
+    background: hsl(var(--bg-active));
+    color: hsl(var(--text-primary));
+    border-color: hsl(var(--border-default));
+  }
+  .ng-pagination__btn[disabled] {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .ng-pagination__readout {
+    padding: 0 8px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    color: hsl(var(--text-muted));
+  }
+
+  /* ── Status density ─────────────────────────────────────────────── */
+  .ng-status-density {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px;
+    border-radius: var(--r-sm);
+    background: hsl(var(--bg-base) / 0.4);
+    font-size: 0;
+    vertical-align: middle;
+  }
+  .ng-status-density__dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: hsl(var(--text-muted));
+    margin: 1px;
+    opacity: 0.5;
+  }
+  .ng-status-density__dot--ok    { background: hsl(var(--accent-green));  opacity: 1; }
+  .ng-status-density__dot--warn  { background: hsl(var(--accent-amber));  opacity: 1; }
+  .ng-status-density__dot--fail  { background: hsl(var(--accent-red));    opacity: 1; }
+  .ng-status-density__dot--info  { background: hsl(var(--accent-blue));   opacity: 1; }
+  .ng-status-density__dot--agent { background: hsl(var(--accent-purple)); opacity: 1; }
+  .ng-status-density__count {
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--text-muted));
+    margin-left: 6px;
+    letter-spacing: 0.04em;
   }
 }
