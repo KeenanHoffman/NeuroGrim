@@ -1,0 +1,57 @@
+[package]
+name = "scoring-source-prom"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "V5-MOD-1 example: third-party ScoringSource impl that fetches a Prometheus instant-query result. Demonstrates the Phase 5 conformance suite."
+# This is an example crate, not a published one. The example crate
+# itself is intentionally NOT on crates.io — its purpose is to be
+# read as a template by third-party plugin authors.
+publish = false
+
+[lib]
+# Library only; no binary target. A consuming binary registers the
+# factory via `registry.register(Box::new(PromSourceFactory))` in
+# its own main.rs.
+
+[dependencies]
+# Public contract surface from neurogrim-core. A third-party crate
+# (one NOT inside this workspace) would write `neurogrim-core = "5"`
+# to fetch from crates.io. Workspace inheritance is used here only
+# because the example crate IS a workspace member; see README.md
+# for the third-party Cargo.toml template.
+neurogrim-core = { workspace = true }
+
+# `#[async_trait]` macro for the trait impl. Same convention as
+# every built-in source (cmdb, a2a, function).
+async-trait = { workspace = true }
+
+# HTTP client for the Prometheus query API. Matches the version +
+# feature flags used elsewhere in the workspace
+# (neurogrim-a2a, neurogrim-ecosystem, neurogrim-sensory) for
+# Cargo.lock consistency.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
+
+# Parse the Prometheus response shape.
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# RFC3339 timestamps in the resulting `CmdbData`.
+chrono = { workspace = true }
+
+# Validate the configured `endpoint` URL before issuing the request.
+url = { workspace = true }
+
+# Warn-log failure modes (unreachable, malformed, etc.). Same
+# discipline as the built-in `A2aSource`.
+tracing = { workspace = true }
+
+[dev-dependencies]
+# `#[tokio::test]` for the conformance integration test.
+tokio = { workspace = true }
+# `tempfile::TempDir` for the conformance suite's `project_root`
+# argument. The suite never writes inside it; any existing path
+# satisfies the contract, but a tempdir keeps the test hermetic.
+tempfile = "3"

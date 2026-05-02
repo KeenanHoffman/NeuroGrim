@@ -9,6 +9,12 @@ members = [
     "crates/neurogrim-dashboard",
     "crates/neurogrim-cli",
     "crates/neurogrim-secrets",
+    # V5-MOD-1 Phase 6 (2026-05-02) — out-of-tree example crate
+    # demonstrating a third-party `ScoringSource` impl that passes
+    # the Phase 5 conformance suite. Lives outside `crates/`
+    # because it's not a published production crate; included as a
+    # workspace member so `cargo test --workspace` exercises it.
+    "examples/scoring-source-prom",
     "xtask",
 ]
 
