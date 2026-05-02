@@ -596,31 +596,60 @@ async fn main() -> Result<()> {
     }
 }
 
+/// Dispatch a `neurogrim cast <name>` invocation through the
+/// V5-MOD-2 [`SensorRegistry`] (2026-05-02 — was a 21-arm string
+/// match prior to V5-MOD-2 Phase 3).
+///
+/// # Sensor inventory
+///
+/// 21 built-in sensors registered via [`built_in_factories`].
+/// The list is the canonical source of truth — adding a new
+/// sensor in v5+ requires only adding a `XSensor` +
+/// `XSensorFactory` block to
+/// `neurogrim-sensory/src/sensor_impls.rs` and an entry to
+/// `built_in_factories()`; this dispatch site is touch-free.
+///
+/// # CLI exit-code parity (preserved)
+///
+/// The 3 fallible sensors (`agent-behavior`, `docker-topology`,
+/// `git-health`) propagate errors via `?` → non-zero CLI exit
+/// on failure. The 18 silent-degrade sensors return a degraded
+/// `Ok(envelope)` from the trait wrapper → zero exit even on
+/// internal failure (the JSON envelope communicates the
+/// degradation). Identical to v4.x semantics.
+///
+/// [`SensorRegistry`]: neurogrim_core::sensor::SensorRegistry
+/// [`built_in_factories`]: neurogrim_sensory::built_in_factories
 async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
+    use neurogrim_core::sensor::SensorRegistry;
+
     eprintln!("✦ Casting {name}…");
-    let result = match name {
-        "git-health" => neurogrim_sensory::git_health::analyze_git_health(project_root).await?,
-        "rust-health" => neurogrim_sensory::rust_health::analyze_rust_health(project_root).await,
-        "code-quality" => neurogrim_sensory::code_quality::analyze_code_quality(project_root).await,
-        "test-health" => neurogrim_sensory::test_results::analyze_test_health(project_root).await,
-        "deploy-readiness" => neurogrim_sensory::deploy_readiness::analyze_deploy_readiness(project_root).await,
-        "security-standards" => neurogrim_sensory::security_standards::analyze_security_standards(project_root).await,
-        "coherence" => neurogrim_sensory::coherence::analyze_coherence(project_root).await,
-        "human-comms" => neurogrim_sensory::human_comms::analyze_human_comms(project_root).await,
-        "secret-refs" => neurogrim_sensory::secret_refs::analyze_secret_refs(project_root).await,
-        "docker-topology" => neurogrim_sensory::docker_topology::analyze_docker_topology(project_root).await?,
-        "agent-behavior" => neurogrim_sensory::agent_behavior::analyze_agent_behavior(project_root).await?,
-        "skill-coherence" => neurogrim_sensory::skill_coherence::analyze_skill_coherence(project_root).await,
-        "capability-hygiene" => neurogrim_sensory::capability_hygiene::analyze_capability_hygiene(project_root).await,
-        "supply-chain-sca" => neurogrim_sensory::supply_chain_sca::analyze_supply_chain_sca(project_root).await,
-        "supply-chain-vigilance" => neurogrim_sensory::supply_chain_vigilance::analyze_supply_chain_vigilance(project_root).await,
-        "supply-chain-review" => neurogrim_sensory::supply_chain_review::analyze_supply_chain_review(project_root).await,
-        "domain-calibration" => neurogrim_sensory::domain_calibration::analyze_domain_calibration(project_root).await,
-        "operator-calibration" => neurogrim_sensory::operator_calibration::analyze_operator_calibration(project_root).await,
-        "trust-budget" => neurogrim_sensory::trust_budget::analyze_trust_budget(project_root).await,
-        "federated-patterns" => neurogrim_sensory::federated_patterns::analyze_federated_patterns(project_root).await,
-        _ => anyhow::bail!("Unknown sensory tool: {}. Available: git-health, rust-health, code-quality, test-health, deploy-readiness, security-standards, coherence, human-comms, secret-refs, docker-topology, agent-behavior, skill-coherence, capability-hygiene, supply-chain-sca, supply-chain-vigilance, supply-chain-review, domain-calibration, operator-calibration, trust-budget, federated-patterns", name),
-    };
+
+    // Build the registry per-invocation. `cast` is a one-shot CLI
+    // command (each invocation = a separate process), so no benefit
+    // to caching the registry. If `run_sensory` ever gets called
+    // many times within one process (e.g., a long-lived MCP server
+    // adopting this dispatch path), wrap in `OnceLock` then.
+    let mut registry = SensorRegistry::new();
+    registry.register_all(neurogrim_sensory::built_in_factories());
+
+    let sensor = registry.build(name).ok_or_else(|| {
+        let mut available: Vec<&str> =
+            registry.registered_names().copied().collect();
+        available.sort();
+        anyhow::anyhow!(
+            "Unknown sensory tool: {}. Available: {}",
+            name,
+            available.join(", ")
+        )
+    })?;
+
+    // The trait method returns `Result<Value>`. Fallible sensors
+    // bubble their underlying error chain; silent-degrade sensors
+    // always return `Ok(...)`. Either way the caller's `?` is
+    // exit-code-parity-correct.
+    let result = sensor.analyze(project_root).await?;
+
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
 }
