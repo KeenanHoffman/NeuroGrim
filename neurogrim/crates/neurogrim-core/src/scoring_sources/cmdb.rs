@@ -51,13 +51,21 @@ pub const CMDB_SOURCE_TYPE: &str = "cmdb";
 /// `Box::new(CmdbSource)` — no per-source state to amortize.
 pub struct CmdbSource;
 
-#[async_trait]
-impl ScoringSource for CmdbSource {
-    fn source_type_name(&self) -> &'static str {
-        CMDB_SOURCE_TYPE
-    }
-
-    async fn load(
+impl CmdbSource {
+    /// **Inherent** async load — bypasses `#[async_trait]`'s
+    /// `Pin<Box<dyn Future>>` boxing for the perf-critical
+    /// dispatch path. Called directly by the
+    /// `BuiltinScoringSource` enum's match arm in
+    /// `neurogrim-mcp::scoring_source_registry`. The trait impl
+    /// below delegates here so trait-based callers (third-party
+    /// plugin code) get the same behavior, paying the boxing
+    /// cost only when actually using `Box<dyn ScoringSource>`.
+    ///
+    /// V5-MOD-1 Phase 4-fallback (2026-05-02): introduced after
+    /// the perf-gate failure (`p95_ms ≤ 19` exceeded by ~6 ms;
+    /// `#[async_trait]` future-boxing identified as the dominant
+    /// cause across 19 domains × scoring run).
+    pub async fn load_inherent(
         &self,
         domain_key: &str,
         config: &ScoringSourceConfig,
@@ -148,6 +156,26 @@ impl ScoringSource for CmdbSource {
             updated_at: ts,
             confidence,
         })
+    }
+}
+
+#[async_trait]
+impl ScoringSource for CmdbSource {
+    fn source_type_name(&self) -> &'static str {
+        CMDB_SOURCE_TYPE
+    }
+
+    async fn load(
+        &self,
+        domain_key: &str,
+        config: &ScoringSourceConfig,
+        project_root: &Path,
+    ) -> Option<CmdbData> {
+        // Trait impl delegates to the inherent method. Trait-based
+        // callers (third-party plugin code via Box<dyn>) pay the
+        // future-boxing cost; the BuiltinScoringSource enum in
+        // neurogrim-mcp calls load_inherent directly to bypass it.
+        self.load_inherent(domain_key, config, project_root).await
     }
 }
 

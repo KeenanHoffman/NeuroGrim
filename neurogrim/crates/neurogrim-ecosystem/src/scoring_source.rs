@@ -64,13 +64,13 @@ pub const A2A_SOURCE_TYPE: &str = "a2a";
 /// pooling lives inside `neurogrim-a2a`'s `HttpSseTransport`.
 pub struct A2aSource;
 
-#[async_trait]
-impl ScoringSource for A2aSource {
-    fn source_type_name(&self) -> &'static str {
-        A2A_SOURCE_TYPE
-    }
-
-    async fn load(
+impl A2aSource {
+    /// **Inherent** async load — bypasses `#[async_trait]`
+    /// future-boxing for the perf-critical dispatch path. See
+    /// `neurogrim_core::scoring_sources::cmdb::CmdbSource::
+    /// load_inherent` for rationale (V5-MOD-1 Phase 4-fallback,
+    /// 2026-05-02). The trait impl below delegates here.
+    pub async fn load_inherent(
         &self,
         domain_key: &str,
         config: &ScoringSourceConfig,
@@ -132,6 +132,25 @@ impl ScoringSource for A2aSource {
                 None
             }
         }
+    }
+}
+
+#[async_trait]
+impl ScoringSource for A2aSource {
+    fn source_type_name(&self) -> &'static str {
+        A2A_SOURCE_TYPE
+    }
+
+    async fn load(
+        &self,
+        domain_key: &str,
+        config: &ScoringSourceConfig,
+        project_root: &Path,
+    ) -> Option<CmdbData> {
+        // Trait impl delegates to the inherent method. See
+        // `neurogrim_core::scoring_sources::cmdb::CmdbSource::load`
+        // for the rationale (V5-MOD-1 Phase 4-fallback).
+        self.load_inherent(domain_key, config, project_root).await
     }
 }
 

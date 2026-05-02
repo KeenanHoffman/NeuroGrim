@@ -38,13 +38,13 @@ pub const FUNCTION_SOURCE_TYPE: &str = "function";
 /// implementation-specific functions inside the pipeline.
 pub struct FunctionSource;
 
-#[async_trait]
-impl ScoringSource for FunctionSource {
-    fn source_type_name(&self) -> &'static str {
-        FUNCTION_SOURCE_TYPE
-    }
-
-    async fn load(
+impl FunctionSource {
+    /// **Inherent** async load — bypasses `#[async_trait]`
+    /// future-boxing for the perf-critical dispatch path. See
+    /// CmdbSource::load_inherent for rationale (V5-MOD-1 Phase
+    /// 4-fallback, 2026-05-02). The trait impl below delegates
+    /// here.
+    pub async fn load_inherent(
         &self,
         _domain_key: &str,
         _config: &ScoringSourceConfig,
@@ -55,6 +55,22 @@ impl ScoringSource for FunctionSource {
         // whose scoring is computed in-pipeline, not from a
         // CMDB envelope.
         None
+    }
+}
+
+#[async_trait]
+impl ScoringSource for FunctionSource {
+    fn source_type_name(&self) -> &'static str {
+        FUNCTION_SOURCE_TYPE
+    }
+
+    async fn load(
+        &self,
+        domain_key: &str,
+        config: &ScoringSourceConfig,
+        project_root: &Path,
+    ) -> Option<CmdbData> {
+        self.load_inherent(domain_key, config, project_root).await
     }
 }
 

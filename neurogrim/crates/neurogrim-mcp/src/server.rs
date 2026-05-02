@@ -69,28 +69,24 @@ impl BrainServer {
     }
 
     async fn load_cmdb_from_disk(&self) -> HashMap<String, CmdbData> {
-        // V5-MOD-1 Phase 3 (2026-05-02): converged with the
-        // CLI-direct dispatch site at `context::load_cmdb_data`.
-        // Both routes now resolve through the global
-        // ScoringSourceRegistry. The MCP-server cache previously
-        // handled only `cmdb` source_types; the registry-based
-        // dispatch handles `cmdb` + `a2a` + `function` plus any
-        // third-party-registered factories — a strict superset of
-        // v4 behavior. Method retained on BrainServer for the
-        // `cmdb_cache` write below at line ~155.
-        let source_registry = crate::scoring_source_registry::default_registry();
+        // V5-MOD-1 Phase 4-fallback (2026-05-02): two-tier
+        // dispatch via Dispatcher (built-ins fast-path; plugins
+        // through Box<dyn>). Same semantics as
+        // context::load_cmdb_data; both sites converge through
+        // the same dispatcher. See scoring_source_registry.rs
+        // for rationale.
+        use crate::scoring_source_registry::Dispatcher;
         let mut data = HashMap::new();
         for (domain_key, def) in &self.registry.config.domain_definitions {
             if let Some(ref src) = def.scoring_source {
-                let Some(factory) = source_registry.get(&src.source_type) else {
+                let Some(dispatcher) = Dispatcher::for_source_type(&src.source_type) else {
                     tracing::warn!(
                         "domain {domain_key}: unknown scoring_source.type {:?}; ignoring",
                         src.source_type
                     );
                     continue;
                 };
-                let source = factory.build();
-                if let Some(cmdb) = source.load(domain_key, src, &self.project_root).await {
+                if let Some(cmdb) = dispatcher.load(domain_key, src, &self.project_root).await {
                     data.insert(domain_key.clone(), cmdb);
                 }
             }

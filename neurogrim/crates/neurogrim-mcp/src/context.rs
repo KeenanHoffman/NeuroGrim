@@ -212,35 +212,30 @@ async fn load_cmdb_data(
     registry: &BrainRegistry,
     project_root: &Path,
 ) -> HashMap<String, CmdbData> {
-    // V5-MOD-1 Phase 3 (2026-05-02): the prior string-match
-    // dispatch on `source_type` ∈ {cmdb, a2a, function} is
-    // replaced by registry-based factory dispatch. Each domain's
-    // ScoringSourceConfig is resolved via the global registry
-    // (cmdb + function from neurogrim-core; a2a from
-    // neurogrim-ecosystem). Unknown source_types log a warn and
-    // skip — same semantics as the old `other => warn` arm. The
-    // cmdb / a2a / function semantics are bit-identical via the
-    // verbatim ports in V5-MOD-1 Phase 2.
-    let source_registry = crate::scoring_source_registry::default_registry();
+    // V5-MOD-1 Phase 4-fallback (2026-05-02): two-tier dispatch.
+    // Built-ins (cmdb / a2a / function) go through the
+    // BuiltinScoringSource enum's inlined match — calls each
+    // source's INHERENT `load_inherent` method directly, no
+    // future-boxing. Third-party plugins (Phase 6+) go through
+    // Box<dyn> and pay the dyn cost only when used.
+    use crate::scoring_source_registry::Dispatcher;
     let mut data = HashMap::new();
     for (dk, def) in &registry.config.domain_definitions {
         if let Some(ref src) = def.scoring_source {
-            let Some(factory) = source_registry.get(&src.source_type) else {
+            let Some(dispatcher) = Dispatcher::for_source_type(&src.source_type) else {
                 tracing::warn!(
                     "domain {dk}: unknown scoring_source.type {:?}; ignoring",
                     src.source_type
                 );
                 continue;
             };
-            let source = factory.build();
-            if let Some(cmdb) = source.load(dk, src, project_root).await {
+            if let Some(cmdb) = dispatcher.load(dk, src, project_root).await {
                 data.insert(dk.clone(), cmdb);
             } else if src.source_type == "a2a" {
                 // Preserve the v4 debug-log breadcrumb specifically
                 // for the a2a path (operators rely on it for
                 // troubleshooting unresolved fractal-composition
-                // children). cmdb / function paths log their own
-                // warns inside the impl when relevant.
+                // children).
                 tracing::debug!(
                     "a2a scoring source for domain {dk} unresolved; \
                      scoring pipeline will fall back to no_file_score"

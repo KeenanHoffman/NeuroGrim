@@ -147,13 +147,13 @@ pub fn check_principle_map_alignment(reg: &BrainRegistry) -> Vec<Finding> {
 // --- Check 4: every scoring_source.path resolves to a readable file --
 
 pub fn check_cmdb_paths(reg: &BrainRegistry, project_root: &Path) -> Vec<Finding> {
-    // V5-MOD-1 Phase 3 (2026-05-02): consult the registry to
-    // (a) emit a finding when source_type is unknown — declares
-    // a registration gap to the operator — and (b) skip the
-    // path-existence check for non-cmdb source types (a2a /
-    // function don't have local paths). The cmdb-specific path
-    // discipline below is preserved verbatim.
-    let source_registry = crate::scoring_source_registry::default_registry();
+    // V5-MOD-1 Phase 4-fallback (2026-05-02): consult the
+    // two-tier dispatcher to (a) emit a finding when source_type
+    // is unknown — declares a registration gap to the operator —
+    // and (b) skip the path-existence check for non-cmdb source
+    // types (a2a / function don't have local paths). The
+    // cmdb-specific path discipline below is preserved verbatim.
+    use crate::scoring_source_registry::{all_registered_names, is_registered};
     let mut findings = Vec::new();
     for (k, def) in &reg.config.domain_definitions {
         let Some(src) = def.scoring_source.as_ref() else {
@@ -163,19 +163,15 @@ pub fn check_cmdb_paths(reg: &BrainRegistry, project_root: &Path) -> Vec<Finding
         // registered. v4 silently coerced unknown types via the
         // tracing::warn in the dispatch path; doctor surfaces the
         // gap to the operator at validation time.
-        if !source_registry.has(&src.source_type) {
+        if !is_registered(&src.source_type) {
             findings.push(Finding::warn(
                 "cmdb-paths",
                 format!(
                     "domain '{k}' has unknown scoring_source.type {:?} \
-                     (no factory registered; scoring will fall back to no_file_score). \
-                     Known source types: {}",
+                     (no built-in or plugin registered; scoring will fall \
+                     back to no_file_score). Known source types: {}",
                     src.source_type,
-                    source_registry
-                        .registered_names()
-                        .copied()
-                        .collect::<Vec<&'static str>>()
-                        .join(", ")
+                    all_registered_names().join(", ")
                 ),
             ));
             continue;
