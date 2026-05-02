@@ -1832,6 +1832,7 @@ name = "neurogrim-core"
 version = "5.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "proptest",
  "rand 0.8.6",
@@ -1841,6 +1842,7 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "thiserror",
+ "tokio",
  "tracing",
  "url",
  "uuid",

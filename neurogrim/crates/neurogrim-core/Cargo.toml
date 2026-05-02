@@ -29,6 +29,13 @@ anyhow = { workspace = true }
 # ledger reader (parse-failure on a bad line should never block
 # the sensor, but the operator should see the warning).
 tracing = { workspace = true }
+# V5-MOD-1 (2026-05-02) — `async fn` in `pub trait ScoringSource`
+# requires the `async_trait` macro at this Rust version (workspace
+# MSRV 1.75; RPITIT is available but the workspace convention is
+# `#[async_trait]` per neurogrim-a2a's Transport trait, including
+# proven Box<dyn> dispatch). Promoted to workspace.dependencies in
+# Phase 0 so neurogrim-core can reference it via workspace = true.
+async-trait = { workspace = true }
 # v3.5.0 ports module — random pick from IANA dynamic range with
 # deterministic-seeded test path. 0.8.x for SeedableRng::from_entropy.
 rand = { workspace = true }
@@ -52,6 +59,11 @@ sqlite = ["dep:rusqlite"]
 
 [dev-dependencies]
 proptest = { workspace = true }
+# V5-MOD-1 Phase 1 (2026-05-02) — `#[tokio::test]` for the
+# `Box<dyn ScoringSource>` async-dispatch validation in
+# `scoring_source::tests`. Phase 2 + Phase 5 (conformance suite)
+# rely on this too.
+tokio = { workspace = true }
 # E-B2-2 C3: tempfile-backed integration tests for the
 # calibration-ledger writer (atomic write + read roundtrip,
 # malformed-line skip, fold-reconstruct). Same posture as

@@ -32,6 +32,11 @@
 //!   `data/schemas/diagnostics-ledger-v1.schema.json`; structural privacy
 //!   floor (forbidden-extras-keys + per-kind allowed-extras list)
 //!   enforced at write time.
+//! - **[`scoring_source`]** — V5-MOD-1 (2026-05-02) `ScoringSource` trait +
+//!   `ScoringSourceFactory` for the pluggable scoring-source dispatch.
+//!   Replaces the string-match in `neurogrim-mcp::context::load_cmdb_data`;
+//!   built-in factories (`cmdb`, `a2a`, `function`) ship in V5-MOD-1
+//!   Phase 2; the registry is hand-rolled (no `inventory` dep).
 //! - **[`ports`]** — v3.5.0 per-project random port allocator. Picks two
 //!   ports (dashboard + a2a) from the IANA dynamic range, persists the
 //!   choice to `.claude/brain/ports.json`, idempotent on subsequent reads.
@@ -90,5 +95,6 @@ pub mod registry;
 #[cfg(feature = "sqlite")]
 pub mod skill_invocations;
 pub mod scoring;
+pub mod scoring_source;
 pub mod trajectory;
 pub mod types;
