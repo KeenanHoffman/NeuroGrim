@@ -4,6 +4,7 @@ pub mod a2a_serve;
 pub mod a2a_token;
 pub mod agent;
 pub mod awareness;
+pub mod diag;
 pub mod disposition;
 pub mod doctor;
 pub mod domain;

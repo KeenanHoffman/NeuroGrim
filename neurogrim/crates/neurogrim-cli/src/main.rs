@@ -306,6 +306,22 @@ enum Commands {
     #[command(name = "disposition")]
     Disposition(commands::disposition::Args),
 
+    /// V5-FOUND-1 diagnostics ledger CLI. Subcommands: `report`
+    /// (top-N slow-ops summary; supports `--json`, `--kind`,
+    /// `--since`, `--name` filters); `synthesize` (deferred to
+    /// V5-FOUND-1.1; reserves the subcommand name).
+    ///
+    /// The diagnostics ledger is fed by the tracing Layer attached
+    /// in `setup_tracing` when `NEUROGRIM_DIAG=1`. Mapped span
+    /// names (`score.pipeline.run`, `test.run`, `cargo.invoke`,
+    /// `mcp.sensory`, `a2a.post`, `a2a.sse`, `dashboard.route`)
+    /// emit one entry per close to
+    /// `<project_root>/.claude/brain/diagnostics.jsonl`. Privacy
+    /// floor enforced at write time: no prompts, args, payloads,
+    /// bodies, or operator notes.
+    #[command(name = "diag")]
+    Diag(commands::diag::Args),
+
     /// Operator-explicit federated-pattern emission CLI (LSP-Brains v2.12
     /// §16.6.1, E-B2-7 C7). Single sub-command at v1: `emit` constructs a
     /// synthetic v1 `FederatedPatternPayload`, writes an
@@ -537,6 +553,7 @@ async fn main() -> Result<()> {
             commands::domain_calibration::run(subcommand).await
         }
         Commands::Disposition(args) => commands::disposition::run(args).await,
+        Commands::Diag(args) => commands::diag::run(args).await,
         Commands::FederatedPattern(args) => commands::federated_pattern::run(args).await,
         Commands::A2aServe {
             port,
