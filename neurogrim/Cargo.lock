@@ -1884,6 +1884,7 @@ name = "neurogrim-ecosystem"
 version = "5.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "chrono",
  "neurogrim-a2a",

@@ -96,5 +96,6 @@ pub mod registry;
 pub mod skill_invocations;
 pub mod scoring;
 pub mod scoring_source;
+pub mod scoring_sources;
 pub mod trajectory;
 pub mod types;

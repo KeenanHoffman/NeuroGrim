@@ -22,6 +22,11 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+# V5-MOD-1 (2026-05-02) — `A2aSource` impl of `neurogrim_core::
+# scoring_source::ScoringSource` needs `#[async_trait]` for the
+# `async fn load(...)` method. Promoted to workspace.dependencies
+# in V5-MOD-1 Phase 0.
+async-trait = { workspace = true }
 neurogrim-core = { workspace = true }
 neurogrim-a2a = { workspace = true }
 

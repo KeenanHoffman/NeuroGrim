@@ -34,6 +34,12 @@
 //! - Schema validation failures name the offending field so the caller can
 //!   fix their child quickly rather than hunt through opaque errors.
 
+// V5-MOD-1 Phase 2 (2026-05-02): the A2a scoring-source impl lives
+// here (where invoke_child lives), keeping the dep graph acyclic.
+// neurogrim-core defines the trait; consumers register
+// A2aSourceFactory at startup.
+pub mod scoring_source;
+
 use neurogrim_a2a::{A2aEnvelope, HttpSseTransport, MessageType, TaskClient};
 use neurogrim_core::agent_output::AgentOutput;
 use neurogrim_core::ecosystem::{
