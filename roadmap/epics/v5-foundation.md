@@ -24,7 +24,7 @@
 
 - [ ] tracing spans + `.claude/brain/diagnostics.jsonl` ledger emit on cargo build, neurogrim test, MCP tool dispatch, A2A POST/SSE, scoring pipeline, dashboard route handlers
 - [ ] `neurogrim diag report` summarizes top-N slow operations + counts
-- [ ] `neurogrim diag synthesize` invokes a bounded-prompt agent that MUST cite measured baseline + target
+- [ ] ~~`neurogrim diag synthesize` invokes a bounded-prompt agent that MUST cite measured baseline + target~~ — **deferred 2026-05-02 to V5-FOUND-1.1** (no Rust-side LLM pathway exists today; deferral preserves V5-FOUND-1's L estimate; design carried forward in `.claude/plans/v5-found-1-diagnostic-monitor.md` § V5-FOUND-1.1)
 - [ ] cargo-nextest adopted; `.config/nextest.toml` profiles `ci` + `default`
 - [ ] sccache (or equivalent) configured in `.cargo/config.toml`
 - [ ] Per-test wall-time SLO documented; existing ≥5s tests audited (fixed / `#[ignore]`d / moved to `benches/`)
@@ -54,7 +54,7 @@
 - [ ] `schema_version` field present; gitignored same as invocation-ledger
 - [ ] Privacy floor: no prompts, no tool args, no peer payloads — names + durations only
 - [ ] `neurogrim diag report` summarizes top-N slow operations + counts
-- [ ] `neurogrim diag synthesize` invokes a bounded-prompt agent; agent output MUST cite measured baseline + target. Prose-only "go faster" recommendations rejected at write time.
+- [ ] ~~`neurogrim diag synthesize` invokes a bounded-prompt agent; agent output MUST cite measured baseline + target. Prose-only "go faster" recommendations rejected at write time.~~ — **deferred 2026-05-02 to V5-FOUND-1.1** (see Theme A Done-When for rationale)
 - [ ] Unit-test coverage for span emission, ledger append, malformed-line skip, privacy filter (≥4 negative paths per v5 conformance discipline)
 - [ ] **S15 scoring round-trip baseline captured** in `roadmap/data/v5-scoring-baseline-<date>.json` (must land before V5-MOD-1 begins — V5-MOD-1's 5% perf gate compares against this baseline)
 
@@ -117,7 +117,7 @@
 **V5-FOUND-1 Diagnostic Monitor:**
 - Run a real `cargo test --workspace` under `neurogrim test`; observe diagnostics emitted to `.claude/brain/diagnostics.jsonl`
 - Run `neurogrim diag report`; confirm top-N slow operations + counts surface
-- Run `neurogrim diag synthesize`; confirm agent output cites measured baseline + target (rejected if not)
+- ~~Run `neurogrim diag synthesize`; confirm agent output cites measured baseline + target (rejected if not)~~ — **deferred to V5-FOUND-1.1**; in V5-FOUND-1, the `synthesize` subcommand is registered as a stub that returns a "not yet implemented; see V5-FOUND-1.1" error (reserves the name)
 - Capture S15 scoring round-trip baseline JSON for V5-MOD-1 perf-gate comparison
 
 **V5-FOUND-2 nextest + sccache:**
