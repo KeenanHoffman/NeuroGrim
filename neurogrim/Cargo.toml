@@ -15,6 +15,12 @@ members = [
     # because it's not a published production crate; included as a
     # workspace member so `cargo test --workspace` exercises it.
     "examples/scoring-source-prom",
+    # V5-MOD-2 Phase 6 (2026-05-02) — out-of-tree example crate
+    # demonstrating a third-party `Sensor` impl that passes the
+    # Phase 5 conformance suite. README-quality scoring: pure FS
+    # (no env vars, no network) — paired with `scoring-source-prom`
+    # (HTTP-fetch) gives the V5-SDK two complementary patterns.
+    "examples/sensor-readme-quality",
     "xtask",
 ]
 

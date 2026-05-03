@@ -1,0 +1,53 @@
+[package]
+name = "sensor-readme-quality"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "V5-MOD-2 example: third-party Sensor impl that scores README quality. Pure-FS, zero deps beyond `neurogrim-core`."
+# This is an example crate, not a published one. Intentionally NOT
+# on crates.io — its purpose is to be read as a template by
+# third-party plugin authors.
+publish = false
+
+[lib]
+# Library only; no binary target. A consuming binary registers the
+# factory via `registry.register(Box::new(ReadmeQualitySensorFactory))`
+# in its own main.rs.
+
+[dependencies]
+# Public contract surface from neurogrim-core. A third-party crate
+# (one NOT inside this workspace) would write `neurogrim-core = "5"`
+# to fetch from crates.io. Workspace inheritance is used here only
+# because the example crate IS a workspace member; see README.md
+# for the third-party Cargo.toml template.
+neurogrim-core = { workspace = true }
+
+# `#[async_trait]` macro for the trait impl. Same convention as
+# every built-in sensor.
+async-trait = { workspace = true }
+
+# `anyhow::Result` is the trait method's return type. Same crate
+# version as `neurogrim-sensory`'s analyzer signatures.
+anyhow = { workspace = true }
+
+# Build the CMDB envelope return value. No serde-derive needed —
+# we construct via `serde_json::json!`.
+serde_json = { workspace = true }
+
+# RFC3339 timestamps in the resulting envelope.
+chrono = { workspace = true }
+
+# Warn-log the unusual case where the README file disappears
+# between path resolution and read. Same posture as built-in
+# silent-degrade sensors.
+tracing = { workspace = true }
+
+[dev-dependencies]
+# `#[tokio::test]` for the conformance integration test + unit tests.
+tokio = { workspace = true }
+# `tempfile::TempDir` for unit tests + the conformance test's
+# `project_root` argument. The conformance suite uses skeletal
+# (empty) tempdirs; unit tests populate fixtures inside.
+tempfile = "3"
