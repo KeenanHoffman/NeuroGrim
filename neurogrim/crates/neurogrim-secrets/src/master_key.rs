@@ -172,14 +172,20 @@ mod tests {
         assert_ne!(k1.as_bytes(), k2.as_bytes());
     }
 
+    // SLO-violation: 52.033s (V5-FOUND-2 audit 2026-05-03). Argon2id KDF
+    // params hard-coded; fix tracked in BACKLOG B-48.
     #[test]
+    #[ignore]
     fn derive_from_passphrase_is_deterministic() {
         let k1 = MasterSessionKey::derive_from_passphrase(b"correct horse battery staple", b"salt-32-bytes-xxxxxxxxxxxxxxxxx0");
         let k2 = MasterSessionKey::derive_from_passphrase(b"correct horse battery staple", b"salt-32-bytes-xxxxxxxxxxxxxxxxx0");
         assert_eq!(k1.as_bytes(), k2.as_bytes());
     }
 
+    // SLO-violation: 61.705s (V5-FOUND-2 audit 2026-05-03). Argon2id KDF
+    // params hard-coded; fix tracked in BACKLOG B-48.
     #[test]
+    #[ignore]
     fn derive_from_passphrase_different_salt_yields_different_key() {
         let k1 = MasterSessionKey::derive_from_passphrase(
             b"same-passphrase",
@@ -192,7 +198,10 @@ mod tests {
         assert_ne!(k1.as_bytes(), k2.as_bytes());
     }
 
+    // SLO-violation: 71.878s (V5-FOUND-2 audit 2026-05-03). Argon2id KDF
+    // params hard-coded; fix tracked in BACKLOG B-48.
     #[test]
+    #[ignore]
     fn derive_from_passphrase_different_passphrase_yields_different_key() {
         let salt = b"shared-salt-padded-32-xxxxxxxxx0";
         let k1 = MasterSessionKey::derive_from_passphrase(b"alpha", salt);

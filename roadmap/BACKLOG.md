@@ -1967,15 +1967,35 @@ LLM-as-judge until explicitly justified otherwise.
 **Problem.** V5-FOUND-2 Phase 4 audits the workspace for tests violating the per-test wall-time SLO (5s investigate / 10s violate per Fork D1) and **tags violators with `#[ignore]` + `// SLO-violation: <duration>` comments**. V5-FOUND-2 deliberately ships tag-only — fixing slow tests is open-ended work (some are slow because they do real I/O honestly; some are slow because of inefficient setup; some need full rewrites) that would balloon V5-FOUND-2's M budget. This entry tracks the v5.5 fix queue: each tagged test gets triaged + fixed/optimized/moved to `benches/` per its individual situation.
 
 **Plan when:**
-1. AND: V5-FOUND-2 Phase 4 audit complete; `docs/test-slo.md` has the audit log.
-2. AND: Number of tagged tests is known (could be 2, could be 20).
-3. AND: Operator decides whether to scope the fix queue as one v5.5 epic or split per-domain (e.g., "v5.5-FOUND-SLO-DASHBOARD" for dashboard-frontend tests, etc.).
+1. AND: V5-FOUND-2 Phase 4 audit complete; `docs/test-slo.md` has the audit log. **DONE 2026-05-03.**
+2. AND: Number of tagged tests is known: **9 violations + 1 investigate.**
+3. AND: Operator decides whether to scope the fix queue as one v5.5 epic or split per-domain (e.g., "v5.5-FOUND-SLO-SECRETS" — likely the right split given the audit landed all 9 violations in `neurogrim-secrets`).
 
-**Dependencies.** V5-FOUND-2 Phase 4 ships first.
+**Dependencies.** V5-FOUND-2 Phase 4 ships first. **MET 2026-05-03.**
 
-**Adversarial note.** The audit may surface tests that are honestly slow (frontend builds invoked from Rust integration tests; SQLite migrations; A2A round-trips). Don't reflexively `#[ignore]` honest tests — if they catch real regressions and the wall-time is the price, document the rationale in `docs/test-slo.md` and accept the SLO violation as a known exception. The 5s/10s thresholds are guidelines, not invariants.
+**Adversarial note.** The audit may surface tests that are honestly slow (frontend builds invoked from Rust integration tests; SQLite migrations; A2A round-trips). Don't reflexively `#[ignore]` honest tests — if they catch real regressions and the wall-time is the price, document the rationale in `docs/test-slo.md` and accept the SLO violation as a known exception. The 5s/10s thresholds are guidelines, not invariants. **The 9 v5.0 violations are all real Argon2id KDF cost — the fix is to parameterize KDF cost for tests, NOT to weaken production cost.**
 
-**Cross-references.** `.claude/plans/v5-found-2-nextest-sccache.md` § Phase 4 (scope discipline); `docs/test-slo.md` (will exist post-V5-FOUND-2 Phase 4).
+**Audit results (V5-FOUND-2 Phase 4, 2026-05-03).** All 9 SLO violations share a single root cause: real Argon2id key-derivation runs at production cost in tests. Likely fix shape:
+
+- `MasterSessionKey::derive_from_passphrase` currently hard-codes Argon2id `(memory_kib, iterations, parallelism)`. Add an internal `derive_with_params(...)` taking explicit params; have the public `derive_from_passphrase` delegate with the production constants.
+- Test helpers (`fresh_master`, `fresh_backend`) call a new `derive_for_tests` variant with reduced params (e.g., `m=4096, t=1, p=1`) — secure enough to validate the round-trip logic, ~1000× faster.
+- Production code path unchanged; production cost unchanged; tests run in <1s instead of ~50–100s each.
+
+Tagged tests (9, all in `neurogrim-secrets`):
+- `master_key::tests::derive_from_passphrase_is_deterministic` (52.033s)
+- `master_key::tests::derive_from_passphrase_different_salt_yields_different_key` (61.705s)
+- `master_key::tests::derive_from_passphrase_different_passphrase_yields_different_key` (71.878s)
+- `encrypted_file::tests::set_then_get_round_trip` (64.432s)
+- `encrypted_file::tests::delete_is_idempotent` (45.468s)
+- `encrypted_file::tests::wrong_passphrase_returns_bad_passphrase_error` (69.991s)
+- `encrypted_file::tests::list_returns_only_brain_id_scoped_secrets` (98.236s)
+- `encrypted_file::tests::each_set_uses_fresh_salt_and_nonce` (64.180s)
+- `encrypted_file::tests::smoke_check_file_succeeds_for_valid_passphrase` (89.104s)
+
+Investigate-band test (1, comment-only — not tagged):
+- `neurogrim-sensory::tests/sensor_behavior::git_health_dirty_repo_scores_below_clean` (5.279s; suspected cause: per-test temp-dir + git init).
+
+**Cross-references.** `.claude/plans/v5-found-2-nextest-sccache.md` § Phase 4; `docs/test-slo.md` (audit log).
 
 ---
 

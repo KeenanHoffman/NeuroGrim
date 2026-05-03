@@ -303,6 +303,8 @@ fn git_commit_all(dir: &std::path::Path, message: &str) {
     assert!(s.success(), "git commit failed");
 }
 
+// SLO-investigate: 5.279s (V5-FOUND-2 audit 2026-05-03). Within investigate
+// band (5–10s); not tagged. Likely candidate: per-test temp-dir + git init.
 #[tokio::test]
 async fn git_health_dirty_repo_scores_below_clean() {
     // Dirty fixture: git init, commit a file, then MODIFY the tracked
