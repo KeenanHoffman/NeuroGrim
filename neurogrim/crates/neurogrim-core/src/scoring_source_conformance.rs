@@ -73,73 +73,16 @@ use crate::scoring_source::ScoringSourceFactory;
 use std::path::Path;
 use std::time::Duration;
 
-/// Per-test outcome inside a [`ConformanceReport`].
-#[derive(Debug, Clone)]
-pub struct TestResult {
-    /// Stable test name (snake_case).
-    pub name: &'static str,
-    /// `true` if the test passed.
-    pub passed: bool,
-    /// On failure: a short string describing what went wrong.
-    /// `None` when the test passed.
-    pub detail: Option<String>,
-}
-
-impl TestResult {
-    fn pass(name: &'static str) -> Self {
-        TestResult {
-            name,
-            passed: true,
-            detail: None,
-        }
-    }
-    fn fail(name: &'static str, detail: impl Into<String>) -> Self {
-        TestResult {
-            name,
-            passed: false,
-            detail: Some(detail.into()),
-        }
-    }
-}
-
-/// Aggregated outcome of running the conformance suite against
-/// one factory.
-#[derive(Debug, Clone, Default)]
-pub struct ConformanceReport {
-    pub results: Vec<TestResult>,
-}
-
-impl ConformanceReport {
-    pub fn new() -> Self {
-        ConformanceReport {
-            results: Vec::new(),
-        }
-    }
-
-    /// `true` iff every test passed.
-    pub fn all_passed(&self) -> bool {
-        self.results.iter().all(|r| r.passed)
-    }
-
-    /// Number of tests that passed.
-    pub fn passed_count(&self) -> usize {
-        self.results.iter().filter(|r| r.passed).count()
-    }
-
-    /// Total tests run.
-    pub fn total(&self) -> usize {
-        self.results.len()
-    }
-
-    /// Just the failures — useful for assertion messages.
-    pub fn failures(&self) -> Vec<&TestResult> {
-        self.results.iter().filter(|r| !r.passed).collect()
-    }
-
-    fn add(&mut self, result: TestResult) {
-        self.results.push(result);
-    }
-}
+// V5-SDK-1 Phase 1.5 (2026-05-02 — Fork F1): `TestResult` +
+// `ConformanceReport` previously lived here as suite-local types
+// duplicated across V5-MOD-1/2/3's three conformance modules.
+// Hoisted to `crate::conformance` for SDK consumer-side
+// type-unification (third-party authors writing both a sensor +
+// a queue backend now see a single `ConformanceReport` nominal
+// type, not three structurally-identical-but-incompatible
+// copies). Re-exported here so existing consumers' import paths
+// keep working.
+pub use crate::conformance::{ConformanceReport, TestResult};
 
 /// Build a minimal [`ScoringSourceConfig`] addressed to the
 /// given source_type. All optional fields are `None` —

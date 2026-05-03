@@ -1,0 +1,29 @@
+[package]
+name = "neurogrim-sdk"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Stable contract surface for NeuroGrim plugin authors. Re-exports the V5-MOD-1/2/3 trait + factory + registry types + conformance suites + core types."
+keywords = ["neurogrim", "sdk", "plugin", "lsp-brains"]
+categories = ["development-tools"]
+# V5-SDK-1 plan-critic 🔴 fix (2026-05-02): publish=false explicitly so
+# `cargo publish` is mechanically blocked until the operator approves
+# crates.io publication separately. Prevents accidental publication
+# during V5-SDK-1's 0.x soak period (≥6 weeks per V5-SDK epic).
+# Flip to `true` (or remove) when publication is approved.
+publish = false
+
+[lib]
+# Pure re-export crate. The compile-test files under tests/ verify
+# every re-exported type's path resolves through `neurogrim_sdk`.
+
+[dependencies]
+neurogrim-core = { workspace = true }
+neurogrim-a2a = { workspace = true }
+neurogrim-secrets = { workspace = true }
+
+[dev-dependencies]
+# Compile-test re-exports use Box<dyn Trait> stanzas; no extra deps
+# beyond what the crates already pull in transitively.

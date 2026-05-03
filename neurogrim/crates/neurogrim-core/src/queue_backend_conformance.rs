@@ -96,62 +96,14 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[derive(Debug, Clone)]
-pub struct TestResult {
-    pub name: &'static str,
-    pub passed: bool,
-    pub detail: Option<String>,
-}
-
-impl TestResult {
-    fn pass(name: &'static str) -> Self {
-        TestResult {
-            name,
-            passed: true,
-            detail: None,
-        }
-    }
-    fn fail(name: &'static str, detail: impl Into<String>) -> Self {
-        TestResult {
-            name,
-            passed: false,
-            detail: Some(detail.into()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct ConformanceReport {
-    pub results: Vec<TestResult>,
-}
-
-impl ConformanceReport {
-    pub fn new() -> Self {
-        ConformanceReport {
-            results: Vec::new(),
-        }
-    }
-
-    pub fn all_passed(&self) -> bool {
-        self.results.iter().all(|r| r.passed)
-    }
-
-    pub fn passed_count(&self) -> usize {
-        self.results.iter().filter(|r| r.passed).count()
-    }
-
-    pub fn total(&self) -> usize {
-        self.results.len()
-    }
-
-    pub fn failures(&self) -> Vec<&TestResult> {
-        self.results.iter().filter(|r| !r.passed).collect()
-    }
-
-    fn add(&mut self, result: TestResult) {
-        self.results.push(result);
-    }
-}
+// V5-SDK-1 Phase 1.5 (2026-05-02 — Fork F1): `TestResult` +
+// `ConformanceReport` hoisted from this module's prior duplicated
+// definitions to `crate::conformance` (shared with
+// `scoring_source_conformance` + `sensor_conformance`).
+// See `crate::conformance` rustdoc for the cross-suite type-
+// unification rationale. Re-exported here so existing consumers'
+// import paths keep working.
+pub use crate::conformance::{ConformanceReport, TestResult};
 
 /// Per-test wall-clock ceiling. Backends that take longer than
 /// this on a tempdir have a contract violation (file I/O should

@@ -9,6 +9,12 @@ members = [
     "crates/neurogrim-dashboard",
     "crates/neurogrim-cli",
     "crates/neurogrim-secrets",
+    # V5-SDK-1 (2026-05-02) — `neurogrim-sdk` thin re-export crate
+    # exposing Theme B trait surfaces + `Transport` + `SecretBackend`
+    # as a stable plugin-author SDK. Versioned independently from
+    # `neurogrim-core` (`0.1.0` initial; semver gate in CI prevents
+    # breaking changes without explicit major bump).
+    "crates/neurogrim-sdk",
     # V5-MOD-1 Phase 6 (2026-05-02) — out-of-tree example crate
     # demonstrating a third-party `ScoringSource` impl that passes
     # the Phase 5 conformance suite. Lives outside `crates/`
@@ -29,6 +35,14 @@ members = [
     # V5-MOD-2's FS-read examples — three complementary V5-SDK
     # patterns covering network, file-system, and pure-memory.
     "examples/queue-backend-memory",
+    # V5-SDK-1 Phase 2 (2026-05-02) — V5-SDK reference example.
+    # Toy `ConstantScoreSensor` that always reports score=42;
+    # demonstrates the smallest-possible third-party `Sensor`
+    # implementation depending only on `neurogrim-sdk` (NOT
+    # `neurogrim-core`). Proves the SDK surface is reachable
+    # for the most basic case. For richer patterns see the
+    # V5-MOD-1/2/3 example crates above.
+    "examples/sensor-constant-score",
     "xtask",
 ]
 

@@ -104,79 +104,14 @@ use serde_json::Value;
 use std::path::Path;
 use std::time::Duration;
 
-/// Per-test outcome inside a [`ConformanceReport`].
-///
-/// Note: this type duplicates `scoring_source_conformance::TestResult`
-/// (V5-MOD-1 Phase 5) — same shape, same purpose. A future v5.5
-/// refactor could hoist both into a shared `crate::conformance`
-/// module; for now the duplication is small and the parallel keeps
-/// each suite self-contained.
-#[derive(Debug, Clone)]
-pub struct TestResult {
-    /// Stable test name (snake_case).
-    pub name: &'static str,
-    /// `true` if the test passed.
-    pub passed: bool,
-    /// On failure: a short string describing what went wrong.
-    /// `None` when the test passed.
-    pub detail: Option<String>,
-}
-
-impl TestResult {
-    fn pass(name: &'static str) -> Self {
-        TestResult {
-            name,
-            passed: true,
-            detail: None,
-        }
-    }
-    fn fail(name: &'static str, detail: impl Into<String>) -> Self {
-        TestResult {
-            name,
-            passed: false,
-            detail: Some(detail.into()),
-        }
-    }
-}
-
-/// Aggregated outcome of running the conformance suite against
-/// one factory.
-#[derive(Debug, Clone, Default)]
-pub struct ConformanceReport {
-    pub results: Vec<TestResult>,
-}
-
-impl ConformanceReport {
-    pub fn new() -> Self {
-        ConformanceReport {
-            results: Vec::new(),
-        }
-    }
-
-    /// `true` iff every test passed.
-    pub fn all_passed(&self) -> bool {
-        self.results.iter().all(|r| r.passed)
-    }
-
-    /// Number of tests that passed.
-    pub fn passed_count(&self) -> usize {
-        self.results.iter().filter(|r| r.passed).count()
-    }
-
-    /// Total tests run.
-    pub fn total(&self) -> usize {
-        self.results.len()
-    }
-
-    /// Just the failures — useful for assertion messages.
-    pub fn failures(&self) -> Vec<&TestResult> {
-        self.results.iter().filter(|r| !r.passed).collect()
-    }
-
-    fn add(&mut self, result: TestResult) {
-        self.results.push(result);
-    }
-}
+// V5-SDK-1 Phase 1.5 (2026-05-02 — Fork F1): `TestResult` +
+// `ConformanceReport` hoisted from this module's prior duplicated
+// definitions to `crate::conformance` (shared with
+// `scoring_source_conformance` + `queue_backend_conformance`).
+// See `crate::conformance` rustdoc for the cross-suite type-
+// unification rationale. Re-exported here so existing consumers'
+// import paths keep working.
+pub use crate::conformance::{ConformanceReport, TestResult};
 
 /// Per-sensor wall-clock ceiling. Sensors that take longer than
 /// this on skeletal input have a contract violation.
@@ -641,20 +576,11 @@ async fn test_analyze_is_idempotent_on_identical_input(
     }
 }
 
-impl TestResult {
-    /// Same as `pass`, but stores a `detail` note explaining
-    /// degenerate-but-acceptable cases (e.g., "fallible sensor
-    /// returned Err on skeletal input — envelope check skipped").
-    /// Useful when the test "passes" only because there's nothing
-    /// to check.
-    fn pass_with_note(name: &'static str, detail: impl Into<String>) -> Self {
-        TestResult {
-            name,
-            passed: true,
-            detail: Some(detail.into()),
-        }
-    }
-}
+// V5-SDK-1 Phase 1.5 (2026-05-02 — Fork F1): the orphan
+// `impl TestResult { fn pass_with_note(...) }` block previously
+// here was lifted into the canonical `crate::conformance` module.
+// `pass_with_note` is now a method on the shared type; callers
+// in this module reach it through the re-exported `TestResult`.
 
 #[cfg(test)]
 mod tests {

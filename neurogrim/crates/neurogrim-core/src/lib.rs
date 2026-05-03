@@ -89,6 +89,15 @@
 pub mod agent_output;
 pub mod awareness;
 pub mod calibration_ledger;
+// V5-SDK-1 Phase 1.5 (2026-05-02 — Fork F1): shared
+// `ConformanceReport` + `TestResult` types for the V5 conformance
+// suites. Pre-V5-SDK-1, each suite (V5-MOD-1's
+// `scoring_source_conformance`, V5-MOD-2's `sensor_conformance`,
+// V5-MOD-3's `queue_backend_conformance`) shipped its own copy
+// of these types. Hoisted here before SDK 0.1.0 ships so
+// consumers writing multiple plugin types share a single nominal
+// `ConformanceReport` across all suites.
+pub mod conformance;
 pub mod confidence;
 pub mod correlation;
 pub mod diagnostics_ledger;
