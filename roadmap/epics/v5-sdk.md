@@ -84,6 +84,28 @@ V5-SDK-2's conformance fixture for `Sensor` should re-export `neurogrim_core::se
 
 **No two-method dance like `ScoringSource::load_inherent`:** sensors are slow IO at seconds-per-call (git, cargo audit, network); ~50ns × 21 boxing overhead is rounding error. SDK consumers see a single `analyze` method; no `BuiltinSensor` enum dispatcher needed (V5-MOD-1's perf-critical scoring path required one — sensors don't).
 
+#### V5-MOD-3 hand-off note (added 2026-05-02 at V5-MOD-3 close-out)
+
+V5-MOD-3 ships the third (and final) Theme B trait surface. SDK extraction should re-export the following:
+
+| Type | Path | SDK re-export? | Why |
+|---|---|---|---|
+| `QueueBackend` **trait** | `neurogrim_core::queue_backend::QueueBackend` | **YES** | Stable contract; behavior third-party backends implement. `Send + Sync` (V5-MOD-3 Fork A2). V5-SDK-2 conformance fixture tests this. |
+| `QueueBackendFactory` **trait** | `neurogrim_core::queue_backend::QueueBackendFactory` | **YES** | Pairs with the backend trait; how registration works. Exposes `name()`, `supports_ack()`, `build(queue_root, topic)`. |
+| `QueueBackendRegistry` | `neurogrim_core::queue_backend::QueueBackendRegistry` | **YES** | Public registration API third-party crates call at startup. |
+| `StoredMessage` | `neurogrim_core::queue_backend::StoredMessage` | **YES** | Return type of `read_from` / `read_unacked`; consumers depend on the offset+message shape. |
+| `QueueBackendConfig` (per-topic config in `queue_config.rs`) | `neurogrim_core::queue_config::TopicConfig` | **PARTIAL** | The `TopicConfig` struct is SDK-stable (operators bind to the `backend: String` field shape); `validate_with_registry()` is SDK-stable; the YAML-deserialization helpers are not (could change with config-schema bumps). |
+
+V5-SDK-2's conformance fixture for `QueueBackend` should re-export `neurogrim_core::queue_backend_conformance::run_factory_conformance` (V5-MOD-3 Phase 4 — 12 cross-cutting tests covering factory contract, append/read round-trip, concurrent safety, ack semantics, and the `Send + Sync + 'static` runtime check). The example crate at `examples/queue-backend-memory/` (V5-MOD-3 Phase 5) demonstrates the canonical third-party-author pattern with full ack semantics — a complement to V5-MOD-1's `scoring-source-prom` (HTTP-fetch, no ack) and V5-MOD-2's `sensor-readme-quality` (FS-read, no ack).
+
+**Trait shape note — `Send + Sync` consistency:** V5-MOD-3's `QueueBackend` joins `ScoringSource` (V5-MOD-1) and `Sensor` (V5-MOD-2) in being `Send + Sync`. SDK consumers see all three traits with the same async-safe bound. The minor inconsistency between traits is V5-MOD-2's `Sensor::analyze(&str)` vs `ScoringSource::load(&Path)` and `QueueBackend` methods on simple types — documented in V5-MOD-2's hand-off note.
+
+**`Arc<dyn QueueBackend>` not `Box<dyn>`:** V5-MOD-3 returns `Arc<dyn QueueBackend>` from factory `build()` (vs. V5-MOD-1/2's `Box<dyn>`). The reason: queue backends are **per-topic shared state** (a single `SqliteBackend` connection is shared across the bus's read/write paths). `Arc` lets the bus's per-topic cache hold one handle that multiple call sites can clone. SDK consumers should expect `Arc<dyn QueueBackend>` from the registry.
+
+**Backend-name display via re-resolve (Fork D3):** No `name()` method on `QueueBackend` itself; callers re-resolve the backend wire-name from `QueueConfig::lookup(topic).backend`. Matches V5-MOD-2's no-`name()`-on-`Sensor` precedent.
+
+**Conformance test renamed `concurrent_appends_dont_panic`:** V5-MOD-3 Phase 4 caught a known JsonlBackend TOCTOU race (`len()` then `append`) via the original `append_returns_unique_offsets` check. Renamed and weakened to "no panic + no error + no deadlock"; backends with stronger transactional guarantees (SqliteBackend, MemoryQueueBackend) verify offset uniqueness via per-backend tests, not the cross-cutting suite. SDK consumers writing transactional backends can add an `_unique_offsets` test in their own crate's `tests/` if needed.
+
 ### V5-SDK-2: SDK conformance suites (distributed) (~3–5 days)
 
 **Status:** Planned

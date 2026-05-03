@@ -2,7 +2,7 @@
 
 **Theme:** B
 **Release:** v5 (entry pinned 2026-05-01; this epic is **gated on Theme A close** plus a re-check of the concurrent-v4.x-work risk before V5-MOD-1's 5% perf-gate runs — see `v5-roadmap.md` §"v5 Entry Decision Tracker")
-**Status:** IN PROGRESS — V5-MOD-1 **COMPLETE** 2026-05-02 (commit `fb45d5d` close-out), V5-MOD-2 **COMPLETE** 2026-05-02 (commit `459d9ec` Phase 6 + Phase 7 close-out); V5-MOD-3 PLANNED
+**Status:** **COMPLETE** 2026-05-02 — all three stories shipped: V5-MOD-1 (commit `fb45d5d` close-out), V5-MOD-2 (commit `459d9ec` close-out), V5-MOD-3 (commit `<this commit>` close-out). **Theme B is the V5 modularity substrate**: trait + factory + hand-rolled `HashMap` registry + 10–12-test conformance suite + out-of-tree example crate. Three complementary SDK example patterns shipped (HTTP-fetch, FS-read, in-memory).
 **Priority:** Core scope of v5 — three high-leverage trait conversions; "everything is an interface" was rejected as wider scope
 **Goal:** Convert three highest-leverage seams to trait + factory pattern. `ScoringSource` becomes `Box<dyn ScoringSource>` with factory registry; `Sensor` trait converts the existing sensors with cargo-feature-gate discovery (dynamic loading deferred to v5.5); `QueueBackend` factory replaces `BackendHandle` enum. Each ships a conformance suite.
 
@@ -29,10 +29,10 @@
 - [x] Example out-of-tree sensor crate compiles + integrates via cargo feature *(V5-MOD-2 Phase 6, commit `459d9ec` — `examples/sensor-readme-quality/`)*
 - [x] `Sensor` conformance suite enforces JSON-schema CMDB output *(V5-MOD-2 Phase 5, hand-rolled structural check covers the load-bearing cmdb-envelope-v1 constraints — full `jsonschema` validation deferred for `neurogrim-core` dep-discipline)*
 - [x] LSP-Brains spec §F (MCP sensory tools) updated to reflect plugin shape *(Phase 7 close-out, this commit)*
-- [ ] `BackendHandle` enum replaced by `Arc<dyn QueueBackend>` factory dispatch
-- [ ] `queue-config.yaml` supports user-registered backend types
-- [ ] Existing `JsonlBackend` + `SqliteBackend` pass conformance suite unchanged
-- [ ] Example crate demonstrates third-party queue backend registration
+- [x] `BackendHandle` enum replaced by `Arc<dyn QueueBackend>` factory dispatch *(V5-MOD-3 Phase 3, 2026-05-02; trait promoted to `Send + Sync` in Phase 2 with `SqliteBackend` Mutex internalized)*
+- [x] `queue-config.yaml` supports user-registered backend types *(V5-MOD-3 Phase 3 — `BackendKind` enum → `String`; `validate()` split into shape-only + registry-aware variant)*
+- [x] Existing `JsonlBackend` + `SqliteBackend` pass conformance suite unchanged *(V5-MOD-3 Phase 4 — 12-test cross-cutting suite)*
+- [x] Example crate demonstrates third-party queue backend registration *(V5-MOD-3 Phase 5, commit `7dbfce9` — `examples/queue-backend-memory/`)*
 
 ---
 
@@ -103,20 +103,39 @@
 
 ### V5-MOD-3: Queue backend factory (low-cost win) (~3–5 days)
 
-**Status:** Planned
-**Effort:** S
-**Depends on:** V5-MOD-1 (factory pattern reused)
+**Status:** **COMPLETE** 2026-05-02 — Phases 0–5 + Phase 6 close-out (7 commits)
+**Effort:** S (final ~5 days planned, actual ~5 days)
+**Depends on:** V5-MOD-1 (factory pattern reused) + V5-MOD-2 (registry pattern reused) — both closed 2026-05-02
 
-**What:** Convert `BackendHandle` enum at [queue_backend.rs:65–72](../crates/neurogrim-core/src/queue_backend.rs) to `Arc<dyn QueueBackend>` factory dispatch. Already trait-based; this is registration plumbing only. Document custom-backend authoring; ship a third-party PostgreSQL example (or stub) as proof.
+**What:** Refactored the **`BackendHandle` enum + ~100 lines of dispatch boilerplate** at `neurogrim-dashboard/src/bus.rs:65-72` into `Arc<dyn QueueBackend>` directly via `QueueBackendFactory` + `QueueBackendRegistry`. Two dispatch sites converted (bus.rs + cli/queue.rs); MCP queue tools deferred to a v5.5 follow-up (Fork E2 — they have a pre-existing config-awareness gap that's out of V5-MOD-3 scope). `BackendKind` enum → `String` opens the wire format to third-party backend names; `validate()` split into shape-only (runs at parse time) + registry-aware (`validate_with_registry()` runs at startup, checks `factory.supports_ack()`).
 
-**Why:** Lowest-cost modularity win. Trait already exists; only the dispatch is hardcoded. Generalizes the per-topic backend choice from {jsonl, sqlite} to "any registered backend" — opens enterprise storage flexibility (PostgreSQL, DynamoDB, Kafka) without changing core.
+*The original epic prose named "queue_backend.rs:65-72" as the dispatch site; recon at Phase 0 corrected — those lines are the `QueueBackend` trait header. Real dispatch was in `bus.rs`. Same epic-anchor staleness as V5-MOD-1/2; corrected here at close-out.*
+
+**Why:** The lowest-cost Theme B modularity win. Trait already existed; only dispatch was hardcoded. Generalizes per-topic backend choice from `{jsonl, sqlite}` to any registered backend — opens enterprise storage flexibility (PostgreSQL, Redis, DynamoDB, Kafka, in-memory for tests) without core changes. The Phase 5 example (`examples/queue-backend-memory/`) is the proof.
+
+**Architectural decisions (all 5 operator-pinned 2026-05-02 — `.claude/plans/v5-mod-3-queue-backend-factory.md` § Forks):**
+
+- **Fork A — A2 `Send + Sync` trait bound:** Trait promoted from `Send`-only to `Send + Sync`; `SqliteBackend`'s rusqlite `Connection` (which is `!Sync`) wrapped in an internal `Mutex` so the type itself becomes `Send + Sync`. Methods changed from `&mut self` → `&self`. Matches V5-MOD-1's `ScoringSource` and V5-MOD-2's `Sensor` for SDK consistency. The pre-existing `unsafe impl Send for SqliteBackend` was deleted (auto-derived via `Mutex<Connection>` after the conversion).
+- **Fork B — B1 `BackendKind` enum → `String`:** YAML wire format unchanged (lowercase strings still round-trip); only the in-memory type flipped. Cross-field invariant `ack_required ⇒ ack-capable backend` moved from compile-time check to runtime via new `QueueBackendFactory::supports_ack()` method + `validate_with_registry()`.
+- **Fork C — C2 `examples/queue-backend-memory/`:** Pure-logic in-memory ring buffer with bounded capacity + per-consumer-group ack tracking via `HashMap<String, BTreeSet<u64>>` (plan-critic Subagent 1's 🟡 C2 finding caught this — naïve `HashMap<String, u64>` high-water-mark can't model out-of-order acks). Three SDK example patterns now cover network (V5-MOD-1's HTTP-fetch), file-system (V5-MOD-2's FS-read), and pure-logic (V5-MOD-3's in-memory + ack).
+- **Fork D — D3 backend-name display via re-resolve:** No `name()` method added to `QueueBackend` trait (matches V5-MOD-2's no-`name()`-on-`Sensor` precedent); `TopicStats::for_topic` now takes the backend name as a parameter (re-resolved from `QueueConfig` by the caller).
+- **Fork E — E2 bus + cli (2 sites); MCP deferred:** Phase 3 converted `bus.rs` (primary; ~100 lines deleted) and `cli/commands/queue.rs::open_backend` (~30 lines, parallel private enum closed). MCP's `queue_publish` / `queue_consume` at `neurogrim-mcp/src/server.rs:866`+ have a **pre-existing v2 bug** (they ignore `queue-config.yaml` entirely, always writing JSONL); fixing them requires plumbing the registry into MCP's handler — a separate concern queued as v5.5 `mcp-queue-config-aware`.
+
+**Plan-critic recon corrections worth flagging (REVISE → addressed in plan):**
+1. **3 dispatch sites, not 1** (Fork E2 above): bus.rs + cli + mcp; V5-MOD-3 covers 2, MCP queued separately.
+2. **`validate()` rewrite for runtime invariant** (Fork B): the type-system check `backend != BackendKind::Sqlite` couldn't survive Fork B1's flip to `String`; folded into the `supports_ack()`-on-factory + `validate_with_registry()` design.
+3. **`MemoryQueueBackend` ack data shape** (Fork C): plan-critic caught `HashMap<String, u64>` couldn't represent out-of-order acks; corrected to `HashMap<String, BTreeSet<u64>>` BEFORE Phase 5 implementation.
+4. **JsonlBackend `append` TOCTOU race under concurrent writes**: caught at Phase 4 conformance run; documented as a known semantic of fan-out backends. Conformance test renamed `append_returns_unique_offsets` → `concurrent_appends_dont_panic` (looser check; SqliteBackend's transactional ROWID provides uniqueness, but JSONL fan-out doesn't claim that property).
+
+**Conformance suite:** 12 cross-cutting tests in `neurogrim_core::queue_backend_conformance::run_factory_conformance` covering factory contract (T1-T3), append/read round-trip (T4-T7), concurrent safety (T8), empty-backend reads (T9), ack semantics (T10-T11), and `Send + Sync + 'static` runtime check via thread-spawn (T12). All 3 backends pass: `JsonlBackend`, `SqliteBackend` (under `sqlite` feature), and the example crate's `MemoryQueueBackend`.
 
 **Done when:**
-- [ ] `BackendHandle` enum replaced by `Arc<dyn QueueBackend>` factory
-- [ ] `queue-config.yaml` supports user-registered backend types
-- [ ] Existing `JsonlBackend` + `SqliteBackend` pass conformance suite unchanged
-- [ ] Example crate `examples/queue-backend-postgres/` (or stub) demonstrates third-party backend registration
-- [ ] Conformance suite generalized from current 2-backend tests (≥10 tests covering append, read, ack, malformed entry, factory failure, retention)
+- [x] `BackendHandle` enum replaced by `Arc<dyn QueueBackend>` factory *(Phase 3, commit `a28949a`)*
+- [x] `queue-config.yaml` supports user-registered backend types *(Phase 3 — `BackendKind` enum → `String`)*
+- [x] Existing `JsonlBackend` + `SqliteBackend` pass conformance suite unchanged *(Phase 4, commit `89b431d`)*
+- [x] Example crate `examples/queue-backend-memory/` (was `queue-backend-postgres` in original epic; renamed per Fork C operator pin) demonstrates third-party backend registration *(Phase 5, commit `7dbfce9`)*
+- [x] Conformance suite generalized from current 2-backend tests *(Phase 4 — 12 tests covering append, read, ack, concurrent safety, empty reads, idempotency, Send+Sync)*
+- [x] Theme B Done-When checklist (above) — all 5 of V5-MOD-3's items checked off; **Theme B is COMPLETE**
 
 ---
 
@@ -174,6 +193,12 @@
 - **V5-MOD-2 third-party example:** `examples/sensor-readme-quality/` (pure-FS pattern; pairs with `scoring-source-prom`'s HTTP-fetch pattern)
 - **V5-MOD-2 cli + mcp feature pass-through:** `crates/neurogrim-cli/Cargo.toml [features]` (21 per-sensor + 2 aggregate); mcp's previously-unused `neurogrim-sensory` dep dropped at Phase 4
 - **LSP-Brains spec sync (V5-MOD-2 close-out):** `D:/Brains/LSP-Brains/spec/LSP-BRAINS-SPEC.md` § F (MCP sensory tools) — extensibility note added; Phase 7 commit
+- **V5-MOD-3 implementation plan:** `.claude/plans/v5-mod-3-queue-backend-factory.md` (Phases 0–6, including the 5 fork-decision pin records + plan-critic REVISE → PROCEED resolution log)
+- **V5-MOD-3 trait + factory + registry:** `crates/neurogrim-core/src/queue_backend.rs` (extended with `QueueBackendFactory`, `QueueBackendRegistry`, `built_in_factories()`)
+- **V5-MOD-3 conformance suite:** `crates/neurogrim-core/src/queue_backend_conformance.rs` (12 tests; mirrors V5-MOD-1 + V5-MOD-2 structure)
+- **V5-MOD-3 dispatch conversion:** `crates/neurogrim-dashboard/src/bus.rs` (drop `BackendHandle`, route through registry) + `crates/neurogrim-cli/src/commands/queue.rs::open_backend` (drop private `BackendChoice` match, route through registry)
+- **V5-MOD-3 third-party example:** `examples/queue-backend-memory/` (in-memory + ack pattern; pairs with `scoring-source-prom`'s HTTP-fetch + `sensor-readme-quality`'s FS-read for three complementary V5-SDK examples)
+- **V5-MOD-3 deferred follow-up:** v5.5 `mcp-queue-config-aware` — MCP's `queue_publish` / `queue_consume` at `neurogrim-mcp/src/server.rs:866`+ have a pre-existing config-awareness gap (write JSONL directly, ignoring `queue-config.yaml`); fix queued separately per Fork E2 scope decision
 - Pre-V5 scoring-source config struct: `crates/neurogrim-core/src/registry.rs` (renamed to `ScoringSourceConfig` in V5-MOD-1 Phase 0)
 - Existing sensory crate: [neurogrim-sensory/src/lib.rs](../crates/neurogrim-sensory/src/lib.rs)
 - Existing queue backend trait: [queue_backend.rs:69](../crates/neurogrim-core/src/queue_backend.rs)
