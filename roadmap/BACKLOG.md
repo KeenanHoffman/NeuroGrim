@@ -1945,6 +1945,40 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
+### B-47: V5.5-FOUND-CACHE — sccache for CI release-build paths (NOT local dev, NOT rust-cache@v2 overlap) — CANDIDATE (v5.5 horizon)
+
+**Problem.** V5-FOUND-2 plan (2026-05-03) initially called for sccache as a rustc wrapper in `.cargo/config.toml` to speed local dev-loop warm rebuilds (~30% target). Plan-critic 🔴 finding 2026-05-03: sccache forces `CARGO_INCREMENTAL=0` (errors otherwise per `mozilla/sccache#236`). For NeuroGrim's actual dev-loop pattern (small edit → re-run nearby tests), incremental compilation dominates the win envelope; sccache's cold-build advantage is irrelevant when cargo already has rmeta from 30 seconds ago. Plus: MSVC sccache has known preprocessing bugs (`mozilla/sccache#1725`); Defender real-time scan on `~/.cache/sccache/` is documented friction. CI cold builds DO benefit from caching, but our CI uses `Swatinem/rust-cache@v2` which restores `target/` between runs — that win is already captured. **The remaining sccache win-case is CI release-build paths** (where rust-cache@v2 doesn't apply because the target/ contents differ; release builds are full from-scratch compilations).
+
+**Plan when:**
+1. AND: V5 ships and stabilizes (V5-FOUND-2/3/4 + Theme C complete).
+2. AND: Operator measures CI release-build wall-time as a real bottleneck (today's only release path is the `cargo doc` documentation build for `neurogrim-sdk`; operator pull-the-trigger when binary releases enter scope).
+3. AND: A test confirms sccache + the specific CI release-build pattern actually beats `rust-cache@v2` on cold runs (not assumed).
+
+**Dependencies.** None blocking; this is a deferred polish item.
+
+**Adversarial note.** Don't ship sccache because "everyone uses it." It loses to incremental compilation in the dev-loop case, and its cold-build win is overlap-region with rust-cache@v2. Ship it ONLY when there's a measurement showing a release-build path that isn't covered.
+
+**Cross-references.** `.claude/plans/v5-found-2-nextest-sccache.md` § Phase 3 (deferral rationale); `.github/workflows/ci.yml` (current rust-cache@v2 setup).
+
+---
+
+### B-48: V5.5-FOUND-SLO — Fix queue for SLO-violation tests tagged in V5-FOUND-2 Phase 4 — CANDIDATE (v5.5 horizon)
+
+**Problem.** V5-FOUND-2 Phase 4 audits the workspace for tests violating the per-test wall-time SLO (5s investigate / 10s violate per Fork D1) and **tags violators with `#[ignore]` + `// SLO-violation: <duration>` comments**. V5-FOUND-2 deliberately ships tag-only — fixing slow tests is open-ended work (some are slow because they do real I/O honestly; some are slow because of inefficient setup; some need full rewrites) that would balloon V5-FOUND-2's M budget. This entry tracks the v5.5 fix queue: each tagged test gets triaged + fixed/optimized/moved to `benches/` per its individual situation.
+
+**Plan when:**
+1. AND: V5-FOUND-2 Phase 4 audit complete; `docs/test-slo.md` has the audit log.
+2. AND: Number of tagged tests is known (could be 2, could be 20).
+3. AND: Operator decides whether to scope the fix queue as one v5.5 epic or split per-domain (e.g., "v5.5-FOUND-SLO-DASHBOARD" for dashboard-frontend tests, etc.).
+
+**Dependencies.** V5-FOUND-2 Phase 4 ships first.
+
+**Adversarial note.** The audit may surface tests that are honestly slow (frontend builds invoked from Rust integration tests; SQLite migrations; A2A round-trips). Don't reflexively `#[ignore]` honest tests — if they catch real regressions and the wall-time is the price, document the rationale in `docs/test-slo.md` and accept the SLO violation as a known exception. The 5s/10s thresholds are guidelines, not invariants.
+
+**Cross-references.** `.claude/plans/v5-found-2-nextest-sccache.md` § Phase 4 (scope discipline); `docs/test-slo.md` (will exist post-V5-FOUND-2 Phase 4).
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "v5-test-baseline",
+  "purpose": "V5-FOUND-2 Phase 0 baseline. Captures `cargo test --workspace --all-targets` wall-time on a representative dev laptop BEFORE nextest adoption. V5-FOUND-2 Phase 5 (CI integration) and V5-FOUND-3 (per-test coverage selection) compare against this — primary question: did nextest's parallel scheduling actually shorten the wall-time, or did it just rearrange the same work?",
+  "captured_at": "2026-05-03T17:37:27Z",
+  "captured_by": "V5-FOUND-2 Phase 0",
+  "captured_against": {
+    "project": "NeuroGrim",
+    "host": "Windows 10/11 (build 26200), MSI laptop, MSYS2/MinGW64 shell",
+    "cpu": "Intel Core i5-8300H @ 2.30GHz (4 cores, 8 threads, H-class mobile)",
+    "memory_kb": 8232268,
+    "memory_label": "8 GB total visible (representative dev workstation; tighter than the V5-FOUND-1 baseline host but same family)",
+    "git_sha_baseline": "74d4fd4",
+    "git_sha_baseline_short_note": "V5-SDK-1 Phase 5 close-out; V5-FOUND-2 Phase 0 starts here (no production code touched between this commit and baseline capture).",
+    "build_profile": "debug (cargo's default for `cargo test`; unoptimized + debuginfo)",
+    "test_runner": "cargo test (libtest harness — the THING WE'RE REPLACING with cargo-nextest in V5-FOUND-2 Phase 1)"
+  },
+  "capture_protocol": {
+    "warmup_runs": 0,
+    "warmup_treatment": "Run 1 captures the post-V5-SDK-1-work state; some crates may have stale artifacts. Runs 2-3 are warm (no source changes, all crates cached). This pattern matches the actual dev-loop reality more than wiped-target/cold runs would.",
+    "measured_runs": 3,
+    "command": "cargo test --workspace --all-targets --quiet",
+    "working_directory": "D:/Brains/NeuroGrim/neurogrim/",
+    "concurrent_load": "no other Rust builds active during capture; no IDE running"
+  },
+  "wall_time_seconds": {
+    "run_1_partial_cold": 151,
+    "run_2_warm": 98,
+    "run_3_warm": 92,
+    "warm_p50_seconds": 95,
+    "warm_p95_seconds": 98,
+    "warm_min_seconds": 92,
+    "warm_max_seconds": 98,
+    "warm_spread_seconds": 6
+  },
+  "what_run_1_includes_that_warm_doesn_t": "After V5-SDK-1 work concluded with `cargo test -p neurogrim-sdk`, only the SDK + its 3 deps (core, a2a, secrets) were freshly compiled. `cargo test --workspace --all-targets` on Run 1 had to compile the OTHER workspace members (neurogrim-cli, neurogrim-dashboard, neurogrim-ecosystem, neurogrim-mcp, neurogrim-sensory) plus all their test binaries from stale rmeta. Run 1's 151s is the realistic 'first run after a single-crate edit' time. Runs 2-3's 92-98s is the 'no-source-changes re-run' time.",
+  "test_count_estimate": "~1,470 tests workspace-wide (citation: V5-MOD-3 close commit notes). Exact count not extracted from --quiet output; can be re-derived via `cargo test --workspace --all-targets 2>&1 | grep -E '^test result:' | wc -l` if needed.",
+  "v5_found_2_post_nextest_comparison_questions": [
+    "Phase 5 question: does `cargo nextest run --workspace --all-targets --profile ci` warm wall-time beat 95s p50 on this same host?",
+    "Phase 5 question: does the post-nextest CI rust: job (currently runs cargo test) wall-time on GitHub Actions improve commensurately?",
+    "Phase 4 question: which individual tests exceed 5s investigate / 10s violate threshold (Fork D1)?"
+  ],
+  "what_this_baseline_does_NOT_capture": [
+    "Cold-from-clean-target/ wall-time (would require `cargo clean` + full rebuild; recapture if needed)",
+    "Per-test wall-time distribution (Phase 4 audit captures this with `--status-level slow`)",
+    "CI wall-time on GitHub Actions runners (different hardware; Phase 5 captures separately)",
+    "wall-time under test-failure conditions (only happy-path measured)"
+  ],
+  "recapture_required_if_changes_to": [
+    "Major workspace member additions (e.g., a new crate joining the workspace shifts the baseline)",
+    "Dev profile in Cargo.toml (e.g., adding `[profile.dev] opt-level = 1` would change build characteristics)",
+    "Test count substantially (e.g., +20% test additions invalidates direct comparison)"
+  ],
+  "cross_references": {
+    "plan": ".claude/plans/v5-found-2-nextest-sccache.md",
+    "epic": "roadmap/epics/v5-foundation.md § V5-FOUND-2",
+    "predecessor_baseline": "roadmap/data/v5-scoring-baseline-2026-05-02.json (V5-MOD-1 perf-gate; different metric — scoring-path latency, not test-suite wall-time)"
+  }
+}
