@@ -532,12 +532,25 @@ pub trait QueueBackendFactory: Send + Sync {
         false
     }
 
-    /// Construct a backend instance bound to `topic_path`. The
-    /// path's existence is not assumed — the factory is responsible
-    /// for creating the file/directory if needed. Returns
-    /// `Arc<dyn QueueBackend>` so the bus's per-topic cache holds
-    /// a thread-safe shared handle.
-    fn build(&self, topic_path: &Path) -> Result<Arc<dyn QueueBackend>>;
+    /// Construct a backend instance for one topic.
+    ///
+    /// Args:
+    /// - `queue_root` — the directory where backends store per-topic
+    ///   state (typically `<project>/.claude/brain/queues`). The
+    ///   factory composes the full per-topic path internally; JSONL
+    ///   appends `.jsonl`, SQLite appends `.sqlite`, and third-party
+    ///   backends choose their own scheme (could be a per-topic
+    ///   subdirectory, a shared connection string, etc.).
+    /// - `topic` — the bus topic name (e.g., `"pc-state/alerts"`).
+    ///
+    /// Returns `Arc<dyn QueueBackend>` so the bus's per-topic cache
+    /// holds a thread-safe shared handle. Factory is responsible for
+    /// creating any missing directories or files.
+    fn build(
+        &self,
+        queue_root: &Path,
+        topic: &str,
+    ) -> Result<Arc<dyn QueueBackend>>;
 }
 
 /// Hand-rolled registry mapping backend wire-names to factories.
@@ -593,15 +606,16 @@ impl QueueBackendRegistry {
     }
 
     /// Convenience: look up a factory and immediately build a
-    /// backend for `topic_path`. Returns `None` if no factory is
-    /// registered for the given name; otherwise propagates any
-    /// `build()` error.
+    /// backend for `(queue_root, topic)`. Returns `None` if no
+    /// factory is registered for the given name; otherwise
+    /// propagates any `build()` error.
     pub fn build(
         &self,
         name: &str,
-        topic_path: &Path,
+        queue_root: &Path,
+        topic: &str,
     ) -> Option<Result<Arc<dyn QueueBackend>>> {
-        self.get(name).map(|f| f.build(topic_path))
+        self.get(name).map(|f| f.build(queue_root, topic))
     }
 
     /// True if a factory is registered for the given name.
@@ -642,8 +656,13 @@ impl QueueBackendFactory for JsonlBackendFactory {
         "jsonl"
     }
     // supports_ack defaults to false — JSONL is fan-out only.
-    fn build(&self, topic_path: &Path) -> Result<Arc<dyn QueueBackend>> {
-        Ok(Arc::new(JsonlBackend::new(topic_path.to_path_buf())))
+    fn build(
+        &self,
+        queue_root: &Path,
+        topic: &str,
+    ) -> Result<Arc<dyn QueueBackend>> {
+        let path = queue_root.join(format!("{topic}.jsonl"));
+        Ok(Arc::new(JsonlBackend::new(path)))
     }
 }
 
@@ -661,8 +680,13 @@ impl QueueBackendFactory for SqliteBackendFactory {
     fn supports_ack(&self) -> bool {
         true
     }
-    fn build(&self, topic_path: &Path) -> Result<Arc<dyn QueueBackend>> {
-        Ok(Arc::new(SqliteBackend::open(topic_path)?))
+    fn build(
+        &self,
+        queue_root: &Path,
+        topic: &str,
+    ) -> Result<Arc<dyn QueueBackend>> {
+        let path = queue_root.join(format!("{topic}.sqlite"));
+        Ok(Arc::new(SqliteBackend::open(&path)?))
     }
 }
 
@@ -1025,11 +1049,10 @@ mod tests {
     #[test]
     fn jsonl_factory_builds_a_working_backend() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("test.jsonl");
         let factory = JsonlBackendFactory;
         assert_eq!(factory.name(), "jsonl");
         assert!(!factory.supports_ack());
-        let be = factory.build(&path).unwrap();
+        let be = factory.build(dir.path(), "test/topic").unwrap();
         let m = QueueMessage::new("test/topic", json!({"n": 1}));
         let off = be.append(&m).unwrap();
         assert_eq!(off, 0);
@@ -1040,11 +1063,10 @@ mod tests {
     #[test]
     fn sqlite_factory_builds_a_working_backend() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("test.sqlite");
         let factory = SqliteBackendFactory;
         assert_eq!(factory.name(), "sqlite");
         assert!(factory.supports_ack());
-        let be = factory.build(&path).unwrap();
+        let be = factory.build(dir.path(), "test_topic").unwrap();
         let m = QueueMessage::new("test/topic", json!({"n": 1}));
         let off = be.append(&m).unwrap();
         assert_eq!(off, 1); // SQLite ROWID starts at 1
@@ -1058,7 +1080,7 @@ mod tests {
         assert_eq!(reg.len(), 0);
         assert!(!reg.has("jsonl"));
         assert!(reg.get("anything").is_none());
-        assert!(reg.build("anything", Path::new("/tmp")).is_none());
+        assert!(reg.build("anything", Path::new("/tmp"), "topic").is_none());
     }
 
     #[test]
@@ -1070,7 +1092,7 @@ mod tests {
         assert!(reg.has("jsonl"));
         assert!(reg.get("jsonl").is_some());
         let be = reg
-            .build("jsonl", &dir.path().join("topic.jsonl"))
+            .build("jsonl", dir.path(), "topic")
             .expect("factory registered")
             .expect("build succeeds");
         let _: Arc<dyn QueueBackend> = be;
@@ -1081,7 +1103,9 @@ mod tests {
         let mut reg = QueueBackendRegistry::new();
         reg.register(Box::new(JsonlBackendFactory));
         assert!(reg.get("does-not-exist").is_none());
-        assert!(reg.build("does-not-exist", Path::new("/tmp")).is_none());
+        assert!(reg
+            .build("does-not-exist", Path::new("/tmp"), "topic")
+            .is_none());
     }
 
     #[test]
@@ -1120,8 +1144,13 @@ mod tests {
         fn name(&self) -> &'static str {
             "jsonl"
         }
-        fn build(&self, topic_path: &Path) -> Result<Arc<dyn QueueBackend>> {
-            Ok(Arc::new(JsonlBackend::new(topic_path.to_path_buf())))
+        fn build(
+            &self,
+            queue_root: &Path,
+            topic: &str,
+        ) -> Result<Arc<dyn QueueBackend>> {
+            let path = queue_root.join(format!("{topic}.jsonl"));
+            Ok(Arc::new(JsonlBackend::new(path)))
         }
     }
 

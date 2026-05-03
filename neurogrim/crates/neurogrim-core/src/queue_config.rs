@@ -42,48 +42,50 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// Backend selection for one topic. Mirrors the strings in
-/// `queue-config.yaml`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
-#[serde(rename_all = "lowercase")]
-pub enum BackendKind {
-    /// Default. Append-only JSONL file at
-    /// `<project>/.claude/brain/queues/<topic>.jsonl`.
-    Jsonl,
-    /// Opt-in. WAL-mode SQLite at
-    /// `<project>/.claude/brain/queues/<topic>.sqlite`. Required for
-    /// `ack_required: true` topics.
-    Sqlite,
-}
+// V5-MOD-3 Phase 3 (2026-05-02 — Fork B1) — `BackendKind` enum
+// previously lived here as a closed-set serde enum (`Jsonl |
+// Sqlite`). Replaced with `String` to support third-party backend
+// names registered via `QueueBackendRegistry` (V5-MOD-3 Phase 1).
+// The wire format in `queue-config.yaml` is unchanged: lowercase
+// strings (`backend: jsonl`, `backend: sqlite`, `backend: postgres`,
+// `backend: redis`, ...) deserialize to `String` directly. Existing
+// YAML files round-trip unchanged.
+//
+// `validate_with_registry()` (below) replaces the type-system
+// invariant `backend != "sqlite"` with a runtime check
+// against `QueueBackendFactory::supports_ack()` — third-party
+// ack-capable backends are accepted alongside `sqlite`.
 
-impl Default for BackendKind {
-    fn default() -> Self {
-        BackendKind::Jsonl
-    }
-}
+/// Default backend wire-name. Used by `TopicConfig::default()` when
+/// a topic has no explicit override.
+pub const DEFAULT_BACKEND: &str = "jsonl";
 
 /// One topic's resolved configuration. Construct via
 /// [`QueueConfig::lookup`] — the lookup applies sensible defaults
 /// for unspecified fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TopicConfig {
-    pub backend: BackendKind,
+    /// Backend wire-name (e.g., `"jsonl"`, `"sqlite"`, or any
+    /// third-party-registered backend name). The `QueueBackendRegistry`
+    /// resolves this to a concrete `Arc<dyn QueueBackend>` at
+    /// dispatch time.
+    pub backend: String,
     /// Drop messages older than this many days during compaction.
     /// `None` = no time-based retention.
     pub retention_days: Option<u32>,
     /// Drop messages older than this many entries during compaction
     /// (keep the most-recent N). `None` = no count-based retention.
     pub retention_messages: Option<u32>,
-    /// True iff consumers must explicitly ack each message. Only
-    /// meaningful for SQLite-backed topics; declaring `ack_required:
-    /// true` on a JSONL topic surfaces as a `validate()` error.
+    /// True iff consumers must explicitly ack each message. Validated
+    /// against [`QueueConfig::validate_with_registry`] to catch
+    /// declaring `ack_required: true` on a non-ack-capable backend.
     pub ack_required: bool,
 }
 
 impl Default for TopicConfig {
     fn default() -> Self {
         Self {
-            backend: BackendKind::Jsonl,
+            backend: DEFAULT_BACKEND.to_string(),
             retention_days: Some(30),
             retention_messages: Some(10_000),
             ack_required: false,
@@ -98,7 +100,7 @@ impl Default for TopicConfig {
 #[serde(deny_unknown_fields)]
 pub struct TopicConfigYaml {
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub backend: Option<BackendKind>,
+    pub backend: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub retention_days: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -146,8 +148,13 @@ impl QueueConfig {
         }
     }
 
-    /// Cross-field invariants. Returns an error describing the first
-    /// violation found.
+    /// **Shape-only** invariants. Checks `schema_version`; does NOT
+    /// validate the `ack_required ⇒ ack-capable backend` cross-field
+    /// invariant — that requires registry awareness, see
+    /// [`Self::validate_with_registry`].
+    ///
+    /// Called by [`Self::from_yaml`] at parse time. Returns an error
+    /// describing the first violation found.
     pub fn validate(&self) -> Result<()> {
         if self.schema_version != "1" {
             anyhow::bail!(
@@ -156,14 +163,54 @@ impl QueueConfig {
                 self.schema_version
             );
         }
+        Ok(())
+    }
+
+    /// **Registry-aware** cross-field invariants
+    /// (V5-MOD-3 Phase 3, 2026-05-02 — Fork B's 🔴 B2 plan-critic fix).
+    ///
+    /// Validates that:
+    /// - Every named backend is registered in `registry`.
+    /// - Topics declaring `ack_required: true` use a backend whose
+    ///   factory's `supports_ack()` returns `true`.
+    ///
+    /// Called by the bus at startup, after the registry is populated
+    /// with built-in + third-party factories. Separated from the
+    /// shape-only [`Self::validate`] so shape-checks can run without
+    /// a registry (e.g., in `from_yaml` at parse time, or in
+    /// `neurogrim doctor` lints).
+    pub fn validate_with_registry(
+        &self,
+        registry: &crate::queue_backend::QueueBackendRegistry,
+    ) -> Result<()> {
+        // Shape checks first (subset of validate()).
+        self.validate()?;
+
         for (topic, raw) in &self.topics {
-            let backend = raw.backend.unwrap_or(BackendKind::Jsonl);
+            let backend = raw
+                .backend
+                .clone()
+                .unwrap_or_else(|| DEFAULT_BACKEND.to_string());
             let ack_required = raw.ack_required.unwrap_or(false);
-            if ack_required && backend != BackendKind::Sqlite {
+
+            let factory = registry.get(&backend).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "queue-config.yaml: topic {:?} declares backend {:?} \
+                     but no factory is registered for that name. \
+                     Registered: {:?}",
+                    topic,
+                    backend,
+                    registry.registered_names().copied().collect::<Vec<_>>(),
+                )
+            })?;
+
+            if ack_required && !factory.supports_ack() {
                 anyhow::bail!(
-                    "queue-config.yaml: topic {:?} declares ack_required: \
-                     true but backend: {:?} — ack semantics require the \
-                     SQLite backend",
+                    "queue-config.yaml: topic {:?} declares \
+                     ack_required: true but backend {:?} does not \
+                     support ack semantics (factory.supports_ack() = \
+                     false). Use a backend that supports ack (e.g., \
+                     sqlite, or a third-party ack-capable backend).",
                     topic,
                     backend,
                 );
@@ -180,7 +227,7 @@ impl QueueConfig {
             Some(raw) => {
                 let defaults = TopicConfig::default();
                 TopicConfig {
-                    backend: raw.backend.unwrap_or(defaults.backend),
+                    backend: raw.backend.clone().unwrap_or(defaults.backend),
                     retention_days: raw.retention_days.or(defaults.retention_days),
                     retention_messages: raw
                         .retention_messages
@@ -222,7 +269,7 @@ topics:
         let cfg = QueueConfig::from_yaml(yaml).unwrap();
         assert_eq!(cfg.topics.len(), 2);
         let alerts = cfg.lookup("pc-state/alerts");
-        assert_eq!(alerts.backend, BackendKind::Sqlite);
+        assert_eq!(alerts.backend, "sqlite");
         assert_eq!(alerts.retention_messages, Some(5000));
         // retention_days unspecified → falls back to default (30).
         assert_eq!(alerts.retention_days, Some(30));
@@ -234,7 +281,7 @@ topics:
         let yaml = r#"schema_version: "1""#;
         let cfg = QueueConfig::from_yaml(yaml).unwrap();
         let unknown = cfg.lookup("scratch");
-        assert_eq!(unknown.backend, BackendKind::Jsonl);
+        assert_eq!(unknown.backend, "jsonl");
         assert_eq!(unknown.retention_days, Some(30));
         assert_eq!(unknown.retention_messages, Some(10_000));
         assert!(!unknown.ack_required);
@@ -247,6 +294,11 @@ topics:
         assert!(err.contains("schema_version"));
     }
 
+    /// V5-MOD-3 Phase 3 (2026-05-02 — Fork B's 🔴 B2): the
+    /// cross-field invariant `ack_required ⇒ ack-capable backend`
+    /// moved from `validate()` (shape-only, runs in `from_yaml`)
+    /// to `validate_with_registry()` (registry-aware). Test now
+    /// shape-parses successfully but fails registry validation.
     #[test]
     fn rejects_ack_required_with_jsonl() {
         let yaml = r#"
@@ -256,9 +308,15 @@ topics:
     backend: jsonl
     ack_required: true
 "#;
-        let err = QueueConfig::from_yaml(yaml).unwrap_err().to_string();
-        assert!(err.contains("ack_required"));
-        assert!(err.contains("SQLite"));
+        // Shape-only `from_yaml` accepts the YAML (V5-MOD-3 split).
+        let cfg = QueueConfig::from_yaml(yaml).expect("shape-parse must succeed");
+
+        // Registry-aware validation rejects the ack-on-jsonl combo.
+        let mut registry = crate::queue_backend::QueueBackendRegistry::new();
+        registry.register_all(crate::queue_backend::built_in_factories());
+        let err = cfg.validate_with_registry(&registry).unwrap_err().to_string();
+        assert!(err.contains("ack_required"), "expected ack_required in error: {err}");
+        assert!(err.contains("ack"), "expected ack-related guidance: {err}");
     }
 
     #[test]
@@ -308,7 +366,7 @@ topics:
         )
         .unwrap();
         let cfg = QueueConfig::from_path(&path).unwrap().unwrap();
-        assert_eq!(cfg.lookup("scratch").backend, BackendKind::Jsonl);
+        assert_eq!(cfg.lookup("scratch").backend, "jsonl");
     }
 
     #[test]
@@ -338,7 +396,7 @@ topics:
                 m.insert(
                     "pc-state/alerts".to_string(),
                     TopicConfigYaml {
-                        backend: Some(BackendKind::Sqlite),
+                        backend: Some("sqlite".to_string()),
                         retention_days: None,
                         retention_messages: Some(5000),
                         ack_required: Some(true),

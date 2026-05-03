@@ -625,13 +625,31 @@ pub fn check_queue_config(project_root: &Path) -> Vec<Finding> {
         .join(".claude")
         .join("brain")
         .join("queue-config.yaml");
-    match neurogrim_core::queue_config::QueueConfig::from_path(&path) {
-        Ok(_) => Vec::new(),
-        Err(e) => vec![Finding::err(
+    // V5-MOD-3 Phase 3 (2026-05-02 — Fork B's 🔴 B2): the
+    // `ack_required ⇒ ack-capable backend` invariant is registry-
+    // aware now. `doctor` validates against the workspace's
+    // built-in registry (jsonl + sqlite); third-party adopters
+    // running `neurogrim doctor` against custom backends would
+    // need to extend this with `register(...)` calls.
+    let cfg = match neurogrim_core::queue_config::QueueConfig::from_path(&path) {
+        Ok(Some(cfg)) => cfg,
+        Ok(None) => return Vec::new(),
+        Err(e) => {
+            return vec![Finding::err(
+                "queue-config",
+                format!("{}: {e:#}", path.display()),
+            )]
+        }
+    };
+    let mut registry = neurogrim_core::queue_backend::QueueBackendRegistry::new();
+    registry.register_all(neurogrim_core::queue_backend::built_in_factories());
+    if let Err(e) = cfg.validate_with_registry(&registry) {
+        return vec![Finding::err(
             "queue-config",
             format!("{}: {e:#}", path.display()),
-        )],
+        )];
     }
+    Vec::new()
 }
 
 // --- Tests ------------------------------------------------------------

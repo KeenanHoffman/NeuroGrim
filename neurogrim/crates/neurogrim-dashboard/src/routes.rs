@@ -2570,8 +2570,17 @@ async fn brain_queues_list(
     let topics = crate::bus::list_topics(&brain.project_root);
     let mut stats: Vec<QueueTopicStatsDto> = Vec::with_capacity(topics.len());
     for t in &topics {
+        // V5-MOD-3 Phase 3 (2026-05-02 — Fork D3): resolve backend
+        // name from QueueConfig (not from the handle), since the
+        // trait-object handle no longer surfaces its backend type.
+        let backend_name = state.bus.backend_name_for(t).await;
         let s = match state.bus.backend_for(&brain.project_root, t).await {
-            Ok(handle) => crate::bus::TopicStats::for_topic(&handle, &brain.project_root, t),
+            Ok(handle) => crate::bus::TopicStats::for_topic(
+                &backend_name,
+                handle.as_ref(),
+                &brain.project_root,
+                t,
+            ),
             Err(_) => {
                 let path = crate::bus::topic_path(&brain.project_root, t);
                 crate::bus::TopicStats::from_path(t, &path)

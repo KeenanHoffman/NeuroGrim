@@ -36,7 +36,16 @@ use clap::{Args as ClapArgs, Subcommand};
 use neurogrim_core::queue::{
     self, JsonlQueueReader, Priority, QueueMessage, RetentionPolicy, Topic,
 };
-use neurogrim_core::queue_backend::{JsonlBackend, QueueBackend, SqliteBackend};
+use neurogrim_core::queue_backend::{
+    built_in_factories, QueueBackend, QueueBackendRegistry,
+};
+// V5-MOD-3 Phase 3 (2026-05-02): JsonlBackend + SqliteBackend are
+// now reached through the registry's factories. The direct
+// `SqliteBackend::open` import below is test-only — the integration
+// tests at the bottom of this file probe SQLite state directly to
+// verify migration outcomes.
+#[cfg(test)]
+use neurogrim_core::queue_backend::SqliteBackend;
 use std::path::{Path, PathBuf};
 
 #[derive(ClapArgs, Debug)]
@@ -379,7 +388,7 @@ async fn migrate(args: MigrateArgs) -> Result<()> {
     // Step 1: open source. Read every message into memory. Topics
     // are bounded by retention so loading the full set is OK; if
     // an operator has 500k+ messages they'll want to compact first.
-    let source: Box<dyn QueueBackend> = open_backend(&args.from, root, &args.topic)?;
+    let source: std::sync::Arc<dyn QueueBackend> = open_backend(&args.from, root, &args.topic)?;
     let total = source.len()?;
     let messages = source.read_from(0, total as usize)?;
     drop(source); // release any open handles before opening dest.
@@ -387,7 +396,7 @@ async fn migrate(args: MigrateArgs) -> Result<()> {
     // Step 2: open destination + replay. We append rather than
     // batch-insert so the message ids + produced_at timestamps are
     // preserved exactly.
-    let dest: Box<dyn QueueBackend> = open_backend(&args.to, root, &args.topic)?;
+    let dest: std::sync::Arc<dyn QueueBackend> = open_backend(&args.to, root, &args.topic)?;
     // Refuse migration if dest already has data — we don't want to
     // mix topics. The operator should `rm` the dest first if they
     // really mean to overwrite (loud failure beats silent merge).
@@ -481,16 +490,23 @@ fn open_backend(
     backend: &BackendChoice,
     root: &Path,
     topic: &str,
-) -> Result<Box<dyn QueueBackend>> {
-    let path = topic_path_for(backend, root, topic);
-    match backend {
-        BackendChoice::Jsonl => Ok(Box::new(JsonlBackend::new(path))),
-        BackendChoice::Sqlite => {
-            let be = SqliteBackend::open(&path)
-                .with_context(|| format!("open sqlite at {}", path.display()))?;
-            Ok(Box::new(be))
-        }
-    }
+) -> Result<std::sync::Arc<dyn QueueBackend>> {
+    // V5-MOD-3 Phase 3 (2026-05-02): route through QueueBackendRegistry.
+    // The CLI exposes only the closed-set BackendChoice (jsonl|sqlite)
+    // because it's the user-facing arg of `neurogrim queue migrate`;
+    // third-party backend support at the CLI surface is a v5.5
+    // follow-up.
+    let mut registry = QueueBackendRegistry::new();
+    registry.register_all(built_in_factories());
+    let name = match backend {
+        BackendChoice::Jsonl => "jsonl",
+        BackendChoice::Sqlite => "sqlite",
+    };
+    let queue_root = root.join(".claude").join("brain").join("queues");
+    registry
+        .build(name, &queue_root, topic)
+        .ok_or_else(|| anyhow::anyhow!("queue: backend {name:?} factory not registered"))?
+        .with_context(|| format!("queue: open {name} backend for topic {topic:?}"))
 }
 
 // ── Local helpers (pure functions, no I/O dependency on the dashboard) ─
@@ -737,7 +753,7 @@ mod tests {
         let sqlite = topic_path_for(&BackendChoice::Sqlite, dir.path(), "scratch");
         std::fs::create_dir_all(sqlite.parent().unwrap()).unwrap();
         {
-            let mut be = SqliteBackend::open(&sqlite).unwrap();
+            let be = SqliteBackend::open(&sqlite).unwrap();
             for i in 0..2 {
                 be.append(&QueueMessage::new("scratch", json!({"i": i})))
                     .unwrap();
@@ -776,7 +792,7 @@ mod tests {
         let sqlite = topic_path_for(&BackendChoice::Sqlite, dir.path(), "scratch");
         std::fs::create_dir_all(sqlite.parent().unwrap()).unwrap();
         {
-            let mut be = SqliteBackend::open(&sqlite).unwrap();
+            let be = SqliteBackend::open(&sqlite).unwrap();
             be.append(&QueueMessage::new("scratch", json!({"existing": true})))
                 .unwrap();
         }

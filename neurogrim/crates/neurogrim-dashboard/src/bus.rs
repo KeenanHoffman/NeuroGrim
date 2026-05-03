@@ -46,12 +46,14 @@
 
 use neurogrim_core::queue::{JsonlQueueReader, QueueMessage};
 use neurogrim_core::queue_backend::{
-    JsonlBackend, QueueBackend, SqliteBackend, StoredMessage,
+    built_in_factories, QueueBackend, QueueBackendRegistry,
 };
-use neurogrim_core::queue_config::{BackendKind, QueueConfig};
+#[cfg(test)]
+use neurogrim_core::queue_backend::{JsonlBackend, StoredMessage};
+use neurogrim_core::queue_config::QueueConfig;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
 /// Bounded channel capacity per topic. If subscribers can't keep
@@ -59,117 +61,24 @@ use tokio::sync::{broadcast, RwLock};
 /// SSE handler drops the lagged message rather than crashing.
 pub const TOPIC_CHANNEL_CAPACITY: usize = 64;
 
-/// Per-topic dispatcher. JSONL handles are stateless (each call
-/// reopens the file); SQLite handles hold a long-lived `Connection`
-/// behind a `Mutex` because rusqlite's `Connection` is `!Sync`.
-pub enum BackendHandle {
-    /// Stateless JSONL handle. The path resolves to
-    /// `.claude/brain/queues/<topic>.jsonl`.
-    Jsonl(PathBuf),
-    /// SQLite handle wrapping an open `Connection`. The path
-    /// resolves to `.claude/brain/queues/<topic>.sqlite`.
-    Sqlite(Arc<Mutex<SqliteBackend>>),
-}
+// V5-MOD-3 Phase 3 (2026-05-02 — Fork A2 + B1) — `BackendHandle`
+// enum + ~100 lines of dispatch boilerplate previously lived here.
+// Replaced by `Arc<dyn QueueBackend>` directly: the trait is
+// `Send + Sync` after Phase 2's promotion, so the bus's per-topic
+// cache holds the trait object directly. All 6 dispatch methods
+// (append/read_from/len/supports_ack/read_unacked/ack/last_acked)
+// are now reached via the trait — no wrapper enum needed.
 
-impl BackendHandle {
-    /// Append a single message. Returns the assigned offset.
-    pub fn append(&self, msg: &QueueMessage) -> anyhow::Result<u64> {
-        match self {
-            BackendHandle::Jsonl(path) => {
-                let be = JsonlBackend::new(path.clone());
-                be.append(msg)
-            }
-            BackendHandle::Sqlite(handle) => {
-                let be = handle.lock().expect("sqlite mutex poisoned");
-                be.append(msg)
-            }
-        }
-    }
-
-    /// Read messages from the given offset, up to `limit`.
-    pub fn read_from(
-        &self,
-        since_offset: u64,
-        limit: usize,
-    ) -> anyhow::Result<Vec<StoredMessage>> {
-        match self {
-            BackendHandle::Jsonl(path) => {
-                JsonlBackend::new(path.clone()).read_from(since_offset, limit)
-            }
-            BackendHandle::Sqlite(handle) => {
-                let be = handle.lock().expect("sqlite mutex poisoned");
-                be.read_from(since_offset, limit)
-            }
-        }
-    }
-
-    /// Total message count.
-    pub fn len(&self) -> anyhow::Result<u64> {
-        match self {
-            BackendHandle::Jsonl(path) => JsonlBackend::new(path.clone()).len(),
-            BackendHandle::Sqlite(handle) => {
-                let be = handle.lock().expect("sqlite mutex poisoned");
-                be.len()
-            }
-        }
-    }
-
-    /// True iff this backend supports ack semantics.
-    pub fn supports_ack(&self) -> bool {
-        matches!(self, BackendHandle::Sqlite(_))
-    }
-
-    /// Read messages not yet acked by `consumer_group`. Errors for
-    /// JSONL topics (which don't support ack semantics).
-    pub fn read_unacked(
-        &self,
-        consumer_group: &str,
-        limit: usize,
-    ) -> anyhow::Result<Vec<StoredMessage>> {
-        match self {
-            BackendHandle::Jsonl(_) => {
-                anyhow::bail!(
-                    "queue: read_unacked() called on a JSONL-backed topic; \
-                     declare the topic with `backend: sqlite` and \
-                     `ack_required: true` in queue-config.yaml"
-                );
-            }
-            BackendHandle::Sqlite(handle) => {
-                let be = handle.lock().expect("sqlite mutex poisoned");
-                be.read_unacked(consumer_group, limit)
-            }
-        }
-    }
-
-    /// Mark a message as acked by `consumer_group`. Errors for
-    /// JSONL topics.
-    pub fn ack(&self, offset: u64, consumer_group: &str) -> anyhow::Result<()> {
-        match self {
-            BackendHandle::Jsonl(_) => {
-                anyhow::bail!(
-                    "queue: ack() called on a JSONL-backed topic; \
-                     declare the topic with `backend: sqlite` and \
-                     `ack_required: true` in queue-config.yaml"
-                );
-            }
-            BackendHandle::Sqlite(handle) => {
-                let be = handle.lock().expect("sqlite mutex poisoned");
-                be.ack(offset, consumer_group)
-            }
-        }
-    }
-
-    /// Highest acked offset for `consumer_group`. None for JSONL
-    /// topics.
-    pub fn last_acked(&self, consumer_group: &str) -> anyhow::Result<Option<u64>> {
-        match self {
-            BackendHandle::Jsonl(_) => Ok(None),
-            BackendHandle::Sqlite(handle) => {
-                let be = handle.lock().expect("sqlite mutex poisoned");
-                be.last_acked(consumer_group)
-            }
-        }
-    }
+/// Build a `QueueBackendRegistry` with the workspace's built-in
+/// factories (jsonl, sqlite under the `sqlite` feature) pre-
+/// registered. Used by `BusState::new()` and
+/// `BusState::with_config()`; binaries wanting third-party
+/// backends should construct their own registry and use
+/// [`BusState::with_registry`].
+fn default_registry() -> Arc<QueueBackendRegistry> {
+    let mut registry = QueueBackendRegistry::new();
+    registry.register_all(built_in_factories());
+    Arc::new(registry)
 }
 
 /// Per-topic broadcast registry + backend cache. One sender per
@@ -178,38 +87,64 @@ impl BackendHandle {
 #[derive(Clone)]
 pub struct BusState {
     senders: Arc<RwLock<HashMap<String, broadcast::Sender<QueueMessage>>>>,
-    /// v4.1 S13-B-3 v2: per-topic backend cache. SQLite handles
-    /// persist (we don't want to reopen the connection for every
-    /// publish); JSONL handles are reconstructed-on-demand so the
-    /// cache holds just a marker.
-    backends: Arc<RwLock<HashMap<String, Arc<BackendHandle>>>>,
+    /// v4.1 S13-B-3 v2: per-topic backend cache. After V5-MOD-3
+    /// Phase 3 (2026-05-02), holds `Arc<dyn QueueBackend>` directly
+    /// (was `Arc<BackendHandle>` enum wrapping JSONL paths or
+    /// `Arc<Mutex<SqliteBackend>>`). The trait is `Send + Sync`
+    /// after V5-MOD-3 Phase 2 so the trait-object dispatch needs
+    /// no per-call lock ceremony.
+    backends: Arc<RwLock<HashMap<String, Arc<dyn QueueBackend>>>>,
     /// v4.1 S13-B-3 v2 (queue-config.yaml at startup) + S13 follow-on
     /// hot-reload: wrapped in RwLock so the filesystem watcher can
     /// swap the parsed config when the file changes without
     /// restarting the dashboard. `None` means no config file
     /// exists — every topic defaults to JSONL.
     config: Arc<RwLock<Option<QueueConfig>>>,
+    /// V5-MOD-3 Phase 3: pluggable queue-backend factories.
+    /// Constructed from `built_in_factories()` by `BusState::new()` /
+    /// `with_config()`; consuming binaries that want to register
+    /// third-party backends use `with_registry()` instead.
+    registry: Arc<QueueBackendRegistry>,
 }
 
 impl BusState {
     /// Construct a bus with no per-topic config — every topic
     /// defaults to JSONL with the standard retention policy.
+    /// Built-in factories (jsonl + sqlite under the `sqlite`
+    /// feature) are pre-registered; for third-party backends use
+    /// [`Self::with_registry`].
     pub fn new() -> Self {
-        Self {
-            senders: Arc::new(RwLock::new(HashMap::new())),
-            backends: Arc::new(RwLock::new(HashMap::new())),
-            config: Arc::new(RwLock::new(None)),
-        }
+        Self::with_registry(default_registry())
     }
 
     /// Construct a bus with the given queue-config. SQLite-backed
     /// topics will dispatch through `SqliteBackend` once their
-    /// first publish/read lands.
+    /// first publish/read lands. Built-in factories registered.
     pub fn with_config(config: QueueConfig) -> Self {
         Self {
             senders: Arc::new(RwLock::new(HashMap::new())),
             backends: Arc::new(RwLock::new(HashMap::new())),
             config: Arc::new(RwLock::new(Some(config))),
+            registry: default_registry(),
+        }
+    }
+
+    /// V5-MOD-3 Phase 3 (2026-05-02): construct with a custom
+    /// `QueueBackendRegistry`. Consuming binaries that want
+    /// third-party backends register them on the registry before
+    /// passing it here. Pre-built helper:
+    /// ```ignore
+    /// let mut registry = QueueBackendRegistry::new();
+    /// registry.register_all(neurogrim_core::queue_backend::built_in_factories());
+    /// registry.register(Box::new(MyThirdPartyFactory));
+    /// let bus = BusState::with_registry(Arc::new(registry));
+    /// ```
+    pub fn with_registry(registry: Arc<QueueBackendRegistry>) -> Self {
+        Self {
+            senders: Arc::new(RwLock::new(HashMap::new())),
+            backends: Arc::new(RwLock::new(HashMap::new())),
+            config: Arc::new(RwLock::new(None)),
+            registry,
         }
     }
 
@@ -306,14 +241,34 @@ impl BusState {
         self.sender_for(topic).await.subscribe()
     }
 
+    /// V5-MOD-3 Phase 3 (2026-05-02 — Fork D3): resolve the backend
+    /// wire-name for a topic via the bus's `QueueConfig`. Used by
+    /// `TopicStats::for_topic` callers (`routes.rs`) to label stats
+    /// with the right backend without needing to introspect the
+    /// trait object.
+    pub async fn backend_name_for(&self, topic: &str) -> String {
+        let cfg_guard = self.config.read().await;
+        match cfg_guard.as_ref() {
+            Some(cfg) => cfg.lookup(topic).backend,
+            None => "jsonl".to_string(),
+        }
+    }
+
     /// Resolve (or lazy-create) the per-topic backend handle.
     /// Routes use this to get a handle that knows which backend
     /// type to dispatch to for read/write operations.
+    ///
+    /// V5-MOD-3 Phase 3 (2026-05-02): routes through
+    /// [`QueueBackendRegistry`] — the registered factory for the
+    /// topic's `backend` name (resolved from `queue-config.yaml`)
+    /// produces the `Arc<dyn QueueBackend>`. Built-in jsonl/sqlite
+    /// factories are pre-registered; third-party backends register
+    /// via `BusState::with_registry`.
     pub async fn backend_for(
         &self,
         project_root: &Path,
         topic: &str,
-    ) -> anyhow::Result<Arc<BackendHandle>> {
+    ) -> anyhow::Result<Arc<dyn QueueBackend>> {
         // Fast path: already cached.
         {
             let map = self.backends.read().await;
@@ -326,27 +281,27 @@ impl BusState {
         if let Some(h) = map.get(topic) {
             return Ok(h.clone());
         }
-        let kind = {
+        let backend_name = {
             // Read-lock release before any await on backend setup to
-            // avoid holding the lock across SQLite open(). Take a
-            // snapshot copy of the resolution; the topic's backend
-            // kind is a small enum.
+            // avoid holding the lock across factory.build().
             let cfg_guard = self.config.read().await;
             match cfg_guard.as_ref() {
                 Some(cfg) => cfg.lookup(topic).backend,
-                None => BackendKind::Jsonl,
+                None => "jsonl".to_string(),
             }
         };
-        let handle = match kind {
-            BackendKind::Jsonl => {
-                Arc::new(BackendHandle::Jsonl(jsonl_topic_path(project_root, topic)))
-            }
-            BackendKind::Sqlite => {
-                let path = sqlite_topic_path(project_root, topic);
-                let be = SqliteBackend::open(&path)?;
-                Arc::new(BackendHandle::Sqlite(Arc::new(Mutex::new(be))))
-            }
-        };
+        let queue_root = queues_dir(project_root);
+        let factory = self.registry.get(&backend_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "queue: topic {topic:?} declares backend {backend_name:?} \
+                 but no factory is registered. Registered: {:?}",
+                self.registry
+                    .registered_names()
+                    .copied()
+                    .collect::<Vec<_>>()
+            )
+        })?;
+        let handle = factory.build(&queue_root, topic)?;
         map.insert(topic.to_string(), handle.clone());
         Ok(handle)
     }
@@ -380,6 +335,13 @@ impl Default for BusState {
 }
 
 // ── Path helpers ────────────────────────────────────────────────────────
+
+/// V5-MOD-3 Phase 3 (2026-05-02): the queues root directory under
+/// the project — `<project>/.claude/brain/queues`. Used by the
+/// registry's per-topic factory `build()` calls.
+pub fn queues_dir(project_root: &Path) -> PathBuf {
+    project_root.join(".claude").join("brain").join("queues")
+}
 
 /// Resolve the on-disk path for a topic. Topic segments separated
 /// by `/` become directory levels; the leaf gets a `.jsonl`
@@ -464,19 +426,43 @@ impl TopicStats {
 
     /// Compute stats via the topic's resolved backend handle.
     /// Honors per-topic backend configuration.
-    pub fn for_topic(handle: &BackendHandle, project_root: &Path, topic: &str) -> Self {
-        let backend = match handle {
-            BackendHandle::Jsonl(_) => "jsonl",
-            BackendHandle::Sqlite(_) => "sqlite",
-        };
-        let path = match handle {
-            BackendHandle::Jsonl(p) => p.clone(),
-            BackendHandle::Sqlite(_) => sqlite_topic_path(project_root, topic),
+    ///
+    /// V5-MOD-3 Phase 3 (2026-05-02 — Fork D3): the backend name is
+    /// passed in by the caller (resolved from `QueueConfig`) since
+    /// the trait-object handle no longer exposes which backend type
+    /// it is. Caller pattern:
+    /// ```ignore
+    /// let backend_name = state.bus.backend_name_for(&project_root, topic).await;
+    /// let handle = state.bus.backend_for(&project_root, topic).await?;
+    /// let stats = TopicStats::for_topic(&backend_name, handle.as_ref(),
+    ///                                    &project_root, topic);
+    /// ```
+    pub fn for_topic(
+        backend_name: &str,
+        handle: &dyn QueueBackend,
+        project_root: &Path,
+        topic: &str,
+    ) -> Self {
+        // Resolve the on-disk path for size-bytes computation. Built-in
+        // jsonl/sqlite backends have known extensions; third-party
+        // backends fall back to <name> as the extension (matches the
+        // factory's own file-naming convention if it follows the
+        // built-in pattern).
+        let path = match backend_name {
+            "jsonl" => jsonl_topic_path(project_root, topic),
+            "sqlite" => sqlite_topic_path(project_root, topic),
+            other => project_root
+                .join(".claude")
+                .join("brain")
+                .join("queues")
+                .join(format!(
+                    "{}.{other}",
+                    topic.replace('/', std::path::MAIN_SEPARATOR_STR)
+                )),
         };
         let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-        // For both backends, fetch a sample to extract oldest/newest.
-        // We pull only the first + last message rather than the whole
-        // ledger.
+        // Fetch a sample to extract oldest/newest. Pull only the first
+        // + last message rather than the whole ledger.
         let total = handle.len().unwrap_or(0);
         let head = handle.read_from(0, 1).unwrap_or_default();
         let tail = if total > 0 {
@@ -494,7 +480,7 @@ impl TopicStats {
             size_bytes,
             oldest,
             newest,
-            backend: backend.to_string(),
+            backend: backend_name.to_string(),
         }
     }
 }
@@ -763,8 +749,11 @@ mod tests {
     async fn backend_for_returns_jsonl_by_default() {
         let dir = TempDir::new().unwrap();
         let bus = BusState::new();
-        let handle = bus.backend_for(dir.path(), "scratch").await.unwrap();
-        assert!(matches!(handle.as_ref(), BackendHandle::Jsonl(_)));
+        let _handle = bus.backend_for(dir.path(), "scratch").await.unwrap();
+        // V5-MOD-3 Phase 3 (2026-05-02): the trait-object handle has
+        // no enum to match on; assert the observable shape via the
+        // bus's name resolution (Fork D3 — re-resolve from QueueConfig).
+        assert_eq!(bus.backend_name_for("scratch").await, "jsonl");
     }
 
     #[tokio::test]
@@ -774,7 +763,7 @@ mod tests {
         topics.insert(
             "pc-state/alerts".to_string(),
             TopicConfigYaml {
-                backend: Some(BackendKind::Sqlite),
+                backend: Some("sqlite".to_string()),
                 ..Default::default()
             },
         );
@@ -784,7 +773,7 @@ mod tests {
         };
         let bus = BusState::with_config(cfg);
         let handle = bus.backend_for(dir.path(), "pc-state/alerts").await.unwrap();
-        assert!(matches!(handle.as_ref(), BackendHandle::Sqlite(_)));
+        assert_eq!(bus.backend_name_for("pc-state/alerts").await, "sqlite");
         assert!(handle.supports_ack());
     }
 
@@ -804,7 +793,7 @@ mod tests {
         topics.insert(
             "pc-state/alerts".to_string(),
             TopicConfigYaml {
-                backend: Some(BackendKind::Sqlite),
+                backend: Some("sqlite".to_string()),
                 ..Default::default()
             },
         );
@@ -853,8 +842,8 @@ topics:
     async fn from_project_root_falls_back_when_config_missing() {
         let dir = TempDir::new().unwrap();
         let bus = BusState::from_project_root(dir.path());
-        let handle = bus.backend_for(dir.path(), "scratch").await.unwrap();
-        assert!(matches!(handle.as_ref(), BackendHandle::Jsonl(_)));
+        let _handle = bus.backend_for(dir.path(), "scratch").await.unwrap();
+        assert_eq!(bus.backend_name_for("scratch").await, "jsonl");
     }
 
     // ── Hot-reload (S13 follow-on) ────────────────────────────────
@@ -871,9 +860,9 @@ topics:
         let dir = TempDir::new().unwrap();
         // Bus starts with no config (file absent).
         let bus = BusState::from_project_root(dir.path());
-        let handle1 = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
+        let _handle1 = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
         // No config → falls back to JSONL.
-        assert!(matches!(handle1.as_ref(), BackendHandle::Jsonl(_)));
+        assert_eq!(bus.backend_name_for("ack-topic").await, "jsonl");
 
         // Write a config that promotes ack-topic to SQLite.
         write_queue_config(
@@ -913,8 +902,8 @@ topics:
             .unwrap();
         bus.reload_from_path(dir.path()).await;
         // Next lookup falls back to JSONL.
-        let handle2 = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
-        assert!(matches!(handle2.as_ref(), BackendHandle::Jsonl(_)));
+        let _handle2 = bus.backend_for(dir.path(), "ack-topic").await.unwrap();
+        assert_eq!(bus.backend_name_for("ack-topic").await, "jsonl");
     }
 
     #[tokio::test]
@@ -962,7 +951,7 @@ topics:
         topics.insert(
             "pc-state/alerts".to_string(),
             TopicConfigYaml {
-                backend: Some(BackendKind::Sqlite),
+                backend: Some("sqlite".to_string()),
                 ack_required: Some(true),
                 ..Default::default()
             },
