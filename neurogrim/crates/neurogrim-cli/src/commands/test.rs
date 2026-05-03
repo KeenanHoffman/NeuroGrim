@@ -114,6 +114,18 @@ pub struct Args {
     /// Project root containing `.claude/brain/`. Default: cwd.
     #[arg(long, default_value = ".")]
     pub project_root: String,
+
+    /// V5-FOUND-2 Phase 1 (2026-05-03) — nextest profile to use.
+    /// Profiles defined in `<workspace>/.config/nextest.toml`:
+    /// - `default` (developer-friendly: no fail-fast, no retries)
+    /// - `ci` (strict: fail-fast, retries=2, `flaky-result = "fail"`)
+    ///
+    /// Pass-through to `cargo nextest run --profile <name>`. Operator
+    /// rarely needs to override; CI uses `--profile ci` directly via
+    /// `.github/workflows/ci.yml`. Ignored when `--verbose` is set
+    /// (the libtest passthrough doesn't honor nextest profiles).
+    #[arg(long, default_value = "default")]
+    pub profile: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -153,8 +165,18 @@ pub async fn run(args: Args) -> Result<()> {
     let ledger_path = ledger_path(project_root);
     let archive_path = project_root.join(".claude/brain").join(ARCHIVE_FILENAME);
 
-    // Determine which tests to run.
-    let cargo_args = if args.retry_failed {
+    // V5-FOUND-2 Phase 1 (2026-05-03): main path now invokes
+    // `cargo nextest run` instead of `cargo test`. The libtest path
+    // remains accessible via `--verbose` (raw cargo passthrough).
+    //
+    // Nextest invocation differences from the libtest path:
+    // - Subcommand `nextest run` instead of `test`
+    // - `--profile <name>` flag (configured at .config/nextest.toml)
+    // - `-- --exact <name>` retry pattern is libtest-compat (per V5-FOUND-2
+    //   plan Fork F1; nextest filterset DSL deferred to v5.5)
+    // - `--include-ignored` for `--slow` works via the same libtest-compat
+    //   `-- --include-ignored` arg passthrough
+    let cargo_args: Vec<String> = if args.retry_failed {
         let to_retry = read_most_recent_run_failure_names(&ledger_path);
         if to_retry.is_empty() {
             eprintln!(
@@ -167,15 +189,36 @@ pub async fn run(args: Args) -> Result<()> {
             "✦ neurogrim test --retry-failed: re-running {} prior failure(s)",
             to_retry.len()
         );
-        let mut v: Vec<String> = vec!["test".into(), "--workspace".into(), "--all-targets".into(), "--color".into(), "never".into(), "--".into(), "--exact".into()];
-        // Each name passed positionally with --exact; cargo's libtest
-        // honors them as OR filters.
+        let mut v: Vec<String> = vec![
+            "nextest".into(),
+            "run".into(),
+            "--workspace".into(),
+            "--all-targets".into(),
+            "--profile".into(),
+            args.profile.clone(),
+            "--color".into(),
+            "never".into(),
+            "--".into(),
+            "--exact".into(),
+        ];
+        // Each name positional after `-- --exact`; nextest's libtest-
+        // compat arg path treats them as OR filters with exact-match
+        // semantics.
         for name in &to_retry {
             v.push(name.clone());
         }
         v
     } else {
-        let mut v: Vec<String> = vec!["test".into(), "--workspace".into(), "--all-targets".into(), "--color".into(), "never".into()];
+        let mut v: Vec<String> = vec![
+            "nextest".into(),
+            "run".into(),
+            "--workspace".into(),
+            "--all-targets".into(),
+            "--profile".into(),
+            args.profile.clone(),
+            "--color".into(),
+            "never".into(),
+        ];
         if args.slow {
             v.push("--".into());
             v.push("--include-ignored".into());
@@ -244,7 +287,11 @@ pub async fn run(args: Args) -> Result<()> {
     let stderr_text = String::from_utf8_lossy(&output.stderr);
     let combined = format!("{stdout_text}\n{stderr_text}");
 
-    let parsed = parse_cargo_output(&combined);
+    // V5-FOUND-2 Phase 1: nextest stdout has a different shape from
+    // libtest's. The new parser handles `PASS/FAIL/FLAKY` lines,
+    // `--- STDERR/STDOUT:` failure detail blocks, and the `Summary`
+    // total line.
+    let parsed = parse_nextest_output(&combined);
 
     // Build failure entries for this run.
     let run_id = Uuid::new_v4().to_string();
@@ -475,6 +522,246 @@ pub fn parse_cargo_output(text: &str) -> ParsedCargoOutput {
 
     out.any_failure_observed = !out.failures.is_empty() || out.total_failed > 0;
     out
+}
+
+/// V5-FOUND-2 Phase 1 (2026-05-03) — parse `cargo nextest run` stdout.
+///
+/// Nextest's output format differs from libtest's in three ways:
+/// 1. **Per-test status lines** are unified — one line per test with
+///    `PASS|FAIL|FLAKY|SKIP|TIMEOUT|LEAK|SLOW` prefix, duration,
+///    `(current/total)` counter, `<binary>` (crate::test_target form),
+///    and the test function name. No multi-binary "running N tests"
+///    delimiters — nextest interleaves output across binaries.
+/// 2. **Failure detail blocks** are framed as `--- STDERR: <binary>
+///    <test> ---` followed by panic output, then `--- STDOUT: <binary>
+///    <test> ---` and stdout output. The block ends at the next status
+///    line, the next `---` framing line, or the `Summary` line.
+/// 3. **The summary line** uses `Summary [<dur>] N tests run: P
+///    passed[, F failed][, S skipped]` rather than libtest's per-binary
+///    `test result: ok. ...`.
+///
+/// **`FLAKY` semantic** (nextest 0.9.131+): a test that failed on
+/// attempt 1 but passed on retry. With `flaky-result = "fail"` in the
+/// CI profile, FLAKY counts as a failure for the run's exit code, but
+/// nextest still emits a separate `FLAKY` status line. We treat FLAKY
+/// as a failure for the ledger so operators can see retry-rescued
+/// tests in the failure history.
+///
+/// Returns the same `ParsedCargoOutput` shape as `parse_cargo_output`
+/// so the rest of the wrapper (ledger writer, summary printer) is
+/// runner-agnostic.
+pub fn parse_nextest_output(text: &str) -> ParsedCargoOutput {
+    let mut out = ParsedCargoOutput::default();
+
+    // Real nextest output for a failing test:
+    //
+    //         FAIL [   0.018s] (1/1) <binary> <test_name>
+    //   stdout ───
+    //
+    //       running 1 test
+    //       test <test_name> ... FAILED
+    //       ...
+    //
+    //   stderr ───
+    //
+    //       thread '<test_name>' panicked at <file>:<line>:<col>:
+    //       <msg>
+    //       ...
+    //
+    // ────────────
+    //      Summary [   0.021s] 1 test run: 0 passed, 1 failed
+    //         FAIL [   0.018s] (1/1) <binary> <test_name>      ← echoed after summary
+    //
+    // The `────────────` divider closes a detail block; the `FAIL`
+    // line is emitted twice (once during the run, once echoed after
+    // the summary), so we dedup failures by (test_name, binary).
+    let mut named_failures: Vec<(String, String)> = Vec::new();
+    let mut seen_failure_keys: std::collections::HashSet<(String, String)> =
+        std::collections::HashSet::new();
+    let mut detail_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let mut current_failure_test: Option<String> = None;
+    let mut current_buffer: String = String::new();
+
+    let flush_buffer = |test: &mut Option<String>,
+                        buf: &mut String,
+                        map: &mut std::collections::HashMap<String, String>| {
+        if let Some(t) = test.take() {
+            // Only insert if the buffer has real content; FLAKY/TIMEOUT/
+            // LEAK can fail without a stdout/stderr block, in which case
+            // the placeholder is used at stitch time.
+            if !buf.trim().is_empty() {
+                map.entry(t).or_insert_with(|| std::mem::take(buf));
+            }
+            buf.clear();
+        }
+    };
+
+    for raw_line in text.lines() {
+        let line = strip_ansi(raw_line);
+        let trimmed = line.trim();
+
+        // `────────────` divider (4+ U+2500 box-drawing chars, nothing
+        // else). Closes any in-progress detail buffer. Also appears
+        // BEFORE the first test line (section divider before the
+        // run header) — harmless since no buffer is open yet.
+        if !trimmed.is_empty() && trimmed.chars().all(|c| c == '─') {
+            flush_buffer(&mut current_failure_test, &mut current_buffer, &mut detail_map);
+            continue;
+        }
+
+        // Per-test status line.
+        if let Some((status, binary, test_name)) = parse_nextest_status_line(&line) {
+            // A new status line ends any prior detail buffer.
+            flush_buffer(&mut current_failure_test, &mut current_buffer, &mut detail_map);
+
+            match status.as_str() {
+                "PASS" => out.total_passed += 1,
+                "FAIL" | "TIMEOUT" | "LEAK" | "FLAKY" => {
+                    let key = (test_name.clone(), binary.clone());
+                    if seen_failure_keys.insert(key) {
+                        out.total_failed += 1;
+                        named_failures.push((test_name.clone(), binary.clone()));
+                    }
+                    // The detail block (if any) follows this line and
+                    // is closed by the next `────────────` divider.
+                    current_failure_test = Some(test_name.clone());
+                }
+                "SKIP" => out.total_ignored += 1,
+                "SLOW" => {
+                    // Informational only; the final PASS/FAIL line for
+                    // the same test arrives later.
+                }
+                _ => {}
+            }
+            continue;
+        }
+
+        // Summary line: `     Summary [   1.5s] N tests run: P passed[, F failed][, S skipped]`
+        if let Some(rest) = trimmed.strip_prefix("Summary [") {
+            flush_buffer(&mut current_failure_test, &mut current_buffer, &mut detail_map);
+            update_totals_from_nextest_summary(&mut out, rest);
+            continue;
+        }
+
+        // Inside a detail block: append the raw line (preserve formatting
+        // since panic backtraces have their own indentation, and the
+        // `stdout ───` / `stderr ───` sub-headers are part of the block).
+        if current_failure_test.is_some() {
+            current_buffer.push_str(raw_line);
+            current_buffer.push('\n');
+        }
+    }
+
+    // Final flush.
+    flush_buffer(&mut current_failure_test, &mut current_buffer, &mut detail_map);
+
+    // Stitch named_failures with detail_map.
+    for (test_name, binary) in named_failures {
+        let output_block = detail_map
+            .get(&test_name)
+            .cloned()
+            .map(|s| s.trim_end_matches('\n').to_string())
+            .unwrap_or_else(|| "(no panic detail captured)".to_string());
+        out.failures.push(ParsedFailure {
+            test_name,
+            binary,
+            output_block,
+        });
+    }
+
+    out.any_failure_observed = !out.failures.is_empty() || out.total_failed > 0;
+    out
+}
+
+/// Parse a nextest per-test status line.
+/// Format: `        STATUS [   0.029s] (1/7) <binary> <test_name>`
+/// where leading whitespace varies and STATUS is one of
+/// PASS/FAIL/FLAKY/SKIP/TIMEOUT/LEAK/SLOW.
+fn parse_nextest_status_line(line: &str) -> Option<(String, String, String)> {
+    let trimmed = line.trim_start();
+    // Status word
+    let (status, rest) = trimmed.split_once(' ')?;
+    let status = status.trim();
+    if !matches!(
+        status,
+        "PASS" | "FAIL" | "FLAKY" | "SKIP" | "TIMEOUT" | "LEAK" | "SLOW"
+    ) {
+        return None;
+    }
+    // Skip the `[   N.Ns]` duration block
+    let rest = rest.trim_start();
+    if !rest.starts_with('[') {
+        return None;
+    }
+    let rest = rest.split_once(']')?.1.trim_start();
+    // Skip the `(current/total)` counter
+    if !rest.starts_with('(') {
+        return None;
+    }
+    let rest = rest.split_once(')')?.1.trim_start();
+    // Now `<binary> <test_name>` remain
+    let (binary, test_name) = rest.split_once(' ')?;
+    Some((
+        status.to_string(),
+        binary.trim().to_string(),
+        test_name.trim().to_string(),
+    ))
+}
+
+/// Parse `<binary> <test_name>` from a `--- STDERR:` / `--- STDOUT:`
+/// header. The block format is:
+///   `--- STDERR:              <binary> <test_name> ---`
+/// where the trailing `---` was already trimmed by the caller. The
+/// inner content has variable whitespace between binary and test name.
+fn parse_failure_block_header(inner: &str) -> Option<(String, String)> {
+    // Whitespace-collapse: split into 2 tokens
+    let mut parts = inner.split_whitespace();
+    let binary = parts.next()?.to_string();
+    let test_name = parts.next()?.to_string();
+    Some((binary, test_name))
+}
+
+/// Update parser totals from a nextest summary line.
+/// Format (after the `Summary [` prefix has been stripped):
+///   `   1.5s] 12 tests run: 11 passed, 1 failed, 0 skipped`
+/// Both `failed` and `skipped` segments are optional in nextest output.
+fn update_totals_from_nextest_summary(out: &mut ParsedCargoOutput, rest: &str) {
+    // Skip the duration prefix `   N.Ns]`
+    let rest = match rest.split_once(']') {
+        Some((_, after)) => after.trim_start(),
+        None => return,
+    };
+    // `12 tests run: 11 passed[, 1 failed][, 0 skipped]`
+    let (total_str, after_total) = match rest.split_once(" tests run:") {
+        Some((t, after)) => (t.trim(), after.trim_start()),
+        None => return,
+    };
+    if let Ok(total) = total_str.parse::<u32>() {
+        out.total_tests = total;
+    }
+    // Each segment ends with a verb: passed/failed/skipped. The summary
+    // is comma-separated. Parse each segment.
+    for segment in after_total.split(',') {
+        let seg = segment.trim();
+        if let Some(n_str) = seg.strip_suffix(" passed") {
+            if let Ok(n) = n_str.trim().parse::<u32>() {
+                out.total_passed = n;
+            }
+        } else if let Some(n_str) = seg.strip_suffix(" failed") {
+            if let Ok(n) = n_str.trim().parse::<u32>() {
+                // Trust the summary's total_failed over our line-by-line
+                // count; the per-line count includes FLAKY rescues.
+                if n > 0 {
+                    out.total_failed = n;
+                }
+            }
+        } else if let Some(n_str) = seg.strip_suffix(" skipped") {
+            if let Ok(n) = n_str.trim().parse::<u32>() {
+                out.total_ignored = n;
+            }
+        }
+    }
 }
 
 /// Extract a stable binary identifier from `Running ...` lines like:
@@ -1080,5 +1367,199 @@ test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
             extract_binary_id("tests/cli.rs (target/debug/deps/cli-1234567890abcdef)"),
             Some("cli".to_string())
         );
+    }
+
+    // ── V5-FOUND-2 Phase 1 (2026-05-03) — nextest parser tests ──────────
+
+    /// Sample nextest stdout for a clean run (all tests pass).
+    /// Captured from `cargo nextest run -p neurogrim-sdk` 2026-05-03.
+    const NEXTEST_SAMPLE_ALL_OK: &str = "
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.39s
+────────────
+ Nextest run ID 32a284ed-98c9-45b7-9737-8f71fa41910c with nextest profile: default
+    Starting 7 tests across 3 binaries
+        PASS [   0.029s] (1/7) neurogrim-sdk::compile_test_re_exports theme_b_traits_are_object_safe_via_sdk
+        PASS [   0.041s] (2/7) neurogrim-sdk::compile_test_re_exports queue_built_in_factories_reachable
+        PASS [   0.052s] (3/7) neurogrim-sdk::compile_test_re_exports registries_constructible_via_sdk
+        PASS [   0.068s] (4/7) neurogrim-sdk::sdk_surface_assertion sdk_surface_signatures_unchanged
+        PASS [   0.095s] (5/7) neurogrim-sdk::compile_test_re_exports core_types_reachable_via_sdk
+        PASS [   0.109s] (6/7) neurogrim-sdk::compile_test_re_exports conformance_types_unified_across_suites
+        PASS [   0.129s] (7/7) neurogrim-sdk::compile_test_re_exports adjacent_stable_traits_reachable
+────────────
+     Summary [   0.135s] 7 tests run: 7 passed, 0 skipped
+";
+
+    /// Sample nextest stdout with one failing test + one panic detail block.
+    /// Format mirrors real nextest 0.9.133 output (captured 2026-05-03):
+    /// detail block follows the FAIL line, terminated by `────────────`,
+    /// and the FAIL line is echoed once after the Summary (must dedup).
+    const NEXTEST_SAMPLE_ONE_FAILURE: &str = "
+────────────
+ Nextest run ID test-abc with nextest profile: default
+    Starting 3 tests across 1 binaries
+        PASS [   0.012s] (1/3) my_crate::tests passing_test
+        FAIL [   0.025s] (2/3) my_crate::tests broken_test
+  stdout ───
+
+    running 1 test
+    test broken_test ... FAILED
+
+  stderr ───
+
+    thread 'broken_test' panicked at tests/foo.rs:13:5:
+    assertion `left == right` failed
+      left: 1
+     right: 2
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+────────────
+        PASS [   0.018s] (3/3) my_crate::tests another_passing
+────────────
+     Summary [   0.060s] 3 tests run: 2 passed, 1 failed, 0 skipped
+        FAIL [   0.025s] (2/3) my_crate::tests broken_test
+";
+
+    /// Sample with FLAKY (test failed on attempt 1, passed on retry).
+    /// With `flaky-result = "fail"` in the ci profile, this counts as
+    /// a run failure for the ledger.
+    const NEXTEST_SAMPLE_FLAKY: &str = "
+────────────
+ Nextest run ID test-flake with nextest profile: ci
+    Starting 2 tests across 1 binaries
+        PASS [   0.008s] (1/2) my_crate::tests stable_test
+        FLAKY [   0.150s] (2/2) my_crate::tests flaky_test
+────────────
+     Summary [   0.165s] 2 tests run: 1 passed, 1 failed, 0 skipped
+";
+
+    /// Sample with SKIP (test was filtered out / `#[ignore]`d).
+    const NEXTEST_SAMPLE_WITH_SKIP: &str = "
+────────────
+ Nextest run ID test-skip with nextest profile: default
+    Starting 3 tests across 1 binaries
+        PASS [   0.005s] (1/3) my_crate::tests fast_test
+        SKIP [   0.000s] (2/3) my_crate::tests ignored_test
+        PASS [   0.012s] (3/3) my_crate::tests another_test
+────────────
+     Summary [   0.020s] 3 tests run: 2 passed, 1 skipped
+";
+
+    /// Sample with TIMEOUT (test exceeded slow-timeout's terminate-after).
+    const NEXTEST_SAMPLE_TIMEOUT: &str = "
+────────────
+ Nextest run ID test-timeout with nextest profile: default
+    Starting 2 tests across 1 binaries
+        PASS [   0.005s] (1/2) my_crate::tests fast_test
+        TIMEOUT [ 120.001s] (2/2) my_crate::tests hanging_test
+────────────
+     Summary [ 120.010s] 2 tests run: 1 passed, 1 failed, 0 skipped
+";
+
+    /// Sample with ANSI color codes (nextest emits color by default; we
+    /// pass --color never to strip, but this test verifies graceful
+    /// handling if color sneaks through).
+    const NEXTEST_SAMPLE_WITH_ANSI: &str = "
+────────────
+ \x1b[1mNextest run ID test-ansi\x1b[0m with nextest profile: default
+    Starting 1 tests across 1 binaries
+        \x1b[32mPASS\x1b[0m [   0.005s] (1/1) my_crate::tests colored_test
+────────────
+     Summary [   0.010s] 1 tests run: 1 passed, 0 skipped
+";
+
+    #[test]
+    fn parse_nextest_no_failures() {
+        let out = parse_nextest_output(NEXTEST_SAMPLE_ALL_OK);
+        assert_eq!(out.total_passed, 7, "expected 7 PASS lines counted");
+        assert_eq!(out.total_failed, 0, "expected zero failures");
+        assert_eq!(out.total_ignored, 0, "expected zero skipped");
+        assert_eq!(out.total_tests, 7, "summary total_tests");
+        assert!(out.failures.is_empty(), "failures vec must be empty");
+        assert!(!out.any_failure_observed, "any_failure_observed must be false");
+    }
+
+    #[test]
+    fn parse_nextest_one_failure_with_detail() {
+        let out = parse_nextest_output(NEXTEST_SAMPLE_ONE_FAILURE);
+        assert_eq!(out.total_passed, 2);
+        assert_eq!(out.total_failed, 1);
+        assert_eq!(out.total_tests, 3);
+        assert_eq!(out.failures.len(), 1);
+        let f = &out.failures[0];
+        assert_eq!(f.test_name, "broken_test");
+        assert_eq!(f.binary, "my_crate::tests");
+        assert!(
+            f.output_block.contains("assertion `left == right` failed"),
+            "output_block should contain panic detail; got: {}",
+            f.output_block
+        );
+        assert!(out.any_failure_observed);
+    }
+
+    #[test]
+    fn parse_nextest_flaky_counts_as_failure() {
+        // FLAKY = passed-on-retry. With `flaky-result = "fail"` in the
+        // ci profile, this should count as a failure for ledger purposes.
+        let out = parse_nextest_output(NEXTEST_SAMPLE_FLAKY);
+        assert_eq!(out.total_passed, 1, "stable_test passed");
+        assert_eq!(out.total_failed, 1, "flaky_test counts as failure");
+        assert_eq!(out.failures.len(), 1);
+        let f = &out.failures[0];
+        assert_eq!(f.test_name, "flaky_test");
+        // No panic detail block in this sample; placeholder expected.
+        assert!(
+            f.output_block.contains("no panic detail captured"),
+            "FLAKY without detail block should use placeholder; got: {}",
+            f.output_block
+        );
+    }
+
+    #[test]
+    fn parse_nextest_skip_counted_as_ignored() {
+        let out = parse_nextest_output(NEXTEST_SAMPLE_WITH_SKIP);
+        assert_eq!(out.total_passed, 2);
+        assert_eq!(out.total_failed, 0);
+        assert_eq!(out.total_ignored, 1, "SKIP increments ignored");
+        assert!(out.failures.is_empty());
+    }
+
+    #[test]
+    fn parse_nextest_timeout_counted_as_failure() {
+        let out = parse_nextest_output(NEXTEST_SAMPLE_TIMEOUT);
+        assert_eq!(out.total_passed, 1);
+        assert_eq!(out.total_failed, 1, "TIMEOUT counts as failure");
+        assert_eq!(out.failures.len(), 1);
+        let f = &out.failures[0];
+        assert_eq!(f.test_name, "hanging_test");
+        // No panic detail block (test was killed); placeholder expected.
+        assert!(f.output_block.contains("no panic detail captured"));
+    }
+
+    #[test]
+    fn parse_nextest_strips_ansi_codes() {
+        let out = parse_nextest_output(NEXTEST_SAMPLE_WITH_ANSI);
+        // The ANSI-decorated PASS line should still be recognized.
+        assert_eq!(out.total_passed, 1);
+        assert_eq!(out.total_failed, 0);
+        assert_eq!(out.total_tests, 1);
+    }
+
+    #[test]
+    fn parse_nextest_status_line_extracts_components() {
+        // Direct unit test of the helper.
+        let line = "        PASS [   0.029s] (1/7) neurogrim-sdk::compile_test_re_exports theme_b_traits_are_object_safe_via_sdk";
+        let (status, binary, test) = parse_nextest_status_line(line).expect("must parse");
+        assert_eq!(status, "PASS");
+        assert_eq!(binary, "neurogrim-sdk::compile_test_re_exports");
+        assert_eq!(test, "theme_b_traits_are_object_safe_via_sdk");
+    }
+
+    #[test]
+    fn parse_nextest_status_line_rejects_non_status_lines() {
+        // Lines that look similar but aren't status lines.
+        assert!(parse_nextest_status_line("    Finished `test` profile").is_none());
+        assert!(parse_nextest_status_line("     Summary [   0.135s] 7 tests run").is_none());
+        assert!(parse_nextest_status_line("--- STDERR:    foo bar ---").is_none());
+        assert!(parse_nextest_status_line("").is_none());
     }
 }

@@ -56,9 +56,19 @@ The substantial work is **NOT** the new tool (well-documented, stable) — it's:
 
 **Ship criterion:** plan-internal; no production code changes. Baseline JSON exists; nextest installed; forks pinned; B-47 filed.
 
-### Phase 1 — nextest wrapper migration (Day 1–2, ~1.5 days)
+### Phase 1 — nextest wrapper migration (Day 1–2, ~1.5 days) — **DONE 2026-05-03**
 
 **Goal:** `neurogrim test` invokes `cargo nextest run --workspace --all-targets` (default profile) and continues to write the failure ledger correctly. All existing flags (`--show-only-new`, `--retry-failed`, `--slow`, `--keep-last`, `--verbose`) work.
+
+**Outcome (post-implementation):**
+- `crates/neurogrim-cli/src/commands/test.rs` `run()` switched from `cargo test` to `cargo nextest run --workspace --all-targets --profile <name> --color never`. `--retry-failed` uses libtest-compat `-- --exact <names>` per Fork F1.
+- New `parse_nextest_output()` parser added alongside preserved `parse_cargo_output()`. 8 new unit tests; 18/18 test.rs unit tests + 244/244 neurogrim-cli unit tests pass.
+- Smoke test against the live workspace confirmed: 1 injected `panic!()` extracted from real nextest output (1671 passed / 1 failed / 3 ignored), panic detail captured with `value.rs:320:9` line ref, ledger appended at `<project>/.claude/brain/test-failures.jsonl`, `--retry-failed` correctly re-ran only the injected test.
+
+**Deviations from the original step list (each justified, none material to ship criterion):**
+1. **Stdout parser instead of JUnit XML parser** (Step 1). The original plan called for a JUnit XML parser using `quick-xml`. After the smoke test ran, nextest's stdout already exposes everything the wrapper needs (status lines, panic detail blocks, summary totals); adding an XML dep + extracting `target/nextest/<profile>/junit.xml` would be ceremony. JUnit XML is still emitted (Phase 2's `.config/nextest.toml` configures it) and is what Phase 5 will upload as a CI artifact — just not what the wrapper itself parses.
+2. **Real-format fixture correction.** First parser pass used a fabricated `--- STDERR: <binary> <test> ---` block-marker format; live nextest 0.9.133 actually uses `  stdout ───` / `  stderr ───` markers terminated by a `────────────` divider, with the `FAIL` line **echoed once after the Summary** (must dedup by `(test_name, binary)`). Both bugs caught by smoke test, both fixed.
+3. **Cleanly-bounded smoke test simplified.** Used a single `#[test] fn smoke_inject_failure_v5_found_2()` injection in `crates/neurogrim-secrets/src/value.rs`, then reverted via `Edit`. Did not branch — the injection + revert was atomic enough that a temp branch would have been ceremony.
 
 **Effort note (revised from ~1 day):** 1,084-line wrapper + 11 existing parser tests + new JUnit-XML parser + 6–8 new tests + cleanly-bounded smoke test = realistically 1.5 days.
 

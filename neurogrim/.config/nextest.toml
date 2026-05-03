@@ -1,0 +1,54 @@
+# nextest profiles for NeuroGrim — V5-FOUND-2 Phase 2 (2026-05-03).
+#
+# Two profiles:
+#   default — local dev loop (developer-friendly: no fail-fast, no
+#             retries; surfaces all failures so the operator can
+#             decide what to fix).
+#   ci      — GitHub Actions / pre-merge gate (strict: fail-fast,
+#             retries with `flaky-result = "fail"` so passes-on-retry
+#             still red-light the run).
+#
+# Both profiles emit JUnit XML to `target/nextest/<profile>/junit.xml`
+# for CI artifact upload (V5-FOUND-2 Phase 5) + dashboard consumption
+# (GitHub Actions test summary, Codecov, etc. consume JUnit natively).
+#
+# Wrapper integration: `neurogrim test` defaults to `--profile default`;
+# `neurogrim test --profile ci` opts into the CI profile. CI's
+# `.github/workflows/ci.yml` calls `cargo nextest run --profile ci`
+# directly.
+#
+# Cross-references:
+# - Plan: .claude/plans/v5-found-2-nextest-sccache.md § Phase 2
+# - SLO doc (Phase 4): docs/test-slo.md
+# - V5-FOUND-2 epic: roadmap/epics/v5-foundation.md § V5-FOUND-2
+
+[profile.default]
+# Developer-friendly: surface all failures, no retries, allow
+# generous slow timeout for honest-IO integration tests (filesystem,
+# git, SQLite). Fork D1 SLO threshold: 5s investigate / 10s violate;
+# slow-timeout matches the SOFT investigate threshold.
+fail-fast = false
+test-threads = "num-cpus"
+slow-timeout = { period = "60s", terminate-after = 2 }
+# `retries = 0` — local dev wants honest results, not retry-papering.
+
+[profile.default.junit]
+path = "junit.xml"
+report-name = "neurogrim-default"
+
+[profile.ci]
+# Strict: fail-fast on first failure to surface the breakage faster,
+# retries = 2 to absorb transient network/filesystem flakes,
+# flaky-result = "fail" so a test that passes only on retry STILL
+# fails the run (closes the false-negative concern from V5-FOUND-2
+# plan-critic 2026-05-03).
+fail-fast = true
+test-threads = 4
+slow-timeout = { period = "90s", terminate-after = 2 }
+retries = 2
+
+[profile.ci.junit]
+path = "junit.xml"
+report-name = "neurogrim-ci"
+# CI uploads target/nextest/ci/junit.xml as a workflow artifact
+# (V5-FOUND-2 Phase 5).
