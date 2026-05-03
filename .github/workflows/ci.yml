@@ -41,7 +41,7 @@ jobs:
         run: cargo clippy --workspace --all-targets
 
   rust:
-    name: cargo test (ubuntu)
+    name: cargo nextest (ubuntu)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,14 +52,47 @@ jobs:
         with:
           workspaces: neurogrim
 
-      # Primary gate — every unit + integration test across the workspace.
-      # Includes sensor_behavior.rs (Tier-A), cli_smoke.rs, dual_brain_pair.rs,
-      # schema_conformance.rs (skips silently without LSP-Brains sibling,
-      # which is fine — CI here is NeuroGrim-only; ecosystem CI covers the
-      # cross-repo schema check).
-      - name: cargo test --workspace
+      # V5-FOUND-2 Phase 5 (2026-05-03): install nextest from a
+      # prebuilt binary (~10s) instead of `cargo install cargo-nextest`
+      # (~3-5min). Fork E1 pin.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # Primary gate — every unit + integration test across the
+      # workspace via nextest's `ci` profile (fail-fast, retries=2,
+      # flaky-result="fail" so passes-on-retry STILL red-light the run).
+      # Profile defined in `neurogrim/.config/nextest.toml`.
+      #
+      # SLO discipline (V5-FOUND-2 Phase 4 + Fork D1, 2026-05-03):
+      # 9 tests in `neurogrim-secrets` are tagged `#[ignore]` because
+      # real Argon2id KDF runs at production cost (45–98s each). The
+      # `ci` profile DOES NOT run them — release prep should run
+      # `neurogrim test --slow` (or `cargo nextest run --run-ignored
+      # all`) before any release that touches `neurogrim-secrets`.
+      # Fix queued to v5.5 BACKLOG B-48. See `docs/test-slo.md`.
+      - name: cargo nextest run --profile ci
         working-directory: neurogrim
-        run: cargo test --workspace --all-targets
+        run: cargo nextest run --workspace --all-targets --profile ci
+
+      # Doctests — nextest does not run them (Fork F1 pin); cargo's
+      # libtest harness is the only runner that does. Keep this step
+      # so doctest assertions remain part of the CI gate.
+      - name: cargo test --doc
+        working-directory: neurogrim
+        run: cargo test --doc --workspace
+
+      # Always upload the JUnit XML — even on test failure — so the
+      # GitHub Actions run summary + any external tooling (Codecov,
+      # test-summary action, etc.) can ingest a structured run report.
+      # nextest writes to `target/nextest/<profile>/junit.xml`.
+      - name: upload junit xml
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-junit-xml
+          path: neurogrim/target/nextest/ci/junit.xml
+          if-no-files-found: warn
 
   frontend:
     name: dashboard frontend (vitest + build)
