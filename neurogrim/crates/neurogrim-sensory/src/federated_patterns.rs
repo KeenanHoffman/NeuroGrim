@@ -181,6 +181,19 @@ const DROPPED_REASONS: &[&str] = &[
 /// list, and a `federated_patterns_breakdown` block with aggregate counters
 /// + per-peer + per-pattern-kind breakdowns (NEVER per-row data; see
 /// module-level docs).
+/// # No "no peer CMDBs" sentinel here (V5-MOD-2 Phase 4.5, 2026-05-02)
+///
+/// `coherence` ships a sentinel that returns `score: 0` when its
+/// registry-declared correlations can't be evaluated against any
+/// peer CMDBs. **`federated-patterns` intentionally does NOT carry
+/// the same sentinel.** Per the operator-pinned Q10 + Q17 lock
+/// (see `analyze_federated_patterns_path` Phase 1 comments at line
+/// ~209), missing-ledger is the legitimate "Brain hasn't run any
+/// federation" state, not an error. The signal is surfaced via
+/// `low_confidence: true` and the `federated_patterns:low_confidence`
+/// finding — degrading the score would contradict the operator
+/// design pin. Recon at Phase 4.5 confirmed only `coherence` has
+/// the false-positive-green issue Subagent 2 flagged.
 pub async fn analyze_federated_patterns(project_root: &str) -> Value {
     let root_raw = PathBuf::from(project_root);
     let root = root_raw.canonicalize().unwrap_or(root_raw);

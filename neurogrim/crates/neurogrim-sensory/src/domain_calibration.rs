@@ -178,6 +178,21 @@ struct AggregatedState {
 /// points (`analyze_supply_chain_review`, etc.). The body is fully
 /// synchronous (small file reads through `std::fs`); no actual
 /// async I/O happens in v1.
+///
+/// # No "no peer CMDBs" sentinel here (V5-MOD-2 Phase 4.5, 2026-05-02)
+///
+/// `coherence` ships a sentinel that returns `score: 0` when its
+/// registry-declared correlations can't be evaluated against any
+/// peer CMDBs. **`domain-calibration` intentionally does NOT carry
+/// the same sentinel.** This sensor reads
+/// `*-calibration-ledger.jsonl` files (evidence of fires); their
+/// absence is the legitimate "nothing has fired yet" state, where
+/// the correct answer is `score: 100, has_ever_fired: false,
+/// confidence: 100` (see line 304's `_impl_status` comment). The
+/// signal is surfaced via `domains_scanned` extras, not via the
+/// score. The plan-critic Subagent 2 finding ("same fix-pattern
+/// applies") was overreach — recon at Phase 4.5 confirmed only
+/// `coherence` has the false-positive-green issue.
 pub async fn analyze_domain_calibration(project_root: &str) -> Value {
     let root = Path::new(project_root);
     let claude_root = resolve_claude_root(root);

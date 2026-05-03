@@ -153,6 +153,63 @@ pub async fn analyze_coherence(project_root: &str) -> Value {
         }
     }
 
+    // ── Step 4.5: Sentinel — registry declares correlations but ────────────────
+    //              ZERO peer CMDBs were reachable.
+    //
+    // V5-MOD-2 Phase 4.5 (2026-05-02 — plan-critic Subagent 2 finding):
+    // Without this guard, the `evaluate_condition` fallback (returns
+    // false on missing variables) would produce a misleading
+    // `score: 100` for the empty-peer-CMDBs case (no correlation
+    // fires = "all healthy"). Honest behavior: return a degraded
+    // envelope marking the score as unverifiable so the operator
+    // knows to run the other sensors first.
+    //
+    // This sentinel ONLY fires when correlations EXIST. A registry
+    // with zero declared correlations correctly returns score 100
+    // regardless of peer-CMDB state — there's nothing to evaluate,
+    // so "everything is healthy" is honest.
+    //
+    // The sentinel does NOT apply to `domain-calibration` or
+    // `federated-patterns` (the other two meta-sensors): both have
+    // operator-pinned designs treating absence as a legitimate
+    // state (no fires/no ledger = score 100, signal surfaced via
+    // findings/extras). See those modules' rustdoc for details.
+    if !domains_needed.is_empty() && cmdb_data.is_empty() {
+        let mut sentinel_extras: Vec<(&str, Value)> = Vec::new();
+        sentinel_extras.push((
+            "coherence_error",
+            Value::String(format!(
+                "registry declares {} correlation domain(s) but no peer \
+                 CMDB files were reachable under .claude/. Score is \
+                 unverifiable; returning degraded envelope. Run other \
+                 sensors first (e.g., `neurogrim cast git-health`) to \
+                 populate peer CMDBs.",
+                domains_needed.len()
+            )),
+        ));
+        sentinel_extras.push(("correlations_evaluated", Value::from(0u8)));
+        sentinel_extras.push(("correlations_fired", Value::from(0u8)));
+        sentinel_extras.push(("highest_severity", Value::String("none".into())));
+        sentinel_extras.push(("correlation_details", json!([])));
+        sentinel_extras.push((
+            "domains_needed_count",
+            Value::from(domains_needed.len()),
+        ));
+        sentinel_extras.push(("peer_cmdbs_found_count", Value::from(0u8)));
+
+        findings.push(Finding {
+            name: "coherence:no_peer_cmdbs_found".to_string(),
+            status: "missing".to_string(),
+            points: -100,
+            detail: Some(format!(
+                "{} domain(s) referenced by correlations; 0 peer CMDBs found",
+                domains_needed.len()
+            )),
+        });
+
+        return build_cmdb("check-coherence", 0, findings, Some(sentinel_extras), None);
+    }
+
     // ── Step 5: Build domain variables map ───────────────────────────────────
     // Mirror the fallback path of extract_domain_variables in neurogrim-core:
     // all top-level bool/number fields become "domain:field" keys.

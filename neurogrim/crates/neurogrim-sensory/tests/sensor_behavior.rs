@@ -123,6 +123,76 @@ async fn coherence_runs_with_one_stub_cmdb() {
     assert_envelope_healthy("coherence", &env);
 }
 
+/// V5-MOD-2 Phase 4.5 sentinel: registry declares correlations but
+/// zero peer CMDBs are reachable → degraded envelope with `score: 0`
+/// + a `coherence:no_peer_cmdbs_found` finding. Without the sentinel,
+/// the false-positive-green path returns score 100 because every
+/// correlation's `evaluate_condition` falls through with "no
+/// variables" (returns false → no fires → no deductions → score 100).
+#[tokio::test]
+async fn coherence_sentinel_fires_on_zero_peer_cmdbs() {
+    let tmp = TempDir::new().unwrap();
+    let claude_dir = tmp.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+
+    // Registry with one correlation that references two domains.
+    // Neither domain has a CMDB file → sentinel must fire.
+    std::fs::write(
+        claude_dir.join("brain-registry.json"),
+        r#"{
+          "config": {
+            "correlations": [
+              {
+                "name": "test-correlation",
+                "domains": ["domain-a", "domain-b"],
+                "condition": "domain-a:flag == true && domain-b:flag == true",
+                "severity": "warning",
+                "description": "fixture"
+              }
+            ],
+            "domain_definitions": {
+              "domain-a": {
+                "weight": 1.0,
+                "scoring_source": { "type": "cmdb", "path": ".claude/domain-a-cmdb.json" }
+              },
+              "domain-b": {
+                "weight": 1.0,
+                "scoring_source": { "type": "cmdb", "path": ".claude/domain-b-cmdb.json" }
+              }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let env = neurogrim_sensory::coherence::analyze_coherence(
+        tmp.path().to_str().unwrap()
+    ).await;
+
+    // Score must be 0 (degraded envelope, not 100).
+    let score = env.get("score").and_then(Value::as_u64).unwrap();
+    assert_eq!(
+        score, 0,
+        "sentinel must produce score 0 when correlations declared \
+         but zero peer CMDBs reachable; got {score}"
+    );
+
+    // Finding must include the sentinel name.
+    let findings = env.get("findings").and_then(Value::as_array).unwrap();
+    let has_sentinel = findings.iter().any(|f| {
+        f.get("name").and_then(Value::as_str)
+            == Some("coherence:no_peer_cmdbs_found")
+    });
+    assert!(
+        has_sentinel,
+        "sentinel finding 'coherence:no_peer_cmdbs_found' must be \
+         present; findings = {findings:?}"
+    );
+
+    // Envelope still validates against cmdb-envelope-v1.
+    assert_envelope_healthy("coherence_sentinel", &env);
+}
+
 #[tokio::test]
 async fn human_comms_runs_with_empty_manifest() {
     let tmp = TempDir::new().unwrap();
