@@ -66,6 +66,24 @@ V5-SDK-2's conformance fixture for `ScoringSource` should re-export `neurogrim_c
 
 **Naming history note:** the `ScoringSource` struct (now `ScoringSourceConfig`) and the `ScoringSource` trait briefly collided in the V5-MOD-1 plan. Resolved by renaming the struct + accepting a semver-major bump on `neurogrim-core` (4.x → 5.0.0). LSP-Brains spec `METHODOLOGY-EVOLUTION.md` lines 1118 + 1135 carry the rename note. SDK extraction inherits the post-rename naming — consumers of the SDK will only ever see `ScoringSource` as the trait.
 
+#### V5-MOD-2 hand-off note (added 2026-05-02 at V5-MOD-2 close-out)
+
+V5-MOD-2 ships the second of three Theme B trait surfaces. SDK extraction should re-export the following:
+
+| Type | Path | SDK re-export? | Why |
+|---|---|---|---|
+| `Sensor` **trait** | `neurogrim_core::sensor::Sensor` | **YES** | Stable contract; behavior third-party sensors implement. V5-SDK-2 conformance fixture tests this. |
+| `SensorFactory` **trait** | `neurogrim_core::sensor::SensorFactory` | **YES** | Pairs with the sensor trait; how registration works. |
+| `SensorRegistry` | `neurogrim_core::sensor::SensorRegistry` | **YES** | Public registration API third-party crates call at startup (`registry.register(Box::new(...))` or `registry.register_all(...)`). |
+
+V5-SDK-2's conformance fixture for `Sensor` should re-export `neurogrim_core::sensor_conformance::run_factory_conformance` (V5-MOD-2 Phase 5 — 10 cross-cutting + sensor-specific tests covering factory contract, async safety, CMDB envelope shape, score range, meta block well-formedness, 30-second timeout, idempotency). The example crate at `examples/sensor-readme-quality/` (V5-MOD-2 Phase 6) demonstrates the canonical third-party-author pattern: depend only on `neurogrim-core` (post-V5-SDK: only on `neurogrim-sdk`), implement `Sensor` + `SensorFactory`, run the conformance suite as an integration test. Lift its `tests/conformance.rs` verbatim into the SDK README's "writing a conformant Sensor" walkthrough.
+
+**Trait shape note — `&str` vs `&Path` SDK consumer-facing inconsistency:** unlike `ScoringSource::load(&Path)`, `Sensor::analyze` takes `&str` for the project root. The reason is migration economy — V5-MOD-2 migrated 21 existing analyzers that already took `&str`, and promoting them to `&Path` would either (a) introduce a `to_string_lossy()` round-trip Windows correctness regression at the trait boundary, or (b) eager-migrate all 21 signatures (out-of-scope for V5-MOD-2). The inconsistency surfaces in V5-SDK-1: SDK consumers will see `ScoringSource::load(&Path)` and `Sensor::analyze(&str)`. Document explicitly in SDK README; the v6 promotion path (`Sensor::analyze(&Path)`) is filed as a v5.5 BACKLOG item if SDK adopters demand uniformity.
+
+**Sensor surface decision — no `Sensor::name()` method:** the factory's `name()` is canonical. The trait stays minimal (single `analyze` method), removing one drift risk (sensor's name vs. factory's name disagreeing). SDK consumers index by factory name when they need to identify a sensor for routing.
+
+**No two-method dance like `ScoringSource::load_inherent`:** sensors are slow IO at seconds-per-call (git, cargo audit, network); ~50ns × 21 boxing overhead is rounding error. SDK consumers see a single `analyze` method; no `BuiltinSensor` enum dispatcher needed (V5-MOD-1's perf-critical scoring path required one — sensors don't).
+
 ### V5-SDK-2: SDK conformance suites (distributed) (~3–5 days)
 
 **Status:** Planned
