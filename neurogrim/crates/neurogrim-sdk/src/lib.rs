@@ -46,6 +46,242 @@
 //! `ConformanceReport`, not three structurally-identical-but-
 //! incompatible copies).
 //!
+//! ## Authoring guides
+//!
+//! Three walkthroughs covering the most common third-party plugin
+//! patterns. Each shows the minimum-viable impl + conformance
+//! test wiring + common pitfalls.
+//!
+//! ### Writing a conformant `Sensor` (V5-MOD-2)
+//!
+//! Sensors produce CMDB envelopes that the scoring pipeline
+//! consumes. Use this when you want to plug a new data source
+//! (Jira, GitHub, custom telemetry) into NeuroGrim's `cast`
+//! dispatch. Built-in sensors live in `neurogrim-sensory` and
+//! cover ~21 domains; third-party sensors register alongside.
+//!
+//! Cargo.toml:
+//! ```toml
+//! [dependencies]
+//! neurogrim-sdk = "0.1"
+//! async-trait = "0.1"
+//! anyhow = "1"
+//! serde_json = "1"
+//! chrono = { version = "0.4", features = ["serde"] }
+//! ```
+//!
+//! Minimum-viable impl (stateless, infallible-degrading; matches
+//! the contract of 18-of-21 built-in sensors):
+//!
+//! ```ignore
+//! use async_trait::async_trait;
+//! use neurogrim_sdk::{Sensor, SensorFactory};
+//! use serde_json::{json, Value};
+//!
+//! pub struct MySensor;
+//!
+//! #[async_trait]
+//! impl Sensor for MySensor {
+//!     async fn analyze(
+//!         &self,
+//!         project_root: &str,
+//!     ) -> anyhow::Result<Value> {
+//!         let now = chrono::Utc::now().to_rfc3339();
+//!         Ok(json!({
+//!             "meta": {
+//!                 "schema_version": "1",
+//!                 "updated_at": now,
+//!                 "updated_by": "my-sensor",
+//!             },
+//!             "score": 100,
+//!             "updated_at": now,
+//!             "findings": [],
+//!         }))
+//!     }
+//! }
+//!
+//! pub struct MySensorFactory;
+//!
+//! impl SensorFactory for MySensorFactory {
+//!     fn name(&self) -> &'static str { "my-sensor" }
+//!     fn build(&self) -> Box<dyn Sensor> { Box::new(MySensor) }
+//! }
+//! ```
+//!
+//! Conformance test (`tests/conformance.rs` in your crate):
+//!
+//! ```ignore
+//! use neurogrim_sdk::sensor_conformance::run_factory_conformance;
+//! use my_sensor::MySensorFactory;
+//! use tempfile::TempDir;
+//!
+//! #[tokio::test]
+//! async fn passes_full_conformance_suite() {
+//!     let dir = TempDir::new().unwrap();
+//!     let report = run_factory_conformance(&MySensorFactory, dir.path()).await;
+//!     assert!(
+//!         report.all_passed(),
+//!         "{}/{} failed: {:#?}",
+//!         report.failures().len(),
+//!         report.total(),
+//!         report.failures()
+//!     );
+//! }
+//! ```
+//!
+//! **Contract pitfalls to avoid:**
+//!
+//! - Never panic. The conformance suite catches panics in
+//!   `analyze` calls; if your sensor encounters an unexpected
+//!   project state, return an `Err(anyhow!(...))` or a degraded
+//!   `Ok(envelope)` with `score: 0` + a finding describing the
+//!   failure.
+//! - The `meta.schema_version` field MUST equal `"1"` (string,
+//!   not integer).
+//! - The top-level `score` MUST be an integer in `[0, 100]`.
+//! - Both `meta.updated_at` and the top-level `updated_at` MUST
+//!   be RFC3339 strings.
+//! - Don't take a long time on skeletal input. The conformance
+//!   suite has a 30-second timeout; sensors that block on
+//!   missing-file IO should fast-fail.
+//!
+//! Reference: `examples/sensor-readme-quality/` (file-system
+//! pattern), `examples/sensor-constant-score/` (minimal-deps
+//! pattern; SDK reference example).
+//!
+//! ### Writing a conformant `ScoringSource` (V5-MOD-1)
+//!
+//! Scoring sources load a domain's pre-computed CMDB data for
+//! the unified-score aggregation in `neurogrim score`. Use this
+//! when you want to plug a new score-source pattern (HTTP-fetch
+//! from a metrics service, database lookup, custom format).
+//! Built-in: `cmdb` (file), `a2a` (peer-fetch), `function`
+//! (no-op marker).
+//!
+//! Cargo.toml: same five deps as the Sensor template above
+//! (the SDK contract surface is identical at the dep level).
+//!
+//! Minimum-viable impl:
+//!
+//! ```ignore
+//! use async_trait::async_trait;
+//! use neurogrim_sdk::{
+//!     ScoringSource, ScoringSourceFactory,
+//! };
+//! // Note: ScoringSource takes &Path (not &str like Sensor) and
+//! // returns Option<CmdbData>, not Result<Value>. CmdbData lives
+//! // in neurogrim_core::scoring::CmdbData — re-import via your
+//! // Cargo.toml's neurogrim-core dep, OR use the SDK's
+//! // re-export when SDK 0.2.0 surfaces it.
+//! // Today (0.1.0) this requires a direct `neurogrim-core` dep.
+//!
+//! pub struct MyScoringSource;
+//! pub struct MyScoringSourceFactory;
+//! ```
+//!
+//! Reference: `examples/scoring-source-prom/` (HTTP-fetch
+//! pattern; Prometheus instant-query). The example's
+//! `tests/conformance.rs` shows the full suite invocation.
+//!
+//! **Note on SDK 0.1.0 surface gap:** `CmdbData` is not yet
+//! re-exported via `neurogrim-sdk` because it has cyclic-dep
+//! considerations with `neurogrim-ecosystem`. Third-party
+//! `ScoringSource` authors currently need a direct
+//! `neurogrim-core` dep alongside `neurogrim-sdk`. Tracked for
+//! SDK 0.2.0 polish.
+//!
+//! ### Writing a conformant `QueueBackend` (V5-MOD-3)
+//!
+//! Queue backends store bus messages for a single topic. Use
+//! this when you want a new persistence shape (Redis, PostgreSQL,
+//! DynamoDB, in-memory). Built-in: `jsonl` (file fan-out),
+//! `sqlite` (transactional + ack-capable).
+//!
+//! Cargo.toml minimum:
+//! ```toml
+//! [dependencies]
+//! neurogrim-sdk = "0.1"
+//! anyhow = "1"
+//! tracing = "0.1"
+//! ```
+//!
+//! Minimum-viable impl skeleton (in-memory, no persistence,
+//! ack-supported via `BTreeSet<u64>`):
+//!
+//! ```ignore
+//! use neurogrim_sdk::{QueueBackend, QueueBackendFactory, StoredMessage, QueueMessage};
+//! use std::collections::{BTreeSet, HashMap};
+//! use std::path::Path;
+//! use std::sync::{Arc, RwLock};
+//!
+//! pub struct MyQueueBackend {
+//!     log: RwLock<Vec<StoredMessage>>,
+//!     acks: RwLock<HashMap<String, BTreeSet<u64>>>,
+//!     next_offset: RwLock<u64>,
+//! }
+//!
+//! impl QueueBackend for MyQueueBackend {
+//!     fn append(&self, msg: &QueueMessage) -> anyhow::Result<u64> {
+//!         let mut next = self.next_offset.write().unwrap();
+//!         let off = *next;
+//!         *next += 1;
+//!         drop(next);
+//!         self.log.write().unwrap().push(StoredMessage {
+//!             offset: off,
+//!             message: msg.clone(),
+//!         });
+//!         Ok(off)
+//!     }
+//!     fn read_from(&self, since: u64, limit: usize) -> anyhow::Result<Vec<StoredMessage>> {
+//!         Ok(self.log.read().unwrap().iter()
+//!             .filter(|sm| sm.offset >= since)
+//!             .take(limit)
+//!             .cloned()
+//!             .collect())
+//!     }
+//!     fn len(&self) -> anyhow::Result<u64> {
+//!         Ok(self.log.read().unwrap().len() as u64)
+//!     }
+//!     // Override `supports_ack`/`read_unacked`/`ack`/`last_acked`
+//!     // for ack-capable backends. See `examples/queue-backend-memory/`
+//!     // for a full impl.
+//! }
+//!
+//! pub struct MyQueueBackendFactory;
+//!
+//! impl QueueBackendFactory for MyQueueBackendFactory {
+//!     fn name(&self) -> &'static str { "my-backend" }
+//!     fn build(&self, _queue_root: &Path, topic: &str)
+//!         -> anyhow::Result<Arc<dyn QueueBackend>>
+//!     {
+//!         Ok(Arc::new(MyQueueBackend {
+//!             log: RwLock::new(Vec::new()),
+//!             acks: RwLock::new(HashMap::new()),
+//!             next_offset: RwLock::new(0),
+//!         }))
+//!     }
+//! }
+//! ```
+//!
+//! **Contract pitfalls to avoid:**
+//!
+//! - The trait is `Send + Sync` (V5-MOD-3 Fork A2). Use `Mutex`
+//!   or `RwLock` for any interior mutability; method receivers
+//!   are `&self`, not `&mut self`.
+//! - Per-consumer-group ack tracking needs `BTreeSet<u64>` (or
+//!   equivalent), NOT `HashMap<String, u64>` high-water-mark.
+//!   The set lets you represent out-of-order acks (e.g., ack 1, 4
+//!   means offsets 2, 3 are still pending). High-water-mark
+//!   would treat 4 as "everything up to 4 is acked", which is
+//!   wrong.
+//! - `factory.supports_ack()` and `backend.supports_ack()` MUST
+//!   agree. The conformance suite verifies this.
+//! - Acking an offset that doesn't exist is an error, not a
+//!   silent no-op.
+//!
+//! Reference: `examples/queue-backend-memory/` (full ack-supported
+//! in-memory pattern with `BTreeSet` ack tracking).
+//!
 //! ## What's NOT here
 //!
 //! - **Implementation crates** (`JsonlBackend`, `SqliteBackend`,
