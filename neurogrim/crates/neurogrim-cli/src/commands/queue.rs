@@ -379,7 +379,7 @@ async fn migrate(args: MigrateArgs) -> Result<()> {
     // Step 1: open source. Read every message into memory. Topics
     // are bounded by retention so loading the full set is OK; if
     // an operator has 500k+ messages they'll want to compact first.
-    let mut source: Box<dyn QueueBackend> = open_backend(&args.from, root, &args.topic)?;
+    let source: Box<dyn QueueBackend> = open_backend(&args.from, root, &args.topic)?;
     let total = source.len()?;
     let messages = source.read_from(0, total as usize)?;
     drop(source); // release any open handles before opening dest.
@@ -387,7 +387,7 @@ async fn migrate(args: MigrateArgs) -> Result<()> {
     // Step 2: open destination + replay. We append rather than
     // batch-insert so the message ids + produced_at timestamps are
     // preserved exactly.
-    let mut dest: Box<dyn QueueBackend> = open_backend(&args.to, root, &args.topic)?;
+    let dest: Box<dyn QueueBackend> = open_backend(&args.to, root, &args.topic)?;
     // Refuse migration if dest already has data — we don't want to
     // mix topics. The operator should `rm` the dest first if they
     // really mean to overwrite (loud failure beats silent merge).

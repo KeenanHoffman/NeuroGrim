@@ -76,11 +76,11 @@ impl BackendHandle {
     pub fn append(&self, msg: &QueueMessage) -> anyhow::Result<u64> {
         match self {
             BackendHandle::Jsonl(path) => {
-                let mut be = JsonlBackend::new(path.clone());
+                let be = JsonlBackend::new(path.clone());
                 be.append(msg)
             }
             BackendHandle::Sqlite(handle) => {
-                let mut be = handle.lock().expect("sqlite mutex poisoned");
+                let be = handle.lock().expect("sqlite mutex poisoned");
                 be.append(msg)
             }
         }
@@ -153,7 +153,7 @@ impl BackendHandle {
                 );
             }
             BackendHandle::Sqlite(handle) => {
-                let mut be = handle.lock().expect("sqlite mutex poisoned");
+                let be = handle.lock().expect("sqlite mutex poisoned");
                 be.ack(offset, consumer_group)
             }
         }

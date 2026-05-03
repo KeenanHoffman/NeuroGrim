@@ -81,7 +81,7 @@ pub fn ingest_and_open(project_root: &Path) -> Result<SqliteBackend> {
     if let Some(parent) = sqlite.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let mut backend = SqliteBackend::open(&sqlite)?;
+    let backend = SqliteBackend::open(&sqlite)?;
 
     let jsonl = jsonl_path(project_root);
     let text = match std::fs::read_to_string(&jsonl) {

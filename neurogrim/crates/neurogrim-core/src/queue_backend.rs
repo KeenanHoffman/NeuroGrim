@@ -59,16 +59,23 @@ pub struct StoredMessage {
 
 /// Pluggable persistence backend for one bus topic.
 ///
-/// All methods are `&mut self` for mutators and `&self` for readers
-/// to make sharing across threads explicit at the call site
-/// (typically wrapped in a `Mutex` by the dashboard's bus state).
+/// All methods are `&self` (V5-MOD-3 Phase 2, 2026-05-02 — Fork A2):
+/// backends that need interior mutability (e.g., `SqliteBackend`'s
+/// `Connection`) wrap the state in `Mutex` internally. Promotion
+/// to `&self` lets the registry hand out `Arc<dyn QueueBackend>`
+/// directly; consumers don't pay the `Arc<Mutex<dyn>>` ceremony.
+///
+/// `Send + Sync` (V5-MOD-3 Fork A2) so backends can be shared across
+/// the bus's tokio runtime without per-call lock-and-clone gymnastics.
+/// Matches V5-MOD-1's `ScoringSource` and V5-MOD-2's `Sensor` for
+/// SDK consistency.
 ///
 /// Default impls of the ack-related methods return an error or
 /// no-op so backends that don't support ack semantics (JsonlBackend)
 /// don't need to override them.
-pub trait QueueBackend: Send {
+pub trait QueueBackend: Send + Sync {
     /// Append a single message. Returns the assigned offset.
-    fn append(&mut self, msg: &QueueMessage) -> Result<u64>;
+    fn append(&self, msg: &QueueMessage) -> Result<u64>;
 
     /// Read messages with offset >= `since_offset`, up to `limit`.
     /// Returns ascending-offset order.
@@ -99,7 +106,7 @@ pub trait QueueBackend: Send {
 
     /// Mark a message as acked by `consumer_group`.
     /// Default impl errors — only ack-capable backends override.
-    fn ack(&mut self, _offset: u64, _consumer_group: &str) -> Result<()> {
+    fn ack(&self, _offset: u64, _consumer_group: &str) -> Result<()> {
         anyhow::bail!(
             "queue backend: ack() called on a backend that does not \
              support ack_required semantics"
@@ -140,7 +147,7 @@ impl JsonlBackend {
 }
 
 impl QueueBackend for JsonlBackend {
-    fn append(&mut self, msg: &QueueMessage) -> Result<u64> {
+    fn append(&self, msg: &QueueMessage) -> Result<u64> {
         // The JSONL writer doesn't natively report an offset, so
         // we count current messages and return that as the assigned
         // offset of the row we just appended. This mirrors the
@@ -207,13 +214,16 @@ mod sqlite_impl {
     /// readers + writer on the same DB file. Mirrors the discipline
     /// in `neurogrim-a2a/src/token_store.rs`.
     ///
-    /// **Concurrency note:** the bus's per-topic `Arc<Mutex<…>>`
-    /// remains the canonical serializer. WAL mode means a reader
-    /// from another process won't block, but within-process
-    /// callers should still hold the Mutex for the duration of
-    /// each backend operation.
+    /// **Concurrency note (V5-MOD-3 Phase 2 update, 2026-05-02):** the
+    /// `Connection` is wrapped in a `std::sync::Mutex` *internally*
+    /// so the type is `Send + Sync`. Callers no longer need to hold
+    /// an external `Arc<Mutex<SqliteBackend>>`; an `Arc<dyn QueueBackend>`
+    /// dispatches directly. WAL mode + a per-call `lock()` keep the
+    /// concurrency model identical to v4.x: at most one in-process
+    /// caller in the critical section per topic, with multi-process
+    /// readers unblocked by WAL.
     pub struct SqliteBackend {
-        conn: Connection,
+        conn: std::sync::Mutex<Connection>,
     }
 
     impl SqliteBackend {
@@ -231,7 +241,9 @@ mod sqlite_impl {
             // enough for a coordination bus, faster than FULL.
             conn.pragma_update(None, "synchronous", "NORMAL")?;
             Self::ensure_schema(&conn)?;
-            Ok(Self { conn })
+            Ok(Self {
+                conn: std::sync::Mutex::new(conn),
+            })
         }
 
         fn ensure_schema(conn: &Connection) -> Result<()> {
@@ -313,7 +325,7 @@ mod sqlite_impl {
     }
 
     impl QueueBackend for SqliteBackend {
-        fn append(&mut self, msg: &QueueMessage) -> Result<u64> {
+        fn append(&self, msg: &QueueMessage) -> Result<u64> {
             let payload_str = serde_json::to_string(&msg.payload)?;
             let priority_str = match msg.priority {
                 crate::queue::Priority::Low => "low",
@@ -321,7 +333,11 @@ mod sqlite_impl {
                 crate::queue::Priority::High => "high",
             };
             let expires_at_str = msg.expires_at.map(|d| d.to_rfc3339());
-            self.conn.execute(
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| anyhow::anyhow!("sqlite mutex poisoned"))?;
+            conn.execute(
                 r#"INSERT INTO messages
                        (id, topic, payload, produced_at, priority, expires_at)
                    VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
@@ -336,7 +352,7 @@ mod sqlite_impl {
             )?;
             // SQLite returns the autoincremented ROWID (which equals
             // our `offset` PK) via `last_insert_rowid()`.
-            Ok(self.conn.last_insert_rowid() as u64)
+            Ok(conn.last_insert_rowid() as u64)
         }
 
         fn read_from(
@@ -344,7 +360,11 @@ mod sqlite_impl {
             since_offset: u64,
             limit: usize,
         ) -> Result<Vec<StoredMessage>> {
-            let mut stmt = self.conn.prepare(
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| anyhow::anyhow!("sqlite mutex poisoned"))?;
+            let mut stmt = conn.prepare(
                 r#"SELECT offset, id, topic, payload, produced_at, priority, expires_at
                    FROM messages
                    WHERE offset >= ?1
@@ -363,9 +383,12 @@ mod sqlite_impl {
         }
 
         fn len(&self) -> Result<u64> {
-            let n: i64 = self
+            let conn = self
                 .conn
-                .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))?;
+                .lock()
+                .map_err(|_| anyhow::anyhow!("sqlite mutex poisoned"))?;
+            let n: i64 =
+                conn.query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))?;
             Ok(n as u64)
         }
 
@@ -378,7 +401,11 @@ mod sqlite_impl {
             consumer_group: &str,
             limit: usize,
         ) -> Result<Vec<StoredMessage>> {
-            let mut stmt = self.conn.prepare(
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| anyhow::anyhow!("sqlite mutex poisoned"))?;
+            let mut stmt = conn.prepare(
                 r#"SELECT m.offset, m.id, m.topic, m.payload, m.produced_at,
                           m.priority, m.expires_at
                    FROM messages m
@@ -401,12 +428,15 @@ mod sqlite_impl {
             Ok(out)
         }
 
-        fn ack(&mut self, offset: u64, consumer_group: &str) -> Result<()> {
+        fn ack(&self, offset: u64, consumer_group: &str) -> Result<()> {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| anyhow::anyhow!("sqlite mutex poisoned"))?;
             // Verify the offset exists; if not, the caller is acking
             // a non-existent message — return a clear error rather
             // than silently inserting an orphan ack row.
-            let exists: bool = self
-                .conn
+            let exists: bool = conn
                 .query_row(
                     "SELECT 1 FROM messages WHERE offset = ?1",
                     params![offset as i64],
@@ -423,7 +453,7 @@ mod sqlite_impl {
             }
             // INSERT OR IGNORE — second ack from the same consumer
             // group is a no-op (idempotent).
-            self.conn.execute(
+            conn.execute(
                 r#"INSERT OR IGNORE INTO acks (consumer_group, offset, acked_at)
                    VALUES (?1, ?2, ?3)"#,
                 params![consumer_group, offset as i64, chrono::Utc::now().to_rfc3339()],
@@ -432,8 +462,11 @@ mod sqlite_impl {
         }
 
         fn last_acked(&self, consumer_group: &str) -> Result<Option<u64>> {
-            let row: Option<i64> = self
+            let conn = self
                 .conn
+                .lock()
+                .map_err(|_| anyhow::anyhow!("sqlite mutex poisoned"))?;
+            let row: Option<i64> = conn
                 .query_row(
                     r#"SELECT MAX(offset) FROM acks WHERE consumer_group = ?1"#,
                     params![consumer_group],
@@ -445,14 +478,214 @@ mod sqlite_impl {
         }
     }
 
-    // The `Send` bound on QueueBackend is satisfied because rusqlite's
-    // Connection is `Send` (just `!Sync`, hence the Mutex wrapper at
-    // the call site).
-    unsafe impl Send for SqliteBackend {}
+    // V5-MOD-3 Phase 2 (2026-05-02) — `unsafe impl Send for SqliteBackend`
+    // was needed pre-V5-MOD-3 because the struct held a raw `Connection`
+    // (which is conditionally Send only on certain SQLite builds). With
+    // `conn: Mutex<Connection>` after Fork A2, `Send + Sync` are
+    // auto-derived; the unsafe impl is no longer needed and was removed.
 }
 
 #[cfg(feature = "sqlite")]
 pub use sqlite_impl::SqliteBackend;
+
+// ────────────────────────────────────────────────────────────────
+// V5-MOD-3 Phase 1 (2026-05-02) — `QueueBackendFactory` +
+// `QueueBackendRegistry` for the pluggable backend dispatch.
+// ────────────────────────────────────────────────────────────────
+//
+// Replaces the closed-set `BackendKind` match in
+// `neurogrim-dashboard/src/bus.rs::BackendHandle::*` (V5-MOD-3
+// Phase 3 conversion target). Mirrors V5-MOD-1's `ScoringSource`
+// + V5-MOD-2's `Sensor` factory + registry pattern: hand-rolled
+// `HashMap<&str, Box<dyn Factory>>`, last-write-wins on duplicate
+// register, `register_all` for the canonical built-in list.
+
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+
+/// Factory: produces a [`QueueBackend`] impl for one bus topic.
+///
+/// Each bus topic has its own backend instance (one `.jsonl` file
+/// per topic, one `.sqlite` file per topic), so `build()` takes
+/// the topic file path. The factory is responsible for any
+/// per-topic state initialization (open SQLite connection,
+/// validate file format, etc.).
+///
+/// `Send + Sync` so the registry can be shared across the bus's
+/// tokio runtime without `Arc<Mutex>` ceremony — registration is
+/// startup-time-only.
+pub trait QueueBackendFactory: Send + Sync {
+    /// Stable wire-name. Matches the `backend` string in
+    /// `queue-config.yaml::topics::<topic>::backend`.
+    fn name(&self) -> &'static str;
+
+    /// True iff backends produced by this factory support
+    /// `ack_required: true` semantics. `queue_config::validate()`
+    /// (V5-MOD-3 Phase 3 update) checks this when a topic declares
+    /// `ack_required: true` — declaring ack on a non-ack backend is
+    /// a startup-time configuration error.
+    ///
+    /// Default: `false`. Backends that support ack semantics
+    /// (e.g., `SqliteBackend`) override to return `true`.
+    fn supports_ack(&self) -> bool {
+        false
+    }
+
+    /// Construct a backend instance bound to `topic_path`. The
+    /// path's existence is not assumed — the factory is responsible
+    /// for creating the file/directory if needed. Returns
+    /// `Arc<dyn QueueBackend>` so the bus's per-topic cache holds
+    /// a thread-safe shared handle.
+    fn build(&self, topic_path: &Path) -> Result<Arc<dyn QueueBackend>>;
+}
+
+/// Hand-rolled registry mapping backend wire-names to factories.
+///
+/// **Why hand-rolled** (V5-MOD-1 / V5-MOD-2 Subagent 2 finding,
+/// reapplied to V5-MOD-3): the workspace has no existing
+/// static-registration substrate (`inventory` / `linkme` / `ctor` —
+/// none present). The `dependency-discipline` skill enforces a
+/// 4-point pre-flight on new deps; this `HashMap`-backed registry
+/// is the same ~40 lines with zero supply-chain review burden.
+///
+/// # Built-in registration
+///
+/// [`built_in_factories`] returns the JSONL + SQLite factories.
+/// Consuming binaries call `registry.register_all(built_in_factories())`
+/// at startup; third-party crates register their own via
+/// [`Self::register`] alongside.
+pub struct QueueBackendRegistry {
+    factories: HashMap<&'static str, Box<dyn QueueBackendFactory>>,
+}
+
+impl QueueBackendRegistry {
+    /// Empty registry. Caller registers factories explicitly.
+    pub fn new() -> Self {
+        QueueBackendRegistry {
+            factories: HashMap::new(),
+        }
+    }
+
+    /// Register a factory by its `name()`. Last-write-wins on
+    /// duplicate name — consumers can override built-ins for
+    /// testing.
+    pub fn register(&mut self, factory: Box<dyn QueueBackendFactory>) {
+        let name = factory.name();
+        self.factories.insert(name, factory);
+    }
+
+    /// Convenience: register multiple factories from an iterator.
+    /// V5-MOD-3 Phase 3 wire-up:
+    /// `registry.register_all(built_in_factories())`.
+    pub fn register_all(
+        &mut self,
+        factories: impl IntoIterator<Item = Box<dyn QueueBackendFactory>>,
+    ) {
+        for factory in factories {
+            self.register(factory);
+        }
+    }
+
+    /// Look up a factory by wire-name.
+    pub fn get(&self, name: &str) -> Option<&dyn QueueBackendFactory> {
+        self.factories.get(name).map(|f| f.as_ref())
+    }
+
+    /// Convenience: look up a factory and immediately build a
+    /// backend for `topic_path`. Returns `None` if no factory is
+    /// registered for the given name; otherwise propagates any
+    /// `build()` error.
+    pub fn build(
+        &self,
+        name: &str,
+        topic_path: &Path,
+    ) -> Option<Result<Arc<dyn QueueBackend>>> {
+        self.get(name).map(|f| f.build(topic_path))
+    }
+
+    /// True if a factory is registered for the given name.
+    pub fn has(&self, name: &str) -> bool {
+        self.factories.contains_key(name)
+    }
+
+    /// Iterate over registered wire-names.
+    pub fn registered_names(&self) -> impl Iterator<Item = &&'static str> {
+        self.factories.keys()
+    }
+
+    /// Number of registered factories.
+    pub fn len(&self) -> usize {
+        self.factories.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.factories.is_empty()
+    }
+}
+
+impl Default for QueueBackendRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ── Built-in factories ──────────────────────────────────────────
+
+/// Factory for [`JsonlBackend`]. Always-on (no feature gate);
+/// JSONL is the default backend for any topic without an explicit
+/// `queue-config.yaml` override.
+pub struct JsonlBackendFactory;
+
+impl QueueBackendFactory for JsonlBackendFactory {
+    fn name(&self) -> &'static str {
+        "jsonl"
+    }
+    // supports_ack defaults to false — JSONL is fan-out only.
+    fn build(&self, topic_path: &Path) -> Result<Arc<dyn QueueBackend>> {
+        Ok(Arc::new(JsonlBackend::new(topic_path.to_path_buf())))
+    }
+}
+
+/// Factory for [`SqliteBackend`]. Gated by the `sqlite` feature
+/// (matches the `SqliteBackend` itself). Required for any topic
+/// declaring `ack_required: true`.
+#[cfg(feature = "sqlite")]
+pub struct SqliteBackendFactory;
+
+#[cfg(feature = "sqlite")]
+impl QueueBackendFactory for SqliteBackendFactory {
+    fn name(&self) -> &'static str {
+        "sqlite"
+    }
+    fn supports_ack(&self) -> bool {
+        true
+    }
+    fn build(&self, topic_path: &Path) -> Result<Arc<dyn QueueBackend>> {
+        Ok(Arc::new(SqliteBackend::open(topic_path)?))
+    }
+}
+
+/// Canonical list of built-in queue backend factories.
+///
+/// V5-MOD-3 Phase 3 wire-up (in cli + dashboard startup):
+/// ```ignore
+/// use neurogrim_core::queue_backend::{QueueBackendRegistry, built_in_factories};
+/// let mut registry = QueueBackendRegistry::new();
+/// registry.register_all(built_in_factories());
+/// ```
+///
+/// Under `--features sqlite` (default in cli + dashboard) returns
+/// 2 factories (jsonl + sqlite); without the feature, returns 1
+/// (jsonl only).
+pub fn built_in_factories() -> Vec<Box<dyn QueueBackendFactory>> {
+    #[allow(unused_mut)]
+    let mut factories: Vec<Box<dyn QueueBackendFactory>> =
+        vec![Box::new(JsonlBackendFactory)];
+    #[cfg(feature = "sqlite")]
+    factories.push(Box::new(SqliteBackendFactory));
+    factories
+}
 
 #[cfg(test)]
 mod tests {
@@ -471,7 +704,7 @@ mod tests {
 
     fn run_appended_messages_round_trip(make: fn(&TempDir) -> Box<dyn QueueBackend>) {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make(&dir);
+        let be = make(&dir);
         assert_eq!(be.len().unwrap(), 0);
         let m1 = QueueMessage::new("test/topic", json!({"n": 1}));
         let m2 = QueueMessage::new("test/topic", json!({"n": 2}));
@@ -487,7 +720,7 @@ mod tests {
 
     fn run_read_from_offset(make: fn(&TempDir) -> Box<dyn QueueBackend>) {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make(&dir);
+        let be = make(&dir);
         for i in 0..5 {
             let m = QueueMessage::new("test/topic", json!({"i": i}));
             be.append(&m).unwrap();
@@ -500,7 +733,7 @@ mod tests {
 
     fn run_read_with_limit(make: fn(&TempDir) -> Box<dyn QueueBackend>) {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make(&dir);
+        let be = make(&dir);
         for i in 0..10 {
             let m = QueueMessage::new("test/topic", json!({"i": i}));
             be.append(&m).unwrap();
@@ -511,7 +744,7 @@ mod tests {
 
     fn run_priority_round_trip(make: fn(&TempDir) -> Box<dyn QueueBackend>) {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make(&dir);
+        let be = make(&dir);
         let m = QueueMessage::new("test/topic", json!({})).with_priority(Priority::High);
         be.append(&m).unwrap();
         let read = be.read_from(0, 10).unwrap();
@@ -520,7 +753,7 @@ mod tests {
 
     fn run_expires_at_round_trip(make: fn(&TempDir) -> Box<dyn QueueBackend>) {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make(&dir);
+        let be = make(&dir);
         let mut m = QueueMessage::new("test/topic", json!({}));
         let exp = chrono::Utc::now() + chrono::Duration::hours(1);
         m.expires_at = Some(exp);
@@ -541,7 +774,7 @@ mod tests {
 
     fn run_uuid_preserved(make: fn(&TempDir) -> Box<dyn QueueBackend>) {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make(&dir);
+        let be = make(&dir);
         let m = QueueMessage::new("test/topic", json!({"x": 1}));
         let original_id = m.id;
         be.append(&m).unwrap();
@@ -593,7 +826,7 @@ mod tests {
     #[test]
     fn jsonl_does_not_support_ack() {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make_jsonl(&dir);
+        let be = make_jsonl(&dir);
         assert!(!be.supports_ack());
         let m = QueueMessage::new("test/topic", json!({}));
         be.append(&m).unwrap();
@@ -669,7 +902,7 @@ mod tests {
     #[test]
     fn sqlite_ack_marks_message_consumed_for_a_group() {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make_sqlite(&dir);
+        let be = make_sqlite(&dir);
         let m1 = QueueMessage::new("test/topic", json!({"n": 1}));
         let m2 = QueueMessage::new("test/topic", json!({"n": 2}));
         let off1 = be.append(&m1).unwrap();
@@ -691,7 +924,7 @@ mod tests {
         // until they ack — fan-out semantics on top of per-group
         // exactly-once.
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make_sqlite(&dir);
+        let be = make_sqlite(&dir);
         let m = QueueMessage::new("test/topic", json!({"n": 1}));
         let off = be.append(&m).unwrap();
         be.ack(off, "group-A").unwrap();
@@ -706,7 +939,7 @@ mod tests {
     #[test]
     fn sqlite_ack_idempotent() {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make_sqlite(&dir);
+        let be = make_sqlite(&dir);
         let m = QueueMessage::new("test/topic", json!({"n": 1}));
         let off = be.append(&m).unwrap();
         be.ack(off, "group-A").unwrap();
@@ -719,7 +952,7 @@ mod tests {
     #[test]
     fn sqlite_ack_unknown_offset_errors() {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make_sqlite(&dir);
+        let be = make_sqlite(&dir);
         let result = be.ack(99_999, "group-A");
         assert!(result.is_err(), "ack for non-existent offset should fail");
     }
@@ -728,7 +961,7 @@ mod tests {
     #[test]
     fn sqlite_last_acked_tracks_max() {
         let dir = TempDir::new().expect("tempdir");
-        let mut be = make_sqlite(&dir);
+        let be = make_sqlite(&dir);
         let mut offsets = vec![];
         for i in 0..5 {
             let m = QueueMessage::new("test/topic", json!({"i": i}));
@@ -749,7 +982,7 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
         let path = dir.path().join("durable.sqlite");
         {
-            let mut be = SqliteBackend::open(&path).unwrap();
+            let be = SqliteBackend::open(&path).unwrap();
             let m = QueueMessage::new("test/topic", json!({"durable": true}));
             be.append(&m).unwrap();
         }
@@ -766,7 +999,7 @@ mod tests {
         let path = dir.path().join("durable-acks.sqlite");
         let off;
         {
-            let mut be = SqliteBackend::open(&path).unwrap();
+            let be = SqliteBackend::open(&path).unwrap();
             let m = QueueMessage::new("test/topic", json!({"n": 1}));
             off = be.append(&m).unwrap();
             be.ack(off, "group-A").unwrap();
@@ -774,5 +1007,131 @@ mod tests {
         let be = SqliteBackend::open(&path).unwrap();
         assert!(be.read_unacked("group-A", 10).unwrap().is_empty());
         assert_eq!(be.last_acked("group-A").unwrap(), Some(off));
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // V5-MOD-3 Phase 1 tests — QueueBackendFactory + Registry
+    // ────────────────────────────────────────────────────────────────
+
+    /// Compile-only object-safety guards. Fail to compile if a
+    /// future change breaks `Box<dyn>` / `Arc<dyn>` dispatch.
+    #[allow(dead_code)]
+    fn _object_safety_check_backend(_: Box<dyn QueueBackend>) {}
+    #[allow(dead_code)]
+    fn _object_safety_check_factory(_: Box<dyn QueueBackendFactory>) {}
+    #[allow(dead_code)]
+    fn _arc_dyn_backend_works(_: Arc<dyn QueueBackend>) {}
+
+    #[test]
+    fn jsonl_factory_builds_a_working_backend() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.jsonl");
+        let factory = JsonlBackendFactory;
+        assert_eq!(factory.name(), "jsonl");
+        assert!(!factory.supports_ack());
+        let be = factory.build(&path).unwrap();
+        let m = QueueMessage::new("test/topic", json!({"n": 1}));
+        let off = be.append(&m).unwrap();
+        assert_eq!(off, 0);
+        assert_eq!(be.len().unwrap(), 1);
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test]
+    fn sqlite_factory_builds_a_working_backend() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.sqlite");
+        let factory = SqliteBackendFactory;
+        assert_eq!(factory.name(), "sqlite");
+        assert!(factory.supports_ack());
+        let be = factory.build(&path).unwrap();
+        let m = QueueMessage::new("test/topic", json!({"n": 1}));
+        let off = be.append(&m).unwrap();
+        assert_eq!(off, 1); // SQLite ROWID starts at 1
+        assert_eq!(be.len().unwrap(), 1);
+    }
+
+    #[test]
+    fn empty_registry_has_no_factories() {
+        let reg = QueueBackendRegistry::new();
+        assert!(reg.is_empty());
+        assert_eq!(reg.len(), 0);
+        assert!(!reg.has("jsonl"));
+        assert!(reg.get("anything").is_none());
+        assert!(reg.build("anything", Path::new("/tmp")).is_none());
+    }
+
+    #[test]
+    fn register_then_lookup_and_build() {
+        let dir = TempDir::new().unwrap();
+        let mut reg = QueueBackendRegistry::new();
+        reg.register(Box::new(JsonlBackendFactory));
+        assert_eq!(reg.len(), 1);
+        assert!(reg.has("jsonl"));
+        assert!(reg.get("jsonl").is_some());
+        let be = reg
+            .build("jsonl", &dir.path().join("topic.jsonl"))
+            .expect("factory registered")
+            .expect("build succeeds");
+        let _: Arc<dyn QueueBackend> = be;
+    }
+
+    #[test]
+    fn unknown_name_returns_none() {
+        let mut reg = QueueBackendRegistry::new();
+        reg.register(Box::new(JsonlBackendFactory));
+        assert!(reg.get("does-not-exist").is_none());
+        assert!(reg.build("does-not-exist", Path::new("/tmp")).is_none());
+    }
+
+    #[test]
+    fn register_all_populates_from_iterator() {
+        let mut reg = QueueBackendRegistry::new();
+        reg.register_all(built_in_factories());
+        // With sqlite feature: 2 factories. Without: 1.
+        #[cfg(feature = "sqlite")]
+        assert_eq!(reg.len(), 2);
+        #[cfg(not(feature = "sqlite"))]
+        assert_eq!(reg.len(), 1);
+        assert!(reg.has("jsonl"));
+        #[cfg(feature = "sqlite")]
+        assert!(reg.has("sqlite"));
+    }
+
+    /// Built-in factories' `supports_ack()` matches the
+    /// per-backend ack capabilities.
+    #[test]
+    fn built_in_factory_ack_capabilities_match_backends() {
+        let factories = built_in_factories();
+        for f in &factories {
+            match f.name() {
+                "jsonl" => assert!(!f.supports_ack(), "jsonl is fan-out, no ack"),
+                "sqlite" => assert!(f.supports_ack(), "sqlite supports ack"),
+                other => panic!("unexpected built-in: {other:?}"),
+            }
+        }
+    }
+
+    /// Last-write-wins on duplicate registration. Lets test fixtures
+    /// override built-ins (e.g., wrap `JsonlBackendFactory` with an
+    /// instrumented variant).
+    struct AlternateJsonlFactory;
+    impl QueueBackendFactory for AlternateJsonlFactory {
+        fn name(&self) -> &'static str {
+            "jsonl"
+        }
+        fn build(&self, topic_path: &Path) -> Result<Arc<dyn QueueBackend>> {
+            Ok(Arc::new(JsonlBackend::new(topic_path.to_path_buf())))
+        }
+    }
+
+    #[test]
+    fn last_write_wins_on_duplicate_registration() {
+        let mut reg = QueueBackendRegistry::new();
+        reg.register(Box::new(JsonlBackendFactory));
+        reg.register(Box::new(AlternateJsonlFactory));
+        // Still 1 entry; later registration replaced earlier.
+        assert_eq!(reg.len(), 1);
+        assert!(reg.has("jsonl"));
     }
 }
