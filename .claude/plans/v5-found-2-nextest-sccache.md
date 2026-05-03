@@ -2,7 +2,7 @@
 
 **Epic:** `roadmap/epics/v5-foundation.md` § V5-FOUND-2
 **Effort estimate (epic):** M, ~3–4 days
-**Status:** drafted 2026-05-03; **plan-critic REVISED 2026-05-03** (2 🔴 blockers absorbed: Fork B sccache→B3 deferral, Fork C C1→JUnit XML; 1 🔵→🟢 win: `flaky-result = "fail"` adopted at v5.0 not v5.5; Phase 1 budget tightened); fork decisions pending operator pin
+**Status:** **COMPLETE 2026-05-03** — 4 phase commits landed (Phase 0 → 60eb3b6; Phase 1 → 52356f0; Phase 4 → 6bc386f; Phase 5 → 2078dfd); Phase 6 close-out commit pending. Phases 2 + 3 absorbed into other phase commits (Phase 2 nextest.toml shipped with Phase 1; Phase 3 sccache deferral was a Phase 0 decision with B-47 already filed). Drafted 2026-05-03; **plan-critic REVISED 2026-05-03** (2 🔴 blockers absorbed: Fork B sccache→B3 deferral, Fork C C1→JUnit XML; 1 🔵→🟢 win: `flaky-result = "fail"` adopted at v5.0 not v5.5; Phase 1 budget tightened); 6 forks operator-pinned 2026-05-03.
 **Methodology:** plan-critic before implementation per `v5-roadmap.md` final note
 **Substrate:** Theme A V5-FOUND-1 closed 2026-05-02 (diagnostics ledger + report); V5-FOUND-2 has no upstream story dependency.
 
@@ -119,7 +119,7 @@ The substantial work is **NOT** the new tool (well-documented, stable) — it's:
 
 **Ship criterion:** B-47 exists in `roadmap/BACKLOG.md`; no production config changed; plan retrospective documents the deferral rationale.
 
-### Phase 4 — SLO audit + tagging only (Day 3, ~0.5 day)
+### Phase 4 — SLO audit + tagging only (Day 3, ~0.5 day) — **DONE 2026-05-03 (commit 6bc386f)**
 
 **Goal:** Document the per-test wall-time SLO; **identify and tag** existing ≥5s tests. **Do NOT fix in V5-FOUND-2** — non-trivial fixes go to v5.5 backlog (B-48).
 
@@ -135,7 +135,7 @@ The substantial work is **NOT** the new tool (well-documented, stable) — it's:
 
 **Ship criterion:** All ≥10s tests tagged with `#[ignore]` + comment; `docs/test-slo.md` exists with audit log; B-48 filed; default `cargo nextest run --profile default` runs without exceeding SLO violation threshold.
 
-### Phase 5 — CI integration (Day 3–4, ~0.5 day)
+### Phase 5 — CI integration (Day 3–4, ~0.5 day) — **DONE 2026-05-03 (commit 2078dfd)**
 
 **Goal:** CI runs `cargo nextest run --profile ci`; flake-with-fail honesty (no false negatives); doctests preserved; JUnit artifact published.
 
@@ -151,7 +151,7 @@ The substantial work is **NOT** the new tool (well-documented, stable) — it's:
 
 **Ship criterion:** CI passes via nextest on green PRs; deliberate-flake PR shows `flaky-result = "fail"` triggering a CI red; doctests still run; JUnit artifact published in CI run details.
 
-### Phase 6 — Epic story close-out (Day 4, ~0.25 day)
+### Phase 6 — Epic story close-out (Day 4, ~0.25 day) — **DONE 2026-05-03**
 
 - Update `roadmap/epics/v5-foundation.md` § V5-FOUND-2: status → COMPLETE; check off Done-When items; add commit references.
 - Update `roadmap/v5-roadmap.md` Theme A status row.
