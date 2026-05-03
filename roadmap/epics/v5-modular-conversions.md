@@ -11,7 +11,7 @@
 - S12 publish gates (CI semver discipline)
 
 **Blocks:**
-- Theme C (SDK extraction can only stabilize trait shapes after they're real)
+- Theme C (SDK extraction can only stabilize trait shapes after they're real) — **handshake complete 2026-05-03 with V5-SDK-1 close-out (commit `343fc68` Phase 4 + Phase 5)**: all three Theme B trait surfaces are now re-exported through `neurogrim-sdk` with a working compile-test semver gate. Theme C V5-SDK-1 Done-When fully checked; V5-SDK-2 remains planned at reduced scope (V5-SDK-1 absorbed conformance re-exports per Fork C1).
 
 **Master roadmap:** `roadmap/v5-roadmap.md`
 **Pre-plan source:** `C:\Users\koff0\.claude\plans\i-would-like-you-curried-milner.md`
@@ -204,3 +204,4 @@
 - Existing queue backend trait: [queue_backend.rs:69](../crates/neurogrim-core/src/queue_backend.rs)
 - LSP-Brains spec sync (V5-MOD-1 close-out): `D:/Brains/LSP-Brains/spec/METHODOLOGY-EVOLUTION.md` lines 1118 + 1135 — `ScoringSource` → `ScoringSourceConfig` rename note added
 - Successor pipeline: BACKLOG B-37..B-40 (v5.5 trimmed items)
+- **Theme C downstream (V5-SDK-1 close 2026-05-03):** `roadmap/epics/v5-sdk.md` § V5-SDK-1 status COMPLETE; the three Theme B trait surfaces are re-exported through `crates/neurogrim-sdk/` at v0.1.0 with a working compile-test semver gate (V5-SDK-1 Phase 4 commit `343fc68`). V5-SDK-1's Phase 4 retrospective documents that `cargo-semver-checks` is structurally blind to pure re-exports (rust#94338) — gap tracked at `BACKLOG.md` § B-46.

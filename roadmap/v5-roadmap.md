@@ -31,8 +31,8 @@ Four themes make this work, in this order:
 | Theme | Title | Stories | Effort | Strict deps |
 |-------|-------|---------|--------|-------------|
 | **A** | **Foundation: Diagnostics + Test Speed** | V5-FOUND-1..4 | ~3–5 weeks | S15 ships |
-| **B** | **Three Modular Conversions** | V5-MOD-1..3 | ~4–6 weeks | Theme A |
-| **C** | **SDK Extraction** | V5-SDK-1..2 | ~2–3 weeks | Theme B |
+| **B** | **Three Modular Conversions** ✅ COMPLETE 2026-05-02 | V5-MOD-1..3 | ~4–6 weeks | Theme A |
+| **C** | **SDK Extraction** — IN PROGRESS (V5-SDK-1 ✅ COMPLETE 2026-05-03; V5-SDK-2 planned, scope reduced) | V5-SDK-1..2 | ~2–3 weeks | Theme B |
 | **D** | **Coherence + Docs** | V5-DOC-1..2 | ~2 weeks | Theme C |
 
 Theme order is firm; intra-theme epic order is firm. The pre-plan default was "concurrent v4.x + v5 work is not pursued" because Stage 15 changes UI surfaces v5 might re-touch — the operator **explicitly waived this default on 2026-05-01** to begin V5-FOUND-1 (Diagnostic Monitor) concurrently with in-flight S15 / S16 work. V5-FOUND-1 is the safest concurrent epic because it adds tracing instrumentation (additive — does not modify scoring or UI surfaces). Theme B (modular conversions) remains gated on Theme A close + a re-check of the concurrent-work risk before V5-MOD-1's perf-gate runs.
@@ -129,19 +129,21 @@ There is no `neurogrim-sdk` crate today; `neurogrim-core` is the de-facto SDK. B
 
 ## Theme C — SDK Extraction
 
+**Status:** IN PROGRESS — V5-SDK-1 **COMPLETE** 2026-05-03 (commits `f27eed1` Phase 0, `ed014d0` Iter 1, `1a3fcda` Phase 3, `343fc68` Phase 4, `<this commit>` Phase 5). V5-SDK-2 planned (scope reduced — V5-SDK-1 absorbed conformance re-exports per Fork C1).
+
 **Theme:** Stabilize the contract surface. Thin re-export crate with semver gate.
 
 **Goal:** `neurogrim-sdk` exists as a thin re-export layer of stable contract types. Versioned independently from `neurogrim-core` — core can break internals; SDK cannot break trait shapes without major-version bump. Conformance suites are `#[cfg(feature = "conformance")]` test fixtures distributed via the SDK.
 
 **Architectural anchors:**
-- **Type re-export pattern** — already used informally; SDK formalizes it with `pub use` discipline.
-- **CI semver checks** — `cargo-semver-checks` crate exists; integrates as a publish gate (re-uses S12 publish-gate infrastructure).
+- **Type re-export pattern** — already used informally; SDK formalizes it with `pub use` discipline. ✅ shipped at V5-SDK-1.
+- **CI semver checks** — ~~`cargo-semver-checks` crate exists; integrates as a publish gate~~. **Re-classified at V5-SDK-1 Phase 4 (2026-05-03):** `cargo-semver-checks` is structurally blind to pure re-export crates (rust#94338, blocked upstream). Switched to compile-test gate (`crates/neurogrim-sdk/tests/sdk_surface_assertion.rs`) which pins every re-exported trait method's signature mechanically. See `roadmap/BACKLOG.md` § B-46 for the upstream-tooling tracker.
 
 **Stories:** V5-SDK-1..2 (see `epics/v5-sdk.md`).
 
 **Adversary concerns:**
-- 🟡 **Premature stability.** A trait shape might still be wrong when SDK extracts it. Mitigation: 6-week soak between Theme B last ship and SDK extraction; Theme C explicitly depends on Theme B closure.
-- 🔵 **Suggestion: ship SDK with a `0.x` version line first.** Pre-1.0 lets us still iterate trait shapes if Theme B reveals a flaw. Promote to 1.0 after one external adopter validates.
+- 🟡 ~~**Premature stability.** A trait shape might still be wrong when SDK extracts it.~~ — **DEFANGED 2026-05-03** by shipping V5-SDK-1 at `0.1.0` with `publish = false`. The SDK is in-tree only during 0.x soak; explicit allowance for trait-shape changes via minor bumps. Promotion to 1.0 requires ≥6 weeks soak (earliest 2026-06-13) + at least one external-adopter validation.
+- 🔵 ~~**Suggestion: ship SDK with a `0.x` version line first.**~~ ✅ adopted at V5-SDK-1.
 
 ---
 

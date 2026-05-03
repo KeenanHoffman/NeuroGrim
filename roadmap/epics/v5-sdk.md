@@ -2,7 +2,7 @@
 
 **Theme:** C
 **Release:** v5 (entry pinned 2026-05-01; this epic is gated on Theme B close — see `v5-roadmap.md` §"v5 Entry Decision Tracker")
-**Status:** PLANNED (drafted 2026-05-01)
+**Status:** **IN PROGRESS** — V5-SDK-1 **COMPLETE** 2026-05-03 (commits `f27eed1` Phase 0, `ed014d0` Iter 1 Phases 1.5/1/2, `1a3fcda` Phase 3, `343fc68` Phase 4); V5-SDK-2 PLANNED (scope reduced — V5-SDK-1 absorbed conformance re-exports per Fork C1)
 **Priority:** Stabilization — extracts the trait surface from Theme B as a versioned contract
 **Goal:** Stand up `neurogrim-sdk` as a thin re-export crate of the stable contract types from Theme B. Versioned independently from `neurogrim-core` with semver discipline — core can break internals, SDK cannot break trait shapes without major-version bump. Conformance suites distributed via the SDK as `#[cfg(feature = "conformance")]` test fixtures.
 
@@ -19,13 +19,13 @@
 
 ## Theme C Is Done When
 
-- [ ] `neurogrim-sdk` crate exists as a thin re-export layer
-- [ ] Public surface documented: every type has a doc comment + example
-- [ ] "Hello world sensor" example outside `D:\Brains\` compiles with one cargo dep on `neurogrim-sdk`
-- [ ] Semver gate in CI: any change to a re-exported trait shape blocks merge without explicit major bump
-- [ ] Conformance fixtures exposed for: `Sensor`, `ScoringSource`, `QueueBackend`, `TestRunner`
-- [ ] Documented: how a third-party crate runs the conformance suite against its own impls
-- [ ] CI in this repo runs every built-in impl against its conformance suite
+- [x] `neurogrim-sdk` crate exists as a thin re-export layer (V5-SDK-1 Phase 1, commit `ed014d0`)
+- [x] Public surface documented: every type has a doc comment + example (V5-SDK-1 Phase 3, commit `1a3fcda` — three "Authoring guides" walkthroughs in lib.rs rustdoc + 200-line README)
+- [x] "Hello world sensor" example outside `D:\Brains\` compiles with one cargo dep on `neurogrim-sdk` (V5-SDK-1 Phase 2, `examples/sensor-constant-score/` — depends ONLY on `neurogrim-sdk`, proves modularity claim)
+- [x] Semver gate in CI: any change to a re-exported trait shape blocks merge without explicit major bump (V5-SDK-1 Phase 4, commit `343fc68` — compile-test gate at `crates/neurogrim-sdk/tests/sdk_surface_assertion.rs`; runs as part of `cargo test --workspace --all-targets`. Tool selection diverged from plan: `cargo-semver-checks` smoke-tested as structurally blind to pure re-exports per rust#94338, switched to compile-test approach. Known gaps tracked in `roadmap/BACKLOG.md` § B-46.)
+- [⚠️] Conformance fixtures exposed for: `Sensor`, `ScoringSource`, `QueueBackend`, `TestRunner` — 3 of 4 shipped at V5-SDK-1 (Fork C1: re-exported `*_conformance::run_factory_conformance` for sensor / scoring source / queue backend); `TestRunner` deferred to SDK 0.2.0 per Fork A1 pending V5-FOUND-4
+- [x] Documented: how a third-party crate runs the conformance suite against its own impls (V5-SDK-1 Phase 3, commit `1a3fcda` — three trait walkthroughs in lib.rs rustdoc cover this; the four reference example crates' `tests/conformance.rs` are canonical templates)
+- [x] CI in this repo runs every built-in impl against its conformance suite (V5-MOD-1 Phase 5 + V5-MOD-2 Phase 5 + V5-MOD-3 Phase 4 conformance suites all run via `cargo test --workspace --all-targets`; V5-SDK-1 didn't add new CI work for this — it confirmed the existing coverage)
 
 ---
 
@@ -33,9 +33,15 @@
 
 ### V5-SDK-1: neurogrim-sdk crate (extraction, not invention) (~7–10 days)
 
-**Status:** Planned
+**Status:** **COMPLETE** 2026-05-03 (~5 actual days; came in under estimate because Theme B's hand-off notes pre-loaded the taxonomy work). Five phases shipped as commits:
+- Phase 0 (setup + audit): `f27eed1`
+- Iter 1 (Phase 1.5 conformance hoist + Phase 1 SDK skeleton + Phase 2 reference example): `ed014d0`
+- Phase 3 (documentation pass): `1a3fcda`
+- Phase 4 (semver gate via compile-test, Option B): `343fc68`
+- Phase 5 (this epic close-out): `<this commit>`
+
 **Effort:** M
-**Depends on:** V5-MOD-1, V5-MOD-2, V5-MOD-3, V5-FOUND-4
+**Depends on:** V5-MOD-1, V5-MOD-2, V5-MOD-3, ~~V5-FOUND-4~~ (Fork A1: deferred `TestRunner` to SDK 0.2.0)
 
 **What:** Extract a thin SDK crate from `neurogrim-core`. Re-exports stable contract types only: `Sensor`, `ScoringSource`, `QueueBackend`, `Transport`, `TestRunner`, plus core types (`DomainDefinition`, `BrainRegistry`, etc.). Versioned independently; follows semver. `neurogrim-core` can break internals; `neurogrim-sdk` cannot break trait shapes without major-version bump.
 
@@ -44,12 +50,12 @@
 **Architectural decision: 0.x first, promote to 1.0 only after external adopter validates.** Pre-1.0 explicit allowance for trait-shape changes if Theme B reveals a flaw post-ship. Promotion to 1.0 requires (a) ≥6 weeks of soak post-Theme-B-completion, (b) at least one external adopter confirming the surface works for their use case.
 
 **Done when:**
-- [ ] `neurogrim-sdk` crate exists at `crates/neurogrim-sdk/` as a thin re-export layer
-- [ ] Public surface documented: every type has a doc comment + at least one usage example
-- [ ] "Hello world sensor" example outside `D:\Brains\` compiles with one cargo dep on `neurogrim-sdk`
-- [ ] Semver gate in CI (`cargo-semver-checks` or equivalent): any change to a re-exported trait shape blocks merge without explicit major bump
-- [ ] Workspace `Cargo.toml` lists `neurogrim-sdk` as workspace member
-- [ ] Initial version `0.1.0` published; CHANGELOG documents the contract
+- [x] `neurogrim-sdk` crate exists at `crates/neurogrim-sdk/` as a thin re-export layer (Phase 1, `ed014d0`)
+- [x] Public surface documented: every type has a doc comment + at least one usage example (Phase 3, `1a3fcda` — module-level rustdoc + per-trait authoring walkthroughs + crates.io README)
+- [x] "Hello world sensor" example outside `D:\Brains\` compiles with one cargo dep on `neurogrim-sdk` (Phase 2, `examples/sensor-constant-score/` — depends only on `neurogrim-sdk`)
+- [x] Semver gate in CI: any change to a re-exported trait shape blocks merge without explicit major bump (Phase 4, `343fc68` — *via compile-test, not `cargo-semver-checks`*; tool was the plan default but proven structurally blind to pure re-exports per rust#94338. Compile-test pins every re-exported trait method's signature; verified to fire on a method-signature change. Known gaps tracked at `BACKLOG.md` § B-46.)
+- [x] Workspace `Cargo.toml` lists `neurogrim-sdk` as workspace member (Phase 1, `ed014d0`)
+- [⚠️] Initial version `0.1.0` published; CHANGELOG documents the contract — version IS at `0.1.0` in-tree, but `publish = false` per plan-critic 🔴 fix (mechanically blocks accidental crates.io push during 0.x soak period); CHANGELOG out of scope for 0.1.0. crates.io publication deferred to V5-SDK-2 or v5.5 follow-up.
 
 #### V5-MOD-1 hand-off note (added 2026-05-02 at V5-MOD-1 close-out)
 
@@ -108,29 +114,35 @@ V5-SDK-2's conformance fixture for `QueueBackend` should re-export `neurogrim_co
 
 ### V5-SDK-2: SDK conformance suites (distributed) (~3–5 days)
 
-**Status:** Planned
-**Effort:** S
+**Status:** Planned (scope reduced after V5-SDK-1 close — 2026-05-03)
+**Effort:** S (reduced from initial estimate)
 **Depends on:** V5-SDK-1
 
-**What:** Promote per-trait conformance suites from Theme B epics into the SDK crate as `#[cfg(feature = "conformance")]` test fixtures. Any third-party impl can add `neurogrim-sdk` with `--features conformance` and run the same tests the built-ins pass.
+**Scope-reduction note (2026-05-03):** V5-SDK-1 Fork C1 chose to re-export the conformance suites at v0.1.0 rather than defer to V5-SDK-2 — the 3 suites are reachable today as `neurogrim_sdk::{sensor_conformance, scoring_source_conformance, queue_backend_conformance}::run_factory_conformance`. The `compile_test_re_exports.rs` test verifies this. **What V5-SDK-2 still needs to deliver:**
+1. Optional `#[cfg(feature = "conformance")]` feature-gating to keep dev-deps (currently `tempfile`) out of production builds. Today the conformance modules are reachable unconditionally; consumers building without dev-tools may carry the dev-dep transitively.
+2. The `TestRunner` conformance suite (deferred per V5-SDK-1 Fork A1 + V5-FOUND-4 dependency).
+3. End-to-end documentation walkthrough lifting `examples/sensor-constant-score/tests/conformance.rs` verbatim into the SDK README's "writing a conformant Sensor" section. Currently the SDK README points consumers at the example crate; V5-SDK-2 inlines the walkthrough.
 
-**Why:** "Modular middleware ships degraded" — the adversary concern that alternate impls are 80% feature-complete. Conformance suites distributed via SDK make "passes the same tests as built-ins" a checkable claim. Lifts third-party module quality bar to match in-tree.
+**What:** Originally — promote per-trait conformance suites from Theme B epics into the SDK crate as `#[cfg(feature = "conformance")]` test fixtures. **Revised** — feature-gate the already-shipped re-exports, add the missing `TestRunner` suite when V5-FOUND-4 lands, inline the walkthrough docs. Most of the "conformance fixtures distributed" Done-When was satisfied by V5-SDK-1.
+
+**Why:** "Modular middleware ships degraded" — the adversary concern that alternate impls are 80% feature-complete. Conformance suites distributed via SDK make "passes the same tests as built-ins" a checkable claim. Lifts third-party module quality bar to match in-tree. V5-SDK-2 closes the remaining gaps.
 
 **Done when:**
-- [ ] Conformance fixtures exposed for: `Sensor` (≥6 tests), `ScoringSource` (≥8 tests), `QueueBackend` (≥10 tests), `TestRunner` (≥6 tests)
-- [ ] All fixtures include negative-path tests (malformed input, panic recovery, timeout)
+- [x] Conformance fixtures exposed for: `Sensor` (10 tests), `ScoringSource` (≥8 tests), `QueueBackend` (12 tests) — *shipped at V5-SDK-1 (commit `ed014d0`)*; `TestRunner` deferred to V5-FOUND-4.
+- [ ] All fixtures include negative-path tests (malformed input, panic recovery, timeout) — already true for the 3 shipped suites; verify when `TestRunner` lands
 - [ ] Documented: how a third-party crate runs the conformance suite against its own impls — `cargo test --features conformance` recipe in SDK docs
-- [ ] CI in this repo runs every built-in impl against its conformance suite (gates regression)
-- [ ] `neurogrim-sdk` README has a "writing a conformant Sensor" walkthrough
+- [ ] CI in this repo runs every built-in impl against its conformance suite (gates regression) — *shipped via existing `cargo test --workspace` job (V5-MOD-1/2/3 conformance suites included)*
+- [ ] `neurogrim-sdk` README has a "writing a conformant Sensor" walkthrough — *partial; lib.rs rustdoc has it as of Phase 3 commit `1a3fcda`; README cross-references the example crate. Inline the full walkthrough at V5-SDK-2.*
+- [ ] Conformance modules feature-gated behind `#[cfg(feature = "conformance")]` (NEW — closes the dev-dep-pollution concern)
 
 ---
 
 ## Verification (end-to-end smoke per story)
 
-**V5-SDK-1 neurogrim-sdk crate:**
-- Outside the repo (e.g., a fresh `cargo new`), write a 30-line sensor crate that depends only on `neurogrim-sdk`; confirm it compiles and runs against a local NeuroGrim instance
-- Force a trait-shape change in CI (rename a method on `Sensor`); confirm `cargo-semver-checks` (or equivalent) blocks the merge
-- Verify `neurogrim-sdk` builds standalone (without `neurogrim-core` available as a path dep) — the contract-integrity check
+**V5-SDK-1 neurogrim-sdk crate (VERIFIED 2026-05-03):**
+- ✅ Outside the repo: `examples/sensor-constant-score/` depends ONLY on `neurogrim-sdk` (verified at Phase 2, commit `ed014d0`). Crate compiles, runs, and passes the V5-MOD-2 conformance suite as an integration test.
+- ✅ Force a trait-shape change: smoke test added `_smoke_test_extra: u64` parameter to `Sensor::analyze`; the compile-test gate at `crates/neurogrim-sdk/tests/sdk_surface_assertion.rs` failed with `error[E0061]: this method takes 2 arguments but 1 argument was supplied` on every pin function. Reverted; tests green. *(Note: tool diverged from plan default. `cargo-semver-checks` smoke-tested as structurally blind to pure re-exports per rust#94338; see Phase 4 retrospective in `.claude/plans/v5-sdk-1-thin-reexport.md`. Switched to compile-test approach as Option B per operator pin.)*
+- ✅ `neurogrim-sdk` builds standalone: `cargo build -p neurogrim-sdk` clean (verified at Phase 1).
 
 **V5-SDK-2 SDK conformance suites:**
 - From a third-party crate, add `neurogrim-sdk` with `--features conformance` and run the test fixtures; confirm they execute against the third-party impls
@@ -145,7 +157,7 @@ V5-SDK-2's conformance fixture for `QueueBackend` should re-export `neurogrim_co
 
 🟡 **Re-export bloat.** SDK might balloon into "everything in core re-exported" if not disciplined. Mitigation: SDK only re-exports types that appear in trait surface signatures. Internal helpers stay in core.
 
-🟡 **Semver-checks false positives.** `cargo-semver-checks` flags some legitimate changes (e.g., adding a non-required trait method) as breaking. Mitigation: document override path; require dual-review on any semver gate override.
+🟡 **Semver-checks false positives.** ~~`cargo-semver-checks` flags some legitimate changes (e.g., adding a non-required trait method) as breaking. Mitigation: document override path; require dual-review on any semver gate override.~~ **Re-classified post-V5-SDK-1 Phase 4 (2026-05-03):** the false-positive risk is moot because `cargo-semver-checks` is structurally **false-NEGATIVE** for pure re-export crates (rust#94338, blocked upstream). Switched to compile-test gate at `crates/neurogrim-sdk/tests/sdk_surface_assertion.rs`. Compile-test approach has effectively zero false-positive surface. See `crates/neurogrim-sdk/SEMVER-OVERRIDE.md` for override path; backlog gap tracked at `BACKLOG.md` § B-46 (re-export-aware semver gate when upstream tooling matures).
 
 🔵 **Suggestion: SDK + core version-pin docs.** Ship a compatibility matrix (`neurogrim-core 4.5.x ⇄ neurogrim-sdk 0.1.x`) so adopters know which versions work together. v5.5 polish.
 
