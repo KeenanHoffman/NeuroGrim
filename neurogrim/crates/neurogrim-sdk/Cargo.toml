@@ -25,5 +25,20 @@ neurogrim-a2a = { workspace = true }
 neurogrim-secrets = { workspace = true }
 
 [dev-dependencies]
-# Compile-test re-exports use Box<dyn Trait> stanzas; no extra deps
-# beyond what the crates already pull in transitively.
+# V5-SDK-1 Phase 4 (2026-05-03) — `tests/sdk_surface_assertion.rs`
+# pins every re-exported trait method's signature. The pinning
+# functions reach for support types (e.g., `ScoringSourceConfig`,
+# `SecretKey`, `url::Url`) from the source crates directly because
+# the SDK is intentionally a contract crate (not impl crate); these
+# types aren't part of the SDK surface but ARE needed to type-check
+# the trait methods that ARE on the SDK surface.
+#
+# These dev-deps do NOT leak to consumers — `[dev-dependencies]` is
+# strictly internal-test scope. The SDK's published surface remains
+# `neurogrim-core` + `neurogrim-a2a` + `neurogrim-secrets`.
+neurogrim-core = { workspace = true }
+neurogrim-a2a = { workspace = true }
+neurogrim-secrets = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }

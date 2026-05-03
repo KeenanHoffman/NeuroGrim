@@ -1923,6 +1923,28 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
+### B-46: B-MOD-SDK-SEMVER-GAP — Re-export-aware semver gate for `neurogrim-sdk` once rustdoc inlines foreign items — CANDIDATE (v5.5 horizon)
+
+**Problem.** V5-SDK-1 Phase 4 (2026-05-03) attempted to wire `cargo-semver-checks` as the SDK's CI gate; smoke tests confirmed the tool is **structurally blind** to breaking changes in pure re-export crates (rename / delete `pub use foo::Bar`, add required method to a re-exported trait — none detected). Root cause is rust#94338: rustdoc 2018+ does not inline foreign-crate items into the re-exporting crate's rustdoc JSON. cargo-semver-checks reads that JSON and so cannot see what isn't there. Confirmed by maintainer obi1kenobi on cargo-semver-checks issues #167, #291, #355, #629; Predrag's blog ["Four challenges cargo-semver-checks has yet to tackle"](https://predr.ag/blog/four-challenges-cargo-semver-checks-has-yet-to-tackle/) names this as the #1 blocker. **Workaround shipped at V5-SDK-1 Phase 4** (`crates/neurogrim-sdk/tests/sdk_surface_assertion.rs`): hand-pinned compile-tests for every re-exported trait method's signature. This catches the realistic risks (re-export adds/removes/renames, trait method shape changes) but adds operator burden — every new re-export needs a matching pin.
+
+**Plan when:**
+1. OR: rustdoc fixes JSON-backend foreign-item inlining (rust#94338 closed).
+2. OR: `cargo-semver-checks` ships a "re-export-aware" mode that traces through `pub use` to source-crate rustdoc JSON.
+3. OR: `cargo-public-api` matures to a stable-toolchain workflow that catches re-export list churn (catches Exp. 1+2; doesn't catch Exp. 3 but pairs with the existing compile-tests for Exp. 3).
+
+**Dependencies.** Upstream rustdoc / cargo-semver-checks / cargo-public-api work. None of the three blockers is in NeuroGrim's control.
+
+**Known gaps the current Phase 4 gate doesn't catch:**
+- Visibility-only changes to re-exported items (e.g., `pub` → `pub(crate)` field).
+- Changes to re-exported types not currently pinned (e.g., a new required field on `AgentOutput` without `#[non_exhaustive]`).
+- Cross-crate `pub use` reorganization that ends at the same nominal type.
+
+**Adversarial note.** Operator burden is the real cost. Adding a new re-export to `lib.rs` requires adding a pin to `tests/sdk_surface_assertion.rs` in the same PR — easy to forget. Mitigation: a v5.5 lint that compares re-export count to pin count and fails if they diverge. Until that lands, code review is the load-bearing layer.
+
+**Cross-references.** `crates/neurogrim-sdk/SEMVER-OVERRIDE.md` (gate operator doc); `.claude/plans/v5-sdk-1-thin-reexport.md` § Phase 4 (retrospective).
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

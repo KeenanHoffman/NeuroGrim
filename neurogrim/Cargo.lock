@@ -1926,9 +1926,12 @@ dependencies = [
 name = "neurogrim-sdk"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "neurogrim-a2a",
  "neurogrim-core",
  "neurogrim-secrets",
+ "serde_json",
+ "url",
 ]
 
 [[package]]

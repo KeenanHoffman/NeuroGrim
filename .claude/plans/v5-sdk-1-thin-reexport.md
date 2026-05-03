@@ -231,18 +231,44 @@ neurogrim-secrets = { workspace = true }
 
 ### Phase 4 — Semver gate (Day 4–6, ~2 days)
 
-**Goal:** Wire `cargo-semver-checks` into CI to block merges that change a re-exported trait shape without an explicit major-version bump.
+**Status (2026-05-03):** SHIPPED via Option B (compile-test gate) after smoke-testing revealed the plan-default approach (`cargo-semver-checks`) is structurally blind to pure re-export crates. See "Phase 4 retrospective" below.
 
-**Steps:**
-1. **Tool selection (Fork E):** plan default `cargo-semver-checks` — most-maintained Rust semver tool, mature integration with `cargo`. Alternative: `rustsemverver` (less active).
-2. **CI integration:** add a job to the workspace's CI pipeline (likely GitHub Actions) that runs `cargo install cargo-semver-checks` + `cargo semver-checks check-release -p neurogrim-sdk` on every PR.
-3. **Baseline establishment:** publish `0.1.0` to crates.io (or use a fixture) so `semver-checks` has a baseline to compare against.
-4. **Smoke test:** rename a method on a re-exported trait in a feature branch; confirm CI fails. Revert.
-5. **Override path documentation:** the SDK epic notes "document override path; require dual-review on any semver gate override." Add a `SEMVER-OVERRIDE.md` documenting how to legitimately bump.
+**Goal:** Block merges that change a re-exported trait shape without an explicit major-version bump.
 
-**Risk:** publishing to crates.io is a v5.5 commitment. Alternative: use a Git-based baseline (`semver-checks` supports `--baseline-rev <git-sha>`) so we don't need crates.io publication for the gate to work. **Plan default:** Git-based baseline; crates.io publication deferred to V5-SDK-2 or later.
+**As shipped:**
+1. **Approach:** Hand-pinned compile-test at `crates/neurogrim-sdk/tests/sdk_surface_assertion.rs`. Every re-exported trait method has a `_pin_<trait>_<method>` wrapper that takes `&dyn Trait`, calls the method, and binds the return value to the expected type. Any change to method signatures (rename, parameter retype, return retype, generic bounds) fails to compile.
+2. **CI integration:** runs as part of the existing `cargo test --workspace --all-targets` job in `.github/workflows/ci.yml` (no new job; the assertion test is just another integration test).
+3. **Override path:** documented in `crates/neurogrim-sdk/SEMVER-OVERRIDE.md`. Path A = update pin + bump version; Path B = treat as pin bug, two reviewers; Path C = `[broken-toolchain]` skip-hatch with two reviewers (rare).
+4. **Smoke test (verified):** modified `Sensor::analyze` to add a `_smoke_test_extra: u64` parameter; `cargo build --tests -p neurogrim-sdk` failed with `error[E0061]: this method takes 2 arguments but 1 argument was supplied` on every pin function. Reverted; tests green.
 
-**Ship criterion:** PR-blocking semver gate active in CI; smoke-test PR proves it works (gate fails on a fake breaking change, succeeds when reverted).
+**Phase 4 retrospective (2026-05-03):**
+
+The plan-default approach was `cargo-semver-checks` with `--baseline-rev` Git-only. After installing v0.47.0 and running three breaking-change smoke tests against baseline `1a3fcda`:
+
+| Mutation | Expected | `cargo-semver-checks` reported |
+|---|---|---|
+| Renamed `pub use neurogrim_core::sensor::Sensor` → `as SensorRenamedForSmokeTest` | FAIL | PASS ❌ |
+| Deleted `pub use neurogrim_core::sensor::Sensor;` outright | FAIL | PASS ❌ |
+| Added required method (no default impl) to `SensorFactory` in `neurogrim-core` | FAIL | PASS ❌ |
+
+A research agent confirmed via cargo-semver-checks issues #167, #291, #355, #629 + Predrag's blog ["Four challenges cargo-semver-checks has yet to tackle"](https://predr.ag/blog/four-challenges-cargo-semver-checks-has-yet-to-tackle/): rustdoc 2018+ does not inline foreign-crate items into the re-exporting crate's rustdoc JSON (rust#94338, blocked upstream). cargo-semver-checks reads that JSON, so it cannot see what isn't there. No flag, `#[doc(inline)]`, or workspace setting works around it. `rust-semverver` is unmaintained.
+
+**Forks reconsidered post-smoke-test:**
+
+| Option | Choice | Rationale |
+|---|---|---|
+| A — `cargo-public-api` + compile-tests (~1.5d, full coverage, requires nightly toolchain in CI) | NOT chosen | Marginal delta over Option B; nightly toolchain in CI is non-trivial complexity for a 0.x SDK |
+| B — Compile-tests only (~0.5d) | **CHOSEN (operator pin 2026-05-03)** | Catches the most damaging risk (upstream trait-shape changes leaking through re-exports); re-export list churn is rare and code-review-visible |
+| C — Ship cargo-semver-checks gate as theater | NOT chosen | False confidence is worse than no gate |
+
+**Known gaps shipped at Phase 4** (tracked in `roadmap/BACKLOG.md` § B-46):
+- Visibility-only changes to re-exported items.
+- Changes to re-exported types not currently pinned (e.g., struct field changes on `AgentOutput`).
+- Cross-crate `pub use` reorganization ending at the same nominal type.
+
+When `cargo-semver-checks` ships a re-export-aware mode (or rustdoc fixes JSON-backend foreign-item inlining), the compile-test gate can be supplemented or replaced. Until then, it's the load-bearing layer.
+
+**Ship criterion:** PR-blocking semver gate active via standard `cargo test` workflow; smoke test verifies the gate fires (failure noted above).
 
 ### Phase 5 — Epic close-out (Day 6, ~0.5 day)
 
