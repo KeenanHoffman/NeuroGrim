@@ -1,0 +1,39 @@
+[package]
+name = "queue-backend-memory"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "V5-MOD-3 example: third-party QueueBackend impl with in-memory ring buffer + full ack semantics. Pure logic, zero deps beyond neurogrim-core."
+publish = false
+
+[lib]
+
+[dependencies]
+# Public contract surface from neurogrim-core. A third-party crate
+# (one NOT inside this workspace) would write `neurogrim-core = "5"`
+# to fetch from crates.io.
+neurogrim-core = { workspace = true }
+
+# `anyhow::Result` is the trait method's return type; same crate
+# version as neurogrim-core itself.
+anyhow = { workspace = true }
+
+# Warn-log capacity-pressure events (FIFO drops). Same posture as
+# every built-in backend.
+tracing = { workspace = true }
+
+[dev-dependencies]
+# `#[tokio::test]` for the conformance integration test.
+tokio = { workspace = true }
+# `tempfile::TempDir` for the conformance test's queue_root
+# argument. The in-memory backend doesn't actually use the path,
+# but the conformance suite's signature requires one.
+tempfile = "3"
+# Used by unit tests in src/lib.rs to construct test
+# `QueueMessage` values. `neurogrim-core` already pins these at
+# the workspace level; we share the same versions.
+serde_json = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { workspace = true }

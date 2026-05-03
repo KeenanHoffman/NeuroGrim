@@ -21,6 +21,14 @@ members = [
     # (no env vars, no network) — paired with `scoring-source-prom`
     # (HTTP-fetch) gives the V5-SDK two complementary patterns.
     "examples/sensor-readme-quality",
+    # V5-MOD-3 Phase 5 (2026-05-02) — out-of-tree example crate
+    # demonstrating a third-party `QueueBackend` impl that passes
+    # the Phase 4 conformance suite. In-memory ring buffer with
+    # full ack semantics: pure logic, zero deps beyond
+    # `neurogrim-core`. Pairs with V5-MOD-1's HTTP-fetch and
+    # V5-MOD-2's FS-read examples — three complementary V5-SDK
+    # patterns covering network, file-system, and pure-memory.
+    "examples/queue-backend-memory",
     "xtask",
 ]
 

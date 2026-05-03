@@ -2333,6 +2333,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "queue-backend-memory"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "neurogrim-core",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
