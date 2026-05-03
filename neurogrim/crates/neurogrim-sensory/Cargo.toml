@@ -71,17 +71,82 @@ flate2 = { workspace = true, optional = true }
 jsonschema = { version = "0.17", optional = true }
 
 [features]
-# V5-MOD-2 Phase 0 (2026-05-02) — placeholder feature activates all
-# optional heavy deps so v4 behavior is preserved while the trait
-# refactor lands across Phases 1-3. Phase 4 replaces this single
-# bucket with per-sensor feature gates that map heavy deps to the
-# specific sensors that need them; the placeholder feature is then
-# removed, and `default` becomes the per-sensor feature list.
-default = ["_phase0-all-deps"]
-_phase0-all-deps = [
-    "dep:cargo-lock", "dep:toml", "dep:semver",
-    "dep:yarn-lock-parser", "dep:reqwest", "dep:sha2",
-    "dep:tar", "dep:flate2", "dep:jsonschema",
+# V5-MOD-2 Phase 4 (2026-05-02) — per-sensor feature gates replace
+# the Phase 0 `_phase0-all-deps` placeholder. Each `sensor-X`
+# feature compiles in:
+#   1. The sensor's source module(s) under `src/`
+#   2. Its registration in `built_in_factories()`
+#   3. Any optional heavy deps the sensor needs (`dep:foo`)
+#
+# Default feature set = all 21 sensors (preserves v4.x default
+# behavior). Operators who want a slim build do
+# `cargo build --no-default-features --features sensor-X,sensor-Y`.
+# `neurogrim-cli` Cargo.toml has matching pass-through features
+# so the same flags work at the binary level (Fork D).
+
+default = [
+    "sensor-agent-behavior",
+    "sensor-capability-hygiene",
+    "sensor-code-quality",
+    "sensor-coherence",
+    "sensor-deploy-readiness",
+    "sensor-docker-topology",
+    "sensor-domain-calibration",
+    "sensor-federated-patterns",
+    "sensor-git-health",
+    "sensor-human-comms",
+    "sensor-operator-calibration",
+    "sensor-rust-health",
+    "sensor-secret-refs",
+    "sensor-secrets-readiness",
+    "sensor-security-standards",
+    "sensor-skill-coherence",
+    "sensor-supply-chain-review",
+    "sensor-supply-chain-sca",
+    "sensor-supply-chain-vigilance",
+    "sensor-test-health",
+    "sensor-trust-budget",
+]
+
+# ─── Per-sensor features ─────────────────────────────────────────
+# Empty `[]` = sensor compiles but pulls no extra deps (uses only
+# always-on workspace deps like serde, tokio, anyhow). Heavy-dep
+# users list `dep:X` entries that activate the optional dep.
+
+sensor-agent-behavior = []
+sensor-capability-hygiene = ["dep:jsonschema"]
+sensor-code-quality = []
+sensor-coherence = []
+sensor-deploy-readiness = []
+sensor-docker-topology = []
+sensor-domain-calibration = []
+sensor-federated-patterns = []
+sensor-git-health = []
+sensor-human-comms = []
+sensor-operator-calibration = []
+sensor-rust-health = ["dep:cargo-lock"]
+sensor-secret-refs = []
+sensor-secrets-readiness = []
+sensor-security-standards = []
+sensor-skill-coherence = []
+sensor-supply-chain-review = ["dep:tar"]
+sensor-supply-chain-sca = ["dep:cargo-lock", "dep:toml", "dep:semver", "dep:yarn-lock-parser", "dep:reqwest", "dep:sha2"]
+sensor-supply-chain-vigilance = ["dep:reqwest", "dep:sha2", "dep:tar", "dep:flate2"]
+sensor-test-health = []
+sensor-trust-budget = ["dep:cargo-lock", "dep:toml", "dep:jsonschema"]
+
+# ─── Convenience aggregates (Subagent 2 suggestion) ──────────────
+# Operators get short names for common bundles; the underlying
+# per-sensor features remain available for fine-grained gating.
+
+sensors-builtin-core = [
+    "sensor-git-health", "sensor-code-quality", "sensor-test-health",
+    "sensor-deploy-readiness", "sensor-coherence", "sensor-human-comms",
+    "sensor-secret-refs", "sensor-rust-health", "sensor-trust-budget",
+]
+sensors-supply-chain = [
+    "sensor-supply-chain-sca", "sensor-supply-chain-vigilance",
+    "sensor-supply-chain-review",
 ]
 
 [dev-dependencies]

@@ -31,7 +31,15 @@ colored = { workspace = true }
 # and the CLI both call into context here, so the dep moves to mcp.
 url = { workspace = true }
 neurogrim-core = { workspace = true, features = ["sqlite"] }
-neurogrim-sensory = { workspace = true }
+# V5-MOD-2 Phase 4 (2026-05-02) — `neurogrim-sensory` previously
+# listed here was an UNUSED dep (verified via
+# `grep -rn neurogrim_sensory:: neurogrim-mcp/src/` — zero source
+# imports; the dep only appeared in Cargo.toml). Dropped to (a)
+# avoid the V5-MOD-2 binary-level pass-through having a phantom
+# branch and (b) reduce neurogrim-mcp's transitive deps. mcp does
+# NOT use any sensor analyzers; its public surface is the
+# BrainServer scoring tools (get_health_score / get_trajectory /
+# etc.), which depend only on neurogrim-core.
 neurogrim-ecosystem = { workspace = true }
 # v4.2 S14-S-5 — secret_fetch MCP tool wraps the secrets backend.
 neurogrim-secrets = { workspace = true }

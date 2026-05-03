@@ -262,6 +262,11 @@ enum Commands {
     /// (LSP-Brains v2.6 §16.4). Tickets carry the human-decision gate for
     /// flagged dependencies; resolution writes to the append-only decision
     /// ledger at .claude/supply-chain-decision-ledger.jsonl.
+    ///
+    /// V5-MOD-2 Phase 4 (2026-05-02): gated behind `sensor-supply-chain-review`.
+    /// In slim builds without that feature, `sca-review` disappears from the
+    /// CLI surface entirely.
+    #[cfg(feature = "sensor-supply-chain-review")]
     #[command(name = "sca-review")]
     ScaReview {
         #[command(subcommand)]
@@ -272,6 +277,11 @@ enum Commands {
     /// calibration report (E-SC-8). Use --check-promotion-ready to gate CI on
     /// promotion-readiness; in v1 this always returns exit 1 by design (the
     /// framework ships before the data does).
+    ///
+    /// V5-MOD-2 Phase 4 (2026-05-02): gated behind `sensor-supply-chain-sca`.
+    /// In slim builds without that feature, `sca-calibrate` disappears from
+    /// the CLI surface entirely.
+    #[cfg(feature = "sensor-supply-chain-sca")]
     #[command(name = "sca-calibrate")]
     ScaCalibrate(commands::sca_calibrate::ScaCalibrateArgs),
 
@@ -547,7 +557,9 @@ async fn main() -> Result<()> {
             project_root,
             subcommand,
         } => commands::awareness::run(&project_root, subcommand).await,
+        #[cfg(feature = "sensor-supply-chain-review")]
         Commands::ScaReview { subcommand } => commands::sca_review::run(subcommand).await,
+        #[cfg(feature = "sensor-supply-chain-sca")]
         Commands::ScaCalibrate(args) => commands::sca_calibrate::run(args).await,
         Commands::DomainCalibration { subcommand } => {
             commands::domain_calibration::run(subcommand).await

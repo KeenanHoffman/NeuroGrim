@@ -1910,7 +1910,6 @@ dependencies = [
  "neurogrim-core",
  "neurogrim-ecosystem",
  "neurogrim-secrets",
- "neurogrim-sensory",
  "rmcp",
  "schemars 0.8.22",
  "serde",
@@ -1951,6 +1950,7 @@ name = "neurogrim-sensory"
 version = "5.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "cargo-lock",
  "chrono",
  "filetime",

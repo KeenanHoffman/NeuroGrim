@@ -137,7 +137,16 @@ flate2 = "1"
 # intra-workspace deps from crates.io. Keep versions in lock-step with
 # `workspace.package.version` above.
 neurogrim-core = { path = "crates/neurogrim-core", version = "5.0.0" }
-neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "5.0.0" }
+# V5-MOD-2 Phase 4 (2026-05-02) — `default-features = false` here
+# is required so cli's local `default-features = false` override
+# actually takes effect. Without it, Cargo warns
+# "`default-features` is ignored ... since `default-features` was
+# not specified for `workspace.dependencies.neurogrim-sensory`"
+# and silently keeps all defaults active. cli is the only consumer
+# of neurogrim-sensory; cli's [features] section explicitly
+# activates per-sensor pass-through, so the workspace-level
+# default-off is the right policy.
+neurogrim-sensory = { path = "crates/neurogrim-sensory", version = "5.0.0", default-features = false }
 neurogrim-secrets = { path = "crates/neurogrim-secrets", version = "5.0.0" }
 neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "5.0.0" }
 neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "5.0.0" }

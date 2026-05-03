@@ -14,34 +14,70 @@
 //! [`Sensor`]: neurogrim_core::sensor::Sensor
 //! [`SensorFactory`]: neurogrim_core::sensor::SensorFactory
 
-pub mod agent_behavior;
-pub mod capability_hygiene;
+// Always-compiled shared infrastructure: CMDB envelope builder
+// shared by all sensors. Pulls only always-on workspace deps
+// (chrono, serde, serde_json) so it's safe to leave unfeature-gated.
 pub mod cmdb;
+
+// V5-MOD-2 Phase 4 (2026-05-02) — per-sensor `#[cfg(feature)]`
+// gates carve out source modules + heavy deps for slim builds.
+// Default-features build pulls all 21 sensors (= v4 behavior).
+// `--no-default-features --features sensor-X` builds only X.
+#[cfg(feature = "sensor-agent-behavior")]
+pub mod agent_behavior;
+#[cfg(feature = "sensor-capability-hygiene")]
+pub mod capability_hygiene;
+#[cfg(feature = "sensor-code-quality")]
 pub mod code_quality;
+#[cfg(feature = "sensor-coherence")]
 pub mod coherence;
+#[cfg(feature = "sensor-deploy-readiness")]
 pub mod deploy_readiness;
+#[cfg(feature = "sensor-docker-topology")]
 pub mod docker_topology;
+#[cfg(feature = "sensor-domain-calibration")]
 pub mod domain_calibration;
+#[cfg(feature = "sensor-federated-patterns")]
 pub mod federated_patterns;
+#[cfg(feature = "sensor-git-health")]
 pub mod git_health;
+#[cfg(feature = "sensor-human-comms")]
 pub mod human_comms;
+#[cfg(feature = "sensor-operator-calibration")]
 pub mod operator_calibration;
+#[cfg(feature = "sensor-rust-health")]
 pub mod rust_health;
+#[cfg(feature = "sensor-secret-refs")]
 pub mod secret_refs;
+#[cfg(feature = "sensor-secrets-readiness")]
 pub mod secrets_readiness;
+#[cfg(feature = "sensor-security-standards")]
 pub mod security_standards;
+#[cfg(feature = "sensor-skill-coherence")]
 pub mod skill_coherence;
+// `supply_chain_calibration` is the calibration helper used by both
+// the `supply_chain_sca` SENSOR and the `sca-calibrate` CLI command.
+// Gated alongside `sensor-supply-chain-sca` — they're conceptually
+// paired (no SCA = no calibrate). The CLI's `sca_calibrate` command
+// is gated to match.
+#[cfg(feature = "sensor-supply-chain-sca")]
 pub mod supply_chain_calibration;
+#[cfg(feature = "sensor-supply-chain-review")]
 pub mod supply_chain_review;
+#[cfg(feature = "sensor-supply-chain-sca")]
 pub mod supply_chain_sca;
+#[cfg(feature = "sensor-supply-chain-vigilance")]
 pub mod supply_chain_vigilance;
+#[cfg(feature = "sensor-test-health")]
 pub mod test_results;
+#[cfg(feature = "sensor-trust-budget")]
 pub mod trust_budget;
 
 // V5-MOD-2 Phase 2 (2026-05-02) — centralized `Sensor` +
 // `SensorFactory` impls for all 21 built-in sensors plus the
 // `built_in_factories()` aggregator. Phase 3 wires the dispatch
-// through this list. See `sensor_impls.rs` rustdoc for the
-// "centralized vs per-module" plan deviation note.
+// through this list; Phase 4 adds per-entry `#[cfg(feature)]`
+// gates. See `sensor_impls.rs` rustdoc for the "centralized vs
+// per-module" plan deviation note.
 pub mod sensor_impls;
 pub use sensor_impls::built_in_factories;

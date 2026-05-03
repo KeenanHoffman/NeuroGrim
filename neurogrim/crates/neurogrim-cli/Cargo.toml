@@ -29,7 +29,12 @@ rmcp = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 neurogrim-core = { workspace = true, features = ["sqlite"] }
-neurogrim-sensory = { workspace = true }
+# V5-MOD-2 Phase 4 (2026-05-02) — `default-features = false` so the
+# binary's [features] section below decides which sensor-X features
+# pass through. `default = ["neurogrim-sensory/default"]` preserves
+# v4 behavior (all 21 sensors); operators who want a slim binary do
+# `cargo build --bin neurogrim --no-default-features --features sensor-X`.
+neurogrim-sensory = { workspace = true, default-features = false }
 neurogrim-mcp = { workspace = true }
 neurogrim-a2a = { workspace = true }
 neurogrim-ecosystem = { workspace = true }
@@ -44,6 +49,78 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # v3.1 E-V31-C C1: TOML loader for hat-narration templates. Templates
 # bundled at compile time via include_str!; toml crate parses at runtime.
 toml = { workspace = true }
+
+[features]
+# V5-MOD-2 Phase 4 (2026-05-02) — pass-through to
+# `neurogrim-sensory`'s sensor-X features. `default` activates all
+# 21 cli sensor-X features (which transitively activate the
+# matching `neurogrim-sensory/sensor-X` features). Preserves v4
+# behavior. Operators can do
+# `cargo build --bin neurogrim --no-default-features
+#   --features sensor-git-health,sensor-code-quality` to ship a
+# slim binary; the heavy deps for absent sensors are not compiled,
+# AND gated CLI commands like `sca-review` / `sca-calibrate`
+# disappear from the surface.
+#
+# IMPORTANT: `default` MUST list the cli's own per-sensor features
+# (not just `neurogrim-sensory/default`) — Cargo features
+# propagate downward only, so cli's `#[cfg(feature = "sensor-X")]`
+# guards check cli's OWN flag, not the dep's. Listing
+# `neurogrim-sensory/default` activates the dep's defaults but
+# leaves cli's own flags off, which would silently hide
+# `sca-review` and `sca-calibrate` from the default build.
+default = [
+    "sensor-agent-behavior",
+    "sensor-capability-hygiene",
+    "sensor-code-quality",
+    "sensor-coherence",
+    "sensor-deploy-readiness",
+    "sensor-docker-topology",
+    "sensor-domain-calibration",
+    "sensor-federated-patterns",
+    "sensor-git-health",
+    "sensor-human-comms",
+    "sensor-operator-calibration",
+    "sensor-rust-health",
+    "sensor-secret-refs",
+    "sensor-secrets-readiness",
+    "sensor-security-standards",
+    "sensor-skill-coherence",
+    "sensor-supply-chain-review",
+    "sensor-supply-chain-sca",
+    "sensor-supply-chain-vigilance",
+    "sensor-test-health",
+    "sensor-trust-budget",
+]
+
+# Per-sensor pass-through. Each cli `sensor-X` feature activates
+# the matching `neurogrim-sensory/sensor-X` feature, which in turn
+# compiles in the sensor module + its heavy deps.
+sensor-agent-behavior = ["neurogrim-sensory/sensor-agent-behavior"]
+sensor-capability-hygiene = ["neurogrim-sensory/sensor-capability-hygiene"]
+sensor-code-quality = ["neurogrim-sensory/sensor-code-quality"]
+sensor-coherence = ["neurogrim-sensory/sensor-coherence"]
+sensor-deploy-readiness = ["neurogrim-sensory/sensor-deploy-readiness"]
+sensor-docker-topology = ["neurogrim-sensory/sensor-docker-topology"]
+sensor-domain-calibration = ["neurogrim-sensory/sensor-domain-calibration"]
+sensor-federated-patterns = ["neurogrim-sensory/sensor-federated-patterns"]
+sensor-git-health = ["neurogrim-sensory/sensor-git-health"]
+sensor-human-comms = ["neurogrim-sensory/sensor-human-comms"]
+sensor-operator-calibration = ["neurogrim-sensory/sensor-operator-calibration"]
+sensor-rust-health = ["neurogrim-sensory/sensor-rust-health"]
+sensor-secret-refs = ["neurogrim-sensory/sensor-secret-refs"]
+sensor-secrets-readiness = ["neurogrim-sensory/sensor-secrets-readiness"]
+sensor-security-standards = ["neurogrim-sensory/sensor-security-standards"]
+sensor-skill-coherence = ["neurogrim-sensory/sensor-skill-coherence"]
+sensor-supply-chain-review = ["neurogrim-sensory/sensor-supply-chain-review"]
+sensor-supply-chain-sca = ["neurogrim-sensory/sensor-supply-chain-sca"]
+sensor-supply-chain-vigilance = ["neurogrim-sensory/sensor-supply-chain-vigilance"]
+sensor-test-health = ["neurogrim-sensory/sensor-test-health"]
+sensor-trust-budget = ["neurogrim-sensory/sensor-trust-budget"]
+
+# Convenience aggregates (mirror neurogrim-sensory's).
+sensors-builtin-core = ["neurogrim-sensory/sensors-builtin-core"]
+sensors-supply-chain = ["neurogrim-sensory/sensors-supply-chain"]
 
 [dev-dependencies]
 tempfile = "3"

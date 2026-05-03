@@ -40,35 +40,63 @@
 //! `_phase0-all-deps` (in `Cargo.toml`) currently activates all
 //! optional heavy deps so the v4-equivalent default build works.
 
+// `unused_imports` may fire when --no-default-features is used and
+// no sensor-X features compile a single trait impl — these imports
+// only surface inside macro-expanded code. The "no sensors built"
+// case is a legitimate slim build (e.g., a custom binary registers
+// only third-party `Sensor` impls), so the lints are noise.
+#[allow(unused_imports)]
 use async_trait::async_trait;
+#[allow(unused_imports)]
 use neurogrim_core::sensor::{Sensor, SensorFactory};
+#[allow(unused_imports)]
 use serde_json::Value;
 
 // Pull each analyzer into scope so the trait impls below can call
-// them by their short names. Keeps the impls visually compact.
-use crate::{
-    agent_behavior::analyze_agent_behavior,
-    capability_hygiene::analyze_capability_hygiene,
-    code_quality::analyze_code_quality,
-    coherence::analyze_coherence,
-    deploy_readiness::analyze_deploy_readiness,
-    docker_topology::analyze_docker_topology,
-    domain_calibration::analyze_domain_calibration,
-    federated_patterns::analyze_federated_patterns,
-    git_health::analyze_git_health,
-    human_comms::analyze_human_comms,
-    operator_calibration::analyze_operator_calibration,
-    rust_health::analyze_rust_health,
-    secret_refs::analyze_secret_refs,
-    secrets_readiness::analyze_secrets_readiness,
-    security_standards::analyze_security_standards,
-    skill_coherence::analyze_skill_coherence,
-    supply_chain_review::analyze_supply_chain_review,
-    supply_chain_sca::analyze_supply_chain_sca,
-    supply_chain_vigilance::analyze_supply_chain_vigilance,
-    test_results::analyze_test_health,
-    trust_budget::analyze_trust_budget,
-};
+// them by their short names. Each `use` is gated by the same
+// `sensor-X` feature as its source module in `lib.rs`.
+#[cfg(feature = "sensor-agent-behavior")]
+use crate::agent_behavior::analyze_agent_behavior;
+#[cfg(feature = "sensor-capability-hygiene")]
+use crate::capability_hygiene::analyze_capability_hygiene;
+#[cfg(feature = "sensor-code-quality")]
+use crate::code_quality::analyze_code_quality;
+#[cfg(feature = "sensor-coherence")]
+use crate::coherence::analyze_coherence;
+#[cfg(feature = "sensor-deploy-readiness")]
+use crate::deploy_readiness::analyze_deploy_readiness;
+#[cfg(feature = "sensor-docker-topology")]
+use crate::docker_topology::analyze_docker_topology;
+#[cfg(feature = "sensor-domain-calibration")]
+use crate::domain_calibration::analyze_domain_calibration;
+#[cfg(feature = "sensor-federated-patterns")]
+use crate::federated_patterns::analyze_federated_patterns;
+#[cfg(feature = "sensor-git-health")]
+use crate::git_health::analyze_git_health;
+#[cfg(feature = "sensor-human-comms")]
+use crate::human_comms::analyze_human_comms;
+#[cfg(feature = "sensor-operator-calibration")]
+use crate::operator_calibration::analyze_operator_calibration;
+#[cfg(feature = "sensor-rust-health")]
+use crate::rust_health::analyze_rust_health;
+#[cfg(feature = "sensor-secret-refs")]
+use crate::secret_refs::analyze_secret_refs;
+#[cfg(feature = "sensor-secrets-readiness")]
+use crate::secrets_readiness::analyze_secrets_readiness;
+#[cfg(feature = "sensor-security-standards")]
+use crate::security_standards::analyze_security_standards;
+#[cfg(feature = "sensor-skill-coherence")]
+use crate::skill_coherence::analyze_skill_coherence;
+#[cfg(feature = "sensor-supply-chain-review")]
+use crate::supply_chain_review::analyze_supply_chain_review;
+#[cfg(feature = "sensor-supply-chain-sca")]
+use crate::supply_chain_sca::analyze_supply_chain_sca;
+#[cfg(feature = "sensor-supply-chain-vigilance")]
+use crate::supply_chain_vigilance::analyze_supply_chain_vigilance;
+#[cfg(feature = "sensor-test-health")]
+use crate::test_results::analyze_test_health;
+#[cfg(feature = "sensor-trust-budget")]
+use crate::trust_budget::analyze_trust_budget;
 
 // ────────────────────────────────────────────────────────────────
 // Helper macros — keep the per-sensor block to 1-2 lines so the
@@ -78,6 +106,7 @@ use crate::{
 /// Generates `XSensor` + `XSensorFactory` for an analyzer that
 /// returns `anyhow::Result<Value>`. The 3 fallible sensors use
 /// this variant.
+#[allow(unused_macros)]
 macro_rules! fallible_sensor {
     ($sensor:ident, $factory:ident, $name:literal, $analyzer:path) => {
         #[doc = concat!(
@@ -118,6 +147,7 @@ macro_rules! fallible_sensor {
 /// infallible sensors use this variant. The trait wrapper
 /// `Ok(...)`s the value — operator-visible behavior is identical
 /// to the v4 free-function semantics.
+#[allow(unused_macros)]
 macro_rules! infallible_sensor {
     ($sensor:ident, $factory:ident, $name:literal, $analyzer:path) => {
         #[doc = concat!(
@@ -160,28 +190,49 @@ macro_rules! infallible_sensor {
 // ────────────────────────────────────────────────────────────────
 
 // Fallible (3): analyzer returns anyhow::Result<Value>.
+#[cfg(feature = "sensor-agent-behavior")]
 fallible_sensor!(AgentBehaviorSensor, AgentBehaviorSensorFactory, "agent-behavior", analyze_agent_behavior);
+#[cfg(feature = "sensor-docker-topology")]
 fallible_sensor!(DockerTopologySensor, DockerTopologySensorFactory, "docker-topology", analyze_docker_topology);
+#[cfg(feature = "sensor-git-health")]
 fallible_sensor!(GitHealthSensor, GitHealthSensorFactory, "git-health", analyze_git_health);
 
 // Infallible / silent-degrade (18): analyzer returns Value directly.
+#[cfg(feature = "sensor-capability-hygiene")]
 infallible_sensor!(CapabilityHygieneSensor, CapabilityHygieneSensorFactory, "capability-hygiene", analyze_capability_hygiene);
+#[cfg(feature = "sensor-code-quality")]
 infallible_sensor!(CodeQualitySensor, CodeQualitySensorFactory, "code-quality", analyze_code_quality);
+#[cfg(feature = "sensor-coherence")]
 infallible_sensor!(CoherenceSensor, CoherenceSensorFactory, "coherence", analyze_coherence);
+#[cfg(feature = "sensor-deploy-readiness")]
 infallible_sensor!(DeployReadinessSensor, DeployReadinessSensorFactory, "deploy-readiness", analyze_deploy_readiness);
+#[cfg(feature = "sensor-domain-calibration")]
 infallible_sensor!(DomainCalibrationSensor, DomainCalibrationSensorFactory, "domain-calibration", analyze_domain_calibration);
+#[cfg(feature = "sensor-federated-patterns")]
 infallible_sensor!(FederatedPatternsSensor, FederatedPatternsSensorFactory, "federated-patterns", analyze_federated_patterns);
+#[cfg(feature = "sensor-human-comms")]
 infallible_sensor!(HumanCommsSensor, HumanCommsSensorFactory, "human-comms", analyze_human_comms);
+#[cfg(feature = "sensor-operator-calibration")]
 infallible_sensor!(OperatorCalibrationSensor, OperatorCalibrationSensorFactory, "operator-calibration", analyze_operator_calibration);
+#[cfg(feature = "sensor-rust-health")]
 infallible_sensor!(RustHealthSensor, RustHealthSensorFactory, "rust-health", analyze_rust_health);
+#[cfg(feature = "sensor-secret-refs")]
 infallible_sensor!(SecretRefsSensor, SecretRefsSensorFactory, "secret-refs", analyze_secret_refs);
+#[cfg(feature = "sensor-secrets-readiness")]
 infallible_sensor!(SecretsReadinessSensor, SecretsReadinessSensorFactory, "secrets-readiness", analyze_secrets_readiness);
+#[cfg(feature = "sensor-security-standards")]
 infallible_sensor!(SecurityStandardsSensor, SecurityStandardsSensorFactory, "security-standards", analyze_security_standards);
+#[cfg(feature = "sensor-skill-coherence")]
 infallible_sensor!(SkillCoherenceSensor, SkillCoherenceSensorFactory, "skill-coherence", analyze_skill_coherence);
+#[cfg(feature = "sensor-supply-chain-review")]
 infallible_sensor!(SupplyChainReviewSensor, SupplyChainReviewSensorFactory, "supply-chain-review", analyze_supply_chain_review);
+#[cfg(feature = "sensor-supply-chain-sca")]
 infallible_sensor!(SupplyChainScaSensor, SupplyChainScaSensorFactory, "supply-chain-sca", analyze_supply_chain_sca);
+#[cfg(feature = "sensor-supply-chain-vigilance")]
 infallible_sensor!(SupplyChainVigilanceSensor, SupplyChainVigilanceSensorFactory, "supply-chain-vigilance", analyze_supply_chain_vigilance);
+#[cfg(feature = "sensor-test-health")]
 infallible_sensor!(TestHealthSensor, TestHealthSensorFactory, "test-health", analyze_test_health);
+#[cfg(feature = "sensor-trust-budget")]
 infallible_sensor!(TrustBudgetSensor, TrustBudgetSensorFactory, "trust-budget", analyze_trust_budget);
 
 // Note: `supply_chain_review`'s `cli_create` / `cli_resolve` /
@@ -221,31 +272,59 @@ infallible_sensor!(TrustBudgetSensor, TrustBudgetSensorFactory, "trust-budget", 
 ///
 /// [`SensorRegistry`]: neurogrim_core::sensor::SensorRegistry
 pub fn built_in_factories() -> Vec<Box<dyn SensorFactory>> {
-    vec![
-        // Fallible
-        Box::new(AgentBehaviorSensorFactory),
-        Box::new(DockerTopologySensorFactory),
-        Box::new(GitHealthSensorFactory),
-        // Infallible / silent-degrade
-        Box::new(CapabilityHygieneSensorFactory),
-        Box::new(CodeQualitySensorFactory),
-        Box::new(CoherenceSensorFactory),
-        Box::new(DeployReadinessSensorFactory),
-        Box::new(DomainCalibrationSensorFactory),
-        Box::new(FederatedPatternsSensorFactory),
-        Box::new(HumanCommsSensorFactory),
-        Box::new(OperatorCalibrationSensorFactory),
-        Box::new(RustHealthSensorFactory),
-        Box::new(SecretRefsSensorFactory),
-        Box::new(SecretsReadinessSensorFactory),
-        Box::new(SecurityStandardsSensorFactory),
-        Box::new(SkillCoherenceSensorFactory),
-        Box::new(SupplyChainReviewSensorFactory),
-        Box::new(SupplyChainScaSensorFactory),
-        Box::new(SupplyChainVigilanceSensorFactory),
-        Box::new(TestHealthSensorFactory),
-        Box::new(TrustBudgetSensorFactory),
-    ]
+    // `mut` is conditionally needed: only used when at least one
+    // sensor-X feature compiles a `factories.push(...)` line.
+    // `--no-default-features` (zero sensors) leaves the vec empty.
+    #[allow(unused_mut)]
+    let mut factories: Vec<Box<dyn SensorFactory>> = Vec::new();
+
+    // Fallible (3)
+    #[cfg(feature = "sensor-agent-behavior")]
+    factories.push(Box::new(AgentBehaviorSensorFactory));
+    #[cfg(feature = "sensor-docker-topology")]
+    factories.push(Box::new(DockerTopologySensorFactory));
+    #[cfg(feature = "sensor-git-health")]
+    factories.push(Box::new(GitHealthSensorFactory));
+
+    // Infallible / silent-degrade (18)
+    #[cfg(feature = "sensor-capability-hygiene")]
+    factories.push(Box::new(CapabilityHygieneSensorFactory));
+    #[cfg(feature = "sensor-code-quality")]
+    factories.push(Box::new(CodeQualitySensorFactory));
+    #[cfg(feature = "sensor-coherence")]
+    factories.push(Box::new(CoherenceSensorFactory));
+    #[cfg(feature = "sensor-deploy-readiness")]
+    factories.push(Box::new(DeployReadinessSensorFactory));
+    #[cfg(feature = "sensor-domain-calibration")]
+    factories.push(Box::new(DomainCalibrationSensorFactory));
+    #[cfg(feature = "sensor-federated-patterns")]
+    factories.push(Box::new(FederatedPatternsSensorFactory));
+    #[cfg(feature = "sensor-human-comms")]
+    factories.push(Box::new(HumanCommsSensorFactory));
+    #[cfg(feature = "sensor-operator-calibration")]
+    factories.push(Box::new(OperatorCalibrationSensorFactory));
+    #[cfg(feature = "sensor-rust-health")]
+    factories.push(Box::new(RustHealthSensorFactory));
+    #[cfg(feature = "sensor-secret-refs")]
+    factories.push(Box::new(SecretRefsSensorFactory));
+    #[cfg(feature = "sensor-secrets-readiness")]
+    factories.push(Box::new(SecretsReadinessSensorFactory));
+    #[cfg(feature = "sensor-security-standards")]
+    factories.push(Box::new(SecurityStandardsSensorFactory));
+    #[cfg(feature = "sensor-skill-coherence")]
+    factories.push(Box::new(SkillCoherenceSensorFactory));
+    #[cfg(feature = "sensor-supply-chain-review")]
+    factories.push(Box::new(SupplyChainReviewSensorFactory));
+    #[cfg(feature = "sensor-supply-chain-sca")]
+    factories.push(Box::new(SupplyChainScaSensorFactory));
+    #[cfg(feature = "sensor-supply-chain-vigilance")]
+    factories.push(Box::new(SupplyChainVigilanceSensorFactory));
+    #[cfg(feature = "sensor-test-health")]
+    factories.push(Box::new(TestHealthSensorFactory));
+    #[cfg(feature = "sensor-trust-budget")]
+    factories.push(Box::new(TrustBudgetSensorFactory));
+
+    factories
 }
 
 #[cfg(test)]
@@ -253,83 +332,110 @@ mod tests {
     use super::*;
     use neurogrim_core::sensor::SensorRegistry;
 
-    /// Smoke test: all 21 factories register cleanly into a
+    /// Smoke test: built-in factories register cleanly into a
     /// `SensorRegistry`. Catches duplicate wire-names, factory
     /// `name()` returning empty strings, and any panic in
-    /// `Box::new(...)`.
+    /// `Box::new(...)`. Feature-aware: registry length equals
+    /// `built_in_factories().len()` (which varies with enabled
+    /// `sensor-X` features).
     #[test]
     fn all_built_in_factories_register_into_registry() {
+        let factories = built_in_factories();
+        let n = factories.len();
         let mut registry = SensorRegistry::new();
-        registry.register_all(built_in_factories());
-        // 21 unique wire-names; no collisions.
+        registry.register_all(factories);
+        // No duplicate wire-names → registry length matches input.
         assert_eq!(
             registry.len(),
-            21,
-            "expected 21 built-in factories, got {}",
+            n,
+            "expected {n} built-in factories registered, got {}",
             registry.len()
         );
     }
 
     /// Wire-name parity: every name from the v4 `run_sensory` match
     /// in `neurogrim-cli/src/main.rs:601-621` must be present in
-    /// the registry. Phase 3 wires the dispatch through this list;
-    /// any missing name would silently break a previously-working
-    /// `neurogrim cast <name>` invocation.
+    /// the registry **when its `sensor-X` feature is enabled**.
+    /// Each name is `#[cfg]`-gated so the test passes on any
+    /// feature subset.
     #[test]
     fn wire_names_match_v4_run_sensory_dispatch() {
-        // The 20 names in run_sensory's match arms (pre-V5-MOD-2)
-        // PLUS secrets-readiness (Fork C orphan reclaimed in
-        // Phase 3 — registered here as the 21st).
-        let v4_dispatch_names = [
+        // Each entry compiles in only when its sensor-X feature
+        // is active. Default-features build pulls all 21 (= v4
+        // dispatch parity); slim builds pull only the enabled
+        // subset.
+        let expected: Vec<&str> = vec![
+            #[cfg(feature = "sensor-git-health")]
             "git-health",
+            #[cfg(feature = "sensor-rust-health")]
             "rust-health",
+            #[cfg(feature = "sensor-code-quality")]
             "code-quality",
+            #[cfg(feature = "sensor-test-health")]
             "test-health",
+            #[cfg(feature = "sensor-deploy-readiness")]
             "deploy-readiness",
+            #[cfg(feature = "sensor-security-standards")]
             "security-standards",
+            #[cfg(feature = "sensor-coherence")]
             "coherence",
+            #[cfg(feature = "sensor-human-comms")]
             "human-comms",
+            #[cfg(feature = "sensor-secret-refs")]
             "secret-refs",
+            #[cfg(feature = "sensor-docker-topology")]
             "docker-topology",
+            #[cfg(feature = "sensor-agent-behavior")]
             "agent-behavior",
+            #[cfg(feature = "sensor-skill-coherence")]
             "skill-coherence",
+            #[cfg(feature = "sensor-capability-hygiene")]
             "capability-hygiene",
+            #[cfg(feature = "sensor-supply-chain-sca")]
             "supply-chain-sca",
+            #[cfg(feature = "sensor-supply-chain-vigilance")]
             "supply-chain-vigilance",
+            #[cfg(feature = "sensor-supply-chain-review")]
             "supply-chain-review",
+            #[cfg(feature = "sensor-domain-calibration")]
             "domain-calibration",
+            #[cfg(feature = "sensor-operator-calibration")]
             "operator-calibration",
+            #[cfg(feature = "sensor-trust-budget")]
             "trust-budget",
+            #[cfg(feature = "sensor-federated-patterns")]
             "federated-patterns",
-            // Fork C: secrets-readiness orphan reclaimed.
+            // Fork C: secrets-readiness orphan reclaimed in Phase 3.
+            #[cfg(feature = "sensor-secrets-readiness")]
             "secrets-readiness",
         ];
 
         let mut registry = SensorRegistry::new();
         registry.register_all(built_in_factories());
 
-        for name in &v4_dispatch_names {
+        for name in &expected {
             assert!(
                 registry.has(name),
-                "wire-name {name:?} missing from registry; v4 \
-                 dispatch parity broken"
+                "wire-name {name:?} missing from registry; \
+                 feature-aware dispatch parity broken"
             );
         }
 
-        // And the count matches — no extras either.
         assert_eq!(
             registry.len(),
-            v4_dispatch_names.len(),
-            "registry has {} entries; v4 parity expects {}",
+            expected.len(),
+            "registry has {} entries; feature-aware list expects {}",
             registry.len(),
-            v4_dispatch_names.len()
+            expected.len()
         );
     }
 
     /// Factory `name()` and `build().<no name on Sensor by design>`
     /// — but the registry's `register_all` would panic if any
     /// factory's name conflicted. This test rehearses the registry
-    /// dispatch path for a non-trivial subset of sensors.
+    /// dispatch path for a non-trivial subset of sensors. Gated on
+    /// `sensor-human-comms` since it builds + invokes that sensor.
+    #[cfg(feature = "sensor-human-comms")]
     #[tokio::test]
     async fn registry_can_build_and_invoke_a_sensor_end_to_end() {
         use std::path::PathBuf;
