@@ -114,5 +114,11 @@ pub mod scoring_sources;
 // (`run_sensory`). Built-in factories ship in V5-MOD-2 Phase 2;
 // dispatch conversion in Phase 3.
 pub mod sensor;
+// V5-MOD-2 Phase 5 (2026-05-02) — `Sensor` conformance suite for
+// third-party impls. 10 cross-cutting + sensor-specific tests
+// (factory contract, async safety, CMDB envelope shape, score
+// range, meta block well-formedness, timeout, idempotency).
+// Mirrors V5-MOD-1's `scoring_source_conformance` pattern.
+pub mod sensor_conformance;
 pub mod trajectory;
 pub mod types;
