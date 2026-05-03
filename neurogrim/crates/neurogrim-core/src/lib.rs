@@ -100,6 +100,12 @@ pub mod ports;
 pub mod metrics;
 pub mod queue;
 pub mod queue_backend;
+// V5-MOD-3 Phase 4 (2026-05-02) — `QueueBackend` conformance suite
+// for third-party impls. 12 cross-cutting + backend-specific tests
+// (factory contract, append/read round-trip, concurrent appends,
+// ack semantics, Send+Sync runtime check). Mirrors V5-MOD-1's
+// `scoring_source_conformance` and V5-MOD-2's `sensor_conformance`.
+pub mod queue_backend_conformance;
 pub mod queue_config;
 pub mod registry;
 #[cfg(feature = "sqlite")]
