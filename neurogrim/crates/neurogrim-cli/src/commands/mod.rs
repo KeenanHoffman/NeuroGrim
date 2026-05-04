@@ -35,6 +35,11 @@ pub mod secrets;
 pub mod skill;
 pub mod serve;
 pub mod test;
+// V5-FOUND-4 Phase 2 (2026-05-04) — NextestRunner impl of
+// neurogrim_core::test_runner::TestRunner. Lives here (not in
+// neurogrim-core) to avoid a cyclic dep with commands::test's
+// build_cargo_args + parse_nextest_output (Forks B1/C1).
+pub mod test_runner_impls;
 pub mod ui;
 pub mod trend;
 pub mod validate;

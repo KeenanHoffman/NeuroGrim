@@ -29,6 +29,11 @@ rmcp = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 neurogrim-core = { workspace = true, features = ["sqlite"] }
+# V5-FOUND-4 Phase 2 (2026-05-04) — `#[async_trait]` macro for the
+# `NextestRunner` impl of `neurogrim_core::test_runner::TestRunner`.
+# Same workspace-promoted version every other async-trait usage
+# in the workspace pins to.
+async-trait = { workspace = true }
 # V5-MOD-2 Phase 4 (2026-05-02) — `default-features = false` so the
 # binary's [features] section below decides which sensor-X features
 # pass through. `default = ["neurogrim-sensory/default"]` preserves
