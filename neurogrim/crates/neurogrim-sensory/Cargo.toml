@@ -158,3 +158,11 @@ tokio = { workspace = true }
 # mtimes to simulate old skills. std::fs doesn't offer write access
 # to mtime on stable Rust.
 filetime = "0.2"
+# V5-SDK-2 partial Phase 3 (2026-05-04) — `tests/sensor_conformance.rs:37`
+# imports `neurogrim_core::sensor_conformance::run_factory_conformance`,
+# which is now feature-gated (V5-SDK-2 Phase 1). Activate the feature
+# at test-build time only via `[dev-dependencies]` so production
+# `cargo build -p neurogrim-sensory` stays tokio-clean. Carry the
+# `sqlite` feature too so we don't lose the rusqlite-backed SqliteBackend
+# the existing `[dependencies]` line activates.
+neurogrim-core = { workspace = true, features = ["conformance", "sqlite"] }

@@ -37,3 +37,9 @@ tempfile = "3"
 serde_json = { workspace = true }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { workspace = true }
+# V5-SDK-2 partial Phase 3 (2026-05-04) — `tests/conformance.rs:10`
+# imports `neurogrim_core::queue_backend_conformance::run_factory_conformance`,
+# which is now feature-gated (V5-SDK-2 Phase 1). Activate at
+# test-build time only via `[dev-dependencies]` so production
+# `cargo build -p queue-backend-memory` stays tokio-clean.
+neurogrim-core = { workspace = true, features = ["conformance"] }

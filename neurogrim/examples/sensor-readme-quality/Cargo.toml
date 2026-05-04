@@ -51,3 +51,9 @@ tokio = { workspace = true }
 # `project_root` argument. The conformance suite uses skeletal
 # (empty) tempdirs; unit tests populate fixtures inside.
 tempfile = "3"
+# V5-SDK-2 partial Phase 3 (2026-05-04) — `tests/conformance.rs:30`
+# imports `neurogrim_core::sensor_conformance::run_factory_conformance`,
+# which is now feature-gated (V5-SDK-2 Phase 1). Activate at
+# test-build time only via `[dev-dependencies]` so production
+# `cargo build -p sensor-readme-quality` stays tokio-clean.
+neurogrim-core = { workspace = true, features = ["conformance"] }

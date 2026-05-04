@@ -55,3 +55,9 @@ tokio = { workspace = true }
 # argument. The suite never writes inside it; any existing path
 # satisfies the contract, but a tempdir keeps the test hermetic.
 tempfile = "3"
+# V5-SDK-2 partial Phase 3 (2026-05-04) — `tests/conformance.rs:26`
+# imports `neurogrim_core::scoring_source_conformance::run_factory_conformance`,
+# which is now feature-gated (V5-SDK-2 Phase 1). Activate at
+# test-build time only via `[dev-dependencies]` so production
+# `cargo build -p scoring-source-prom` stays tokio-clean.
+neurogrim-core = { workspace = true, features = ["conformance"] }

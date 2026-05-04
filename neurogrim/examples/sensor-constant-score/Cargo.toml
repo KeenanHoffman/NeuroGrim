@@ -33,3 +33,12 @@ chrono = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true }
 tempfile = "3"
+# V5-SDK-2 partial Phase 3 (2026-05-04) — `tests/conformance.rs:11`
+# imports `neurogrim_sdk::sensor_conformance::run_factory_conformance`,
+# which is now feature-gated (V5-SDK-2 Phase 2). Activate at
+# test-build time only via `[dev-dependencies]` so production
+# `cargo build -p sensor-constant-score` stays tokio-clean. Cargo
+# unifies feature spec across the `[dependencies]` (no features) and
+# `[dev-dependencies]` (features=conformance) entries — the test
+# build sees both, the lib build sees only the former.
+neurogrim-sdk = { path = "../../crates/neurogrim-sdk", features = ["conformance"] }

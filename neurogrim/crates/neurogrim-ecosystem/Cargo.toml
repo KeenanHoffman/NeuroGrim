@@ -36,3 +36,10 @@ axum = "0.7"
 # `default-features = false` + `rustls-tls-native-roots` — keep the
 # dev-dep in lock-step with the runtime TLS choice in neurogrim-a2a.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
+# V5-SDK-2 partial Phase 3 (2026-05-04) — `src/scoring_source.rs:241`
+# (inside `#[tokio::test] async fn a2a_factory_passes_full_conformance_suite`)
+# imports `neurogrim_core::scoring_source_conformance::run_factory_conformance`,
+# which is now feature-gated. Activate at test-build time only via
+# `[dev-dependencies]` so production `cargo build -p neurogrim-ecosystem`
+# stays tokio-clean.
+neurogrim-core = { workspace = true, features = ["conformance"] }
