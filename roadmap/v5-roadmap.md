@@ -1,5 +1,17 @@
 # v5 Roadmap — "Everything is Lego" (adversary-reviewed)
 
+> **🚀 v5 SHIPPABLE 2026-05-04** — All four themes complete or honestly deferred:
+> Theme A 3/4 (V5-FOUND-3 ⏸ deferred to v5.1/v6 on Windows host coverage-toolchain
+> gap; V5-FOUND-1/2/4 ✅), Theme B ✅, Theme C ✅, Theme D ✅. v5 release tag is
+> gated only on workspace CI green + operator tag creation per Fork G1 (operator
+> runs `git tag -a v5.0.0` separately). VISION principle #20 ("Pluggability by use,
+> not aspiration") landed via V5-DOC-2 dual-review T+P. LSP-Brains spec at v3.1
+> with new §9.8 trait-surface recommendation. CHANGELOG.md [Unreleased] entry
+> staged. See `.claude/plans/v5-doc-2-vision-spec-alignment.md` for the V5-DOC-2
+> retrospective and `roadmap/epics/v5-coherence.md` § V5-DOC-2 retrospective for
+> the close-out summary.
+
+
 **Span:** Themes A–D (Foundation, Modular Conversions, SDK Extraction, Coherence) — stage numbers assigned at backlog-merge time
 **Approved on:** 2026-05-01 via three strategic decisions (stage shape: open-ended; adversary trim: partial with successor pipeline; v4/v5 timing: pinned 2026-05-01 — same-day operator pin overrode the default "decide-later" stance — see §"v5 Entry Decision Tracker")
 **Posture:** **adversary hat** worn throughout — adversarial review baked into every theme; trimmed items pre-scheduled in the v5.5/v6 successor pipeline (BACKLOG B-37..B-45) rather than rejected.
@@ -33,7 +45,7 @@ Four themes make this work, in this order:
 | **A** | **Foundation: Diagnostics + Test Speed** — 3/4 epics complete (V5-FOUND-1 ✅ 2026-05-02; V5-FOUND-2 ✅ 2026-05-03; V5-FOUND-3 ⏸ DEFERRED 2026-05-03 to v5.1/v6 — Windows coverage-toolchain gap, Phase 0 partial shipped at commit `39d7295`; V5-FOUND-4 ✅ COMPLETE 2026-05-04) | V5-FOUND-1..4 | ~3–5 weeks | S15 ships |
 | **B** | **Three Modular Conversions** ✅ COMPLETE 2026-05-02 | V5-MOD-1..3 | ~4–6 weeks | Theme A |
 | **C** | **SDK Extraction** ✅ COMPLETE 2026-05-04 (V5-SDK-1 ✅ COMPLETE 2026-05-03; V5-SDK-2 ✅ COMPLETE 2026-05-04 — TestRunner conformance suite closure via V5-FOUND-4 lifted V5-SDK-2 from PARTIAL to COMPLETE) | V5-SDK-1..2 | ~2–3 weeks | Theme B |
-| **D** | **Coherence + Docs** — IN PROGRESS (V5-DOC-1 ✅ COMPLETE 2026-05-04 — 756-line composition guide with 4 working recipes lifted from in-tree example crates; V5-DOC-2 PLANNED — VISION principle #20 + LSP-Brains spec §9/§F alignment; only remaining v5 ship blocker) | V5-DOC-1..2 | ~2 weeks | Theme C |
+| **D** | **Coherence + Docs** ✅ COMPLETE 2026-05-04 (V5-DOC-1 ✅ — 756-line composition guide with 4 working recipes lifted from in-tree example crates; V5-DOC-2 ✅ — VISION principle #20 "Pluggability by use, not aspiration" landed via dual-review T+P + LSP-Brains spec v3.0 → v3.1 with new §9.8 trait-surface recommendation) | V5-DOC-1..2 | ~2 weeks | Theme C |
 
 Theme order is firm; intra-theme epic order is firm. The pre-plan default was "concurrent v4.x + v5 work is not pursued" because Stage 15 changes UI surfaces v5 might re-touch — the operator **explicitly waived this default on 2026-05-01** to begin V5-FOUND-1 (Diagnostic Monitor) concurrently with in-flight S15 / S16 work. V5-FOUND-1 is the safest concurrent epic because it adds tracing instrumentation (additive — does not modify scoring or UI surfaces). Theme B (modular conversions) remains gated on Theme A close + a re-check of the concurrent-work risk before V5-MOD-1's perf-gate runs.
 

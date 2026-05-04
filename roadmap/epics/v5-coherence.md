@@ -59,24 +59,32 @@
 
 ### V5-DOC-2: VISION + spec alignment (~3–5 days)
 
-**Status:** Planned
-**Effort:** S
-**Depends on:** V5-DOC-1
+**Status:** **✅ COMPLETE 2026-05-04** — 6 phase commits (`74e1ba5` Phase 0 plan + plan-critic absorption; `3f9f9d8` Phase 1 dual-review verdict A1 → A3a; `f3297ee` Phase 2 VISION.md + cross-ref sweep; `2918303` LSP-Brains submodule Phase 3 spec §9.8 + v3.0 → v3.1; `7dae51b` Phase 4 BACKLOG B-53; `185ed91` Phase 5 CHANGELOG + verifications; plus this Phase 6 close-out). Effort actual: ~1 day, well under the 3–5d S estimate. **Theme D ✅ COMPLETE 2026-05-04; v5 is SHIPPABLE — gated only on workspace CI green + operator tag creation.**
+**Effort:** S (actual: ~1 day)
+**Depends on:** V5-DOC-1 ✅ (Theme D 1/2 complete)
 
-**What:** Update VISION.md (currently 19 principles per pre-plan exploration) with one v5-shaped principle (proposed wording, subject to LSP-Brains spec coordination): "**#20 Pluggability is justified by use, not aspiration.**" Update LSP-Brains spec §9 (fractal composition) and §F (MCP sensory tools) for SDK-shape changes. If any culture update emerges during implementation (none currently proposed), mirror byte-identically across all four `.claude/culture.yaml` copies per CLAUDE.md culture-changes-propagation rule.
+**What:** Updated VISION.md with principle #20 ("**Pluggability by use, not aspiration.**" — wording finalized via dual-review T+P; revised from initial draft "Pluggability is justified by use, not aspiration" to match #1 / #8 binary-contrast template) at sequential position 20. Body paragraph (13 lines) operationalizes the reshape rule with V5-FOUND-4 AgentDrivenRunner deferral as the canonical past-decision case. Updated LSP-Brains spec from v3.0 → v3.1 with new §9.8 "Trait Surface Recommendation (Implementation-Pattern)" — fractal-composition-relevant trait surfaces (test runner, transport, secrets backend) MAY be exposed via a contract crate; mirrors the existing §F.6 trait-surface recommendation for sensors. No culture update emerged (verified byte-identity across all 4 `.claude/culture.yaml` copies — SHA256 = 94201AA4...).
 
-**Why:** Principle #20 is the codification of the adversary trim that gated v5. Without it, future major-version planning may slip back into "everything is an interface" without the discipline. Spec updates ensure LSP-Brains spec reflects what v5 actually shipped.
+**Why:** Principle #20 is the codification of the adversary trim that gated v5. Without it, future major-version planning may slip back into "everything is an interface" without the discipline. Spec updates ensure LSP-Brains spec reflects what v5 actually shipped — at v3.1, NeuroGrim's SDK pattern is now the canonical reference impl for fractal-composition-relevant trait surfaces.
 
-**Architectural decision: dual-review on principle #20.** New VISION principles change agent behavior across the ecosystem. T+P (technical + philosophy) review via the `dual-review` skill is required before merge. The Philosophy reviewer specifically checks alignment with #1 (declarations over dashboards) and #8 (absorption over invention) since #20 builds on both.
+**Architectural decision: dual-review on principle #20.** New VISION principles change agent behavior across the ecosystem. T+P (technical + philosophy) review via the `dual-review` skill is required before merge. **EXECUTED 2026-05-04 at Phase 1:** Both reviewers spawned in parallel via Agent tasks following the dual-review skill protocol. Both `passed: true`. Convergent recommendation revised A1 → A3a (binary-contrast template matching peer #1 / #8). Operator-approved (option 1 — accept synthesis). Wording-frozen gate held through Phase 2 sweep.
 
 **Done when:**
-- [ ] VISION.md updated with proposed principle #20
-- [ ] Principle wording reviewed via `dual-review` skill (T+P) — both reviewers approve
-- [ ] LSP-Brains spec §9 + §F updated to reflect v5 SDK trait shapes
-- [ ] If `culture.yaml` changes (probably not), all four copies updated byte-identically (ecosystem + NeuroGrim + LSP-Brains + python-starter)
-- [ ] `culture-coherence` advisory domain still 100% (no drift introduced by v5)
-- [ ] `terminology-coherence` advisory domain still passes (SDK / module / plugin / sensor / scoring source terms catalogued in `.claude/terminology-catalog.json`)
-- [ ] `spec-impl-alignment` advisory domain confirms NeuroGrim conforms to LSP-Brains spec at v5 version
+- [x] VISION.md updated with principle #20 at sequential position 20 — *Phase 2 commit `f3297ee`; 13-line body operationalizing the reshape rule with V5-FOUND-4 AgentDrivenRunner deferral as the canonical past-decision case + cross-refs to v5-roadmap.md § Adversary findings A and the V5-DOC-2 plan record's Phase 1 dual-review verdict.*
+- [x] Principle wording reviewed via `dual-review` skill (T+P) — both reviewers approve — *Phase 1 commit `3f9f9d8`; both T (`passed: true`, 5 questions evaluated) and P (`passed: true`, 5 questions including binary-contrast template probe). Convergent recommendation revised A1 → A3a; operator approved option 1 (accept synthesis); wording FROZEN at Phase 1 close per Fork F1 wording-frozen gate.*
+- [x] LSP-Brains spec §9 + §F updated to reflect v5 SDK trait shapes — *Phase 3 commit `2918303` in LSP-Brains submodule; spec v3.0 → v3.1 with new §9.8 trait-surface recommendation; §F.6 verified-no-edit (already documented V5-MOD-2 sensor pattern at v3.0). Ecosystem-side LSP-Brains submodule pointer bumped at `D:\Brains\` commit `996af08`.*
+- [x] If `culture.yaml` changes (probably not), all four copies updated byte-identically — *No culture update emerged at V5-DOC-2 (Fork E1 default held). Phase 5 verified byte-identity: all 4 copies SHA256 = `94201AA4A230FAAC74932449AD8B26BEEA44D2B88DAAC4F55ED5D9E8A787FE0E`.*
+- [x] `culture-coherence` advisory domain still 100% (no drift introduced by v5) — *Verified at Phase 5 byte-identity check; no drift introduced.*
+- [⏸] `terminology-coherence` advisory domain still passes — *Plan-critic v1 finding C5: the registered domain expects a CMDB at `.claude/terminology-coherence-cmdb.json` (NOT a free-form catalog); no sensory tool currently emits that CMDB. Domain runs at advisory weight 0.0; falls back to no-file behavior (still passes structurally). DEFERRED to v5.5 (BACKLOG B-53 V5.5-DOC-TERMINOLOGY-CMDB) per Fork D2 — v5.5 ships the sensory tool + CMDB shape together.*
+- [x] `spec-impl-alignment` advisory domain confirms NeuroGrim conforms to LSP-Brains spec at v5 version — *Spec at v3.1 (post Phase 3); NeuroGrim's V5-MOD-1/2/3 + V5-FOUND-4 + V5-SDK-1/2 implementations conform to spec §F.6 + §9.8 trait-surface recommendations. V5-SDK-1 surface-assertion test (`sdk_surface_signatures_unchanged`) PASSES post V5-FOUND-4 + V5-DOC-2 — verified at Phase 5.*
+
+**V5-DOC-2 retrospective (2026-05-04):**
+
+- **Plan record:** [`.claude/plans/v5-doc-2-vision-spec-alignment.md`](../../.claude/plans/v5-doc-2-vision-spec-alignment.md) — v2 plan, two plan-critic lenses (technical + methodology in parallel; technical = REVISE, methodology = PROCEED WITH CAUTION). 1 🔴 + 5 🟡 technical + 1 🔴 + 4 🟡 methodology absorbed. Major absorptions: Phase 3 spec scope reduced (§F.6 already covered V5-MOD-2 from v3.0 ship-out; only §9 needed the new paragraph); Fork D default flipped D1 → D2 (terminology-CMDB deferred to v5.5); Phase 6 verification profile switched `--profile ci` → `--profile default` (fail-fast=true would abort on pre-existing init_scaffold flake). Phase 1 dual-review captured the full T+P verdict in the plan record (both `passed: true`, convergent A1 → A3a recommendation, operator-approved).
+- **Forks pinned:** A1 → revised to A3a via dual-review (operator-approved option 1 = accept synthesis) / B1 (sequential position 20) / C1' revised (§9 narrow paragraph + §F.6 verified-no-edit + spec v3.0 → v3.1 with changelog) / D2 revised (defer terminology-CMDB to v5.5 BACKLOG B-53) / E1 (no culture update; verified byte-identity) / F1 (single round T+P; both passed first time, no revision rounds needed) / G1 (operator-controlled tag — Phase 6 marks v5 SHIPPABLE; operator runs `git tag -a v5.0.0` separately).
+- **Outcome:** VISION principle #20 lands with binary-contrast headline + 13-line body; LSP-Brains spec at v3.1 with new §9.8; all 4 culture.yaml copies byte-identical; 7 verbatim cross-references swept (5 expected + 2 caught post-Phase-1); CHANGELOG.md [Unreleased] v5 entry drafted. Theme D ✅ COMPLETE; v5 SHIPPABLE.
+- **Plan deviations:** none. Phase 4's terminology-catalog file-creation was deferred via Fork D2 (operator-pinned default after plan v2 absorbed plan-critic finding C5); deferral tracked at BACKLOG B-53.
+- **What's NOT done that the original epic called for:** terminology-coherence sensory tool + CMDB (deferred to v5.5 BACKLOG B-53 — the registered domain expects a CMDB the v5.5 sensory-tool epic emits; creating a catalog at the wrong filename without the sensory tool was drift bait per plan-critic v1 finding C5).
 
 ---
 
