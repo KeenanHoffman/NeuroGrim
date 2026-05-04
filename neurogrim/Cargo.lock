@@ -1929,6 +1929,7 @@ dependencies = [
  "anyhow",
  "neurogrim-a2a",
  "neurogrim-core",
+ "neurogrim-sdk",
  "neurogrim-secrets",
  "serde_json",
  "url",
