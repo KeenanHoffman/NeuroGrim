@@ -4,7 +4,7 @@
 **Release:** v5 (entry pinned 2026-05-01; this epic is gated on Theme C close — see `v5-roadmap.md` §"v5 Entry Decision Tracker")
 **Status:** PLANNED (drafted 2026-05-01)
 **Priority:** Closure — docs describe shipped reality; written last
-**Goal:** Author the modular composition guide from real recipes; update LSP-Brains spec §9 + §F to reflect SDK trait shapes; add VISION principle #20 ("Pluggability is justified by use, not aspiration"); preserve culture-coherence byte-identity across all four `.claude/culture.yaml` copies.
+**Goal:** Author the modular composition guide from real recipes; update LSP-Brains spec §9 + §F to reflect SDK trait shapes; add VISION principle #20 ("Pluggability by use, not aspiration" — wording finalized via V5-DOC-2 dual-review T+P 2026-05-04); preserve culture-coherence byte-identity across all four `.claude/culture.yaml` copies.
 
 **Depends on:**
 - Theme C complete (V5-SDK-1..2 — composition guide describes the actual SDK API)
@@ -99,7 +99,7 @@
 
 🟡 **Doc rot.** Composition guide drifts from reality if not CI-tested. Mitigation: V5-DOC-1 acceptance requires CI-built code samples; broken samples fail the build.
 
-🟡 **Principle #20 inflation.** "Pluggability is justified by use" risks becoming a slogan that doesn't actually constrain decisions. Mitigation: dual-review skill (T+P) gates the wording; reviewers must cite a specific past decision the principle would have changed.
+🟡 **Principle #20 inflation.** "Pluggability by use" risks becoming a slogan that doesn't actually constrain decisions. Mitigation: dual-review skill (T+P) gates the wording; reviewers must cite a specific past decision the principle would have changed. — **RESOLVED 2026-05-04 at V5-DOC-2 Phase 1:** dual-review T+P both passed; final wording is binary-contrast headline ("Pluggability by use, not aspiration.") + 13-line body that operationalizes the reshape rule with V5-FOUND-4 AgentDrivenRunner deferral as the canonical past-decision case the principle would have classified.
 
 🟡 **Spec/impl drift during Theme D writing.** While Theme D is in flight, Theme C SDK might still ship patches. Mitigation: V5-DOC-1 depends on V5-SDK-2 (SDK at `0.1.x` minimum); patch-level SDK changes don't invalidate the guide unless trait shapes change (which they shouldn't post-extraction).
 

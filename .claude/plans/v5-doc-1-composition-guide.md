@@ -31,7 +31,7 @@ This is the same framing discipline V5-FOUND-4 used internally — show what's s
 - `docs/` directory has 25 markdown files (cosmetic correction post-recon). The composition guide will be the 26th. Length range of existing docs: ~100–600 lines (median ~250). Composition guide should target ~300–400 lines: 4 recipes × ~50–80 lines each + skeleton/intro/diagram/closing ≈ 350 lines.
 - Each example crate's README runs ~50–100 lines and includes a Cargo.toml block + minimum-viable impl + conformance test snippet. The composition guide can lift these directly with attribution.
 - The SDK README (`crates/neurogrim-sdk/README.md`, ~285 lines post V5-SDK-2 partial Phase 4) already has the Sensor walkthrough inlined. The composition guide should NOT duplicate that — instead it cites the SDK README for the Sensor recipe's depth and focuses on the cross-cutting "wire factories into the registry, dispatch through the trait" story.
-- VISION.md exists at `roadmap/VISION.md` and lists 19 principles. Principle #20 ("pluggability is justified by use, not aspiration") is V5-DOC-2's deliverable. V5-DOC-1 can reference proposed-#20 without modifying VISION.md.
+- VISION.md exists at `roadmap/VISION.md` and lists 19 principles. Principle #20 ("pluggability by use, not aspiration" — wording finalized via V5-DOC-2 dual-review T+P 2026-05-04; revised from initial draft "pluggability is justified by use, not aspiration") is V5-DOC-2's deliverable. V5-DOC-1 can reference proposed-#20 without modifying VISION.md.
 
 ## Phases
 
@@ -210,4 +210,4 @@ V5-DOC-1 does not add new CLI flags or commands. No exit-code spec needed.
 
 🔵 **Suggestion — render the guide locally before commit.** GitHub markdown renderer occasionally surprises (table column alignment, code-block language tagging). A local render via any markdown viewer catches most surprises pre-commit. Manual; not in CI scope.
 
-🔵 **Suggestion — V5-DOC-2 prep work.** V5-DOC-1 closes with a "v5.5/v6 horizon" section; V5-DOC-2 follows with VISION principle #20 + spec alignment. Suggest: V5-DOC-2's plan-critic round explicitly checks that proposed-#20 wording is *backward-readable* against V5-DOC-1's deferral framings (recipe 4's "what's NOT possible" callouts must align with #20's "justified by use, not aspiration" stance).
+🔵 **Suggestion — V5-DOC-2 prep work.** V5-DOC-1 closes with a "v5.5/v6 horizon" section; V5-DOC-2 follows with VISION principle #20 + spec alignment. Suggest: V5-DOC-2's plan-critic round explicitly checks that proposed-#20 wording is *backward-readable* against V5-DOC-1's deferral framings (recipe 4's "what's NOT possible" callouts must align with #20's "by use, not aspiration" stance).

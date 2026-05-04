@@ -151,13 +151,13 @@ There is no `neurogrim-sdk` crate today; `neurogrim-core` is the de-facto SDK. B
 
 **Theme:** Composition guide written from shipped reality, plus VISION/spec alignment.
 
-**Goal:** `docs/v5-composition-guide.md` documents real recipes; LSP-Brains spec §9 + §F reflect SDK trait shapes; VISION.md gains principle #20 ("Pluggability is justified by use, not aspiration"); `culture-coherence` domain still passes (byte-identity preserved across all four `.claude/culture.yaml` copies).
+**Goal:** `docs/v5-composition-guide.md` documents real recipes; LSP-Brains spec §9 + §F reflect SDK trait shapes; VISION.md gains principle #20 ("Pluggability by use, not aspiration" — wording finalized via V5-DOC-2 dual-review T+P 2026-05-04; revised from initial draft "Pluggability is justified by use, not aspiration" to match #1 / #8 binary-contrast template); `culture-coherence` domain still passes (byte-identity preserved across all four `.claude/culture.yaml` copies).
 
 **Stories:** V5-DOC-1..2 (see `epics/v5-coherence.md`).
 
 **Adversary concerns:**
 - 🟡 **Doc rot.** Composition guide must include working code samples; CI builds them. Otherwise the guide drifts.
-- 🟡 **Principle #20 inflation.** "Pluggability is justified by use" risks becoming a slogan. Dual-review skill (T+P) gates the principle's wording before merge.
+- 🟡 **Principle #20 inflation.** "Pluggability by use" risks becoming a slogan. Dual-review skill (T+P) gates the principle's wording before merge. — **RESOLVED 2026-05-04 at V5-DOC-2 Phase 1:** dual-review T+P both passed; final wording is the binary-contrast headline ("Pluggability by use, not aspiration.") + 13-line body operationalizing the reshape rule with V5-FOUND-4 grounding example. Body carries the load that the headline alone would lack.
 
 ---
 
@@ -173,7 +173,7 @@ There is no `neurogrim-sdk` crate today; `neurogrim-core` is the de-facto SDK. B
 | #13 Domains are single-concern; coherence is the association cortex | New "diagnostic synthesis" / "blast-radius" Brain domains pushed to v6 — not invented in v5 |
 | #16 Right protocol for the role — MCP for tools, A2A for peers | v5 must not blur this. Sensors stay MCP; child Brains stay A2A |
 | #17 Culture is the substrate of communication | Any v5 culture update mirrored byte-identical across all four Brains |
-| Proposed #20 Pluggability is justified by use, not aspiration | New principle proposed in V5-DOC-2; gates the v5.5/v6 successor pipelines (BACKLOG B-37..B-45) |
+| #20 Pluggability by use, not aspiration | Landed at V5-DOC-2 (2026-05-04) via dual-review T+P; gates the v5.5/v6 successor pipelines (BACKLOG B-37..B-45 + B-51..B-53) |
 
 ### Methodology fit
 

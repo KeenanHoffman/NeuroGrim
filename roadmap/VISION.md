@@ -1,6 +1,6 @@
 # North Star: LSP Brains
 
-**Last updated:** 2026-04-17 (principle #16: right protocol for the role; principle #17: culture as substrate; principle #18: sensors need sensors)
+**Last updated:** 2026-05-04 (principle #16: right protocol for the role; principle #17: culture as substrate; principle #18: sensors need sensors; principle #19: agents are sensed [header was stale since #19 landed 2026-04 — V5-DOC-2 incidentally corrected]; principle #20: pluggability by use, not aspiration)
 
 ---
 
@@ -333,6 +333,24 @@ These guide every decision. When in doubt, choose the option that advances these
     behavior is messier than deterministic tests; the mess is load-bearing, and the
     distributional interpretation of scores is what makes it honest. See spec §15,
     `agent-behavior-scenario-v1.schema.json`, and METHODOLOGY-EVOLUTION §11.
+
+20. **Pluggability by use, not aspiration.** Pluggability earns its place when
+    actual use exists for it: ≥2 plausible alternate implementations already in
+    scope, an external adopter has asked for it, or leaving the seam concrete is
+    provably blocking adoption. Aspirational pluggability — adding a trait or
+    factory because it *might* be useful, or extracting a seam to ship a stub-as-
+    second-impl — manufactures a maintenance burden against a hypothetical
+    future. v5's reshape rule operationalizes this: each Theme B trait extraction
+    (V5-MOD-1/2/3) cleared the bar via real built-in impls; V5-FOUND-4
+    deliberately deferred AgentDrivenRunner to v5.5 (BACKLOG B-51) because the
+    second impl would have been aspirational at v5.0. Items that fail the rule
+    today but might pass it later live in the v5.5 / v6 successor pipeline
+    (BACKLOG B-37..B-45 + B-51..B-53), not in the current trait surface. The
+    discipline applies at every scale — single-project trait extractions, SDK
+    re-exports, fractal-composition seams. The wording landed via dual-review
+    T+P at V5-DOC-2 (2026-05-04); see `roadmap/v5-roadmap.md` § Adversary
+    findings A and `.claude/plans/v5-doc-2-vision-spec-alignment.md` § Phase 1
+    dual-review verdict.
 
 ---
 
