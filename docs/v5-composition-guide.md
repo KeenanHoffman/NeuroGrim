@@ -22,11 +22,11 @@ this guide for v5+ trait-shape questions).
 1. [Everything is Lego — what v5 ships](#everything-is-lego--what-v5-ships)
 2. [What this guide is NOT](#what-this-guide-is-not)
 3. [Architecture: where the trait surfaces live](#architecture-where-the-trait-surfaces-live)
-4. **Recipe 1: Swap the queue backend** *(coming in Phase 2)*
-5. **Recipe 2: Add a custom scoring source** *(coming in Phase 2)*
-6. **Recipe 3: Ship a sensor as a crate** *(coming in Phase 2)*
-7. **Recipe 4: Drive tests with your own runner** *(coming in Phase 3)*
-8. **v5.5 / v6 horizon — what's not possible at v5.0** *(coming in Phase 4)*
+4. [Recipe 1: Swap the queue backend](#recipe-1-swap-the-queue-backend)
+5. [Recipe 2: Add a custom scoring source](#recipe-2-add-a-custom-scoring-source)
+6. [Recipe 3: Ship a sensor as a crate](#recipe-3-ship-a-sensor-as-a-crate)
+7. [Recipe 4: Drive tests with your own runner](#recipe-4-drive-tests-with-your-own-runner)
+8. [v5.5 / v6 horizon — what's not possible at v5.0](#v55--v6-horizon--whats-not-possible-at-v50)
 
 ---
 
@@ -297,6 +297,14 @@ registry.register_all(neurogrim_sdk::queue_built_in_factories());
 registry.register(Box::new(MemoryQueueBackendFactory));
 ```
 
+**Further reading:** [`neurogrim/examples/queue-backend-memory/README.md`](../neurogrim/examples/queue-backend-memory/README.md)
+(full impl + capacity / ack semantics rationale);
+[`roadmap/epics/v5-modular-conversions.md`](../roadmap/epics/v5-modular-conversions.md) §
+V5-MOD-3 (trait-shape rationale + the V5-MOD-3 Fork A2 `Send + Sync`
+decision); [`neurogrim/crates/neurogrim-sdk/README.md`](../neurogrim/crates/neurogrim-sdk/README.md) §
+"Writing a conformant `QueueBackend`" (rustdoc walkthrough — covers
+the `BTreeSet<u64>` ack discipline in depth).
+
 **What's NOT possible at v5.0:** dynamic `.so` / `.dll` plugin
 loading — at v5.0 plugins are cargo-feature-gated at compile time
 (BACKLOG B-40, v5.5 successor pipeline). For runtime registration
@@ -397,6 +405,12 @@ A `brain-registry.json` domain entry like `{"scoring_source":
 {"type": "prom", "endpoint": "https://prom.example.com/api/v1/query",
 "path": "avg(node_load1)"}}` then routes through `PromSource`.
 
+**Further reading:** [`neurogrim/examples/scoring-source-prom/README.md`](../neurogrim/examples/scoring-source-prom/README.md)
+(full HTTP-fetch impl + Prometheus response parsing);
+[`roadmap/epics/v5-modular-conversions.md`](../roadmap/epics/v5-modular-conversions.md) §
+V5-MOD-1 (trait-shape rationale + the perf-gate scoring round-trip
+ceiling `p95 ≤ 19ms`).
+
 **What's NOT possible at v5.0:** `ScoringSourceConfig` carries a
 closed shape (`endpoint`, `path`, `score_field`, `updated_at_field`)
 that all source types share — adding new typed fields requires
@@ -454,6 +468,17 @@ registry.register_all(neurogrim_sensory::built_in_factories());
 // Your factory.
 registry.register(Box::new(MySensorFactory));
 ```
+
+**Further reading:** [`neurogrim/crates/neurogrim-sdk/README.md`](../neurogrim/crates/neurogrim-sdk/README.md) §
+"Writing a conformant Sensor" (the canonical Sensor walkthrough —
+full impl + conformance contract pitfalls; this guide does NOT
+duplicate that depth);
+[`neurogrim/examples/sensor-readme-quality/README.md`](../neurogrim/examples/sensor-readme-quality/README.md)
+(FS-read pattern with 6 heuristic features);
+[`neurogrim/examples/sensor-constant-score/README.md`](../neurogrim/examples/sensor-constant-score/README.md)
+(minimal-deps reference — the smallest possible sensor impl);
+[`roadmap/epics/v5-modular-conversions.md`](../roadmap/epics/v5-modular-conversions.md) §
+V5-MOD-2 (trait-shape rationale).
 
 **What's NOT possible at v5.0:** dynamic sensor discovery (e.g.,
 "register every sensor crate in the `sensors/` directory at
@@ -623,6 +648,13 @@ The honesty floor: at v5.0, "drive tests with your own runner" is
 genuinely possible — but the dispatch is internal. To make a
 custom runner *operator-selectable*, wait for B-52.
 
+**Further reading:** [`neurogrim/crates/neurogrim-cli/src/commands/test_runner_impls/nextest.rs`](../neurogrim/crates/neurogrim-cli/src/commands/test_runner_impls/nextest.rs)
+(the bundled `NextestRunner` source — production-ready reference
+for the trait pattern);
+[`roadmap/epics/v5-foundation.md`](../roadmap/epics/v5-foundation.md) §
+V5-FOUND-4 (trait-shape rationale + the AgentDrivenRunner /
+`--runner=` deferral story).
+
 **What's NOT possible at v5.0:** coverage-driven test selection
 (`neurogrim test --select-by-coverage --since HEAD~1`) is deferred
 behind a Windows host coverage-toolchain gap (BACKLOG B-28 →
@@ -632,4 +664,93 @@ lands as a new variant — non-breaking thanks to `#[non_exhaustive]`.
 
 ---
 
-*Cross-references and the v5.5/v6 horizon section land in Phase 4.*
+## v5.5 / v6 horizon — what's not possible at v5.0
+
+v5 deliberately trims plenty of "this could be an interface"
+surfaces (per [v5-roadmap.md § Adversary findings A](../roadmap/v5-roadmap.md)).
+Below are the capability gaps an adopter might hit at v5.0,
+organized by theme. Each gap names the limitation first; BACKLOG
+IDs are parenthetical breadcrumbs for operators who want to drill
+into the tracker.
+
+### Plugin loading / runtime registration
+
+- **Dynamic `.so` / `.dll` plugin loading** — at v5.0 every plugin
+  is statically registered at startup (one `registry.register(...)`
+  call per crate, in a consuming binary's `main.rs`). Loading
+  factories from a directory at runtime is v5.5 work
+  (BACKLOG B-40).
+- **MCP tool plugin loading** — third-party MCP tools shipped as
+  separate crates aren't auto-discovered today; they're statically
+  linked into a custom binary. v5.5 horizon (BACKLOG B-38).
+- **Dashboard widget plugin trait** — adopters can't ship custom
+  dashboard widgets at v5.0; the dashboard's widget set is fixed
+  at compile time. v5.5 horizon (BACKLOG B-37).
+- **Transport runtime selection** — A2A `Transport` impls are
+  selected at compile time; v5.5 may add runtime selection
+  (BACKLOG B-39).
+
+### Test runner
+
+- **CLI runner selection (`neurogrim test --runner=<name>`)** — at
+  v5.0 the wrapper dispatches through `Box<dyn TestRunner>`
+  internally with `NextestRunner` as the only registered runner.
+  The clap flag for operator-facing selection lands when ≥1 second
+  runner exists (BACKLOG B-52).
+- **Agent-driven test orchestration** — `AgentDrivenRunner` would
+  ask an LLM to pick a test subset based on diff context + coverage
+  data. Requires a Rust-side LLM client to land first (BACKLOG B-51,
+  paired with V5-FOUND-1.1 diagnostic synthesis).
+- **Coverage-driven test selection** (`--select-by-coverage --since
+  HEAD~1`) — runs only tests covering files changed since a git
+  revision. Deferred behind a Windows host coverage-toolchain gap
+  (BACKLOG B-28; V5-FOUND-3 deferred 2026-05-03; v6 promotion to a
+  Brain domain at BACKLOG B-44).
+
+### Domain extension
+
+- **Per-domain custom CMDB types** — `CmdbData`'s shape is closed
+  at v5.0 (`score`, `updated_at`, `findings`, `meta`); per-domain
+  typed extensions require schema changes in `neurogrim-core`. v6
+  horizon (BACKLOG B-41).
+- **Agent-card versioning trait** — A2A peer Agent Cards have a
+  fixed shape at v5.0; per-version Agent Card schemas are v6
+  horizon (BACKLOG B-42).
+- **Trajectory model abstraction** — the trajectory engine
+  (`compute_trajectory`) uses a fixed velocity/acceleration model;
+  pluggable models are v6 horizon (BACKLOG B-43).
+- **Diagnostic synthesis as a Brain domain** — the diagnostics
+  ledger drives `neurogrim diag report` today; promotion to a
+  scored Brain domain is v6 horizon (BACKLOG B-45).
+
+### SDK + tooling polish (operator-facing)
+
+These don't block adopters at v5.0 but are tracked for v5.5:
+
+- **Re-export-aware semver gate** — `cargo-semver-checks` is
+  structurally blind to pure re-export crates (rust#94338); the
+  V5-SDK-1 compile-test gate at `crates/neurogrim-sdk/tests/sdk_surface_assertion.rs`
+  fills the gap, but a real semver-aware tool is v5.5 work
+  (BACKLOG B-46).
+- **SDK surface-assertion conformance pins** — the compile-test gate
+  pins trait method signatures but doesn't yet pin conformance
+  function signatures (BACKLOG B-49).
+- **Sensor walkthrough deduplication** — the writing-a-conformant-Sensor
+  walkthrough lives in two places (the SDK README and lib.rs
+  rustdoc). Once rustdoc supports `#![doc = include_str!]` cleanly
+  across feature gates, deduplicate via include (BACKLOG B-50).
+
+### How to follow these along
+
+The full v5.5 / v6 successor pipeline is tracked in
+[`roadmap/BACKLOG.md`](../roadmap/BACKLOG.md). Each entry has explicit
+"plan when" triggers — adopters watching for a gap to close can
+subscribe to the BACKLOG file's git history.
+
+The reshape rule still applies: a deferred capability becomes an
+epic only when ≥2 plausible alternate impls exist or are in scope,
+OR an external user has asked, OR leaving it concrete is provably
+blocking adoption. If you're an external user blocked by something
+in the horizon list, the most useful contribution is opening a
+GitHub issue describing your concrete use case — that's clause (ii)
+firing.
