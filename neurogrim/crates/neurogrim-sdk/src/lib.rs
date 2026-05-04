@@ -36,6 +36,17 @@
 //! crate's `tests/conformance.rs` and have a verifiable
 //! "passes the same contract as built-ins" claim.
 //!
+//! **Available behind the `conformance` feature** (V5-SDK-2 partial
+//! Phase 2 — 2026-05-04). The suites use `tokio::spawn` +
+//! `tokio::time::timeout` in their public API, so they're gated to
+//! keep tokio out of production binaries that don't run them. Add
+//! to your crate's `[dev-dependencies]`:
+//!
+//! ```toml
+//! [dev-dependencies]
+//! neurogrim-sdk = { version = "0.1", features = ["conformance"] }
+//! ```
+//!
 //! - [`scoring_source_conformance`]
 //! - [`sensor_conformance`]
 //! - [`queue_backend_conformance`]
@@ -357,6 +368,9 @@ pub use neurogrim_secrets::backend::SecretBackend;
 /// NeuroGrim workspace) verbatim — substituting their own factory
 /// type — for a verifiable "passes the same contract as built-ins"
 /// guarantee.
+///
+/// V5-SDK-2 partial Phase 2 (2026-05-04) — feature-gated.
+#[cfg(feature = "conformance")]
 pub mod scoring_source_conformance {
     pub use neurogrim_core::scoring_source_conformance::*;
 }
@@ -365,6 +379,9 @@ pub mod scoring_source_conformance {
 ///
 /// Reference test pattern:
 /// `examples/sensor-readme-quality/tests/conformance.rs`.
+///
+/// V5-SDK-2 partial Phase 2 (2026-05-04) — feature-gated.
+#[cfg(feature = "conformance")]
 pub mod sensor_conformance {
     pub use neurogrim_core::sensor_conformance::*;
 }
@@ -373,6 +390,9 @@ pub mod sensor_conformance {
 ///
 /// Reference test pattern:
 /// `examples/queue-backend-memory/tests/conformance.rs`.
+///
+/// V5-SDK-2 partial Phase 2 (2026-05-04) — feature-gated.
+#[cfg(feature = "conformance")]
 pub mod queue_backend_conformance {
     pub use neurogrim_core::queue_backend_conformance::*;
 }
@@ -384,6 +404,11 @@ pub mod queue_backend_conformance {
 /// (e.g., a sensor + a queue backend) get one
 /// `ConformanceReport` across all suites, not three
 /// structurally-identical-but-incompatible copies.
+///
+/// V5-SDK-2 partial Phase 2 (2026-05-04) — feature-gated alongside
+/// the three suite modules; `ConformanceReport` + `TestResult` are
+/// only useful in conjunction with one of the suites.
+#[cfg(feature = "conformance")]
 pub mod conformance {
     pub use neurogrim_core::conformance::*;
 }

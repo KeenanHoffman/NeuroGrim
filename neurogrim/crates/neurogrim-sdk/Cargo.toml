@@ -24,7 +24,38 @@ neurogrim-core = { workspace = true }
 neurogrim-a2a = { workspace = true }
 neurogrim-secrets = { workspace = true }
 
+[features]
+default = []
+# V5-SDK-2 partial Phase 2 (2026-05-04) — gates the four
+# conformance re-export modules (`scoring_source_conformance`,
+# `sensor_conformance`, `queue_backend_conformance`, and the
+# shared `conformance` types) behind a feature so production
+# consumers don't carry tokio transitively. Mirrors the
+# `neurogrim-core/conformance` gate from V5-SDK-2 partial
+# Phase 1. Adopters opt in with
+# `neurogrim-sdk = { version = "0.1", features = ["conformance"] }`
+# in their `[dev-dependencies]`; production builds stay tokio-free.
+conformance = ["neurogrim-core/conformance"]
+
 [dev-dependencies]
+# V5-SDK-2 partial Phase 2 (2026-05-04) — self-reference with
+# conformance ON so the SDK's own integration tests can use the
+# gated re-exports. Specifically, `tests/compile_test_re_exports.rs`
+# (the `conformance_types_unified_across_suites` fn at lines 48–65,
+# the V5-SDK-1 Phase 1.5 / Fork F1 nominal-identity assertion)
+# references `conformance::ConformanceReport`,
+# `scoring_source_conformance::ConformanceReport`,
+# `sensor_conformance::ConformanceReport`, and
+# `queue_backend_conformance::ConformanceReport` via
+# `use neurogrim_sdk::*;`. After Phase 2 gates the four
+# `pub mod *_conformance` blocks below, those references become
+# unresolved unless conformance is active for the test build.
+# Cargo's feature unification across `[dev-dependencies]` makes
+# activating it via self-reference the cleanest path —
+# `cargo test -p neurogrim-sdk` always builds with conformance
+# on, while `cargo build -p neurogrim-sdk` (no tests) stays
+# feature-clean. Plan-critic v2 caught this gap (B3).
+neurogrim-sdk = { path = ".", features = ["conformance"] }
 # V5-SDK-1 Phase 4 (2026-05-03) — `tests/sdk_surface_assertion.rs`
 # pins every re-exported trait method's signature. The pinning
 # functions reach for support types (e.g., `ScoringSourceConfig`,
