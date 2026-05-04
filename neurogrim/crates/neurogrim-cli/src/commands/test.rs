@@ -189,41 +189,9 @@ pub async fn run(args: Args) -> Result<()> {
             "✦ neurogrim test --retry-failed: re-running {} prior failure(s)",
             to_retry.len()
         );
-        let mut v: Vec<String> = vec![
-            "nextest".into(),
-            "run".into(),
-            "--workspace".into(),
-            "--all-targets".into(),
-            "--profile".into(),
-            args.profile.clone(),
-            "--color".into(),
-            "never".into(),
-            "--".into(),
-            "--exact".into(),
-        ];
-        // Each name positional after `-- --exact`; nextest's libtest-
-        // compat arg path treats them as OR filters with exact-match
-        // semantics.
-        for name in &to_retry {
-            v.push(name.clone());
-        }
-        v
+        build_cargo_args(&args, Some(&to_retry))
     } else {
-        let mut v: Vec<String> = vec![
-            "nextest".into(),
-            "run".into(),
-            "--workspace".into(),
-            "--all-targets".into(),
-            "--profile".into(),
-            args.profile.clone(),
-            "--color".into(),
-            "never".into(),
-        ];
-        if args.slow {
-            v.push("--".into());
-            v.push("--include-ignored".into());
-        }
-        v
+        build_cargo_args(&args, None)
     };
 
     // V5-FOUND-1 Phase 3 step 2: wrap the main test path in a
@@ -355,6 +323,55 @@ pub async fn run(args: Args) -> Result<()> {
 /// Path to `<project>/.claude/brain/test-failures.jsonl`.
 pub fn ledger_path(project_root: &Path) -> PathBuf {
     project_root.join(".claude/brain").join(LEDGER_FILENAME)
+}
+
+/// Build the cargo subcommand arg vector for a `neurogrim test` run.
+///
+/// V5-FOUND-3 Phase 0 (2026-05-03) — extracted from `run()` so that:
+/// 1. The two branches (workspace run / `--retry-failed` replay) share
+///    a single arg-construction code path. Previously both branches
+///    duplicated the prefix and the `--retry-failed` branch silently
+///    dropped `--include-ignored` when `--slow` was set (the libtest-
+///    args section was hardcoded to `-- --exact <names>` with no slot
+///    for other libtest flags). This function fixes that bug.
+/// 2. Future flags (V5-FOUND-3 Phase 3 `--instrument-coverage`, Phase 4
+///    `--select-by-coverage`) extend a single function rather than
+///    re-duplicating prefix construction.
+///
+/// `retry_names` carries the failure-ledger names when invoked via
+/// `--retry-failed`; `None` means a normal workspace run.
+pub fn build_cargo_args(args: &Args, retry_names: Option<&[String]>) -> Vec<String> {
+    let mut v: Vec<String> = vec![
+        "nextest".into(),
+        "run".into(),
+        "--workspace".into(),
+        "--all-targets".into(),
+        "--profile".into(),
+        args.profile.clone(),
+        "--color".into(),
+        "never".into(),
+    ];
+
+    // Libtest-compat arg section (after `--`). Currently used by:
+    //   - `--slow`         → `--include-ignored`
+    //   - `--retry-failed` → `--exact <name1> <name2> ...`
+    //
+    // Both can apply simultaneously (slow retry of a prior `--slow`
+    // run); the `--` separator goes once, with both flag sets inside.
+    let needs_libtest_section = args.slow || retry_names.is_some();
+    if needs_libtest_section {
+        v.push("--".into());
+        if args.slow {
+            v.push("--include-ignored".into());
+        }
+        if let Some(names) = retry_names {
+            v.push("--exact".into());
+            for name in names {
+                v.push(name.clone());
+            }
+        }
+    }
+    v
 }
 
 /// Stripped-down summary of one cargo binary's parsed output.
@@ -1561,5 +1578,111 @@ test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out
         assert!(parse_nextest_status_line("     Summary [   0.135s] 7 tests run").is_none());
         assert!(parse_nextest_status_line("--- STDERR:    foo bar ---").is_none());
         assert!(parse_nextest_status_line("").is_none());
+    }
+
+    // ── V5-FOUND-3 Phase 0 (2026-05-03) — build_cargo_args tests ──────────
+
+    /// Default Args fixture for build_cargo_args tests; tweak per-test.
+    fn args_fixture() -> Args {
+        Args {
+            keep_last: 500,
+            show_only_new: false,
+            retry_failed: false,
+            slow: false,
+            verbose: false,
+            e2e: false,
+            project_root: ".".into(),
+            profile: "default".into(),
+        }
+    }
+
+    #[test]
+    fn build_cargo_args_default_workspace_run() {
+        let v = build_cargo_args(&args_fixture(), None);
+        assert_eq!(
+            v,
+            vec![
+                "nextest", "run", "--workspace", "--all-targets",
+                "--profile", "default", "--color", "never",
+            ]
+        );
+        // No `--` separator when neither --slow nor --retry-failed apply.
+        assert!(!v.iter().any(|s| s == "--"), "no libtest section expected");
+    }
+
+    #[test]
+    fn build_cargo_args_slow_only() {
+        let mut a = args_fixture();
+        a.slow = true;
+        let v = build_cargo_args(&a, None);
+        assert!(v.contains(&"--".to_string()));
+        assert!(v.contains(&"--include-ignored".to_string()));
+        assert!(!v.contains(&"--exact".to_string()));
+    }
+
+    #[test]
+    fn build_cargo_args_retry_only() {
+        let names = vec!["test_a".to_string(), "test_b".to_string()];
+        let v = build_cargo_args(&args_fixture(), Some(&names));
+        assert!(v.contains(&"--".to_string()));
+        assert!(v.contains(&"--exact".to_string()));
+        assert!(v.contains(&"test_a".to_string()));
+        assert!(v.contains(&"test_b".to_string()));
+        assert!(
+            !v.contains(&"--include-ignored".to_string()),
+            "no --include-ignored without --slow"
+        );
+    }
+
+    /// V5-FOUND-3 Phase 0 bug-fix regression: prior to this commit, the
+    /// `--retry-failed` branch hardcoded `-- --exact <names>` and left
+    /// no slot for `--include-ignored`, so `--retry-failed --slow`
+    /// silently dropped the slow flag. This asserts both flags now
+    /// propagate together.
+    #[test]
+    fn build_cargo_args_retry_and_slow_propagates_include_ignored() {
+        let mut a = args_fixture();
+        a.slow = true;
+        let names = vec!["my_test".to_string()];
+        let v = build_cargo_args(&a, Some(&names));
+
+        // Find the `--` index; everything after must contain BOTH
+        // --include-ignored AND --exact <name>.
+        let dash_dash_idx = v.iter().position(|s| s == "--").expect("-- present");
+        let after = &v[dash_dash_idx + 1..];
+        assert!(
+            after.contains(&"--include-ignored".to_string()),
+            "--include-ignored MUST appear in libtest section under --retry-failed --slow; got: {after:?}"
+        );
+        assert!(
+            after.contains(&"--exact".to_string()),
+            "--exact still present"
+        );
+        assert!(
+            after.contains(&"my_test".to_string()),
+            "test name still present"
+        );
+    }
+
+    #[test]
+    fn build_cargo_args_honors_profile_arg() {
+        let mut a = args_fixture();
+        a.profile = "ci".into();
+        let v = build_cargo_args(&a, None);
+        let profile_idx = v.iter().position(|s| s == "--profile").expect("present");
+        assert_eq!(v[profile_idx + 1], "ci");
+    }
+
+    #[test]
+    fn build_cargo_args_retry_with_empty_names_still_emits_libtest_section() {
+        // Empty-list edge case: this branch shouldn't be reached at
+        // call-site (run() short-circuits when to_retry is empty), but
+        // the function should remain well-defined for an empty slice.
+        let names: Vec<String> = vec![];
+        let v = build_cargo_args(&args_fixture(), Some(&names));
+        let dash_dash_idx = v.iter().position(|s| s == "--").expect("-- present");
+        // After --, we expect --exact with no positional names following.
+        assert_eq!(v[dash_dash_idx + 1], "--exact");
+        assert_eq!(v.len(), dash_dash_idx + 2, "no positional names");
     }
 }
