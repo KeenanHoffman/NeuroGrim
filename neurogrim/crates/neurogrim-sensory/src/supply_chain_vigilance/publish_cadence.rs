@@ -182,9 +182,9 @@ mod tests {
     use super::*;
     use crate::supply_chain_sca::Package;
     use crate::supply_chain_vigilance::registry::{
-        AttestationStatus, FetchAllResult, MaintainerInfo, PackageMetadata, VersionInfo,
+        AttestationStatus, FetchAllResult, PackageMetadata, VersionInfo,
     };
-    use chrono::{TimeZone, Utc};
+    use chrono::Utc;
 
     fn version(v: &str, days_ago: i64) -> VersionInfo {
         VersionInfo {

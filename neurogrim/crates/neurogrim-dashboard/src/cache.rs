@@ -300,7 +300,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn skill_invoked_event_does_NOT_clear_cache() {
+    async fn skill_invoked_event_does_not_clear_cache() {
         // Skill ledger / layout edits don't affect any
         // BrainContext field. The cache must NOT clear on those —
         // doing so would cause unnecessary re-loads on every

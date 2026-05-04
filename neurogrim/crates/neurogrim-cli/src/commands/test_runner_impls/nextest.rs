@@ -32,7 +32,7 @@
 //! The `_` arm is required by `#[non_exhaustive]` on `TestSelection` —
 //! v5.1's V5-FOUND-3 follow-up adds `ByCoverage(...)` non-breakingly.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use neurogrim_core::test_runner::{
     TestFailure, TestRunReport, TestRunner, TestRunnerFactory, TestSelection,

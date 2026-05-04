@@ -454,7 +454,7 @@ mod tests {
         // exits quickly (cargo is portable across CI envs and
         // already on the workspace `PATH`), insert, list, remove.
         let reg = ServiceRegistry::new();
-        let mut child = tokio::process::Command::new("cargo")
+        let child = tokio::process::Command::new("cargo")
             .arg("--version")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())

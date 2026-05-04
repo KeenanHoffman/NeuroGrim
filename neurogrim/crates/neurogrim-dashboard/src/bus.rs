@@ -48,8 +48,6 @@ use neurogrim_core::queue::{JsonlQueueReader, QueueMessage};
 use neurogrim_core::queue_backend::{
     built_in_factories, QueueBackend, QueueBackendRegistry,
 };
-#[cfg(test)]
-use neurogrim_core::queue_backend::{JsonlBackend, StoredMessage};
 use neurogrim_core::queue_config::QueueConfig;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

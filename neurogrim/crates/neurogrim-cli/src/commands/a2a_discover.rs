@@ -6,7 +6,6 @@
 //! shaped correctly before you try to talk to it.
 
 use anyhow::{Context, Result};
-use neurogrim_a2a::envelope::MessageType;
 use neurogrim_a2a::TaskClient;
 use url::Url;
 

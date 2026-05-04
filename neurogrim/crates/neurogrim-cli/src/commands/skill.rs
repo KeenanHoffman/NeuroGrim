@@ -11,7 +11,7 @@
 //! the job-hunt B'1 pilot) without forcing operators to copy-paste from
 //! `write-skill`.
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Args as ClapArgs, Subcommand};
 use std::path::PathBuf;
 use tokio::fs;

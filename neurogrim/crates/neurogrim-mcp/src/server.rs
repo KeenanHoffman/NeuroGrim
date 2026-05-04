@@ -3,7 +3,7 @@
 use neurogrim_core::agent_output::{build_agent_output, AgentOutput, CorrelationFired};
 use neurogrim_core::awareness::LocalAwareness;
 use neurogrim_core::correlation::{
-    evaluate_condition, evaluate_incident_patterns, extract_domain_variables, DomainVariables,
+    evaluate_condition, evaluate_incident_patterns, extract_domain_variables,
     IncidentLedgerEntry,
 };
 use neurogrim_core::registry::{BrainRegistry, ExportedVariable};

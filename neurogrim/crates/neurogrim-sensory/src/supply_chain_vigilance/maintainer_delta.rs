@@ -93,7 +93,7 @@ mod tests {
         FetchAllResult, MaintainerInfo, PackageMetadata,
     };
     use crate::supply_chain_vigilance::state::{MaintainerObservation, PackageState};
-    use chrono::{TimeZone, Utc};
+    use chrono::Utc;
     use std::fs;
 
     fn meta_with_owners(
@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn maintainer_first_seen_recently_flagged() {
-        let pkg = Package::npm("fakepkg", "1.0.0");
+        let _pkg = Package::npm("fakepkg", "1.0.0");
         // State is mature (first_scan_at well over 30 days ago).
         // carol joined recently; alice was an incumbent.
         let now = Utc::now();

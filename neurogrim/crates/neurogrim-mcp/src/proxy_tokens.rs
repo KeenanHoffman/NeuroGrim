@@ -226,7 +226,7 @@ mod tests {
         let store = ProxyTokenStore::new();
         let live = store.mint(key(), None, Some(60));
         let used = store.mint(key(), None, Some(60));
-        let expired = store.mint(key(), None, Some(0));
+        let _expired = store.mint(key(), None, Some(0));
         store.redeem(&used.token_id);
         std::thread::sleep(Duration::from_millis(10));
         let removed = store.sweep_expired();
