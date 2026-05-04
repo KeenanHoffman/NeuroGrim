@@ -6,6 +6,77 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### v5 "Everything is Lego" — staged for v5.0.0 tag (2026-05-04)
+
+*v5 — `Everything is Lego` — finishes the interface-and-implementation pattern at four
+high-leverage seams (`ScoringSource`, `Sensor`, `QueueBackend`, `TestRunner`), extracts
+a thin SDK so users can build modules outside the core repo, and ships a diagnostics +
+test-speed foundation that keeps the dev loop fast as adoption scales. See
+[`roadmap/v5-roadmap.md`](roadmap/v5-roadmap.md) for the full theme map and
+[`docs/v5-composition-guide.md`](docs/v5-composition-guide.md) for the modularity
+recipes.*
+
+**Theme status at v5 ship:**
+
+- **Theme A — Foundation: Diagnostics + Test Speed** — 3/4 epics complete.
+  V5-FOUND-1 ✅ (diagnostics ledger + `neurogrim diag report`); V5-FOUND-2 ✅
+  (cargo-nextest adoption + per-test wall-time SLO at `docs/test-slo.md`);
+  V5-FOUND-3 ⏸ DEFERRED to v5.1/v6 (Windows host coverage-toolchain gap —
+  `stable-x86_64-pc-windows-gnu` lacks `profiler_builtins`; Phase 0 partial work
+  shipped at commit `39d7295`); V5-FOUND-4 ✅ (TestRunner trait + 4-test
+  conformance suite + NextestRunner impl).
+- **Theme B — Three Modular Conversions** ✅ COMPLETE 2026-05-02
+  (V5-MOD-1/2/3: `ScoringSource` / `Sensor` / `QueueBackend` traits + factories
+  + registries + per-trait conformance suites).
+- **Theme C — SDK Extraction** ✅ COMPLETE 2026-05-04 (V5-SDK-1 thin re-export
+  crate at `crates/neurogrim-sdk/`; V5-SDK-2 conformance suites distributed via
+  the `conformance` cargo feature). Trait surfaces always-on; conformance suites
+  feature-gated to keep `tokio` out of production binaries that don't run them.
+- **Theme D — Coherence + Docs** ✅ COMPLETE 2026-05-04
+  (V5-DOC-1 — 756-line composition guide at `docs/v5-composition-guide.md` with
+  4 working recipes lifted from in-tree example crates;
+  V5-DOC-2 — VISION principle #20 added: *"Pluggability by use, not aspiration."*
+  Wording finalized via dual-review T+P. LSP-Brains spec bumped v3.0 → v3.1 with
+  new §9.8 trait-surface recommendation.)
+
+**Released crate versions:**
+
+- `neurogrim-core` — `5.0.0`
+- `neurogrim-sensory` — `5.0.0`
+- `neurogrim-mcp` — `5.0.0`
+- `neurogrim-a2a` — `5.0.0`
+- `neurogrim-secrets` — `5.0.0`
+- `neurogrim-ecosystem` — `5.0.0`
+- `neurogrim-dashboard` — `5.0.0`
+- `neurogrim-cli` — `5.0.0`
+- `neurogrim-sdk` — `0.1.0` (in-tree only; `publish = false` during 0.x soak
+  per V5-SDK-1 plan-critic 🔴 fix; promotion to `1.0` requires ≥6 weeks soak
+  + ≥1 external adopter validation)
+
+**LSP-Brains specification:** v3.0 → v3.1 (additive — new §9.8 trait surface
+recommendation; no conformance claims invalidated).
+
+**Deferrals tracked in [`roadmap/BACKLOG.md`](roadmap/BACKLOG.md):**
+
+- B-28 (coverage-aware test selection) → V5-FOUND-3 deferred to v5.1/v6
+- B-37..B-45 (v5.5 + v6 successor pipeline — dashboard widget plugin trait, MCP
+  tool plugin loading, dynamic `.so/.dll`, per-domain custom CMDB types,
+  agent-card versioning, trajectory model abstraction, per-test coverage as
+  Brain domain, diagnostic synthesis as Brain domain)
+- B-46 (re-export-aware semver gate when rustdoc supports cross-crate inlining)
+- B-47 (sccache for CI release-build paths; deferred from V5-FOUND-2 Fork B)
+- B-48 (SLO violations fix queue — encrypted-secrets KDF cost parameterization)
+- B-49 (SDK surface-assertion conformance pins)
+- B-50 (Sensor walkthrough deduplication via `#![doc = include_str!]`)
+- B-51 (`AgentDrivenRunner` real impl — paired with V5-FOUND-1.1 Rust LLM
+  client; honors VISION #20 — deferred until real second impl is in scope)
+- B-52 (`--runner=` CLI flag dispatch via TestRunnerRegistry; gated on B-51 or
+  external-adopter contribution)
+- B-53 (terminology-coherence sensory tool + CMDB)
+
+This [Unreleased] block moves to a `## [5.0.0] - <date>` heading when the
+operator runs `git tag -a v5.0.0`.
+
 ## [4.0.0] - 2026-04-30
 
 *v4.0 — Ship Without Surprise — the structured pre-publish pipeline.
