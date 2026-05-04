@@ -6,9 +6,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-### v5 "Everything is Lego" — staged for v5.0.0 tag (2026-05-04)
+## [5.0.0] - 2026-05-04
 
-*v5 — `Everything is Lego` — finishes the interface-and-implementation pattern at four
+*"Everything is Lego" — finishes the interface-and-implementation pattern at four
 high-leverage seams (`ScoringSource`, `Sensor`, `QueueBackend`, `TestRunner`), extracts
 a thin SDK so users can build modules outside the core repo, and ships a diagnostics +
 test-speed foundation that keeps the dev loop fast as adoption scales. See
@@ -74,8 +74,27 @@ recommendation; no conformance claims invalidated).
   external-adopter contribution)
 - B-53 (terminology-coherence sensory tool + CMDB)
 
-This [Unreleased] block moves to a `## [5.0.0] - <date>` heading when the
-operator runs `git tag -a v5.0.0`.
+### Pre-v5-tag polish (2026-05-04)
+
+Five focused commits ahead of the v5.0.0 tag, on top of the
+V5-DOC-2 close-out:
+
+- **`b4eb98d`** — `cli/test`: removed 5 libtest-era orphan helpers
+  + their dead unit tests + sample fixtures (V5-FOUND-2 Phase 1
+  cleanup; -390 lines).
+- **`3da3c90`** — workspace: swept 10 unused imports + 4 style
+  violations across 12 source files.
+- **`8c91aef`** — workspace: silenced rmcp `tool_router` field
+  warnings (17 sensors) + `tests/test_support/mod.rs` shared-helper
+  warnings via documented `#[allow(dead_code)]` annotations.
+  Framework noise, not waste — fields are accessed by macro-
+  generated dispatch rustc can't see.
+- **`a34e19a`** — `secrets`: declared the `test-helpers` cargo
+  feature in `Cargo.toml` (was referenced but undeclared).
+
+Workspace warning count dropped from ~50 to 13 (74% reduction);
+`cargo nextest run --workspace --profile default` reports
+1676/1676 PASS, 12 skipped (stable baseline).
 
 ## [4.0.0] - 2026-04-30
 
