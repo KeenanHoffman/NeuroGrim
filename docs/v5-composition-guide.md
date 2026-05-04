@@ -464,6 +464,172 @@ adding more sensors is one `registry.register(...)` line per crate.
 
 ---
 
-*Recipe 4 (custom test runner) lands in Phase 3 — see the
-[V5-DOC-1 plan](../.claude/plans/v5-doc-1-composition-guide.md) §
-Phase 3.*
+## Recipe 4: Drive tests with your own runner
+
+`TestRunner` is the smallest modular surface in v5: a single
+`async fn run(&self, selection: &TestSelection) -> Result<TestRunReport>`.
+The `neurogrim test` wrapper dispatches through `Box<dyn TestRunner>`
+internally; v5.0 ships one impl (`NextestRunner` — wraps
+`cargo nextest run`).
+
+> **Structural-asymmetry note.** Recipes 1–3 lift from out-of-tree
+> example crates (`examples/queue-backend-memory`, `examples/scoring-source-prom`,
+> `examples/sensor-readme-quality`). Recipe 4 lifts from
+> `neurogrim/crates/neurogrim-cli/src/commands/test_runner_impls/nextest.rs`
+> because `NextestRunner` is the bundled default impl that ships
+> inside NeuroGrim itself — there is no out-of-tree `TestRunner`
+> example crate at v5.0. **An out-of-tree `TestRunner` written by a
+> third-party adopter would live in their own crate exactly like
+> recipes 1–3.** The structural difference is positional (where the
+> impl lives in the workspace), not patternal (the trait shape,
+> factory contract, and conformance discipline are identical).
+
+`Cargo.toml`:
+
+```toml
+[dependencies]
+neurogrim-sdk = "0.1"
+async-trait = "0.1"
+anyhow = "1"
+tokio = { version = "1", features = ["process", "rt-multi-thread"] }
+tracing = "0.1"
+
+[dev-dependencies]
+neurogrim-sdk = { version = "0.1", features = ["conformance"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tempfile = "3"
+```
+
+Minimum-viable impl:
+
+```rust,ignore
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
+use neurogrim_sdk::{
+    TestFailure, TestRunner, TestRunnerFactory, TestRunReport, TestSelection,
+};
+
+pub struct MyRunner {
+    // Whatever state your runner needs — config, http client, etc.
+}
+
+#[async_trait]
+impl TestRunner for MyRunner {
+    async fn run(&self, selection: &TestSelection) -> Result<TestRunReport> {
+        // Translate TestSelection → your runner's native invocation.
+        // The `_` arm is REQUIRED — TestSelection is #[non_exhaustive],
+        // and v5.1+ may add a `ByCoverage(...)` variant for coverage-
+        // driven selection per the V5-FOUND-3 deferral chain (BACKLOG
+        // B-44). Always include a wildcard arm to stay forward-compatible:
+        let _native_selection = match selection {
+            TestSelection::All           => /* run everything */ todo!(),
+            TestSelection::Names(names)  => /* run by exact name */ todo!(),
+            TestSelection::Packages(pkg) => /* run by package */    todo!(),
+            _ => return Err(anyhow!(
+                "TestSelection::<unknown variant> — recompile against \
+                 current neurogrim_sdk variants"
+            )),
+        };
+
+        // ... invoke your runner; collect results ...
+
+        // Construct the report. TestRunReport is #[non_exhaustive],
+        // so use Default + field assignment (struct-expression
+        // construction is blocked from outside neurogrim-core):
+        let mut report = TestRunReport::default();
+        report.passed       = /* ... */ 0;
+        report.failed       = /* ... */ 0;
+        report.ignored      = /* ... */ 0;
+        report.duration_ms  = /* ... */ 0;
+        report.failures     = /* Vec<TestFailure> */ Vec::new();
+        report.raw_exit_code = 0;
+        Ok(report)
+    }
+}
+
+pub struct MyRunnerFactory;
+
+impl TestRunnerFactory for MyRunnerFactory {
+    fn name(&self) -> &'static str { "my-runner" }
+    fn build(&self) -> Box<dyn TestRunner> {
+        Box::new(MyRunner { /* default config */ })
+    }
+}
+```
+
+Conformance test (`tests/conformance.rs`) follows the same shape as
+recipes 1–3:
+
+```rust,ignore
+use neurogrim_sdk::test_runner_conformance::run_factory_conformance;
+use my_runner_crate::MyRunnerFactory;
+
+#[tokio::test]
+async fn factory_passes_full_conformance_suite() {
+    let factory = MyRunnerFactory;
+    let report = run_factory_conformance(&factory).await;
+    assert!(report.all_passed(), "{:#?}", report.failures());
+}
+```
+
+The 4-test runner conformance suite is right-sized for runtime-
+spawning runners — it covers factory-name contract + factory-build
+repeatability + no-panic-on-malformed-selection. (Cancellation,
+timeout, and concurrent-run tests were dropped from the original
+6-test design because they don't honestly fit runners that hold
+process-level locks like `cargo nextest run`'s workspace lock; see
+the V5-FOUND-4 plan-critic round for rationale.)
+
+> **`NextestRunnerFactory` production-construction caveat.** The
+> in-tree `NextestRunnerFactory::build()` returns a `NextestRunner`
+> with hardcoded defaults (`project_root="."`, `profile="default"`,
+> `slow=false`). Production code constructs `NextestRunner::new(
+> project_root, profile, slow)` directly with operator-supplied
+> values. The factory exists for future v5.5 BACKLOG B-52 (`--runner=`
+> registry dispatch) where operator config drives factory selection.
+> Don't copy the `Box::new(NextestRunnerFactory)` pattern at v5.0 —
+> use the direct constructor instead.
+
+### What v5.0 ships, what's deferred
+
+v5.0 of `TestRunner` is deliberately narrow. Adopters get:
+
+- **The trait + types** (`TestRunner`, `TestRunnerFactory`,
+  `TestRunnerRegistry`, `TestSelection`, `TestRunReport`,
+  `TestFailure`) re-exported from `neurogrim-sdk` always-on.
+- **The 4-test conformance suite** re-exported from
+  `neurogrim_sdk::test_runner_conformance` behind the
+  `conformance` feature.
+- **One concrete impl** (`NextestRunner`) bundled in NeuroGrim
+  itself; the wrapper dispatches through it via `Box<dyn TestRunner>`.
+
+Adopters CAN write their own `TestRunner` impl today (the trait
+surface is stable; the conformance suite is the contract gate). What
+they CAN'T do at v5.0:
+
+- **Select between runners at the CLI surface** (`neurogrim test
+  --runner=<name>`). The flag is deferred to v5.5 (BACKLOG B-52)
+  — at v5.0 only one runner exists, so the flag would be ceremony
+  without value. When ≥1 second runner is registered, B-52 adds
+  the `--runner=` clap dispatch via `TestRunnerRegistry::get()`.
+- **Use the bundled agent-driven runner** (`neurogrim test
+  --runner=agent`). `AgentDrivenRunner` is deferred to v5.5
+  (BACKLOG B-51) alongside the agent-orchestration work that
+  would make it a real impl — building one requires a Rust-side
+  LLM client, which currently blocks V5-FOUND-1.1's diagnostic
+  synthesis too. Both ride the same epic when that pathway lands.
+
+The honesty floor: at v5.0, "drive tests with your own runner" is
+genuinely possible — but the dispatch is internal. To make a
+custom runner *operator-selectable*, wait for B-52.
+
+**What's NOT possible at v5.0:** coverage-driven test selection
+(`neurogrim test --select-by-coverage --since HEAD~1`) is deferred
+behind a Windows host coverage-toolchain gap (BACKLOG B-28 →
+V5-FOUND-3 deferred 2026-05-03; v6 promotion to a Brain domain
+tracked at B-44). When V5-FOUND-3 unblocks, `TestSelection::ByCoverage(...)`
+lands as a new variant — non-breaking thanks to `#[non_exhaustive]`.
+
+---
+
+*Cross-references and the v5.5/v6 horizon section land in Phase 4.*
