@@ -30,7 +30,7 @@ Four themes make this work, in this order:
 
 | Theme | Title | Stories | Effort | Strict deps |
 |-------|-------|---------|--------|-------------|
-| **A** | **Foundation: Diagnostics + Test Speed** — IN PROGRESS (V5-FOUND-1 ✅ COMPLETE 2026-05-02; V5-FOUND-2 ✅ COMPLETE 2026-05-03; V5-FOUND-3..4 planned) | V5-FOUND-1..4 | ~3–5 weeks | S15 ships |
+| **A** | **Foundation: Diagnostics + Test Speed** — IN PROGRESS (V5-FOUND-1 ✅ COMPLETE 2026-05-02; V5-FOUND-2 ✅ COMPLETE 2026-05-03; V5-FOUND-3 ⏸ DEFERRED 2026-05-03 to v5.1/v6 — Windows coverage-toolchain gap, Phase 0 partial shipped at commit `39d7295`; V5-FOUND-4 planned) | V5-FOUND-1..4 | ~3–5 weeks | S15 ships |
 | **B** | **Three Modular Conversions** ✅ COMPLETE 2026-05-02 | V5-MOD-1..3 | ~4–6 weeks | Theme A |
 | **C** | **SDK Extraction** — IN PROGRESS (V5-SDK-1 ✅ COMPLETE 2026-05-03; V5-SDK-2 planned, scope reduced) | V5-SDK-1..2 | ~2–3 weeks | Theme B |
 | **D** | **Coherence + Docs** | V5-DOC-1..2 | ~2 weeks | Theme C |

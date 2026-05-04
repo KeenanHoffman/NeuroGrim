@@ -115,22 +115,42 @@
 
 ### V5-FOUND-3: Change-driven test selection (per-test coverage) (~5–7 days)
 
-**Status:** Planned
-**Effort:** L
-**Depends on:** V5-FOUND-2
-**Absorbs:** BACKLOG B-28 (Coverage-aware test selection — v4.x-deferred)
+**Status:** **⏸ DEFERRED 2026-05-03 to v5.1/v6** — Windows host coverage-toolchain gap. Phase 0 partial work shipped (commit `39d7295`); remainder pending operator-environment decision (install VS Build Tools / install `xwin` / pick up at v5.1 / push to v6). See § V5-FOUND-3 deferral note below.
+**Effort:** L (scope unchanged on re-entry; toolchain prereq added)
+**Depends on:** V5-FOUND-2 ✅, **+ working `cargo-llvm-cov` toolchain on the build host** (NEW — discovered 2026-05-03)
+**Absorbs:** BACKLOG B-28 (Coverage-aware test selection — v4.x-deferred) — *deferral propagates to B-28 (re-deferred 2026-05-03); flips back when V5-FOUND-3 unblocks*
 
-**What:** Add cargo-llvm-cov as opt-in build mode (`neurogrim test --instrument-coverage`). Capture per-test profile data; build a symbol→test map persisted at `.claude/brain/test-coverage-map.jsonl`. Add `neurogrim test --select-by-coverage --since <git-rev>` that runs only tests covering files changed since `<git-rev>`. This is the user's "LSP-brain blast radius" idea, scoped as a test-selection feature in v5; promotion to a Brain domain is v6 successor work (BACKLOG B-44).
+**What:** Add cargo-llvm-cov as opt-in build mode (`neurogrim test --instrument-coverage`). Capture **per-binary** profile data (per-test deferred to v6 / BACKLOG B-44 — see deferral note for plan-critic rationale); build a binary→source-files map persisted at `.claude/brain/test-coverage-map.jsonl`. Add `neurogrim test --select-by-coverage --since <git-rev>` that runs only the test binaries covering files changed since `<git-rev>`. This is the user's "LSP-brain blast radius" idea, scoped as a test-selection feature in v5; promotion to a Brain domain is v6 successor work (BACKLOG B-44).
 
-**Why:** Rerunning all 1,470 tests on every change is wasteful. Per-test coverage maps changes to test subsets — the equivalent of an LSP "find references" but for test coverage. Map first, score later. v5 ships the map and the selector; v6 may promote to a domain after the map proves predictive.
+**Why:** Rerunning all 1,670 tests on every change is wasteful. Coverage-driven binary selection narrows the run to the 1–3 binaries that exercise the changed files — the equivalent of an LSP "find references" but for test coverage. Map first, score later. v5 ships the map and the selector; v6 may promote to a domain after the map proves predictive.
 
 **Done when:**
-- [ ] Coverage build mode produces per-test profile data
-- [ ] Symbol→test map persisted as JSONL; `schema_version` stable
-- [ ] `neurogrim test --select-by-coverage --since HEAD~1` selects a strict subset for a single-file change AND that subset includes ≥1 test verified to cover the change
+- [ ] Coverage build mode produces per-binary profile data
+- [ ] Binary→source-files map persisted as JSONL; `schema_version` stable
+- [ ] `neurogrim test --select-by-coverage --since HEAD~1` selects a strict subset for a single-file change AND that subset includes ≥1 binary verified to cover the change
 - [ ] Documented opt-in; default `neurogrim test` does NOT incur instrumentation cost
-- [ ] Stale-map handling: file mtime + git revision keys; map invalidates on any covering-file change
+- [ ] Stale-map handling: file mtime + blake3 hybrid keys (mtime fast-trigger; blake3 confirms content actually changed); map invalidates on any covering-file change
+- [ ] Mutual-exclusion guards on `--instrument-coverage` / `--retry-failed` / `--select-by-coverage` (sysexits.h `EX_USAGE = 64` for invalid combos)
 - [ ] BACKLOG B-28 closed with pointer to V5-FOUND-3 on completion
+
+#### V5-FOUND-3 deferral note (2026-05-03)
+
+**What shipped (Phase 0 partial):**
+- Phase 0a: `llvm-tools-preview` rustup component installed (both GNU + MSVC toolchains).
+- Phase 0c: `build_cargo_args(args, retry_names)` extracted from `commands::test::run` as a single source of truth for cargo-nextest argv. **Bundled bug fix:** `neurogrim test --retry-failed --slow` was silently dropping `--include-ignored` because the retry branch hardcoded `-- --exact <names>` with no slot for libtest flags. After V5-FOUND-2 Phase 4 tagged 9 encrypted-secrets tests `#[ignore]`, anyone retrying a failed slow run would have lost those 9 tests from the replay. 6 new unit tests, all passing, including the regression `build_cargo_args_retry_and_slow_propagates_include_ignored`. Commit `39d7295`.
+
+**What blocked (Phase 0b smoke):**
+- Goal of Phase 0b: confirm `cargo llvm-cov nextest --no-report -p neurogrim-secrets` produces one `.profdata` per binary on this host (the foundation Phase 1+ would build on).
+- `stable-x86_64-pc-windows-gnu` (active default toolchain): `error[E0463]: can't find crate for 'profiler_builtins'`. The `.rlib` is not part of rustup's `rust-std` distribution for this triple. `-C instrument-coverage` cannot compile.
+- `stable-x86_64-pc-windows-msvc` (alternate toolchain): `libprofiler_builtins-*.rlib` present in sysroot, but `link.exe` not on PATH. No Visual Studio Build Tools installed on the host (`C:\Program Files (x86)\Microsoft Visual Studio\` contains only `Shared\`). `rust-lld.exe` and `lld-link.exe` are bundled with the toolchain but cannot link MSVC targets without the Microsoft CRT and Windows SDK `.lib` files.
+
+**Re-entry triggers (any one is sufficient):**
+1. Operator installs Visual Studio Build Tools (3–7 GB) — official, supported, unblocks immediately.
+2. Operator installs `xwin` (`cargo install xwin && xwin splat --output ~/.xwin`, ~300–500 MB) and configures `[target.x86_64-pc-windows-msvc]` linker + link-args in `.cargo/config.toml`. Lighter, reversible.
+3. v5.1 plans pick up the epic with the toolchain prereq documented up-front.
+4. v6 horizon takes it if v5.1 doesn't.
+
+**Plan record:** [`.claude/plans/v5-found-3-coverage-selection.md`](../../.claude/plans/v5-found-3-coverage-selection.md) — v2 plan with all 3 plan-critic 🔴 blockers absorbed (Fork B per-test→binary-level, mutual-exclusion guards added, exit-code semantics specified); 1 🟡→🟢 (mtime→mtime+blake3 hybrid); operator-pinned 6 forks (A1/B1'/C1/D2/E1/F1). Preserved verbatim for re-entry.
 
 ### V5-FOUND-4: TestRunner trait (minimal modular testing surface) (~2–3 days)
 

@@ -1664,6 +1664,8 @@ LLM-as-judge until explicitly justified otherwise.
 
 **Now planned as:** V5-FOUND-3 (Theme A epic `epics/v5-foundation.md`) — adversary-reviewed, scoped as a test-selection feature (NOT a Brain domain). Promotion to a Brain domain is tracked separately as B-44 (v6 horizon). When V5-FOUND-3 ships, this entry flips to `ABSORBED into V5-FOUND-3`.
 
+**Status update 2026-05-03 — RE-DEFERRED.** V5-FOUND-3 deferred to v5.1/v6 on a Windows host coverage-toolchain gap discovered during Phase 0b smoke: `stable-x86_64-pc-windows-gnu` lacks `profiler_builtins` (cannot compile `-C instrument-coverage`); `stable-x86_64-pc-windows-msvc` has it but lacks `link.exe` / Windows SDK / VC CRT `.lib` files (no Visual Studio Build Tools install on this host; `rust-lld.exe` is bundled but cannot link MSVC targets without the Microsoft `.lib` set). Phase 0 partial work — `build_cargo_args` extraction + `--retry-failed --slow` `--include-ignored` propagation bug fix + 6 unit tests — shipped at commit `39d7295`. Plan record preserved at `.claude/plans/v5-found-3-coverage-selection.md` for re-entry. Re-entry triggers: (a) operator installs Visual Studio Build Tools, (b) operator installs `xwin`, (c) v5.1 picks up the epic, (d) v6 horizon if v5.1 doesn't carry it. See `epics/v5-foundation.md` § "V5-FOUND-3 deferral note (2026-05-03)" for the full diagnosis.
+
 ---
 
 ### B-29: Cloud secret backends (Azure KV, GCP Secret Manager, AWS) — CANDIDATE (v4.x-deferred)
