@@ -62,6 +62,7 @@
 use anyhow::{Context, Result};
 use chrono::{SecondsFormat, Utc};
 use clap::Args as ClapArgs;
+use neurogrim_core::test_runner::{TestRunReport, TestRunner, TestSelection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
@@ -69,6 +70,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use uuid::Uuid;
+
+use super::test_runner_impls::nextest::NextestRunner;
 
 const SCHEMA_VERSION: &str = "1";
 const ARCHIVE_FILENAME: &str = "test-failures.archive.jsonl";
@@ -165,20 +168,25 @@ pub async fn run(args: Args) -> Result<()> {
     let ledger_path = ledger_path(project_root);
     let archive_path = project_root.join(".claude/brain").join(ARCHIVE_FILENAME);
 
-    // V5-FOUND-2 Phase 1 (2026-05-03): main path now invokes
+    // V5-FOUND-2 Phase 1 (2026-05-03): main path invokes
     // `cargo nextest run` instead of `cargo test`. The libtest path
     // remains accessible via `--verbose` (raw cargo passthrough).
     //
-    // Nextest invocation differences from the libtest path:
-    // - Subcommand `nextest run` instead of `test`
-    // - `--profile <name>` flag (configured at .config/nextest.toml)
-    // - `-- --exact <name>` retry pattern is libtest-compat (per V5-FOUND-2
-    //   plan Fork F1; nextest filterset DSL deferred to v5.5)
-    // - `--include-ignored` for `--slow` works via the same libtest-compat
-    //   `-- --include-ignored` arg passthrough
-    let cargo_args: Vec<String> = if args.retry_failed {
-        let to_retry = read_most_recent_run_failure_names(&ledger_path);
-        if to_retry.is_empty() {
+    // V5-FOUND-4 Phase 3 (2026-05-04): the cargo invocation + parse
+    // logic is now dispatched through `Box<dyn TestRunner>`
+    // (`NextestRunner` for the default `--runner=nextest` path; future
+    // v5.5 BACKLOG B-52 adds `--runner=` clap dispatch for additional
+    // runners). The wrapper still owns ledger envelope construction
+    // (run_id/ts/commit), `--show-only-new` filtering, summary
+    // print, ledger append, and exit-code dispatch — only the
+    // cargo+parse subset moves into the runner.
+    //
+    // Resolve the retry-failed name list once (used by --verbose +
+    // main paths). Empty-list early-exit lives here so --verbose
+    // also honors it.
+    let to_retry: Option<Vec<String>> = if args.retry_failed {
+        let names = read_most_recent_run_failure_names(&ledger_path);
+        if names.is_empty() {
             eprintln!(
                 "✦ neurogrim test --retry-failed: no failures in the ledger at {} — nothing to retry.",
                 ledger_path.display()
@@ -187,25 +195,29 @@ pub async fn run(args: Args) -> Result<()> {
         }
         eprintln!(
             "✦ neurogrim test --retry-failed: re-running {} prior failure(s)",
-            to_retry.len()
+            names.len()
         );
-        build_cargo_args(&args, Some(&to_retry))
+        Some(names)
     } else {
-        build_cargo_args(&args, None)
+        None
     };
 
     // V5-FOUND-1 Phase 3 step 2: wrap the main test path in a
     // `test.run` parent span; the cargo invocation is a child
-    // `cargo.invoke` span (same subprocess boundary, per plan-critic
-    // — cargo timing folds into test rather than being its own
-    // surface). Block scope so the spans drop and the diagnostics
-    // Layer's on_close fires BEFORE std::process::exit at the
-    // bottom (exit doesn't run drop). The --verbose / --e2e paths
-    // exit too quickly to instrument cleanly; their cargo invocation
+    // `cargo.invoke` span (now emitted by `NextestRunner::run`).
+    // Block scope so the spans drop and the diagnostics Layer's
+    // on_close fires BEFORE std::process::exit at the bottom (exit
+    // doesn't run drop). The --verbose / --e2e paths exit too
+    // quickly to instrument cleanly; --verbose's cargo invocation
     // gets a `cargo.invoke` span only.
 
     // If verbose, just exec cargo and bail — let cargo speak.
+    // --verbose stays inline (raw cargo passthrough; no output
+    // capture). Constructs cargo_args directly via build_cargo_args
+    // — bypasses the runner trait, since the trait's contract is
+    // captured-output-and-parse, not stream-and-exit.
     if args.verbose {
+        let cargo_args = build_cargo_args(&args, to_retry.as_deref());
         let status = {
             let cargo_span = tracing::info_span!(
                 "cargo.invoke",
@@ -223,9 +235,24 @@ pub async fn run(args: Args) -> Result<()> {
         std::process::exit(status.code().unwrap_or(1));
     }
 
-    // Main path: parent test.run span + child cargo.invoke span,
-    // both block-scoped so spans drop (and the Layer emits) before
-    // process::exit at the bottom of the function.
+    // Main path: dispatch through `Box<dyn TestRunner>` so the
+    // wrapper is independent of any specific runner impl. v5.0
+    // ships only NextestRunner; v5.5 BACKLOG B-52 adds the
+    // `--runner=` clap flag for runtime dispatch via the registry.
+    let selection = match to_retry {
+        None => TestSelection::All,
+        Some(names) => TestSelection::Names(names),
+    };
+    let runner: Box<dyn TestRunner> = Box::new(NextestRunner::new(
+        project_root.to_path_buf(),
+        args.profile.clone(),
+        args.slow,
+    ));
+
+    // Main path: parent test.run span; the runner emits a child
+    // cargo.invoke span internally (V5-FOUND-1 instrumentation
+    // pattern preserved). Block-scoped so spans drop before
+    // process::exit at the bottom.
     let test_run_span = tracing::info_span!(
         "test.run",
         test_count = tracing::field::Empty,
@@ -234,38 +261,18 @@ pub async fn run(args: Args) -> Result<()> {
     );
     let _test_entered = test_run_span.enter();
 
-    // Run cargo with output captured (child span).
     eprintln!("✦ neurogrim test — running workspace tests…");
-    let output = {
-        let cargo_span = tracing::info_span!(
-            "cargo.invoke",
-            cmd = "test",
-            exit_code = tracing::field::Empty,
-        );
-        let _ce = cargo_span.enter();
-        let o = Command::new("cargo")
-            .args(&cargo_args)
-            .output()
-            .with_context(|| "failed to spawn cargo")?;
-        cargo_span.record("exit_code", o.status.code().unwrap_or(-1) as i64);
-        o
-    };
+    let report: TestRunReport = runner.run(&selection).await?;
 
-    let stdout_text = String::from_utf8_lossy(&output.stdout);
-    let stderr_text = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{stdout_text}\n{stderr_text}");
-
-    // V5-FOUND-2 Phase 1: nextest stdout has a different shape from
-    // libtest's. The new parser handles `PASS/FAIL/FLAKY` lines,
-    // `--- STDERR/STDOUT:` failure detail blocks, and the `Summary`
-    // total line.
-    let parsed = parse_nextest_output(&combined);
-
-    // Build failure entries for this run.
+    // Build failure entries for this run. The existing FailureEntry
+    // schema is unchanged — we just read from `report.failures`
+    // (Vec<TestFailure>) instead of `parsed.failures` (Vec<ParsedFailure>).
+    // Field rename: `output_block` → `detail` (one is the parser-side
+    // name, the other is the trait-surface name; same string).
     let run_id = Uuid::new_v4().to_string();
     let ts = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let commit = current_git_rev(project_root);
-    let entries: Vec<FailureEntry> = parsed
+    let entries: Vec<FailureEntry> = report
         .failures
         .iter()
         .map(|f| FailureEntry {
@@ -275,7 +282,7 @@ pub async fn run(args: Args) -> Result<()> {
             test_name: f.test_name.clone(),
             binary: f.binary.clone(),
             outcome: "failed".to_string(),
-            output: f.output_block.clone(),
+            output: f.detail.clone(),
             commit: commit.clone(),
         })
         .collect();
@@ -292,7 +299,7 @@ pub async fn run(args: Args) -> Result<()> {
     };
 
     // Print operator-facing summary.
-    print_summary(&parsed, &to_print, args.show_only_new);
+    print_summary(&report, &to_print, args.show_only_new);
 
     // Persist failures to the ledger.
     if !entries.is_empty() {
@@ -306,15 +313,16 @@ pub async fn run(args: Args) -> Result<()> {
 
     // V5-FOUND-1 Phase 3 step 2: record final test counts before the
     // span drops. The Layer's on_close composes the entry from these.
-    test_run_span.record("test_count", parsed.total_tests as i64);
-    test_run_span.record("fail_count", parsed.total_failed as i64);
-    test_run_span.record("ignored_count", parsed.total_ignored as i64);
+    let total_tests = report.passed + report.failed + report.ignored;
+    test_run_span.record("test_count", total_tests as i64);
+    test_run_span.record("fail_count", report.failed as i64);
+    test_run_span.record("ignored_count", report.ignored as i64);
 
     // Capture exit code, then drop the entered guard + the span so
     // the Layer's on_close fires before std::process::exit (exit
     // does NOT run Drop, so without explicit drops here the span
     // would never close and no ledger entry would be written).
-    let exit_code = output.status.code().unwrap_or(1);
+    let exit_code = report.raw_exit_code;
     drop(_test_entered);
     drop(test_run_span);
     std::process::exit(exit_code);
@@ -893,14 +901,15 @@ fn strip_ansi(s: &str) -> String {
 }
 
 /// Print a tight summary to stderr.
-fn print_summary(parsed: &ParsedCargoOutput, to_print: &[&FailureEntry], show_only_new: bool) {
+fn print_summary(report: &TestRunReport, to_print: &[&FailureEntry], show_only_new: bool) {
     eprintln!();
+    let total = report.passed + report.failed + report.ignored;
     eprintln!(
         "✦ {} test(s) total · {} passed · {} failed · {} ignored",
-        parsed.total_tests, parsed.total_passed, parsed.total_failed, parsed.total_ignored
+        total, report.passed, report.failed, report.ignored
     );
 
-    if to_print.is_empty() && !parsed.failures.is_empty() && show_only_new {
+    if to_print.is_empty() && report.failed > 0 && show_only_new {
         eprintln!("  No NEW failures (all already in the previous run's batch).");
         return;
     }
