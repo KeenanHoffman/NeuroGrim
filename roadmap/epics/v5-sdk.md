@@ -114,26 +114,35 @@ V5-SDK-2's conformance fixture for `QueueBackend` should re-export `neurogrim_co
 
 ### V5-SDK-2: SDK conformance suites (distributed) (~3–5 days)
 
-**Status:** Planned (scope reduced after V5-SDK-1 close — 2026-05-03)
-**Effort:** S (reduced from initial estimate)
+**Status:** **◐ PARTIAL COMPLETE 2026-05-04** — feature-gate (deliverable 1) + walkthrough (deliverable 3) shipped via 6 phase commits (`bb09869`, `7bafe59`, `c410eb2`, `fa19288`, `c19f406`, plus this Phase 5 close-out). **TestRunner conformance suite (deliverable 2) gated on V5-FOUND-4 → V5-FOUND-3** (V5-FOUND-3 deferred 2026-05-03 to v5.1/v6 — Windows coverage-toolchain gap; see [`epics/v5-foundation.md`](v5-foundation.md) § "V5-FOUND-3 deferral note"). Originally Planned (scope reduced after V5-SDK-1 close — 2026-05-03).
+**Effort:** S — actual ~1 day (well under the 3–5 day estimate; plan-critic absorbed two rounds of consumer-set + dev-dep posture findings before any code changed).
 **Depends on:** V5-SDK-1
 
 **Scope-reduction note (2026-05-03):** V5-SDK-1 Fork C1 chose to re-export the conformance suites at v0.1.0 rather than defer to V5-SDK-2 — the 3 suites are reachable today as `neurogrim_sdk::{sensor_conformance, scoring_source_conformance, queue_backend_conformance}::run_factory_conformance`. The `compile_test_re_exports.rs` test verifies this. **What V5-SDK-2 still needs to deliver:**
-1. Optional `#[cfg(feature = "conformance")]` feature-gating to keep dev-deps (currently `tempfile`) out of production builds. Today the conformance modules are reachable unconditionally; consumers building without dev-tools may carry the dev-dep transitively.
-2. The `TestRunner` conformance suite (deferred per V5-SDK-1 Fork A1 + V5-FOUND-4 dependency).
-3. End-to-end documentation walkthrough lifting `examples/sensor-constant-score/tests/conformance.rs` verbatim into the SDK README's "writing a conformant Sensor" section. Currently the SDK README points consumers at the example crate; V5-SDK-2 inlines the walkthrough.
+1. Optional `#[cfg(feature = "conformance")]` feature-gating to keep dev-deps (currently `tokio` — promoted from dev-dep to runtime at V5-MOD-1 Phase 5 because the conformance suite uses `tokio::spawn` + `tokio::time::timeout` in its public API) out of production builds. Today the conformance modules are reachable unconditionally; consumers building without dev-tools may carry the dev-dep transitively. **SHIPPED 2026-05-04** (V5-SDK-2 partial Phases 1–3, commits `7bafe59`, `c410eb2`, `fa19288`).
+2. The `TestRunner` conformance suite (deferred per V5-SDK-1 Fork A1 + V5-FOUND-4 dependency). **STILL DEFERRED** — V5-FOUND-4 is gated on V5-FOUND-3 (deferred 2026-05-03 — Windows coverage-toolchain gap).
+3. End-to-end documentation walkthrough lifting `examples/sensor-constant-score/tests/conformance.rs` verbatim into the SDK README's "writing a conformant Sensor" section. Currently the SDK README points consumers at the example crate; V5-SDK-2 inlines the walkthrough. **SHIPPED 2026-05-04** (V5-SDK-2 partial Phase 4, commit `c19f406`).
 
 **What:** Originally — promote per-trait conformance suites from Theme B epics into the SDK crate as `#[cfg(feature = "conformance")]` test fixtures. **Revised** — feature-gate the already-shipped re-exports, add the missing `TestRunner` suite when V5-FOUND-4 lands, inline the walkthrough docs. Most of the "conformance fixtures distributed" Done-When was satisfied by V5-SDK-1.
 
-**Why:** "Modular middleware ships degraded" — the adversary concern that alternate impls are 80% feature-complete. Conformance suites distributed via SDK make "passes the same tests as built-ins" a checkable claim. Lifts third-party module quality bar to match in-tree. V5-SDK-2 closes the remaining gaps.
+**Why:** "Modular middleware ships degraded" — the adversary concern that alternate impls are 80% feature-complete. Conformance suites distributed via SDK make "passes the same tests as built-ins" a checkable claim. Lifts third-party module quality bar to match in-tree. V5-SDK-2 partial closes deliverables 1 + 3; deliverable 2 (TestRunner) remains for v5.1/v6 once V5-FOUND-3/4 unblocks.
 
 **Done when:**
-- [x] Conformance fixtures exposed for: `Sensor` (10 tests), `ScoringSource` (≥8 tests), `QueueBackend` (12 tests) — *shipped at V5-SDK-1 (commit `ed014d0`)*; `TestRunner` deferred to V5-FOUND-4.
-- [ ] All fixtures include negative-path tests (malformed input, panic recovery, timeout) — already true for the 3 shipped suites; verify when `TestRunner` lands
-- [ ] Documented: how a third-party crate runs the conformance suite against its own impls — `cargo test --features conformance` recipe in SDK docs
-- [ ] CI in this repo runs every built-in impl against its conformance suite (gates regression) — *shipped via existing `cargo test --workspace` job (V5-MOD-1/2/3 conformance suites included)*
-- [ ] `neurogrim-sdk` README has a "writing a conformant Sensor" walkthrough — *partial; lib.rs rustdoc has it as of Phase 3 commit `1a3fcda`; README cross-references the example crate. Inline the full walkthrough at V5-SDK-2.*
-- [ ] Conformance modules feature-gated behind `#[cfg(feature = "conformance")]` (NEW — closes the dev-dep-pollution concern)
+- [x] Conformance fixtures exposed for: `Sensor` (10 tests), `ScoringSource` (≥8 tests), `QueueBackend` (12 tests) — *shipped at V5-SDK-1 (commit `ed014d0`)*; `TestRunner` deferred to V5-FOUND-4 → V5-FOUND-3 (V5-FOUND-3 deferred 2026-05-03).
+- [x] All fixtures include negative-path tests (malformed input, panic recovery, timeout) — true for the 3 shipped suites (verified 2026-05-04 via `cargo nextest run --workspace`); `TestRunner` will verify when it lands.
+- [x] Documented: how a third-party crate runs the conformance suite against its own impls — `cargo test --features conformance` recipe in SDK docs (lib.rs rustdoc + README inlined walkthrough — V5-SDK-2 partial Phase 4 commit `c19f406`).
+- [x] CI in this repo runs every built-in impl against its conformance suite (gates regression) — *shipped via existing `cargo test --workspace` job + V5-SDK-2 partial Phase 3 dev-dep posture (commits `fa19288`)* — `cargo nextest run --workspace --profile ci` exercises 6 consumer paths' conformance integration tests.
+- [x] `neurogrim-sdk` README has a "writing a conformant Sensor" walkthrough — *V5-SDK-2 partial Phase 4 commit `c19f406` inlined the lib.rs walkthrough verbatim into README between Quick start and Conformance.*
+- [x] Conformance modules feature-gated behind `#[cfg(feature = "conformance")]` (NEW — closes the dev-dep-pollution concern) — *V5-SDK-2 partial Phases 1+2 (commits `7bafe59`, `c410eb2`).*
+- [ ] **TestRunner conformance suite** — gated on V5-FOUND-4 → V5-FOUND-3 (V5-FOUND-3 deferred 2026-05-03 to v5.1/v6 — Windows coverage-toolchain gap). Status carried forward unchanged.
+
+**V5-SDK-2 partial retrospective (2026-05-04):**
+
+- **Plan record:** [`.claude/plans/v5-sdk-2-partial.md`](../../.claude/plans/v5-sdk-2-partial.md) — v3 plan, two plan-critic rounds, all 3 🔴 blockers absorbed (consumer-set extends to neurogrim-sensory + neurogrim-ecosystem; 3 of 4 examples depend on neurogrim-core not neurogrim-sdk; 7th consumer is the SDK's own `compile_test_re_exports.rs:48-65`).
+- **Forks pinned:** A1 (feature name `conformance`) / B1 (default OFF — VISION proposed-#20) / C1 (no change to `tempfile`) / D2 (`[dev-dependencies]` posture, default flipped from D1 post-plan-critic) / F1 (Sensor walkthrough only; ScoringSource + QueueBackend stay rustdoc-only with brief README pointers — explicit scope-reduction tension documented). Fork E dropped from v1 (surface-assertion has zero conformance pins today).
+- **Plan deviations:** none. Plan v3 absorbed all plan-critic findings before implementation; phases ran clean.
+- **Outcome:** production `cargo build --workspace` is now tokio-free for crates that don't carry tokio for other reasons; CI's `cargo nextest run` continues to exercise every conformance test through `[dev-dependencies]` activation. README adopters get the full Sensor pattern inlined; ScoringSource + QueueBackend walkthroughs reachable via `cargo doc` / docs.rs.
+- **What's NOT done that the original V5-SDK-2 epic called for:** TestRunner conformance suite (deliverable 2). Gated on V5-FOUND-4 → V5-FOUND-3 deferral chain. v5.1 + v6 successor pipelines carry the work.
 
 ---
 

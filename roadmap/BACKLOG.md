@@ -2001,6 +2001,40 @@ Investigate-band test (1, comment-only — not tagged):
 
 ---
 
+### B-49: V5.5-SDK-SURFACE-CONFORMANCE-PINS — Add conformance-suite pins to `tests/sdk_surface_assertion.rs` (feature-gated) — CANDIDATE (v5.5 horizon)
+
+**Problem.** V5-SDK-1 Phase 4 shipped `crates/neurogrim-sdk/tests/sdk_surface_assertion.rs` as the compile-test gate that pins every re-exported trait method's signature mechanically (Option B per V5-SDK-1 Fork C, after `cargo-semver-checks` proved structurally blind to pure re-exports per rust#94338). The current file pins five trait surfaces (`Sensor`, `ScoringSource`, `QueueBackend`, `Transport`, `SecretBackend`) but **does NOT pin any of the conformance functions** — `run_factory_conformance` for any of the three suites, nor the `ConformanceReport` / `TestResult` types. After V5-SDK-2 partial Phase 2 gated those modules behind `#[cfg(feature = "conformance")]`, the gap is now feature-aware: a regression in any conformance method's signature compiles silently as long as the consumers happen not to use the changed signature. Plan-critic v2 caught the gap during V5-SDK-2 partial review (2026-05-03).
+
+**Plan when:**
+1. AND: V5-SDK-2 partial PARTIAL COMPLETE — pins live alongside the existing surface-assertion pins, gated by `#[cfg(feature = "conformance")] mod conformance_surface { ... }`. **MET 2026-05-04.**
+2. AND: Operator authorizes the small expansion (likely 50–100 lines of additional pin functions across the four conformance modules).
+3. NOT BEFORE: V5-SDK-2 partial ships (avoid scope-creep during the partial).
+
+**Dependencies.** V5-SDK-2 partial complete (Phase 2 feature-gating in particular).
+
+**Adversarial note.** Adding pins requires the operator to remember to extend `sdk_surface_assertion.rs` whenever a new conformance public-API item lands. B-46's "v5.5 lint that compares re-export count to pin count" would catch this drift mechanically; until B-46 lands, manual review is the load-bearing layer. Conformance pins should follow the same `pin_<method>(...)` pattern as the existing trait surface pins.
+
+**Cross-references.** `crates/neurogrim-sdk/tests/sdk_surface_assertion.rs`; `crates/neurogrim-sdk/SEMVER-OVERRIDE.md`; B-46 (re-export-aware semver gate); V5-SDK-2 partial plan-critic v2 finding C2.
+
+---
+
+### B-50: V5.5-SDK-DOC-INCLUDE — Deduplicate Sensor walkthrough between lib.rs rustdoc and README via `#![doc = include_str!]` — CANDIDATE (v5.5 horizon)
+
+**Problem.** V5-SDK-2 partial Phase 4 inlined the writing-a-conformant-Sensor walkthrough into `crates/neurogrim-sdk/README.md` so adopters reading the SDK on crates.io get the full pattern without needing the source repo. The same walkthrough also lives at `crates/neurogrim-sdk/src/lib.rs:55–161` as the canonical rustdoc surface (visible via `cargo doc` / docs.rs). Two copies will drift over time.
+
+**Plan when:**
+1. AND: rustdoc supports `#![doc = include_str!("../README.md")]` cleanly across feature gates (today the README lives outside the SDK's `src/` directory; the include_str pattern works but introduces challenges if the README contains rustdoc-incompatible markdown extensions, intra-doc-link syntax, or feature-gated sections).
+2. AND: Operator decides between (a) lib.rs canonical with README a stripped subset auto-generated from lib.rs, or (b) README canonical with lib.rs `#![doc = include_str!]`-ing the README. (b) is the standard Rust-ecosystem pattern.
+3. NOT BEFORE: V5-SDK-2 partial PARTIAL COMPLETE. **MET 2026-05-04.**
+
+**Dependencies.** V5-SDK-2 partial complete; rustdoc cross-feature support for include_str.
+
+**Adversarial note.** Drift detection cheap-fix: a CI test that diffs the lib.rs walkthrough section against the README walkthrough section, failing if they diverge. Cheaper than the include_str rewrite for v5.5.
+
+**Cross-references.** `crates/neurogrim-sdk/src/lib.rs:55–161` (lib.rs walkthrough); `crates/neurogrim-sdk/README.md` § "Writing a conformant Sensor" (README walkthrough); V5-SDK-2 partial plan v3 § Risks ("Two README walkthroughs drift over time").
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).
