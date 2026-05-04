@@ -37,6 +37,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct SkillCoherenceServer {
+    // rmcp #[tool_router] macro accesses this through generated dispatch — rustc can't see the uses
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 

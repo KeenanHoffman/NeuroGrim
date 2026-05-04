@@ -1,3 +1,7 @@
+// shared test helpers; each integration-test binary only consumes a subset,
+// so rustc reports unused-from-this-binary warnings — silence at module level.
+#![allow(dead_code)]
+
 //! Shared helpers for `neurogrim-sensory` integration tests.
 //!
 //! Rust compiles each `.rs` file directly under `tests/` as a separate

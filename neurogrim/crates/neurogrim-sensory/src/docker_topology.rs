@@ -52,6 +52,8 @@ const MAX_LOG_TAIL: u32 = 1000;
 
 #[derive(Debug, Clone)]
 pub struct DockerTopologyServer {
+    // rmcp #[tool_router] macro accesses this through generated dispatch — rustc can't see the uses
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 
