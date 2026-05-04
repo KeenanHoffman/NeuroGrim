@@ -135,6 +135,15 @@ pub mod scoring_source;
 #[cfg(feature = "conformance")]
 pub mod scoring_source_conformance;
 pub mod scoring_sources;
+// V5-FOUND-4 Phase 1 (2026-05-04) — pluggable test-runner trait
+// + types + registry. Always-on (the trait surface is a stable
+// contract); the conformance suite below is feature-gated.
+pub mod test_runner;
+// V5-FOUND-4 Phase 1 (2026-05-04) — feature-gated test-runner
+// conformance suite. 4 cross-cutting tests; uses
+// `tokio::time::timeout`.
+#[cfg(feature = "conformance")]
+pub mod test_runner_conformance;
 // V5-MOD-2 Phase 1 (2026-05-02) — `Sensor` trait + `SensorFactory`
 // + `SensorRegistry` for the pluggable sensor dispatch. Replaces
 // the 21-arm string match in `neurogrim-cli/src/main.rs:599-622`
