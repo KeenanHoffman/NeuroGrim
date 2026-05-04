@@ -2079,6 +2079,31 @@ Investigate-band test (1, comment-only — not tagged):
 
 ---
 
+### B-53: V5.5-DOC-TERMINOLOGY-CMDB — Sensory tool + CMDB for the `terminology-coherence` advisory domain — CANDIDATE (v5.5 horizon)
+
+**Problem.** The ecosystem Brain's `terminology-coherence` advisory domain is registered at `D:\Brains\.claude\brain-registry.json:268-272` with `scoring_source.path = ".claude/terminology-coherence-cmdb.json"` (a **CMDB** — sensory-tool output following the cmdb-envelope-v1 schema), but no sensory tool currently emits that CMDB. The domain runs at advisory weight 0.0 and falls back to no-file behavior, so it's structurally registered but functionally inert. V5-DOC-2's epic Done-When called for "`terminology-coherence` advisory domain still passes (SDK / module / plugin / sensor / scoring source terms catalogued in `.claude/terminology-catalog.json`)" — but the domain expects a CMDB, not a free-form catalog, and creating any file at v5 without a sensory tool to maintain it is drift bait. v5.5 ships the sensory tool + CMDB shape together so the advisory domain becomes load-bearing.
+
+**Plan when:**
+1. AND: V5-DOC-2 ✅ COMPLETE — adds VISION principle #20 + spec §9.8 trait-surface recommendation + the v5 vocabulary that needs cataloguing. **MET 2026-05-04.**
+2. AND: Operator decides the `terminology-coherence` advisory domain should advance from weight 0.0 (purely advisory) to a real signal — concrete trigger: terminology drift surfaces in adopter feedback or an internal review.
+3. NOT BEFORE: at least one v5 vocabulary review (e.g., during V5-DOC-2 retrospective) reveals that the v5 terms (SDK / module / plugin / sensor / scoring source / TestRunner / queue backend / Transport / SecretBackend / factory / registry / conformance) need a single index file readers can grep. Until then, the V5-DOC-1 composition guide's recipe-by-recipe definitions + the SDK README's surface-by-surface definitions cover most adopter needs.
+
+**What V5.5-DOC-TERMINOLOGY-CMDB would deliver:**
+
+1. A new sensory tool (`neurogrim cast terminology-coherence`) that scans the v5 vocabulary across docs/spec/code, identifies drift (e.g., "module" used inconsistently between `roadmap/v5-roadmap.md` and `crates/neurogrim-sdk/README.md`), and emits a cmdb-envelope-v1-shaped CMDB with `score`, `findings`, `meta`, RFC3339 timestamps.
+2. The CMDB lands at `.claude/terminology-coherence-cmdb.json` (matching the registered path).
+3. The sensory tool ships in `neurogrim-sensory` as `terminology_coherence`, gated by the `sensor-terminology-coherence` cargo feature (mirroring the per-sensor feature pattern from V5-MOD-2 Phase 4).
+4. A `.claude/terminology-vocabulary.toml` (or similar) declares the canonical v5 vocabulary the sensor checks against — separate from the CMDB output (which is the sensor's findings).
+5. Conformance test against `terminology_coherence_factory_passes_full_conformance_suite` (V5-FOUND-4 trait-runner pattern).
+
+**Dependencies.** V5-DOC-2 ✅ (provides the v5 vocabulary set + principle #20). V5-MOD-2 ✅ (provides the Sensor trait + per-sensor feature gating pattern).
+
+**Adversarial note.** A vocabulary CMDB is straightforward to author but hard to keep meaningfully load-bearing — most "terminology drift" is editorial preference, not contract drift. The sensor needs a sharp definition of what counts as a finding (e.g., "term used in normative spec context with a meaning incompatible with its glossary definition") vs. what's editorial (e.g., "module" capitalization). Plan-critic before implementation should pin Fork {strict / lenient / hybrid} on the finding-definition shape, OR defer V5.5-DOC-TERMINOLOGY-CMDB to v6 if the v5.5 review concludes terminology drift isn't a real adopter pain point.
+
+**Cross-references.** V5-DOC-2 plan: `.claude/plans/v5-doc-2-vision-spec-alignment.md` § Phase 4 (Fork D2 default — defer to this BACKLOG entry); registered domain path: `D:\Brains\.claude\brain-registry.json:268-272`; cmdb-envelope-v1 schema: `D:\Brains\NeuroGrim\neurogrim\crates\neurogrim-core\data\schemas\cmdb-envelope-v1.schema.json`.
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).
