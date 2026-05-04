@@ -25,6 +25,7 @@
 //! | [`ScoringSource`] | [`ScoringSourceFactory`] | [`ScoringSourceRegistry`] | V5-MOD-1 |
 //! | [`Sensor`] | [`SensorFactory`] | [`SensorRegistry`] | V5-MOD-2 |
 //! | [`QueueBackend`] | [`QueueBackendFactory`] | [`QueueBackendRegistry`] | V5-MOD-3 |
+//! | [`TestRunner`] | [`TestRunnerFactory`] | [`TestRunnerRegistry`] | V5-FOUND-4 |
 //! | [`Transport`] | (none — directly registered) | (none) | v3.x A2A |
 //! | [`SecretBackend`] | (none — directly registered) | (none) | v4.2 S14 |
 //!
@@ -50,11 +51,12 @@
 //! - [`scoring_source_conformance`]
 //! - [`sensor_conformance`]
 //! - [`queue_backend_conformance`]
+//! - [`test_runner_conformance`] (V5-FOUND-4 / V5-SDK-2 close-out — 4-test suite)
 //!
-//! All three suites share the [`conformance::ConformanceReport`] +
+//! All four suites share the [`conformance::ConformanceReport`] +
 //! [`conformance::TestResult`] types (V5-SDK-1 Phase 1.5 hoist —
 //! consumers writing multiple plugin types see a single nominal
-//! `ConformanceReport`, not three structurally-identical-but-
+//! `ConformanceReport`, not four structurally-identical-but-
 //! incompatible copies).
 //!
 //! ## Authoring guides
@@ -313,9 +315,13 @@
 //!   shape): bound to the registry schema, can drift independently
 //!   of the trait. SDK consumers depend on the trait's *behavior*,
 //!   not the config's serde layout.
-//! - **`TestRunner` (V5-FOUND-4):** unshipped at V5-SDK-1 release.
-//!   Will be added as a pure additive minor bump (`0.2.0`) when
-//!   V5-FOUND-4 lands.
+//! - **`TestRunner` (V5-FOUND-4):** shipped at V5-FOUND-4 close-out
+//!   (2026-05-04). Pluggable contract for executing a workspace
+//!   test selection; see [`TestRunner`] / [`TestRunnerFactory`] /
+//!   [`TestRunnerRegistry`] above. v5.0 ships one impl
+//!   (`NextestRunner` in `neurogrim-cli`); AgentDrivenRunner is
+//!   deferred to v5.5 (BACKLOG B-51) once a Rust-side LLM client
+//!   lands.
 //!
 //! ## Hello-world example
 //!
@@ -357,6 +363,17 @@ pub use neurogrim_core::queue_backend::StoredMessage;
 /// registry.register_all(queue_built_in_factories());
 /// ```
 pub use neurogrim_core::queue_backend::built_in_factories as queue_built_in_factories;
+
+// ────────────────────────────────────────────────────────────────
+// Test runner trait surface — V5-FOUND-4 / V5-SDK-2 close-out
+// ────────────────────────────────────────────────────────────────
+
+pub use neurogrim_core::test_runner::TestFailure;
+pub use neurogrim_core::test_runner::TestRunReport;
+pub use neurogrim_core::test_runner::TestRunner;
+pub use neurogrim_core::test_runner::TestRunnerFactory;
+pub use neurogrim_core::test_runner::TestRunnerRegistry;
+pub use neurogrim_core::test_runner::TestSelection;
 
 // ────────────────────────────────────────────────────────────────
 // Adjacent stable trait surfaces — A2A + secrets
@@ -405,16 +422,32 @@ pub mod queue_backend_conformance {
     pub use neurogrim_core::queue_backend_conformance::*;
 }
 
+/// V5-FOUND-4 conformance suite for [`TestRunner`] impls.
+///
+/// Reference test pattern: a third-party `TestRunner` author
+/// writes `tests/conformance.rs` in their crate that calls
+/// [`test_runner_conformance::run_factory_conformance`] against
+/// their factory. The 4-test suite verifies factory contract +
+/// no-panic on malformed selection. See
+/// `neurogrim-core/src/test_runner_conformance.rs` rustdoc for
+/// the full contract details.
+///
+/// V5-FOUND-4 (2026-05-04) — feature-gated.
+#[cfg(feature = "conformance")]
+pub mod test_runner_conformance {
+    pub use neurogrim_core::test_runner_conformance::*;
+}
+
 /// Shared conformance types (V5-SDK-1 Phase 1.5 hoist — Fork F1).
 ///
-/// All three V5-MOD-1/2/3 conformance suites use these single
-/// nominal types. Consumers writing multiple plugin types
-/// (e.g., a sensor + a queue backend) get one
-/// `ConformanceReport` across all suites, not three
+/// All four V5-MOD-1/2/3/V5-FOUND-4 conformance suites use these
+/// single nominal types. Consumers writing multiple plugin types
+/// (e.g., a sensor + a queue backend + a test runner) get one
+/// `ConformanceReport` across all suites, not four
 /// structurally-identical-but-incompatible copies.
 ///
 /// V5-SDK-2 partial Phase 2 (2026-05-04) — feature-gated alongside
-/// the three suite modules; `ConformanceReport` + `TestResult` are
+/// the four suite modules; `ConformanceReport` + `TestResult` are
 /// only useful in conjunction with one of the suites.
 #[cfg(feature = "conformance")]
 pub mod conformance {

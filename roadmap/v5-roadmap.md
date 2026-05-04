@@ -32,7 +32,7 @@ Four themes make this work, in this order:
 |-------|-------|---------|--------|-------------|
 | **A** | **Foundation: Diagnostics + Test Speed** — IN PROGRESS (V5-FOUND-1 ✅ COMPLETE 2026-05-02; V5-FOUND-2 ✅ COMPLETE 2026-05-03; V5-FOUND-3 ⏸ DEFERRED 2026-05-03 to v5.1/v6 — Windows coverage-toolchain gap, Phase 0 partial shipped at commit `39d7295`; V5-FOUND-4 planned) | V5-FOUND-1..4 | ~3–5 weeks | S15 ships |
 | **B** | **Three Modular Conversions** ✅ COMPLETE 2026-05-02 | V5-MOD-1..3 | ~4–6 weeks | Theme A |
-| **C** | **SDK Extraction** — IN PROGRESS (V5-SDK-1 ✅ COMPLETE 2026-05-03; V5-SDK-2 ◐ PARTIAL COMPLETE 2026-05-04 — feature-gate + walkthrough shipped; TestRunner suite gated on V5-FOUND-4 → V5-FOUND-3 deferral chain) | V5-SDK-1..2 | ~2–3 weeks | Theme B |
+| **C** | **SDK Extraction** ✅ COMPLETE 2026-05-04 (V5-SDK-1 ✅ COMPLETE 2026-05-03; V5-SDK-2 ✅ COMPLETE 2026-05-04 — TestRunner conformance suite closure via V5-FOUND-4 lifted V5-SDK-2 from PARTIAL to COMPLETE) | V5-SDK-1..2 | ~2–3 weeks | Theme B |
 | **D** | **Coherence + Docs** | V5-DOC-1..2 | ~2 weeks | Theme C |
 
 Theme order is firm; intra-theme epic order is firm. The pre-plan default was "concurrent v4.x + v5 work is not pursued" because Stage 15 changes UI surfaces v5 might re-touch — the operator **explicitly waived this default on 2026-05-01** to begin V5-FOUND-1 (Diagnostic Monitor) concurrently with in-flight S15 / S16 work. V5-FOUND-1 is the safest concurrent epic because it adds tracing instrumentation (additive — does not modify scoring or UI surfaces). Theme B (modular conversions) remains gated on Theme A close + a re-check of the concurrent-work risk before V5-MOD-1's perf-gate runs.

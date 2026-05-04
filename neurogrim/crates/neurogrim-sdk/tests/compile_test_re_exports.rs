@@ -24,6 +24,23 @@ fn theme_b_traits_are_object_safe_via_sdk() {
 }
 
 #[test]
+fn test_runner_trait_is_object_safe_via_sdk() {
+    // V5-FOUND-4: `TestRunner` object-safety reachable through the
+    // SDK path (the contract crate's promise). The wrapper at
+    // `neurogrim-cli`'s `commands::test::run` dispatches through
+    // exactly this `Box<dyn TestRunner>` shape (Phase 3 wiring).
+    fn _test_runner(_: Box<dyn TestRunner>) {}
+    fn _test_runner_factory(_: Box<dyn TestRunnerFactory>) {}
+    let _: TestRunnerRegistry = TestRunnerRegistry::new();
+    let _ = (_test_runner, _test_runner_factory);
+    // Type-construct the non_exhaustive enum + struct via Default
+    // (the only construction path available outside neurogrim-core).
+    let _: TestSelection = TestSelection::All;
+    let _: TestRunReport = TestRunReport::default();
+    let _: TestFailure = TestFailure::default();
+}
+
+#[test]
 fn adjacent_stable_traits_reachable() {
     fn _transport(_: Box<dyn Transport>) {}
     fn _secret_backend(_: Box<dyn SecretBackend>) {}

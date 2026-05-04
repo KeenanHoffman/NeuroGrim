@@ -75,7 +75,8 @@ use std::sync::Arc;
 
 use neurogrim_sdk::{
     QueueBackend, QueueBackendFactory, QueueMessage, ScoringSource, ScoringSourceFactory,
-    SecretBackend, Sensor, SensorFactory, StoredMessage, Transport,
+    SecretBackend, Sensor, SensorFactory, StoredMessage, TestRunReport, TestRunner,
+    TestRunnerFactory, TestSelection, Transport,
 };
 
 // ── Sensor (V5-MOD-2) ────────────────────────────────────────────────
@@ -264,6 +265,25 @@ fn _pin_secret_backend_delete<B: SecretBackend + ?Sized>(
 fn _pin_secret_backend_list<B: SecretBackend + ?Sized>(b: &B, brain_id: &str) {
     let _: Result<Vec<neurogrim_secrets::SecretMetadata>, neurogrim_secrets::SecretError> =
         b.list(brain_id);
+}
+
+// ── TestRunner (V5-FOUND-4) ──────────────────────────────────────────
+
+/// Pins `TestRunner::run(&self, selection: &TestSelection) ->
+/// anyhow::Result<TestRunReport>`. Async via `#[async_trait]`;
+/// the `.await` enforces the future's output type.
+async fn _pin_test_runner_run<R: TestRunner + ?Sized>(r: &R, selection: &TestSelection) {
+    let _: anyhow::Result<TestRunReport> = r.run(selection).await;
+}
+
+/// Pins `TestRunnerFactory::name(&self) -> &'static str`.
+fn _pin_test_runner_factory_name<F: TestRunnerFactory + ?Sized>(f: &F) {
+    let _: &'static str = f.name();
+}
+
+/// Pins `TestRunnerFactory::build(&self) -> Box<dyn TestRunner>`.
+fn _pin_test_runner_factory_build<F: TestRunnerFactory + ?Sized>(f: &F) {
+    let _: Box<dyn TestRunner> = f.build();
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
