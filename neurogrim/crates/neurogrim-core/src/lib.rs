@@ -97,6 +97,12 @@ pub mod calibration_ledger;
 // of these types. Hoisted here before SDK 0.1.0 ships so
 // consumers writing multiple plugin types share a single nominal
 // `ConformanceReport` across all suites.
+//
+// V5-SDK-2 partial Phase 1 (2026-05-03) — gated behind the
+// `conformance` feature alongside the three suite modules. The
+// shared `ConformanceReport` + `TestResult` types are only useful
+// in conjunction with one of the suites, so they share the gate.
+#[cfg(feature = "conformance")]
 pub mod conformance;
 pub mod confidence;
 pub mod correlation;
@@ -114,6 +120,9 @@ pub mod queue_backend;
 // (factory contract, append/read round-trip, concurrent appends,
 // ack semantics, Send+Sync runtime check). Mirrors V5-MOD-1's
 // `scoring_source_conformance` and V5-MOD-2's `sensor_conformance`.
+//
+// V5-SDK-2 partial Phase 1 (2026-05-03) — feature-gated.
+#[cfg(feature = "conformance")]
 pub mod queue_backend_conformance;
 pub mod queue_config;
 pub mod registry;
@@ -121,6 +130,9 @@ pub mod registry;
 pub mod skill_invocations;
 pub mod scoring;
 pub mod scoring_source;
+// V5-SDK-2 partial Phase 1 (2026-05-03) — feature-gated; the
+// suite uses `tokio::spawn` + `tokio::time::timeout`.
+#[cfg(feature = "conformance")]
 pub mod scoring_source_conformance;
 pub mod scoring_sources;
 // V5-MOD-2 Phase 1 (2026-05-02) — `Sensor` trait + `SensorFactory`
@@ -134,6 +146,9 @@ pub mod sensor;
 // (factory contract, async safety, CMDB envelope shape, score
 // range, meta block well-formedness, timeout, idempotency).
 // Mirrors V5-MOD-1's `scoring_source_conformance` pattern.
+//
+// V5-SDK-2 partial Phase 1 (2026-05-03) — feature-gated.
+#[cfg(feature = "conformance")]
 pub mod sensor_conformance;
 pub mod trajectory;
 pub mod types;

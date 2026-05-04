@@ -41,7 +41,15 @@ async-trait = { workspace = true }
 # `tokio::spawn` + `tokio::time::timeout` in its public API
 # (the conformance suite that third-party ScoringSource impls
 # call to verify they honor the contract).
-tokio = { workspace = true }
+#
+# V5-SDK-2 partial Phase 1 (2026-05-03) — gated behind the
+# `conformance` feature so consumers that don't use the
+# conformance suite don't pay tokio's compile + binary cost.
+# Test-time `#[tokio::test]` capability is restored via the
+# `[dev-dependencies]` entry below; the runtime `tokio::spawn`
+# + `tokio::time::timeout` reach through `dep:tokio` is only
+# active when `--features conformance` is on.
+tokio = { workspace = true, optional = true }
 # v3.5.0 ports module — random pick from IANA dynamic range with
 # deterministic-seeded test path. 0.8.x for SeedableRng::from_entropy.
 rand = { workspace = true }
@@ -62,16 +70,37 @@ default = []
 # default in neurogrim-cli + neurogrim-dashboard so the operator-
 # facing surfaces always have it.
 sqlite = ["dep:rusqlite"]
+# V5-SDK-2 partial Phase 1 (2026-05-03) — gates the four
+# conformance modules (`scoring_source_conformance`,
+# `sensor_conformance`, `queue_backend_conformance`, and the
+# shared `conformance` types module) behind a feature so
+# production consumers that don't run the conformance suite
+# don't carry tokio transitively. Activates `dep:tokio` for
+# the runtime `tokio::spawn` + `tokio::time::timeout` calls
+# inside the suite. Workspace consumers (sensory, ecosystem,
+# 4 example crates, neurogrim-sdk's own integration test) opt
+# in via `[dev-dependencies] features = ["conformance"]` so
+# the workspace test build activates the gate while
+# `cargo build --workspace` stays feature-clean.
+conformance = ["dep:tokio"]
 
 [dev-dependencies]
 proptest = { workspace = true }
 # V5-MOD-1 Phase 1 (2026-05-02) — `#[tokio::test]` for the
 # `Box<dyn ScoringSource>` async-dispatch validation in
 # `scoring_source::tests`. Phase 2 + Phase 5 (conformance suite)
-# rely on this too. Note: tokio also appears in [dependencies]
-# above (Phase 5 promotion) — `cargo` correctly merges; this
-# dev-dep entry is harmless redundancy that documents the
-# test-only origin of the inclusion.
+# rely on this too.
+#
+# V5-SDK-2 partial Phase 1 (2026-05-03) — restored explicitly to
+# `[dev-dependencies]` because the runtime `tokio` was moved to
+# `optional = true` in `[dependencies]` above. Without this entry,
+# `#[tokio::test]` modules in `scoring_source.rs::tests` and the
+# three `*_conformance.rs::tests` modules fail to compile under
+# `cargo build -p neurogrim-core --tests --no-default-features`.
+# Cargo merges this with the optional runtime entry; under
+# `--no-default-features --tests`, only this dev-dep is active
+# (gives the macros + multi-threaded runtime test infrastructure).
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 # E-B2-2 C3: tempfile-backed integration tests for the
 # calibration-ledger writer (atomic write + read roundtrip,
 # malformed-line skip, fold-reconstruct). Same posture as
