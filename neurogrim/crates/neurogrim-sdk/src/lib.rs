@@ -79,6 +79,14 @@
 //! anyhow = "1"
 //! serde_json = "1"
 //! chrono = { version = "0.4", features = ["serde"] }
+//!
+//! [dev-dependencies]
+//! tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+//! tempfile = "3"
+//! # V5-SDK-2 partial Phase 4 — opt into the conformance feature at
+//! # test-build time so `tests/conformance.rs` can reach the suite.
+//! # Production builds (no `--tests`) stay tokio-clean.
+//! neurogrim-sdk = { version = "0.1", features = ["conformance"] }
 //! ```
 //!
 //! Minimum-viable impl (stateless, infallible-degrading; matches

@@ -104,6 +104,128 @@ example crates in the
 - **ScoringSource (HTTP-fetch):** `scoring-source-prom`
 - **QueueBackend (in-memory + ack):** `queue-backend-memory`
 
+## Writing a conformant `Sensor`
+
+Sensors produce CMDB envelopes that the scoring pipeline
+consumes. Use this when you want to plug a new data source
+(Jira, GitHub, custom telemetry) into NeuroGrim's `cast`
+dispatch. Built-in sensors live in `neurogrim-sensory` and
+cover ~21 domains; third-party sensors register alongside.
+
+`Cargo.toml`:
+
+```toml
+[dependencies]
+neurogrim-sdk = "0.1"
+async-trait = "0.1"
+anyhow = "1"
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tempfile = "3"
+# V5-SDK-2 partial Phase 4 — opt into the conformance feature at
+# test-build time so tests/conformance.rs can reach the suite.
+# Production builds (no --tests) stay tokio-clean.
+neurogrim-sdk = { version = "0.1", features = ["conformance"] }
+```
+
+Minimum-viable impl (stateless, infallible-degrading; matches
+the contract of 18-of-21 built-in sensors):
+
+```rust,ignore
+use async_trait::async_trait;
+use neurogrim_sdk::{Sensor, SensorFactory};
+use serde_json::{json, Value};
+
+pub struct MySensor;
+
+#[async_trait]
+impl Sensor for MySensor {
+    async fn analyze(
+        &self,
+        project_root: &str,
+    ) -> anyhow::Result<Value> {
+        let now = chrono::Utc::now().to_rfc3339();
+        Ok(json!({
+            "meta": {
+                "schema_version": "1",
+                "updated_at": now,
+                "updated_by": "my-sensor",
+            },
+            "score": 100,
+            "updated_at": now,
+            "findings": [],
+        }))
+    }
+}
+
+pub struct MySensorFactory;
+
+impl SensorFactory for MySensorFactory {
+    fn name(&self) -> &'static str { "my-sensor" }
+    fn build(&self) -> Box<dyn Sensor> { Box::new(MySensor) }
+}
+```
+
+Conformance test (`tests/conformance.rs` in your crate):
+
+```rust,ignore
+use neurogrim_sdk::sensor_conformance::run_factory_conformance;
+use my_sensor::MySensorFactory;
+use tempfile::TempDir;
+
+#[tokio::test]
+async fn passes_full_conformance_suite() {
+    let dir = TempDir::new().unwrap();
+    let report = run_factory_conformance(&MySensorFactory, dir.path()).await;
+    assert!(
+        report.all_passed(),
+        "{}/{} failed: {:#?}",
+        report.failures().len(),
+        report.total(),
+        report.failures()
+    );
+}
+```
+
+**Contract pitfalls to avoid:**
+
+- Never panic. The conformance suite catches panics in
+  `analyze` calls; if your sensor encounters an unexpected
+  project state, return an `Err(anyhow!(...))` or a degraded
+  `Ok(envelope)` with `score: 0` + a finding describing the
+  failure.
+- The `meta.schema_version` field MUST equal `"1"` (string,
+  not integer).
+- The top-level `score` MUST be an integer in `[0, 100]`.
+- Both `meta.updated_at` and the top-level `updated_at` MUST
+  be RFC3339 strings.
+- Don't take a long time on skeletal input. The conformance
+  suite has a 30-second timeout; sensors that block on
+  missing-file IO should fast-fail.
+
+Reference: `examples/sensor-readme-quality/` (file-system
+pattern), `examples/sensor-constant-score/` (minimal-deps
+pattern; SDK reference example).
+
+For `ScoringSource` (V5-MOD-1) and `QueueBackend` (V5-MOD-3)
+walkthroughs — covering HTTP-fetch and in-memory ack-supported
+patterns respectively — see the canonical rustdoc on
+[docs.rs/neurogrim-sdk](https://docs.rs/neurogrim-sdk) (each
+walkthrough mirrors this Sensor pattern with the trait-specific
+contract pitfalls). Brief pointers:
+
+- **`ScoringSource`** — implements `async fn load(...) -> Option<CmdbData>`;
+  contract is "return None on any failure, never panic." Reference:
+  `examples/scoring-source-prom/` (Prometheus instant-query pattern).
+- **`QueueBackend`** — implements `append`/`read_from`/`len` with
+  `Send + Sync` interior mutability; per-consumer-group ack tracking
+  needs `BTreeSet<u64>`, NOT `HashMap<String, u64>` high-water-mark
+  (out-of-order acks must be representable). Reference:
+  `examples/queue-backend-memory/` (full ack-supported in-memory pattern).
+
 ## Conformance
 
 The SDK ships three published conformance suites covering every
