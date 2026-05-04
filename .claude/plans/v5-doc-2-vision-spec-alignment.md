@@ -43,6 +43,52 @@ Plan written. Plan-critic spawn pending (technical + methodology lenses in paral
 3. **Wording-frozen gate (plan-critic methodology agent finding 7):** at the end of Phase 1, the wording is FROZEN. Any further wording revisions trigger a Phase 1 re-entry, NOT an in-Phase-2 sweep amendment. The cross-ref sweep (Phase 2) is paraphrastic in 3 of 5 sites (`v5-roadmap.md:160` paraphrase, `v5-roadmap.md:176` paraphrase, `epics/v5-foundation.md:312` paraphrase; `v5-doc-1-composition-guide.md:34` quote, `v5-sdk-2-partial.md:24` quote with attribution) — once started, the sweep can't be paused for wording revisions without manual cleanup.
 4. **Honesty floor:** capture the dual-review verdict in a footnote in the V5-DOC-2 plan record (this file). Even if both approve verbatim, the formal review verdict is the methodology gate per the epic Done-When.
 
+### Phase 1 dual-review verdict (captured 2026-05-04 — Phase 1 close-out)
+
+Both T (Technical Reviewer) and P (Philosophy Reviewer) returned `passed: true` with **convergent recommendation: revise A1 → A3a + body paragraph**. Operator authorized the revision (option 1 — accept synthesis).
+
+**Frozen wording (final):**
+
+> **20. Pluggability by use, not aspiration.**
+
+Body paragraph (drafted; lands at Phase 2 in VISION.md style — 4–15 lines, comparable to #16 / #17 / #18 / #19 depth):
+
+> Pluggability earns its place when actual use exists for it: ≥2 plausible alternate
+> implementations already in scope, an external adopter has asked for it, or leaving
+> the seam concrete is provably blocking adoption. Aspirational pluggability — adding
+> a trait or factory because it *might* be useful, or extracting a seam to ship a
+> stub-as-second-impl — manufactures a maintenance burden against a hypothetical
+> future. v5's reshape rule operationalizes this: each Theme B trait extraction
+> (V5-MOD-1/2/3) cleared the bar via real built-in impls; V5-FOUND-4 deliberately
+> deferred AgentDrivenRunner to v5.5 (BACKLOG B-51) because the second impl was
+> aspirational at v5.0. Items that fail the rule today but might pass it later live
+> in the v5.5 / v6 successor pipeline (BACKLOG B-37..B-45 + B-51..B-53), not in the
+> current trait surface. See `roadmap/v5-roadmap.md` § Adversary findings A.
+
+**T verdict summary (`passed: true`):** T1/T2/T4/T5 warn; T3 pass. "Use" semantically ambiguous in isolation; headline alone under-actionable without body; 2 of 5 cited cross-ref line numbers in plan v2 were stale (corrected list below). Recommendation: approve A1 *contingent on body*; otherwise revise to A3.
+
+**P verdict summary (`passed: true`):** P1/P2/P3/P4 pass; P5 warn (binary-contrast template probe). A1's passive "is justified by" is softer than peer principles' #1 ("Declarations over dashboards.") and #8 ("Absorption over invention.") imperative templates. Recommendation: revise to **"Pluggability by use, not aspiration."** as headline + body paragraph operationalizing the reshape rule.
+
+**Synthesis (per dual-review skill — philosophy takes precedence):** P's recommendation lands; T's recommendation aligns. No genuine conflict; named tension absorbed via P's split between headline (binary-contrast template) and body (reshape rule operationalization). Wording is FROZEN at Phase 1 close per Fork F1 wording-frozen gate.
+
+**Cross-reference sweep site list (CORRECTED post T4 — supersedes plan v1 / v2 list):**
+
+| Site | Type | Notes |
+|---|---|---|
+| `roadmap/v5-roadmap.md:154` | verbatim | (corrected — v1 plan said `:160` paraphrase; T verified line 154 carries verbatim) |
+| `roadmap/v5-roadmap.md:176` | verbatim | exact wording |
+| `roadmap/epics/v5-coherence.md:7` | verbatim | (added — v1 plan missed this site) |
+| `roadmap/epics/v5-coherence.md:102` | verbatim | (added — v1 plan missed this site) |
+| `.claude/plans/v5-sdk-2-partial.md:24` | verbatim with attribution | unchanged from v1 |
+| `roadmap/epics/v5-foundation.md:161, 175` | paraphrase ("aspirational stub-as-second-impl") | (corrected — v1 plan said `:312`; that line is in `.claude/plans/v5-found-4-test-runner-trait.md`, not v5-foundation.md) |
+| `.claude/plans/v5-found-4-test-runner-trait.md:312` | paraphrase ("aspirational-pluggability hazard") | (added — v1 plan mis-attributed to v5-foundation.md) |
+| `docs/v5-composition-guide.md:4` | paraphrase ("reality, not aspiration") | (corrected — v1 plan said `:34` "verbatim"; T verified line 34 is a section header and the only relevant occurrence at line 4 is paraphrase) |
+
+**Sweep behavior (Phase 2):**
+
+- **Verbatim sites** (5): replace "Pluggability is justified by use, not aspiration" → "Pluggability by use, not aspiration".
+- **Paraphrase sites** (3): leave as-is. The paraphrases ("aspirational stub-as-second-impl", "aspirational-pluggability hazard", "reality, not aspiration") don't quote the principle directly; they survive both A1 and A3a wording without revision.
+
 ### Phase 2 — VISION.md update
 
 1. Add principle #20 to `roadmap/VISION.md` at the end of `## Design Principles` (after #19, before `---`). Format mirrors existing principles:
