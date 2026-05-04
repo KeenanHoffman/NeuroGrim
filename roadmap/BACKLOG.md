@@ -2035,6 +2035,50 @@ Investigate-band test (1, comment-only — not tagged):
 
 ---
 
+### B-51: V5.5-FOUND-AGENT-RUNNER — Make AgentDrivenRunner real (LLM-orchestrated test selection) — CANDIDATE (v5.5 horizon)
+
+**Problem.** V5-FOUND-4 originally planned a `TestRunner` trait with two impls — `NextestRunner` (concrete) and `AgentDrivenRunner` (stub initially). Plan-critic v1 (2026-05-04) caught that an aspirational stub-as-second-impl violates the v5-roadmap §A reshape rule (proposed VISION #20: "pluggability is justified by use, not aspiration") AND introduces a silent-green-CI hazard if the stub returns `Ok(empty_report)`. V5-FOUND-4 v5.0 ships with only `NextestRunner` real; AgentDrivenRunner is deferred here so the second-impl arrives only when there's real agent-orchestration work to ride on.
+
+**What V5.5-FOUND-AGENT-RUNNER would deliver:**
+1. A `TestRunner` impl named `AgentDrivenRunner` that takes a `TestSelection` + a context envelope (e.g., the diff against `HEAD~1` + the test-coverage map from V5-FOUND-3) and asks an LLM "which subset of these tests should I run, and why?". Returns the agent's chosen subset as a refined `TestSelection`, then delegates to `NextestRunner` for actual execution. The "agent narrative" (rationale for the chosen subset) emits as a tracing span field on the parent `test.run` span — V5-FOUND-1 instrumentation captures it as a structured ledger entry.
+2. Wire-up via the `--runner=agent` CLI flag from B-52 (the registry-dispatch entry pairs naturally with this).
+3. Conformance suite passes: AgentDrivenRunner factory passes the existing 4-test suite (factory contract + no-panic on malformed selection — the agent should refuse to run on malformed input, not panic).
+
+**Plan when:**
+1. AND: Rust-side LLM client lands. **Currently blocked** — V5-FOUND-1.1 deferred for the same reason (`epics/v5-foundation.md` § V5-FOUND-1.1: "no Rust-side LLM client exists today — no `anyhow` crate, no runtime `reqwest`"). B-51 + V5-FOUND-1.1 should ride the same epic when that pathway is built.
+2. AND: V5-FOUND-3 has unblocked (B-51's value rests on having per-binary or per-test coverage data to feed the agent). If V5-FOUND-3 stays deferred indefinitely, B-51 narrows to "agent picks tests from the failure ledger + recent commits" — still useful but less powerful than coverage-aware.
+3. AND: Operator decides the agent's recommendation needs to be a load-bearing CI signal (vs. an advisory human-in-the-loop tool).
+
+**Dependencies.** V5-FOUND-4 ✅ (this lands trait + NextestRunner). V5-FOUND-1.1's Rust LLM client (currently deferred). Optionally V5-FOUND-3's coverage map (currently deferred).
+
+**Adversarial note.** "Agent picks tests" sounds compelling but the failure mode is silent: an agent that refuses to run any tests trivially passes (empty `TestRunReport` is valid per the conformance suite). The fix shape is a "must-include" floor — the agent's selection must intersect the failure-ledger's most-recent-batch + any test in a file changed in the diff against `HEAD~1`. Without that floor, this regresses to the same silent-green-CI hazard that killed Fork D1. Document the floor in the impl's rustdoc + enforce in `AgentDrivenRunner::run` (not in the trait — keeps the trait shape minimal).
+
+**Cross-references.** V5-FOUND-4 plan: `.claude/plans/v5-found-4-test-runner-trait.md` § Phase 5 + § Risks; V5-FOUND-1.1: `epics/v5-foundation.md` § V5-FOUND-1.1; V5-FOUND-3 deferral: `epics/v5-foundation.md` § "V5-FOUND-3 deferral note"; AgentDrivenRunner-stub plan-critic blocker: V5-FOUND-4 plan-critic v1 methodology lens (verdict REVISE 2026-05-04).
+
+---
+
+### B-52: V5.5-FOUND-RUNNER-FLAG — Add `--runner=<name>` CLI flag dispatch via TestRunnerRegistry — CANDIDATE (v5.5 horizon)
+
+**Problem.** V5-FOUND-4 originally planned `--runner=nextest|agent` as a clap value-enum on the `neurogrim test` command. With AgentDrivenRunner deferred to B-51, only one runner exists at v5.0; adding the clap flag with one value (`Nextest`) would be ceremony without value. The wrapper currently dispatches via `Box<dyn TestRunner>` internally — the trait integration is validated, but operators have no surface to choose runners. B-52 closes that gap once a second runner exists.
+
+**What V5.5-FOUND-RUNNER-FLAG would deliver:**
+1. Add `--runner=<name>` to `commands::test::Args` as a clap String (NOT a value-enum — extensibility goal). Default: `"nextest"`.
+2. Look up the chosen runner via `TestRunnerRegistry::get(name)` (the registry already exists in `neurogrim_core::test_runner`, populated at startup with the in-tree built-ins + any third-party factories registered by adopters).
+3. Error path: unknown runner name → exit `EX_USAGE = 64` with a stderr message listing the registered runners (`neurogrim test --runner=foo` → "unknown runner 'foo'; registered: nextest, agent").
+4. CLI completion + `--help` text auto-update from the registry's `registered_names()` iterator.
+
+**Plan when:**
+1. AND: A second runner exists and is registered with `TestRunnerRegistry`. AgentDrivenRunner from B-51 is the obvious candidate; an external-adopter contribution (e.g., a `LibtestRunner` or a `CargoMiriRunner`) also clears this trigger.
+2. AND: Operator confirms the registry-lookup pattern (vs. a fixed clap value-enum) is the right abstraction. The registry-lookup permits third-party runners without editing the clap surface; the value-enum has compile-time-checked completeness but doesn't extend.
+
+**Dependencies.** B-51 (or any second registered runner). V5-FOUND-4 ✅.
+
+**Adversarial note.** A clap String input means typos hit at runtime, not compile time. The `EX_USAGE = 64` exit + listed registered names mitigates the discoverability cost. Alternative: keep clap value-enum but auto-generate the variants from a `inventory`-style registry — more elegant but adds an `inventory` workspace dep that's currently absent. The registry-lookup pattern matches V5-MOD-1's `ScoringSourceRegistry` choice (also a String lookup, also a registry); precedent.
+
+**Cross-references.** V5-FOUND-4 plan: `.claude/plans/v5-found-4-test-runner-trait.md` § Phase 5 + § Forks (Fork E dropped); B-51 (paired epic).
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).

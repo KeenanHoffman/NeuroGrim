@@ -154,18 +154,26 @@
 
 ### V5-FOUND-4: TestRunner trait (minimal modular testing surface) (~2–3 days)
 
-**Status:** Planned
-**Effort:** S
-**Depends on:** V5-FOUND-2, V5-FOUND-3
+**Status:** **✅ COMPLETE 2026-05-04** — 6 phase commits (`cf6e0cf` Phase 0, `985b7e6` Phase 1, `7060bf3` Phase 2, `ae5604c` Phase 3, `8b98599` Phase 4, plus this Phase 5 close-out). Effort actual: ~1 day, well under the 2–3d S estimate. Plan-critic absorbed two methodology blockers pre-implementation (AgentDrivenRunner stub fails proposed-#20 reshape rule; Fork D1 silent-green-CI hazard) by deferring AgentDrivenRunner + the `--runner=` CLI flag to v5.5 BACKLOG (B-51, B-52).
+**Effort:** S (actual: ~1 day)
+**Depends on:** V5-FOUND-2 ✅; V5-FOUND-3 ⏸ DEFERRED (**soft** — `TestSelection` is `#[non_exhaustive]`; v5.1 adds `ByCoverage(...)` variant non-breakingly when V5-FOUND-3 unblocks. Trait surface itself is shape-stable across coverage-selection's eventual landing. See `.claude/plans/v5-found-4-test-runner-trait.md` § "Soft-dependency on V5-FOUND-3" for the operator decision rule.)
 
-**What:** Define a small `TestRunner` trait inside `neurogrim-core` with two impls: `NextestRunner` (default), `AgentDrivenRunner` (calls an agent for orchestration — stub initially). Public via SDK in Theme C. Trait surfaces only: `run(&self, selection: &TestSelection) -> TestRunReport`. Resists the urge to make TestRunner a god-object.
+**What:** ~~Define a small `TestRunner` trait inside `neurogrim-core` with two impls: `NextestRunner` (default), `AgentDrivenRunner` (calls an agent for orchestration — stub initially).~~ **REVISED 2026-05-04:** ships the trait + types + 4-test conformance suite in `neurogrim-core::test_runner` + a single concrete impl (`NextestRunner` in `neurogrim-cli/src/commands/test_runner_impls/nextest.rs`). The wrapper at `commands::test::run` dispatches via `Box<dyn TestRunner>` internally — no `--runner=` clap flag at v5.0 (only one runner exists; flag deferred to v5.5 B-52). AgentDrivenRunner deferred to v5.5 B-51 alongside the agent-orchestration work that would make it real; deferral honors VISION proposed-#20 ("pluggability is justified by use, not aspiration") by avoiding aspirational stub-as-second-impl. Trait surface: `async fn run(&self, selection: &TestSelection) -> Result<TestRunReport>` — single method.
 
-**Why:** Smallest modular surface that supports the user's "users create their own testing surface" goal. No god-object risk because the trait deliberately exposes one method. AgentDrivenRunner is a stub today; v5.5 may flesh it out if the pattern proves useful.
+**Why:** Smallest modular surface that supports adopters' "users create their own testing surface" goal. Trait extraction at v5.0 clears the v5-roadmap §A reshape rule via clause **(iii)** — leaving NextestRunner concrete blocked V5-SDK-2's promised conformance-suite re-export (deliverable 2). Phase 4 lifted V5-SDK-2 from ◐ PARTIAL → ✅ COMPLETE. Theme C is now ✅ COMPLETE.
 
 **Done when:**
-- [ ] `TestRunner` trait + 2 impls land in `neurogrim-core`
-- [ ] `neurogrim test --runner=nextest` (default) and `--runner=agent` both dispatch via the trait
-- [ ] Conformance suite: any TestRunner impl must pass shared 6-test suite (happy path, empty selection, malformed selection, cancellation, timeout, malformed report output)
+- [x] `TestRunner` trait + types + 4-test conformance suite land in `neurogrim-core` (Phase 1, commit `985b7e6`)
+- [x] `NextestRunner` impl + factory ship in `neurogrim-cli` (Phase 2, commit `7060bf3`); the wrapper at `commands::test::run` dispatches via `Box<dyn TestRunner>` (Phase 3, commit `ae5604c`)
+- [x] Conformance suite: 4 cross-cutting tests (factory_name_non_empty, factory_name_stable_across_calls, factory_build_repeatable, run_with_malformed_selection_returns_ok_or_err_no_panic). Plan v2 reduced from 6 — dropped `run_with_empty_selection_completes` (undefined cargo behavior with `--exact` + zero names) and `run_is_concurrent_safe` (cargo lockfile contention deadlocks 5-parallel runs). Object-safety + Send guaranteed at compile time via `_object_safety_check_test_runner` + `_send_check_test_run_report` guards in `crate::test_runner` instead.
+- [ ] ~~`neurogrim test --runner=nextest` (default) and `--runner=agent` both dispatch via the trait~~ — **deferred to v5.5 (BACKLOG B-52)**. v5.0 has only one runner; adding the clap flag with one value would be ceremony without value. The trait dispatch is internal — wrapper constructs `Box<dyn TestRunner>` from the in-tree `NextestRunner`.
+
+**V5-FOUND-4 retrospective (2026-05-04):**
+
+- **Plan record:** [`.claude/plans/v5-found-4-test-runner-trait.md`](../../.claude/plans/v5-found-4-test-runner-trait.md) — v2 plan, two plan-critic rounds (technical + methodology in parallel), 3 🔴 blockers absorbed (AgentDrivenRunner-as-stub fails reshape rule; Fork D1 silent-green-CI hazard; `run_with_empty_selection_completes` test undefined behavior + `run_is_concurrent_safe` cargo lockfile contention). 7 🟡 concerns absorbed: tokio dev-dep restoration, rustdoc intra-doc-link gating, CI profile fix, dropped Fork E (surface-assertion), `cargo tree` package-cwd discipline, `runner_name()` removed from trait, span ownership specified, byte-identical-ledger verification.
+- **Forks pinned (5 — down from 7):** A1 (TestSelection variants All/Names/Packages) / B1 (build_cargo_args stays in commands::test) / C1 (parse_nextest_output stays in commands::test) / F1 (SDK trait re-export always-on; only conformance module gated) / G1' (4-test conformance suite). Forks D + E dropped after methodology absorption.
+- **Outcome:** trait extraction with one real impl, no aspirational stub. The wrapper's dispatch through `Box<dyn TestRunner>` validates trait integration; existing 24 unit tests pass byte-identically post-Phase-3 (no operator-facing regression). `neurogrim_sdk::TestRunner` joins the 4 always-on V5-MOD-1/2/3 trait surfaces; `neurogrim_sdk::test_runner_conformance` joins the 3 gated conformance modules.
+- **What's NOT done that the original V5-FOUND-4 epic called for:** AgentDrivenRunner (deferred to v5.5 BACKLOG B-51 alongside agent-orchestration work + Rust LLM client landing); `--runner=` CLI flag dispatch (deferred to v5.5 BACKLOG B-52 once a second runner exists). Both deferrals are honesty-floor compliant — neither failed silently; both are concretely tracked.
 
 ---
 
