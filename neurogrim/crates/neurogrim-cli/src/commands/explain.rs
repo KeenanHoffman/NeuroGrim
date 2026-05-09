@@ -10,15 +10,27 @@
 use anyhow::Result;
 use clap::Args as ClapArgs;
 use neurogrim_mcp::explain as mcp_explain;
+use neurogrim_mcp::version_summary;
 
 #[derive(ClapArgs, Debug)]
 pub struct Args {
-    /// Topic to print. Omit to list available topics.
+    /// Topic to print. Omit to list available topics. Special token
+    /// `version` requires a second positional with the version string
+    /// (e.g., `neurogrim explain version 5.0.0`).
     pub topic: Option<String>,
+
+    /// Second positional — only meaningful when `topic == "version"`.
+    /// The version to summarize (e.g., "5.0.0", "Unreleased").
+    pub version_arg: Option<String>,
 
     /// Print the bundled spec version + canonical-source path.
     #[arg(long)]
     pub version: bool,
+
+    /// When summarizing a CHANGELOG version, render as human prose
+    /// instead of structured JSON. Default is JSON for agent consumption.
+    #[arg(long)]
+    pub prose: bool,
 }
 
 pub async fn run(args: Args) -> Result<()> {
@@ -33,7 +45,58 @@ pub async fn run(args: Args) -> Result<()> {
 
     match args.topic.as_deref() {
         None => print_topic_list(),
+        Some("version") => print_version_summary(args.version_arg.as_deref(), args.prose)?,
         Some(name) => print_topic(name)?,
+    }
+    Ok(())
+}
+
+fn print_version_summary(version: Option<&str>, prose: bool) -> Result<()> {
+    let version = match version {
+        Some(v) if !v.trim().is_empty() => v.trim(),
+        _ => {
+            anyhow::bail!(
+                "`neurogrim explain version` requires a version argument. \
+                 Available: {}",
+                version_summary::bundled_versions().join(", ")
+            )
+        }
+    };
+    let entry = version_summary::bundled_entry(version).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no entry for version {version:?} in bundled CHANGELOG. Available: {}",
+            version_summary::bundled_versions().join(", ")
+        )
+    })?;
+    if prose {
+        // Human-readable prose: heading + raw body (preserves the
+        // operator's original markdown formatting).
+        println!("# Changelog entry: {}", entry.version);
+        if let Some(date) = entry.date.as_deref() {
+            println!("Released: {date}");
+        }
+        println!();
+        println!("{}", entry.raw_body);
+    } else {
+        // Structured JSON for agent consumption.
+        let sections: Vec<serde_json::Value> = entry
+            .sections
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "heading": s.heading,
+                    "items":   s.items,
+                    "raw":     s.raw,
+                })
+            })
+            .collect();
+        let json = serde_json::json!({
+            "version":  entry.version,
+            "date":     entry.date,
+            "sections": sections,
+            "raw_body": entry.raw_body,
+        });
+        println!("{}", serde_json::to_string_pretty(&json)?);
     }
     Ok(())
 }

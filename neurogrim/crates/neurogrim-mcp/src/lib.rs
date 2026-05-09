@@ -17,6 +17,9 @@ pub mod llm_backends;
 pub mod prose;
 pub mod proxy_tokens;
 pub mod publish_gates;
+// v2-Feature 2 (2026-05-09) — `neurogrim explain version <ver>` parser
+// for the bundled CHANGELOG.md. Self-contained module; no extra deps.
+pub mod version_summary;
 // V5-MOD-1 Phase 3 (2026-05-02): factory-registry global for the
 // scoring-source dispatch sites (context.rs, server.rs, doctor.rs).
 pub mod scoring_source_registry;
