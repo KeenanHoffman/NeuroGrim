@@ -19,6 +19,13 @@
 // (chrono, serde, serde_json) so it's safe to leave unfeature-gated.
 pub mod cmdb;
 
+// v2-Feature 7 Phase 1 (2026-05-09) — decision-diversity computation
+// library. Pure-stdlib + serde; no rmcp tool router yet. Phase 7.2
+// wraps this in the sensor-trait shape + adds a `decision-diversity`
+// brain domain registration. Always-on so callers (CLI, tests, future
+// drift sensors) can use the library without sensor-feature gating.
+pub mod decision_diversity;
+
 // V5-MOD-2 Phase 4 (2026-05-02) — per-sensor `#[cfg(feature)]`
 // gates carve out source modules + heavy deps for slim builds.
 // Default-features build pulls all 21 sensors (= v4 behavior).
