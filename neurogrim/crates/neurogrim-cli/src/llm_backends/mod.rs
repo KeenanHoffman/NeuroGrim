@@ -7,24 +7,29 @@
 //! "pure logic, zero I/O" posture. neurogrim-core ships only the
 //! trait + factory + registry.
 //!
-//! ## Built-ins shipped in Phase 1.4
+//! ## Built-ins shipped
 //!
-//! - `copilot-proxied` — talks to `neurogrim-copilot-proxy`
+//! - `copilot-proxied` (Phase 1.4) — talks to `neurogrim-copilot-proxy`
 //!   (port 4546 by default) via OpenAI-compatible chat completions.
 //!   Auth via `X-Scope-Token` from `COPILOT_PROXY_SCOPE_TOKEN` env
 //!   var (issued by `proxy-cli issue --label …`).
+//! - `ollama` (v2-Feature 1, 2026-05-09) — talks to a local Ollama
+//!   daemon at `http://127.0.0.1:11434/v1/chat/completions`.
+//!   No auth (loopback-only, defense-in-depth check on base_url).
+//!   Default model `qwen3.5:1.7b`.
 //!
-//! ## Deferred to Phase 1.5
+//! ## Deferred
 //!
 //! - `anthropic` — direct to api.anthropic.com
 //! - `anthropic-proxied` — through claude-proxy on port 4545
 //! - `codex-cli` — `tokio::process::Command::new("codex")` subprocess
 //!
-//! These three move when `neurogrim-mcp`'s `invoke_subagent` tool
-//! lands and its `BrainServer` constructor wants the same registry
-//! shape.
+//! These three land alongside the Phase 1.5b refactor that dedupes
+//! the cli ↔ mcp factory copies into a shared neurogrim-core module
+//! behind feature flags.
 
 pub mod copilot_proxied;
+pub mod ollama;
 
 use std::sync::Arc;
 
@@ -34,7 +39,10 @@ use neurogrim_core::llm_backend::{LlmBackend, LlmBackendFactory, LlmBackendRegis
 /// register additional factories programmatically via
 /// `registry.register(...)` if they ship a custom workspace binary.
 pub fn built_in_factories() -> Vec<Box<dyn LlmBackendFactory>> {
-    vec![Box::new(copilot_proxied::CopilotProxiedFactory::default())]
+    vec![
+        Box::new(copilot_proxied::CopilotProxiedFactory),
+        Box::new(ollama::OllamaFactory),
+    ]
 }
 
 /// Convenience: build a registry pre-populated with this build's

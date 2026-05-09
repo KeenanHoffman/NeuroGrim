@@ -8,12 +8,16 @@
 //! `D:/Brains/copilot-proxy/DEFERRED-WORK.md` as Phase 1.5b.
 
 pub mod copilot_proxied;
+pub mod ollama;
 
 use neurogrim_core::llm_backend::{LlmBackendFactory, LlmBackendRegistry};
 
 /// Factories the MCP `invoke_subagent` tool ships with.
 pub fn built_in_factories() -> Vec<Box<dyn LlmBackendFactory>> {
-    vec![Box::new(copilot_proxied::CopilotProxiedFactory::default())]
+    vec![
+        Box::new(copilot_proxied::CopilotProxiedFactory),
+        Box::new(ollama::OllamaFactory),
+    ]
 }
 
 /// Build a registry pre-populated with the mcp built-ins.
