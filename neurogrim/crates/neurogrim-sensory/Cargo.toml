@@ -25,6 +25,13 @@ schemars = { workspace = true }
 tracing = { workspace = true }
 neurogrim-core = { workspace = true, features = ["sqlite"] }
 
+# v2-Feature 5 (2026-05-09) — pulldown-cmark for the
+# `documentation-graph` sensor's markdown link extraction.
+# Tiny (~200 KB compiled), pure Rust, MIT/Apache-2.0, well-maintained
+# (the canonical Rust markdown parser used by mdBook + many others).
+# Cleared via `dependency-discipline` skill 2026-05-09.
+pulldown-cmark = { version = "0.10", default-features = false }
+
 # V5-MOD-2 Phase 2 (2026-05-02) — `Sensor` trait impl macro for the
 # 21 built-in factories in `sensor_impls.rs`. Same convention as
 # every existing async-trait usage in the workspace (Transport,

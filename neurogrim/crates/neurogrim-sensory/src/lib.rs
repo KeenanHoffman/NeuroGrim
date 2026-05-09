@@ -26,6 +26,13 @@ pub mod cmdb;
 // drift sensors) can use the library without sensor-feature gating.
 pub mod decision_diversity;
 
+// v2-Feature 5 Phase 1 (2026-05-09) — documentation-graph sensor.
+// Walks *.md files, extracts cross-references via pulldown-cmark,
+// builds a directed graph, scores by orphan ratio + broken links +
+// cycle count. Always-on (small dep) — Phase 2 may carve behind a
+// feature flag if disk pressure justifies it.
+pub mod documentation_graph;
+
 // V5-MOD-2 Phase 4 (2026-05-02) — per-sensor `#[cfg(feature)]`
 // gates carve out source modules + heavy deps for slim builds.
 // Default-features build pulls all 21 sensors (= v4 behavior).
