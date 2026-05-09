@@ -54,6 +54,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # v3.1 E-V31-C C1: TOML loader for hat-narration templates. Templates
 # bundled at compile time via include_str!; toml crate parses at runtime.
 toml = { workspace = true }
+# v2-Feature 4 (2026-05-09) — agent-roles.yaml loader. Same workspace
+# version other consumers (neurogrim-mcp::publish_gates, neurogrim-sensory)
+# pin to.
+serde_yaml = { workspace = true }
 # Feature 1 Phase 1.4 (2026-05-09) — `neurogrim invoke` subcommand
 # routes prompts to LLM subagents via the `neurogrim-core::llm_backend`
 # trait. The `copilot-proxied` built-in talks HTTP to the local

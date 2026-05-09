@@ -5,6 +5,7 @@ mod commands;
 mod diagnostics_layer;
 mod llm_backends;
 mod output;
+mod roles;
 mod tracing_init;
 
 #[derive(Parser)]

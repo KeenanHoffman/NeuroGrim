@@ -20,20 +20,29 @@ use uuid::Uuid;
 use neurogrim_core::llm_backend::LlmInvokeOptions;
 
 use crate::llm_backends;
+use crate::roles::RolesRegistry;
 
 #[derive(Debug, Args)]
 pub struct InvokeArgs {
-    /// Backend wire-name. Defaults to `copilot-proxied`.
-    #[arg(long, default_value = "copilot-proxied")]
-    pub backend: String,
+    /// Backend wire-name. When neither --backend nor --role resolves a
+    /// backend, falls back to the registry's `fallback_backend`
+    /// (default `copilot-proxied`).
+    #[arg(long)]
+    pub backend: Option<String>,
 
     /// Model identifier (backend-specific). E.g. `gpt-4o`,
-    /// `claude-opus-4`, `claude-3-5-sonnet`.
+    /// `claude-opus-4`, `claude-3-5-sonnet`. When --role resolves a
+    /// model, this becomes optional; explicit --model overrides the
+    /// role's default.
     #[arg(long)]
-    pub model: String,
+    pub model: Option<String>,
 
-    /// Optional hat / role label. Recorded in the outcome ledger so
-    /// `subagent-health` can attribute outcomes per hat.
+    /// Hat / role label. When set, looks up the role in
+    /// `.claude/agent-roles.yaml` (or the bundled defaults) and uses
+    /// its backend / model / system_prompt as defaults. Explicit
+    /// --backend / --model / --system flags still override.
+    /// Always recorded in the outcome ledger so `subagent-health` can
+    /// attribute outcomes per hat.
     #[arg(long)]
     pub role: Option<String>,
 
@@ -83,19 +92,57 @@ struct InvokeEnvelope {
 
 pub async fn run(args: InvokeArgs) -> Result<()> {
     let prompt = read_prompt(&args)?;
-    let backend = llm_backends::build_default(&args.backend)?;
+
+    // Role resolver: when --role is set, pull defaults from the bundled
+    // role registry overlaid with <project>/.claude/agent-roles.yaml.
+    // CLI flags override the resolved role.
+    let cwd = args
+        .project_root
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let roles = RolesRegistry::load(&cwd)
+        .with_context(|| "loading agent-roles registry")?;
+    let resolved_role = args.role.as_deref().and_then(|name| {
+        let role = roles.resolve(name);
+        if role.is_none() {
+            tracing::warn!(
+                "role {name:?} not found in registry; available: {:?}",
+                roles.names()
+            );
+        }
+        role
+    });
+
+    // Compose (backend, model, system_prompt) — explicit flag > role
+    // default > registry fallback.
+    let backend_name: String = args
+        .backend
+        .clone()
+        .or_else(|| resolved_role.map(|r| r.backend.clone()))
+        .unwrap_or_else(|| roles.fallback_backend.clone());
+    let model: String = args
+        .model
+        .clone()
+        .or_else(|| resolved_role.map(|r| r.model.clone()))
+        .unwrap_or_else(|| roles.fallback_model.clone());
+    let system_prompt: Option<String> = args
+        .system
+        .clone()
+        .or_else(|| resolved_role.and_then(|r| r.system_prompt.clone()));
+
+    let backend = llm_backends::build_default(&backend_name)?;
 
     let options = LlmInvokeOptions {
         max_tokens: args.max_tokens,
-        system_prompt: args.system.clone(),
+        system_prompt,
         temperature: None,
         timeout: Some(Duration::from_secs(args.timeout_seconds)),
     };
 
     let response = backend
-        .invoke(&prompt, &args.model, &options)
+        .invoke(&prompt, &model, &options)
         .await
-        .with_context(|| format!("invoking backend {}", args.backend))?;
+        .with_context(|| format!("invoking backend {backend_name}"))?;
 
     let outcome_id = format!("ulid_{}", Uuid::new_v4().simple());
     let envelope = InvokeEnvelope {
