@@ -9,6 +9,13 @@ members = [
     "crates/neurogrim-dashboard",
     "crates/neurogrim-cli",
     "crates/neurogrim-secrets",
+    # v2-Feature 9 (NG-PENTEST, 2026-05-09) — optional pen-testing
+    # harness. Workspace member so `cargo test --workspace` exercises
+    # it, but NOT a default dependency of any other crate. Operators
+    # opt in via explicit `dep:neurogrim-pentest` feature wiring;
+    # `neurogrim-mcp`'s `pentest` feature flag (Phase 2) gates the
+    # tool surface that exposes the runtime functionality.
+    "crates/neurogrim-pentest",
     # V5-SDK-1 (2026-05-02) — `neurogrim-sdk` thin re-export crate
     # exposing Theme B trait surfaces + `Transport` + `SecretBackend`
     # as a stable plugin-author SDK. Versioned independently from

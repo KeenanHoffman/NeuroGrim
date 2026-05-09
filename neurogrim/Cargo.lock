@@ -1927,6 +1927,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "neurogrim-pentest"
+version = "5.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "neurogrim-sdk"
 version = "0.1.0"
 dependencies = [
