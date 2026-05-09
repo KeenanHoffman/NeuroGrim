@@ -1905,12 +1905,14 @@ name = "neurogrim-mcp"
 version = "5.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "colored",
  "jsonschema",
  "neurogrim-core",
  "neurogrim-ecosystem",
  "neurogrim-secrets",
+ "reqwest 0.12.28",
  "rmcp",
  "schemars 0.8.22",
  "serde",

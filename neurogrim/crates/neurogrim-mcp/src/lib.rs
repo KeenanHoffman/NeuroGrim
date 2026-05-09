@@ -10,6 +10,10 @@ pub mod context;
 pub mod doctor;
 pub mod domain;
 pub mod explain;
+// Feature 1, Phase 1.5 (2026-05-09) — LLM-subagent dispatch. Wraps
+// the `neurogrim-core::llm_backend` trait with mcp-specific factory
+// registrations (currently `copilot-proxied` HTTP backend).
+pub mod llm_backends;
 pub mod prose;
 pub mod proxy_tokens;
 pub mod publish_gates;

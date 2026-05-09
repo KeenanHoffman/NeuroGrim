@@ -79,6 +79,11 @@ pub fn tool_action_type(tool_name: &str) -> &'static str {
         "domain_new" => "mutate-state",
         "record_subagent_outcome" => "mutate-state",
         "queue_publish" => "mutate-state",
+        // Feature 1 Phase 1.5 — invoke_subagent dispatches a prompt to
+        // an LLM backend (Copilot, Codex, Anthropic). Burns subagent
+        // tokens; default Approve so the operator sees the call before
+        // it bills against the configured backend's quota.
+        "invoke_subagent" => "mutate-state",
         // v4.2 S14-S-5: secret_fetch defaults to Approve (mutate-state)
         // even though it doesn't mutate Brain state — the security
         // model requires explicit operator approval for every secret
@@ -293,6 +298,7 @@ mod tests {
         assert_eq!(tool_action_type("doctor"), "read-only");
         assert_eq!(tool_action_type("domain_new"), "mutate-state");
         assert_eq!(tool_action_type("refresh_sensory"), "mutate-state");
+        assert_eq!(tool_action_type("invoke_subagent"), "mutate-state");
         assert_eq!(
             tool_action_type("record_subagent_outcome"),
             "mutate-state"

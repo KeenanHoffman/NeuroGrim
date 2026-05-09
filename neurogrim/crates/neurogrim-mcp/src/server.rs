@@ -259,6 +259,30 @@ impl BrainServer {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct LocalAwarenessParams {}
 
+/// Feature 1, Phase 1.5 (2026-05-09) — params for `invoke_subagent`.
+/// Routes a prompt to a registered LLM-subagent backend and writes the
+/// outcome to `subagent-outcomes.jsonl` (same ledger
+/// `record_subagent_outcome` writes — same JSONL schema; the
+/// `subagent-health` domain reads both).
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct InvokeSubagentParams {
+    /// Backend wire-name. Currently only `copilot-proxied` is shipped;
+    /// future Phase 1.5b adds `anthropic`, `anthropic-proxied`, `codex-cli`.
+    pub backend: String,
+    /// Model identifier. Backend-specific (`gpt-4o`, `claude-opus-4`, etc.).
+    pub model: String,
+    /// Optional hat / role label. Recorded in the outcome ledger.
+    pub role: Option<String>,
+    /// The prompt to send.
+    pub prompt: String,
+    /// Optional system prompt prepended for chat-shaped backends.
+    pub system: Option<String>,
+    /// Hard cap on output tokens.
+    pub max_tokens: Option<u32>,
+    /// Per-call timeout in seconds.
+    pub timeout_seconds: Option<u64>,
+}
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SubagentOutcomeParams {
     /// Unique ID of the subagent request (matches request_id in the envelope).
@@ -614,6 +638,127 @@ impl BrainServer {
             .unwrap_or_else(LocalAwareness::empty);
         serde_json::to_string_pretty(&awareness)
             .unwrap_or_else(|e| format!("{{\"error\": \"{}\"}}", e))
+    }
+
+    #[tool(
+        description = "Dispatch a prompt to an LLM subagent backend (initially \
+        copilot-proxied, talking to D:/Brains/copilot-proxy on port 4546). \
+        Returns a JSON envelope with the response text + token counts + \
+        outcome_id. Appends a row to .claude/brain/subagent-outcomes.jsonl \
+        for the subagent-health domain. Honors the autonomy gate (default \
+        Approve — operator sees the call before it bills the backend's quota)."
+    )]
+    async fn invoke_subagent(
+        &self,
+        Parameters(p): Parameters<InvokeSubagentParams>,
+    ) -> String {
+        // Autonomy gate. Mutation tool (default Approve in
+        // crate::autonomy::tool_action_type for "invoke_subagent").
+        let autonomy_label = if let Some(early) =
+            crate::autonomy::maybe_block(self, "invoke_subagent").await
+        {
+            return early;
+        } else {
+            // maybe_block returned None → Auto/Notify path was taken.
+            "auto"
+        };
+
+        // Build registry from this crate's built-ins.
+        let registry = crate::llm_backends::build_registry();
+        let cfg = neurogrim_core::llm_backend::LlmBackendConfig {
+            name: p.backend.clone(),
+            options: Default::default(),
+        };
+        let backend = match registry.build(&cfg) {
+            Some(Ok(b)) => b,
+            Some(Err(e)) => {
+                return serde_json::json!({
+                    "error": format!("backend build failed: {e}"),
+                    "backend": p.backend,
+                })
+                .to_string();
+            }
+            None => {
+                let names: Vec<String> = registry
+                    .registered_names()
+                    .map(|s| s.to_string())
+                    .collect();
+                return serde_json::json!({
+                    "error": format!("no backend registered for {:?}", p.backend),
+                    "registered": names,
+                })
+                .to_string();
+            }
+        };
+
+        let options = neurogrim_core::llm_backend::LlmInvokeOptions {
+            max_tokens: p.max_tokens,
+            system_prompt: p.system.clone(),
+            temperature: None,
+            timeout: p
+                .timeout_seconds
+                .map(|s| std::time::Duration::from_secs(s)),
+        };
+
+        let response = match backend.invoke(&p.prompt, &p.model, &options).await {
+            Ok(r) => r,
+            Err(e) => {
+                return serde_json::json!({
+                    "error": format!("invoke failed: {e}"),
+                    "backend": p.backend,
+                    "model": p.model,
+                })
+                .to_string();
+            }
+        };
+
+        let outcome_id = format!("ulid_{}", uuid::Uuid::new_v4().simple());
+
+        // Append outcome row. Same JSONL schema record_subagent_outcome
+        // writes (S13-B-5) — the subagent-health domain reads both.
+        // Phase 1.5b: extract the writer to neurogrim-core and have
+        // both call sites converge there.
+        let log_path = self
+            .project_root
+            .join(".claude/brain/subagent-outcomes.jsonl");
+        let row = serde_json::json!({
+            "ts":          Utc::now().to_rfc3339(),
+            "outcome_id":  outcome_id,
+            "capability":  "llm-invoke",
+            "worn_hat":    p.role.clone().unwrap_or_default(),
+            "status":      "success",
+            "backend":     response.backend,
+            "model":       response.model,
+            "tokens_in":   response.tokens_in,
+            "tokens_out":  response.tokens_out,
+            "duration_ms": response.duration_ms,
+        });
+        if let Some(parent) = log_path.parent() {
+            let _ = tokio::fs::create_dir_all(parent).await;
+        }
+        let line = format!("{}\n", row);
+        {
+            use tokio::io::AsyncWriteExt;
+            if let Ok(mut f) = tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .await
+            {
+                let _ = f.write_all(line.as_bytes()).await;
+            }
+        }
+
+        serde_json::json!({
+            "outcome_id":  outcome_id,
+            "text":        response.text,
+            "tokens_used": { "in": response.tokens_in, "out": response.tokens_out },
+            "backend":     response.backend,
+            "model":       response.model,
+            "duration_ms": response.duration_ms,
+            "autonomy":    autonomy_label,
+        })
+        .to_string()
     }
 
     #[tool(
