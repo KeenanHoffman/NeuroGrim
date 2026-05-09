@@ -37,6 +37,14 @@
 //!   Replaces the string-match in `neurogrim-mcp::context::load_cmdb_data`;
 //!   built-in factories (`cmdb`, `a2a`, `function`) ship in V5-MOD-1
 //!   Phase 2; the registry is hand-rolled (no `inventory` dep).
+//! - **[`llm_backend`]** — V5-feature-1 (2026-05-09) `LlmBackend` trait +
+//!   `LlmBackendFactory` + `LlmBackendRegistry` for the pluggable LLM
+//!   subagent dispatch. Built-in factories ship in consumer crates
+//!   (`neurogrim-mcp` for HTTP-shaped backends; `neurogrim-cli` for the
+//!   `codex-cli` subprocess backend) so this crate's "zero I/O" posture
+//!   stays intact. The registry lives here so any consumer can program
+//!   against the same trait. Same hand-rolled `HashMap<&str, Box<dyn>>`
+//!   substrate as scoring_source / sensor / queue_backend.
 //! - **[`sensor`]** — V5-MOD-2 (2026-05-02) `Sensor` trait +
 //!   `SensorFactory` + `SensorRegistry` for the pluggable sensor
 //!   dispatch. Replaces the 21-arm string match in
@@ -110,6 +118,10 @@ pub mod diagnostics_ledger;
 pub mod ecosystem;
 pub mod governance;
 pub mod learning;
+// V5-feature-1 (2026-05-09) — pluggable LLM-subagent dispatch.
+// Trait + factory + registry only; built-in impls live in consumer
+// crates (neurogrim-mcp, neurogrim-cli) to keep this crate I/O-free.
+pub mod llm_backend;
 pub mod ports;
 #[cfg(feature = "sqlite")]
 pub mod metrics;

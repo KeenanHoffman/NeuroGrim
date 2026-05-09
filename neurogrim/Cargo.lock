@@ -1801,6 +1801,7 @@ name = "neurogrim-cli"
 version = "5.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "chrono",
  "clap",
