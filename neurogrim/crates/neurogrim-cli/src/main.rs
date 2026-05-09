@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 
 mod commands;
 mod diagnostics_layer;
+mod llm_backends;
 mod output;
 mod tracing_init;
 
@@ -388,6 +389,14 @@ enum Commands {
         token_store: Option<String>,
     },
 
+    /// Dispatch a prompt to an LLM subagent backend. Backends register
+    /// in `crates/neurogrim-cli/src/llm_backends/`; the v1 built-in is
+    /// `copilot-proxied` which talks HTTP to `D:/Brains/copilot-proxy`
+    /// on port 4546. Outputs a JSON envelope on stdout + appends an
+    /// outcome row to `.claude/brain/subagent-outcomes.jsonl` for the
+    /// `subagent-health` domain.
+    Invoke(commands::invoke::InvokeArgs),
+
     /// Invoke a single A2A message against a peer Brain (spec §13.3).
     #[command(name = "a2a-invoke", visible_alias = "commune")]
     A2aInvoke {
@@ -585,6 +594,7 @@ async fn main() -> Result<()> {
             )
             .await
         }
+        Commands::Invoke(args) => commands::invoke::run(args).await,
         Commands::A2aInvoke {
             peer_url,
             message_type,

@@ -15,6 +15,10 @@ pub mod federation;
 pub mod health;
 pub mod init;
 pub mod init_scaffold;
+// Feature 1, Phase 1.4 (2026-05-09) — `neurogrim invoke` dispatches
+// a prompt to a registered LLM backend (initially `copilot-proxied`,
+// talking to D:/Brains/copilot-proxy on port 4546).
+pub mod invoke;
 pub mod narrate;
 pub mod publish_gate;
 pub mod queue;
