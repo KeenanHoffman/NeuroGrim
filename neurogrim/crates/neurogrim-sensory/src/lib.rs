@@ -33,6 +33,15 @@ pub mod decision_diversity;
 // feature flag if disk pressure justifies it.
 pub mod documentation_graph;
 
+// v2-Feature 6 Phase 6.4 (2026-05-09) — external-content-safety
+// advisory domain. Reads `<project>/.claude/audit.jsonl` for
+// `category=external_content` rows produced by the IDE's
+// `external_content_scan` Tauri command (Phase 6.1) and scores
+// the operator's recent injection-attempt exposure. Always-on
+// (no extra deps); weight 0.0 (advisory) until ≥30 days of audit
+// history validates the heuristic per LSP-Brains §15.5.
+pub mod external_content_safety;
+
 // V5-MOD-2 Phase 4 (2026-05-02) — per-sensor `#[cfg(feature)]`
 // gates carve out source modules + heavy deps for slim builds.
 // Default-features build pulls all 21 sensors (= v4 behavior).
