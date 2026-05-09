@@ -19,18 +19,19 @@
 // (chrono, serde, serde_json) so it's safe to leave unfeature-gated.
 pub mod cmdb;
 
-// v2-Feature 7 Phase 1 (2026-05-09) — decision-diversity computation
-// library. Pure-stdlib + serde; no rmcp tool router yet. Phase 7.2
-// wraps this in the sensor-trait shape + adds a `decision-diversity`
-// brain domain registration. Always-on so callers (CLI, tests, future
-// drift sensors) can use the library without sensor-feature gating.
+// v2-Feature 7 (2026-05-09) — decision-diversity research-only
+// domain. Always-on stdlib; gated alongside the sensor_impls
+// registration. Phase 2 (this commit) adds the analyzer that
+// emits a CMDB envelope so the domain can be registered in
+// brain-registry.json + appear in `neurogrim score`.
+#[cfg(feature = "sensor-decision-diversity")]
 pub mod decision_diversity;
 
-// v2-Feature 5 Phase 1 (2026-05-09) — documentation-graph sensor.
-// Walks *.md files, extracts cross-references via pulldown-cmark,
-// builds a directed graph, scores by orphan ratio + broken links +
-// cycle count. Always-on (small dep) — Phase 2 may carve behind a
-// feature flag if disk pressure justifies it.
+// v2-Feature 5 (2026-05-09) — documentation-graph sensor. Walks
+// *.md files, extracts cross-references via pulldown-cmark,
+// builds a directed graph, scores by orphan ratio + broken
+// links + cycle count.
+#[cfg(feature = "sensor-documentation-graph")]
 pub mod documentation_graph;
 
 // v2-Feature 6 Phase 6.4 (2026-05-09) — external-content-safety

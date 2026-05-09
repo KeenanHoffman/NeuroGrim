@@ -63,10 +63,14 @@ use crate::capability_hygiene::analyze_capability_hygiene;
 use crate::code_quality::analyze_code_quality;
 #[cfg(feature = "sensor-coherence")]
 use crate::coherence::analyze_coherence;
+#[cfg(feature = "sensor-decision-diversity")]
+use crate::decision_diversity::analyze_decision_diversity;
 #[cfg(feature = "sensor-deploy-readiness")]
 use crate::deploy_readiness::analyze_deploy_readiness;
 #[cfg(feature = "sensor-docker-topology")]
 use crate::docker_topology::analyze_docker_topology;
+#[cfg(feature = "sensor-documentation-graph")]
+use crate::documentation_graph::analyze_documentation_graph;
 #[cfg(feature = "sensor-domain-calibration")]
 use crate::domain_calibration::analyze_domain_calibration;
 #[cfg(feature = "sensor-federated-patterns")]
@@ -204,8 +208,12 @@ infallible_sensor!(CapabilityHygieneSensor, CapabilityHygieneSensorFactory, "cap
 infallible_sensor!(CodeQualitySensor, CodeQualitySensorFactory, "code-quality", analyze_code_quality);
 #[cfg(feature = "sensor-coherence")]
 infallible_sensor!(CoherenceSensor, CoherenceSensorFactory, "coherence", analyze_coherence);
+#[cfg(feature = "sensor-decision-diversity")]
+infallible_sensor!(DecisionDiversitySensor, DecisionDiversitySensorFactory, "decision-diversity", analyze_decision_diversity);
 #[cfg(feature = "sensor-deploy-readiness")]
 infallible_sensor!(DeployReadinessSensor, DeployReadinessSensorFactory, "deploy-readiness", analyze_deploy_readiness);
+#[cfg(feature = "sensor-documentation-graph")]
+infallible_sensor!(DocumentationGraphSensor, DocumentationGraphSensorFactory, "documentation-graph", analyze_documentation_graph);
 #[cfg(feature = "sensor-domain-calibration")]
 infallible_sensor!(DomainCalibrationSensor, DomainCalibrationSensorFactory, "domain-calibration", analyze_domain_calibration);
 #[cfg(feature = "sensor-federated-patterns")]
@@ -293,8 +301,12 @@ pub fn built_in_factories() -> Vec<Box<dyn SensorFactory>> {
     factories.push(Box::new(CodeQualitySensorFactory));
     #[cfg(feature = "sensor-coherence")]
     factories.push(Box::new(CoherenceSensorFactory));
+    #[cfg(feature = "sensor-decision-diversity")]
+    factories.push(Box::new(DecisionDiversitySensorFactory));
     #[cfg(feature = "sensor-deploy-readiness")]
     factories.push(Box::new(DeployReadinessSensorFactory));
+    #[cfg(feature = "sensor-documentation-graph")]
+    factories.push(Box::new(DocumentationGraphSensorFactory));
     #[cfg(feature = "sensor-domain-calibration")]
     factories.push(Box::new(DomainCalibrationSensorFactory));
     #[cfg(feature = "sensor-federated-patterns")]
@@ -408,6 +420,14 @@ mod tests {
             // Fork C: secrets-readiness orphan reclaimed in Phase 3.
             #[cfg(feature = "sensor-secrets-readiness")]
             "secrets-readiness",
+            // v2-Feature 5 (2026-05-09) — documentation-graph sensor
+            // wired into dispatch alongside its brain-registry domain.
+            #[cfg(feature = "sensor-documentation-graph")]
+            "documentation-graph",
+            // v2-Feature 7 (2026-05-09) — decision-diversity research
+            // sensor wired into dispatch. Always scores 100 (advisory).
+            #[cfg(feature = "sensor-decision-diversity")]
+            "decision-diversity",
         ];
 
         let mut registry = SensorRegistry::new();

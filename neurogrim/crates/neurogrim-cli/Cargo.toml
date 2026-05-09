@@ -89,8 +89,10 @@ default = [
     "sensor-capability-hygiene",
     "sensor-code-quality",
     "sensor-coherence",
+    "sensor-decision-diversity",
     "sensor-deploy-readiness",
     "sensor-docker-topology",
+    "sensor-documentation-graph",
     "sensor-domain-calibration",
     "sensor-federated-patterns",
     "sensor-git-health",
@@ -115,8 +117,10 @@ sensor-agent-behavior = ["neurogrim-sensory/sensor-agent-behavior"]
 sensor-capability-hygiene = ["neurogrim-sensory/sensor-capability-hygiene"]
 sensor-code-quality = ["neurogrim-sensory/sensor-code-quality"]
 sensor-coherence = ["neurogrim-sensory/sensor-coherence"]
+sensor-decision-diversity = ["neurogrim-sensory/sensor-decision-diversity"]
 sensor-deploy-readiness = ["neurogrim-sensory/sensor-deploy-readiness"]
 sensor-docker-topology = ["neurogrim-sensory/sensor-docker-topology"]
+sensor-documentation-graph = ["neurogrim-sensory/sensor-documentation-graph"]
 sensor-domain-calibration = ["neurogrim-sensory/sensor-domain-calibration"]
 sensor-federated-patterns = ["neurogrim-sensory/sensor-federated-patterns"]
 sensor-git-health = ["neurogrim-sensory/sensor-git-health"]

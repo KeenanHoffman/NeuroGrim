@@ -26,7 +26,9 @@
       "domain-calibration": 0.0,
       "trust-budget": 0.0,
       "operator-calibration": 0.0,
-      "federated-patterns": 0.0
+      "federated-patterns": 0.0,
+      "documentation-graph": 0.0,
+      "decision-diversity": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -55,7 +57,13 @@
           "path": ".claude/git-health-cmdb.json"
         }
       },
-      "_todo_rust-health": "Advisory domain for Rust-specific signals: clippy lint count, cargo audit CVEs, unused deps, MSRV compliance. Activate: add scoring_source pointing to a custom sensory tool output, set weight > 0. See sdk-python/ for writing a custom sensory tool.",
+      "rust-health": {
+        "_doc": "Advisory domain for Rust-specific signals: clippy lint count, cargo audit CVEs, unused deps, MSRV compliance. v1 stub — CMDB seeded with sensor_status: pending and score 0 until a real rust-health sensor lands. Promote weight > 0 once the sensor exists. See sdk-python/ for writing a custom sensory tool.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/rust-health-cmdb.json"
+        }
+      },
       "security-standards": {
         "scoring_source": {
           "type": "cmdb",
@@ -205,6 +213,31 @@
         "scoring_source": {
           "type": "cmdb",
           "path": ".claude/federated-patterns-cmdb.json"
+        }
+      },
+      "documentation-graph": {
+        "_doc": "v2-Feature 5 (2026-05-09): cross-reference health for the project's *.md tree. Walks every markdown file (skipping node_modules / target / .git / dist / build / __pycache__ / .cargo / .rustup / venv / .venv), extracts links via pulldown-cmark v0.10, builds a directed graph, and computes orphans (no inbound + not index-shaped) + broken internal links + non-trivial SCCs (cycles via Tarjan). README.md / index.md / CHANGELOG.md are treated as intentional roots and never count as orphans. Score = 100 - orphan_penalty(<=30) - broken_penalty(<=40) - cycle_penalty(<=10). Refresh: `neurogrim sensory documentation-graph --project-root . > .claude/documentation-graph-cmdb.json`. Advisory weight 0.0 in v1 — promotion past advisory requires §15.5-equivalent calibration evidence (e.g., 30+ days of CMDB history confirming flagged orphans/broken links are genuine drift vs intentional file shapes).",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/documentation-graph-cmdb.json"
+        },
+        "exported_variables": {
+          "documentation-graph:total_docs":      { "field": "total_docs",      "type": "number" },
+          "documentation-graph:total_edges":     { "field": "total_edges",     "type": "number" },
+          "documentation-graph:orphan_count":    { "field": "orphan_count",    "type": "number" },
+          "documentation-graph:broken_count":    { "field": "broken_count",    "type": "number" },
+          "documentation-graph:cycle_count":     { "field": "cycle_count",     "type": "number" }
+        }
+      },
+      "decision-diversity": {
+        "_doc": "v2-Feature 7 (2026-05-09): RESEARCH-ONLY domain. Reads <project>/.claude/brain/subagent-outcomes.jsonl, computes per-capability Shannon entropy + top-3 choice distribution, and surfaces concentration patterns. **Always scores 100** — this domain does NOT detect bias; it surfaces decision concentration and lets operators interpret. Concentration may be appropriate (workspace conventions, project constraints) or worth review. Promotion to weighted (>0.0) is BLOCKED indefinitely per LSP-Brains §15.5: weighted domains require a validated classifier, and no validated classifier exists for 'appropriate vs biased concentration'. Operators who want a hard signal should fork + extend with their own classifier. Refresh: `neurogrim sensory decision-diversity --project-root . > .claude/decision-diversity-cmdb.json`. Missing ledger file is NOT an error — emits a `no_ledger_yet` info finding so operators see 'no signal yet' rather than a misleading 0 score.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/decision-diversity-cmdb.json"
+        },
+        "exported_variables": {
+          "decision-diversity:total_decisions":   { "field": "total_decisions",   "type": "number" },
+          "decision-diversity:capability_count":  { "field": "capability_count",  "type": "number" }
         }
       }
     },

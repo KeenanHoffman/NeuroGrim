@@ -37,6 +37,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Single recorded decision. Maps to one row in subagent-outcomes.jsonl
 /// (or a similar ledger). Phase 1 cares about three fields; future
@@ -190,6 +191,109 @@ pub fn parse_outcomes_jsonl(path: &Path) -> std::io::Result<Vec<Decision>> {
         }
     }
     Ok(out)
+}
+
+/// Sensor entry point — emits a CMDB envelope summarizing decision-
+/// concentration patterns from `<project_root>/.claude/brain/
+/// subagent-outcomes.jsonl`.
+///
+/// **Always scores 100.** Per the module-level disclaimer, this
+/// domain surfaces concentration; it never penalizes. Operators
+/// interpret the per-capability entropy + top_choices breakdown
+/// and decide whether the concentration is appropriate or worth
+/// surfacing as a finding. Promotion to weighted (>0.0) is blocked
+/// indefinitely per LSP-Brains §15.5 — no validated bias-vs-
+/// appropriate-concentration classifier exists.
+///
+/// Missing ledger file is NOT an error: the CMDB carries
+/// `total_decisions: 0` + a `no_ledger_yet` info finding so
+/// operators see "no signal yet" rather than a confusing 0 score.
+pub async fn analyze_decision_diversity(project_root: &str) -> Value {
+    use crate::cmdb::{build_cmdb, Finding};
+
+    let ledger = Path::new(project_root)
+        .join(".claude")
+        .join("brain")
+        .join("subagent-outcomes.jsonl");
+
+    let decisions = match parse_outcomes_jsonl(&ledger) {
+        Ok(d) => d,
+        Err(_) => Vec::new(), // missing or unreadable → empty stream
+    };
+
+    let report = compute_diversity(&decisions);
+
+    let mut findings: Vec<Finding> = Vec::new();
+    if report.total_decisions == 0 {
+        findings.push(Finding {
+            name: "no_ledger_yet".into(),
+            status: "info".into(),
+            points: 0,
+            detail: Some(format!(
+                "No decisions in {}. Domain stays informational.",
+                ledger.display()
+            )),
+        });
+    } else {
+        findings.push(Finding {
+            name: "decisions_observed".into(),
+            status: "info".into(),
+            points: 0,
+            detail: Some(format!(
+                "{} decisions across {} capabilities",
+                report.total_decisions, report.capability_count
+            )),
+        });
+        // Surface a research-only concentration finding for any
+        // capability with normalized entropy < 0.5 AND sample size
+        // >= 10. Threshold is heuristic; operators read the
+        // disclaimer to interpret.
+        for cap in &report.per_capability {
+            if cap.sample_size >= 10 && cap.normalized < 0.5 {
+                findings.push(Finding {
+                    name: format!("concentration:{}", cap.capability),
+                    status: "info".into(),
+                    points: 0,
+                    detail: Some(format!(
+                        "Capability `{}` shows normalized entropy {:.2} \
+                         over {} decisions across {} distinct choices. \
+                         Top choices: {:?}. RESEARCH-ONLY: concentration may \
+                         be appropriate (workspace conventions) or worth \
+                         operator review.",
+                        cap.capability,
+                        cap.normalized,
+                        cap.sample_size,
+                        cap.distinct_choices,
+                        cap.top_choices,
+                    )),
+                });
+            }
+        }
+    }
+
+    let extras = vec![
+        ("total_decisions", Value::from(report.total_decisions)),
+        ("capability_count", Value::from(report.capability_count)),
+        (
+            "per_capability",
+            serde_json::to_value(&report.per_capability).unwrap_or(Value::Null),
+        ),
+        (
+            "disclaimer",
+            Value::from(
+                "Research-only domain. Surfaces concentration; does NOT detect bias. \
+                 Promotion to weighted (>0.0) blocked indefinitely per LSP-Brains §15.5.",
+            ),
+        ),
+    ];
+
+    build_cmdb(
+        "decision-diversity",
+        100, // always 100 — research-only
+        findings,
+        Some(extras),
+        None,
+    )
 }
 
 /// Shannon entropy in bits. Inputs are raw counts; the function

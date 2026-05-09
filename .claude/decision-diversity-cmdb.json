@@ -1,0 +1,21 @@
+{
+  "capability_count": 0,
+  "disclaimer": "Research-only domain. Surfaces concentration; does NOT detect bias. Promotion to weighted (>0.0) blocked indefinitely per LSP-Brains §15.5.",
+  "findings": [
+    {
+      "detail": "No decisions in .\\.claude\\brain\\subagent-outcomes.jsonl. Domain stays informational.",
+      "name": "no_ledger_yet",
+      "points": 0,
+      "status": "info"
+    }
+  ],
+  "meta": {
+    "schema_version": "1",
+    "updated_at": "2026-05-09T23:04:56.561330400+00:00",
+    "updated_by": "decision-diversity"
+  },
+  "per_capability": [],
+  "score": 100,
+  "total_decisions": 0,
+  "updated_at": "2026-05-09T23:04:56.561330400+00:00"
+}

@@ -96,8 +96,10 @@ default = [
     "sensor-capability-hygiene",
     "sensor-code-quality",
     "sensor-coherence",
+    "sensor-decision-diversity",
     "sensor-deploy-readiness",
     "sensor-docker-topology",
+    "sensor-documentation-graph",
     "sensor-domain-calibration",
     "sensor-federated-patterns",
     "sensor-git-health",
@@ -124,8 +126,14 @@ sensor-agent-behavior = []
 sensor-capability-hygiene = ["dep:jsonschema"]
 sensor-code-quality = []
 sensor-coherence = []
+# v2-Feature 7 (2026-05-09) — research-only decision-diversity domain.
+# Pure stdlib; no extra deps.
+sensor-decision-diversity = []
 sensor-deploy-readiness = []
 sensor-docker-topology = []
+# v2-Feature 5 (2026-05-09) — documentation-graph domain. Activates the
+# pulldown-cmark dep alongside the source module.
+sensor-documentation-graph = []
 sensor-domain-calibration = []
 sensor-federated-patterns = []
 sensor-git-health = []
