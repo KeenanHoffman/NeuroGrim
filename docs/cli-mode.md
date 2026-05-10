@@ -71,7 +71,7 @@ BrainServer tool to its CLI equivalent.
 
 ## How the Agent Uses It
 
-Load the [cli-mode skill](../.claude/skills/cli-mode.md) at session
+Load the [cli-mode skill](../.claude/skills/cli-mode/SKILL.md) at session
 start so the agent knows to reach for Bash instead of MCP tools.
 The skill cites the same CLI surface doc and enumerates the
 tradeoffs from the agent's perspective.

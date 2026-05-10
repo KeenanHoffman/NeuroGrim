@@ -62,12 +62,12 @@ pays when each concern's work exceeds that threshold.
 
 | # | Pattern | Use when | Full walk-through |
 |---|---------|----------|-------------------|
-| 1 | **Parallel Fan-Out** | N independent concerns, no shared state, each ≥ 15s work | [`guide § Pattern 1`](../../docs/subagent-patterns-guide.md#pattern-1--parallel-fan-out) |
-| 2 | **Staged Convergence** | Parallel stage 1 feeds a stage 2 decision (inline or parallel) | [`guide § Pattern 2`](../../docs/subagent-patterns-guide.md#pattern-2--staged-convergence) |
-| 3 | **Sequential Hand-Off** | A's structured output flows as explicit input to B | [`guide § Pattern 3`](../../docs/subagent-patterns-guide.md#pattern-3--sequential-hand-off) |
-| 4 | **Hat-Calibrated Briefing** | Parent wearing a hat; subagents need the same lens | [`guide § Pattern 4`](../../docs/subagent-patterns-guide.md#pattern-4--hat-calibrated-briefing) |
-| 5 | **Sensor Fan-Out** | Parallel `neurogrim sensory *` queries bucketed by latency | [`guide § Pattern 5`](../../docs/subagent-patterns-guide.md#pattern-5--sensor-fan-out) |
-| 6 | **Human-Facing Output** | Any message to the human user — treat as a distillation problem | [`guide § Pattern 6`](../../docs/subagent-patterns-guide.md#pattern-6--human-facing-output-communication-interface) |
+| 1 | **Parallel Fan-Out** | N independent concerns, no shared state, each ≥ 15s work | [`guide § Pattern 1`](../../../docs/subagent-patterns-guide.md#pattern-1--parallel-fan-out) |
+| 2 | **Staged Convergence** | Parallel stage 1 feeds a stage 2 decision (inline or parallel) | [`guide § Pattern 2`](../../../docs/subagent-patterns-guide.md#pattern-2--staged-convergence) |
+| 3 | **Sequential Hand-Off** | A's structured output flows as explicit input to B | [`guide § Pattern 3`](../../../docs/subagent-patterns-guide.md#pattern-3--sequential-hand-off) |
+| 4 | **Hat-Calibrated Briefing** | Parent wearing a hat; subagents need the same lens | [`guide § Pattern 4`](../../../docs/subagent-patterns-guide.md#pattern-4--hat-calibrated-briefing) |
+| 5 | **Sensor Fan-Out** | Parallel `neurogrim sensory *` queries bucketed by latency | [`guide § Pattern 5`](../../../docs/subagent-patterns-guide.md#pattern-5--sensor-fan-out) |
+| 6 | **Human-Facing Output** | Any message to the human user — treat as a distillation problem | [`guide § Pattern 6`](../../../docs/subagent-patterns-guide.md#pattern-6--human-facing-output-communication-interface) |
 
 The guide carries every pattern's walk-through with worked examples (LaaS
 incident response, post-deploy verification, pre-deploy safety gate, debug

@@ -8,7 +8,7 @@ LSP Brains is **a declared overlay of project-shaped commitments on a general-pu
 statistical engine** — the LLM provides cognition; the Brain provides what to be
 cognizant of. NeuroGrim is the Rust engine that runs that overlay.
 
-NeuroGrim implements the [LSP Brains Specification](spec/LSP-BRAINS-SPEC.md) — a
+NeuroGrim implements the [LSP Brains Specification](https://github.com/KeenanHoffman/LSP-Brains/blob/main/spec/LSP-BRAINS-SPEC.md) — a
 methodology for giving AI agents continuous, honest awareness of project health through
 MCP-based sensory tools, A2A-based peer coordination, cross-domain correlation,
 trajectory intelligence, and gated governance. Sensory tools are small spells cast
@@ -359,7 +359,7 @@ MyVaultProvider.register(project_root=".")
 
 - **[Whitepaper](whitepaper/WHITEPAPER.md)** — Full methodology, architecture, and design principles
 - **[Domain Catalog](docs/DOMAINS.md)** — All 10 built-in domains + potential domains to inspire adopters
-- **[LSP Brains Spec](spec/LSP-BRAINS-SPEC.md)** — The formal specification
+- **[LSP Brains Spec](https://github.com/KeenanHoffman/LSP-Brains/blob/main/spec/LSP-BRAINS-SPEC.md)** — The formal specification (separate repo; sibling submodule at `D:/Brains/LSP-Brains/`)
 - **[Vision](roadmap/VISION.md)** — Design principles and north star
 - **[Roadmap](roadmap/ROADMAP.md)** — Stage progression and current status
 - **[LaaS Reference](domains/laas/)** — Complete archived implementation (16 domains, 26 gates, 3 hats)

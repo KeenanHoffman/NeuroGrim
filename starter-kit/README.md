@@ -16,7 +16,7 @@ reference material — it is **not maintained** and should not be used for new a
 | Need | New home |
 |------|----------|
 | Quickstart | `README.md` at repo root — shows `cargo build` + `neurogrim sensory` flow |
-| Spec | [`spec/LSP-BRAINS-SPEC.md`](../spec/LSP-BRAINS-SPEC.md) (v2.1+) |
+| Spec | [`LSP-Brains/spec/LSP-BRAINS-SPEC.md`](https://github.com/KeenanHoffman/LSP-Brains/blob/main/spec/LSP-BRAINS-SPEC.md) (v2.1+; sibling submodule) |
 | Write a custom sensory tool | `sdk-python/README.md` — Python SDK with `lsp-brains` package |
 | Built-in sensory tools | `neurogrim/crates/neurogrim-sensory/` (Rust) |
 | Registry template | `.claude/brain-registry.json` at repo root (the Meta Brain registry) |

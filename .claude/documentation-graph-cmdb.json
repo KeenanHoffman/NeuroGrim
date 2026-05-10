@@ -1,21 +1,21 @@
 {
-  "broken_link_count": 44,
+  "broken_link_count": 30,
   "cycle_count": 5,
   "findings": [
     {
-      "detail": "1279 markdown files, 119 outbound links",
+      "detail": "1279 markdown files, 130 outbound links",
       "name": "doc_count",
       "points": 0,
       "status": "info"
     },
     {
-      "detail": "1208 of 1279 docs have no inbound references — first 5: [.claude/plans/v5-mod-1-scoring-source-trait.md, .claude/plans/v5-mod-2-sensor-trait.md, .claude/plans/v5-mod-3-queue-backend-factory.md, .claude/plans/v5-sdk-1-thin-reexport.md, .claude/skills/a2a/SKILL.md]",
+      "detail": "1206 of 1279 docs have no inbound references — first 5: [.claude/plans/v5-mod-1-scoring-source-trait.md, .claude/plans/v5-mod-2-sensor-trait.md, .claude/plans/v5-mod-3-queue-backend-factory.md, .claude/plans/v5-sdk-1-thin-reexport.md, .claude/skills/a2a/SKILL.md]",
       "name": "orphan_docs",
       "points": -28,
       "status": "warn"
     },
     {
-      "detail": "44 broken outbound link(s) — first 5: [.claude/skills/subagent-patterns/SKILL.md->.claude/docs/subagent-patterns-guide.md, .claude/skills/subagent-patterns/SKILL.md->.claude/docs/subagent-patterns-guide.md, .claude/skills/subagent-patterns/SKILL.md->.claude/docs/subagent-patterns-guide.md, .claude/skills/subagent-patterns/SKILL.md->.claude/docs/subagent-patterns-guide.md, .claude/skills/subagent-patterns/SKILL.md->.claude/docs/subagent-patterns-guide.md]",
+      "detail": "30 broken outbound link(s) — first 5: [CLAUDE.md->.claude/experiments/brain-vs-control/reports/reframe-post-mortem.md, CLAUDE.md->.claude/experiments/brain-vs-control/reports/phase2-report.md, CLAUDE.md->.claude/experiments/brain-vs-control/reports/phase3-report.md, CLAUDE.md->.claude/experiments/brain-vs-control/reports/synthesis.md, CLAUDE.md->.claude/experiments/brain-vs-control/reports/dispatcher-rule-analysis.md]",
       "name": "broken_links",
       "points": -40,
       "status": "fail"
@@ -29,12 +29,12 @@
   ],
   "meta": {
     "schema_version": "1",
-    "updated_at": "2026-05-09T23:04:47.817382500+00:00",
+    "updated_at": "2026-05-10T12:04:48.916665900+00:00",
     "updated_by": "check-documentation-graph"
   },
-  "orphan_count": 1208,
+  "orphan_count": 1206,
   "score": 21,
   "total_docs": 1279,
-  "total_edges": 119,
-  "updated_at": "2026-05-09T23:04:47.817382500+00:00"
+  "total_edges": 130,
+  "updated_at": "2026-05-10T12:04:48.916665900+00:00"
 }
