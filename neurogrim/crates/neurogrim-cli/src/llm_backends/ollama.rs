@@ -1,9 +1,26 @@
-//! `ollama` LLM backend — OpenAI-compatible chat completions routed
-//! through a local Ollama daemon (default `http://127.0.0.1:11434`).
+//! `ollama` LLM backend — native chat endpoint routed through a local
+//! Ollama daemon (default `http://127.0.0.1:11434`).
 //!
-//! v2-Feature 1 — 2026-05-09. Mirrors the `copilot_proxied.rs` pattern
-//! since Ollama exposes the same OpenAI shape at `/v1/chat/completions`,
-//! letting the request/response code reuse with minimal divergence.
+//! v2-Feature 1 — 2026-05-09. Initially used Ollama's `/v1/chat/completions`
+//! OpenAI-compat endpoint for shape-reuse with `copilot_proxied.rs`, but
+//! that endpoint can't disable reasoning-model thinking blocks: qwen3-family
+//! models burn the entire token budget on `<think>…</think>` reasoning
+//! before emitting the visible answer (verified 2026-05-12 against
+//! qwen3.5:0.8b — 8000+ thinking tokens, empty visible response). The
+//! native `/api/chat` endpoint accepts `"think": false`, which suppresses
+//! the reasoning phase entirely (7-10s vs 240s+ on the same hardware).
+//!
+//! ## Endpoint + request shape
+//!
+//! POST `/api/chat`. Request fields:
+//!   - `model`, `messages` (same as OpenAI)
+//!   - `stream: false` (unary contract)
+//!   - `think: false` (suppress qwen3-style reasoning blocks)
+//!   - `options: { num_predict, temperature }` (Ollama-native cap)
+//!
+//! Response shape differs from OpenAI-compat — `message.content` lives
+//! at the top level (no `choices` array); token counts are
+//! `prompt_eval_count` + `eval_count`.
 //!
 //! ## Auth posture
 //!
@@ -17,7 +34,7 @@
 //! ## Default model
 //!
 //! When the caller passes an empty model string, the backend defaults
-//! to `qwen3.5:1.7b` (operator-locked choice). The CLI verb's
+//! to `qwen3.5:0.8b` (operator-locked choice). The CLI verb's
 //! `--model` flag overrides per call.
 
 use std::sync::Arc;
@@ -33,7 +50,7 @@ use neurogrim_core::llm_backend::{
 };
 
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:11434";
-const DEFAULT_MODEL: &str = "qwen3.5:1.7b";
+const DEFAULT_MODEL: &str = "qwen3.5:0.8b";
 
 #[derive(Default)]
 pub struct OllamaFactory;
@@ -85,7 +102,7 @@ impl OllamaBackend {
     }
 
     fn endpoint(&self) -> String {
-        format!("{}/v1/chat/completions", self.base_url)
+        format!("{}/api/chat", self.base_url)
     }
 
     /// Probe `/api/tags` for the locally-installed model list. Used by
@@ -122,20 +139,36 @@ fn is_loopback(base_url: &str) -> bool {
         || lower.starts_with("https://localhost")
 }
 
-// ── OpenAI-compatible request/response shapes (shared semantics with
-//    copilot_proxied; intentional duplication until Phase 1.5b dedupes
-//    backend impls into neurogrim-core under a feature flag).
+// ── Ollama native `/api/chat` request + response shapes. Distinct from
+//    `copilot_proxied.rs` (which talks OpenAI shape) — the divergence
+//    is intentional: `think: false` is an Ollama-specific knob that
+//    OpenAI compat doesn't expose. Phase 1.5b's backend-dedup work
+//    will keep the OpenAI types in core and let Ollama declare its own
+//    request envelope.
 
 #[derive(Debug, Serialize)]
 struct ChatRequest<'a> {
     model: &'a str,
     messages: Vec<ChatMessage<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    max_tokens: Option<u32>,
+    stream: Option<bool>,
+    /// Suppress qwen3-style `<think>` reasoning blocks. Without this,
+    /// reasoning models burn the entire `num_predict` budget on
+    /// invisible thinking tokens before emitting the answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    think: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    options: Option<ChatOptions>,
+}
+
+#[derive(Debug, Serialize)]
+struct ChatOptions {
+    /// Ollama-native cap (the `/v1/chat/completions` endpoint's
+    /// `max_tokens` field maps to this internally).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_predict: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    stream: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -148,28 +181,17 @@ struct ChatMessage<'a> {
 struct ChatResponse {
     #[serde(default)]
     model: Option<String>,
-    choices: Vec<ChatChoice>,
+    message: ResponseMessage,
     #[serde(default)]
-    usage: Option<Usage>,
+    prompt_eval_count: u32,
+    #[serde(default)]
+    eval_count: u32,
 }
 
 #[derive(Debug, Deserialize)]
-struct ChatChoice {
-    message: ChoiceMessage,
-}
-
-#[derive(Debug, Deserialize)]
-struct ChoiceMessage {
+struct ResponseMessage {
     #[serde(default)]
     content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct Usage {
-    #[serde(default)]
-    prompt_tokens: u32,
-    #[serde(default)]
-    completion_tokens: u32,
 }
 
 #[async_trait]
@@ -215,14 +237,24 @@ impl LlmBackend for OllamaBackend {
             content: prompt,
         });
 
+        let chat_options = if options.max_tokens.is_some() || options.temperature.is_some() {
+            Some(ChatOptions {
+                num_predict: options.max_tokens,
+                temperature: options.temperature,
+            })
+        } else {
+            None
+        };
         let body = ChatRequest {
             model,
             messages,
-            max_tokens: options.max_tokens,
-            temperature: options.temperature,
-            // Explicit `stream: false` — Ollama's OpenAI-compatible
-            // endpoint defaults to streaming NDJSON otherwise.
+            // Explicit `stream: false` — `/api/chat` streams NDJSON by
+            // default; we want the unary invoke contract.
             stream: Some(false),
+            // Suppress qwen3-family thinking blocks. Harmless on
+            // non-reasoning models — Ollama just ignores the field.
+            think: Some(false),
+            options: chat_options,
         };
 
         let started = Instant::now();
@@ -245,22 +277,11 @@ impl LlmBackend for OllamaBackend {
         let parsed: ChatResponse = resp
             .json()
             .await
-            .context("parsing chat-completion response as JSON")?;
-        let text = parsed
-            .choices
-            .into_iter()
-            .next()
-            .map(|c| c.message.content)
-            .unwrap_or_default();
-        let (tokens_in, tokens_out) = parsed
-            .usage
-            .as_ref()
-            .map(|u| (u.prompt_tokens, u.completion_tokens))
-            .unwrap_or((0, 0));
+            .context("parsing /api/chat response as JSON")?;
         Ok(LlmResponse {
-            text,
-            tokens_in,
-            tokens_out,
+            text: parsed.message.content,
+            tokens_in: parsed.prompt_eval_count,
+            tokens_out: parsed.eval_count,
             model: parsed.model.unwrap_or_else(|| model.to_string()),
             backend: "ollama".to_string(),
             duration_ms: started.elapsed().as_millis() as u64,
