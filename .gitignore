@@ -134,3 +134,10 @@ neurogrim/.dry-run-logs/
 **/a2a-tokens.sqlite
 **/a2a-tokens.sqlite-shm
 **/a2a-tokens.sqlite-wal
+
+# Per-deployment runtime state held in the workspace's neurogrim/data/
+# directory: the LLM token-use store, the cost-budget store, and the
+# audit log. All three are populated as the engine runs (LLM calls,
+# budget reads/writes, audit emits) and never represent committable
+# canonical state.
+neurogrim/data/

@@ -13,7 +13,7 @@ roles:
   # local, low-cost model so operators get cheap second opinions.
   advisor:
     backend: ollama
-    model: qwen3.5:1.7b
+    model: qwen3.5:0.8b
     system_prompt: |
       You are an advisor. Read the operator's question, identify the
       single most important consideration, and respond in 1-3 sentences.
@@ -38,7 +38,7 @@ roles:
   # Local model — fast, no token budget impact.
   rubber-duck:
     backend: ollama
-    model: qwen3.5:1.7b
+    model: qwen3.5:0.8b
     system_prompt: |
       You are a Socratic listener. Read what the operator just said and
       ask exactly one clarifying question. Do not give advice or

@@ -1,0 +1,21 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "neurogrim-dashboard",
+      "runtimeExecutable": "D:/Brains/NeuroGrim/neurogrim/target/debug/neurogrim.exe",
+      "runtimeArgs": [
+        "ui",
+        "--allow-mutations",
+        "--no-browser",
+        "--port",
+        "8420",
+        "--bind",
+        "127.0.0.1",
+        "--registry",
+        "D:/Brains/NeuroGrim/.claude/brain-registry.json"
+      ],
+      "port": 8420
+    }
+  ]
+}

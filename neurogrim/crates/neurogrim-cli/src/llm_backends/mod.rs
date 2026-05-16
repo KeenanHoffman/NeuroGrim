@@ -16,7 +16,7 @@
 //! - `ollama` (v2-Feature 1, 2026-05-09) — talks to a local Ollama
 //!   daemon at `http://127.0.0.1:11434/v1/chat/completions`.
 //!   No auth (loopback-only, defense-in-depth check on base_url).
-//!   Default model `qwen3.5:1.7b`.
+//!   Default model `qwen3.5:0.8b`.
 //!
 //! ## Deferred
 //!

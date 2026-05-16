@@ -49,7 +49,7 @@ pub struct Decision {
     /// is computed PER CAPABILITY because conventions vary.
     pub capability: String,
     /// The choice point — what option the agent picked. Concrete
-    /// examples: a model name (`gpt-4o` vs `qwen3.5:1.7b`), a hat
+    /// examples: a model name (`gpt-4o` vs `qwen3.5:0.8b`), a hat
     /// (`critic-hat` vs `architect-hat`), a library / dep / pattern.
     /// Phase 1 reads from `worn_hat` field of subagent-outcomes; future
     /// phases let the caller specify which field is the choice key.
@@ -395,7 +395,7 @@ mod tests {
         // Valid row
         writeln!(f, r#"{{"capability":"llm-invoke","worn_hat":"advisor","ts":"2026-05-09T00:00:00Z"}}"#).unwrap();
         // Valid row, fallback to model when worn_hat is absent
-        writeln!(f, r#"{{"capability":"llm-invoke","model":"qwen3.5:1.7b"}}"#).unwrap();
+        writeln!(f, r#"{{"capability":"llm-invoke","model":"qwen3.5:0.8b"}}"#).unwrap();
         // Missing capability — skipped
         writeln!(f, r#"{{"worn_hat":"advisor"}}"#).unwrap();
         // Empty worn_hat + no model — skipped
@@ -409,7 +409,7 @@ mod tests {
         let decisions = parse_outcomes_jsonl(&path).expect("parse");
         assert_eq!(decisions.len(), 2);
         assert_eq!(decisions[0].choice, "advisor");
-        assert_eq!(decisions[1].choice, "qwen3.5:1.7b");
+        assert_eq!(decisions[1].choice, "qwen3.5:0.8b");
     }
 
     #[test]

@@ -17,7 +17,7 @@
 //! ## Default model
 //!
 //! When the caller passes an empty model string, the backend defaults
-//! to `qwen3.5:1.7b` (operator-locked choice). The CLI verb's
+//! to `qwen3.5:0.8b` (operator-locked choice). The CLI verb's
 //! `--model` flag overrides per call.
 
 use std::sync::Arc;
@@ -33,7 +33,7 @@ use neurogrim_core::llm_backend::{
 };
 
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:11434";
-const DEFAULT_MODEL: &str = "qwen3.5:1.7b";
+const DEFAULT_MODEL: &str = "qwen3.5:0.8b";
 
 #[derive(Default)]
 pub struct OllamaFactory;

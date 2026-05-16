@@ -180,7 +180,7 @@ roles:
     system_prompt: "Operator-overridden advisor."
   custom-hat:
     backend: ollama
-    model: qwen3.5:1.7b
+    model: qwen3.5:0.8b
 "#,
         )
         .unwrap();

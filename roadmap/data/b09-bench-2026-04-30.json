@@ -1,0 +1,20 @@
+{
+  "cli_mode": {
+    "note": "CLI mode omits NeuroGrim from .mcp.json; see docs/cli-mode.md",
+    "tokens_injected_at_session_start": 0,
+    "tool_count": 0,
+    "tool_list_json_bytes": 0
+  },
+  "delta": {
+    "percent_reduction_from_mcp": 100.0,
+    "tokens_saved_by_cli_mode": 983
+  },
+  "generated_at": "2026-04-30T17:00:02.764869300+00:00",
+  "mcp_mode": {
+    "tokens_injected_at_session_start": 983,
+    "tool_count": 7,
+    "tool_list_json_bytes": 4168
+  },
+  "tokenizer": "tiktoken-rs cl100k_base",
+  "tokenizer_caveat": "cl100k_base is GPT-4 family. Claude's actual tokenizer differs; deltas are directionally right, absolute numbers ~10-20% off."
+}
