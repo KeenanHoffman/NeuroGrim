@@ -1,6 +1,6 @@
 # North Star: LSP Brains
 
-**Last updated:** 2026-05-04 (principle #16: right protocol for the role; principle #17: culture as substrate; principle #18: sensors need sensors; principle #19: agents are sensed [header was stale since #19 landed 2026-04 — V5-DOC-2 incidentally corrected]; principle #20: pluggability by use, not aspiration)
+**Last updated:** 2026-06-14 (principle #16: right protocol for the role; principle #17: culture as substrate; principle #18: sensors need sensors; principle #19: agents are sensed [header was stale since #19 landed 2026-04 — V5-DOC-2 incidentally corrected]; principle #20: pluggability by use, not aspiration; principle #21: agents must perceive their own blind spots [added 2026-06-14])
 
 ---
 
@@ -351,6 +351,30 @@ These guide every decision. When in doubt, choose the option that advances these
     T+P at V5-DOC-2 (2026-05-04); see `roadmap/v5-roadmap.md` § Adversary
     findings A and `.claude/plans/v5-doc-2-vision-spec-alignment.md` § Phase 1
     dual-review verdict.
+
+21. **Agents must perceive their own blind spots.** Principle #18 says the
+    observer needs an observer, and #19 says the agents *running* the observers
+    must themselves be scorable. This turns the lens inward one more time: an
+    agent *debugging the system itself* must be able to perceive what it
+    currently cannot see. Two failures hide in that gap — **causality** that no
+    snapshot captures (what sequence of events led to this state), and
+    **signals that never surface at all** (a subprocess that died on a channel
+    the agent wasn't watching, so the agent had to already *know to ask*). A
+    Brain-driven agent must therefore be able to (a) ask what it cannot
+    currently see and get an answer in the system's own vocabulary, (b) receive
+    **deterministic, cursor-stable** results — the same query or cursor always
+    returns the same rows in the same order, with ids *derived* rather than
+    randomly minted — and (c) be told *proactively*, over a live stream, when
+    something breaks on a channel it never subscribed to. Determinism is the
+    load-bearing half: non-deterministic observability of a non-deterministic
+    system is indistinguishable from noise, and an agent cannot reason reliably
+    against results that shift between identical calls. The motivating failure
+    was concrete — a subprocess exit-code-1 crash that was *detected and logged*
+    yet structurally invisible to an out-of-process agent because nothing pushed
+    it; the agent would have had to poll exactly the right ledger with exactly
+    the right filter. Observability that requires knowing the question in
+    advance is not observability. See NeuroGrim IDE epic **IDE-OBSERV** and
+    METHODOLOGY-EVOLUTION (the cursor-resumable anomaly-stream pattern).
 
 ---
 
