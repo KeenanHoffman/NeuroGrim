@@ -2102,6 +2102,58 @@ Investigate-band test (1, comment-only — not tagged):
 
 **Cross-references.** V5-DOC-2 plan: `.claude/plans/v5-doc-2-vision-spec-alignment.md` § Phase 4 (Fork D2 default — defer to this BACKLOG entry); registered domain path: `D:\Brains\.claude\brain-registry.json:268-272`; cmdb-envelope-v1 schema: `D:\Brains\NeuroGrim\neurogrim\crates\neurogrim-core\data\schemas\cmdb-envelope-v1.schema.json`.
 
+### B-54: BACKLOG-SYMBOLS — backlog-symbol sensor + `backlog-health` domain (IDE-BACKLOG cross-repo) — CANDIDATE (2026-06-17)
+
+**Problem.** The NeuroGrim IDE epic **IDE-BACKLOG** (the backlog as a governed, agent-legible service —
+VISION principle #22) needs NeuroGrim to be the *symbol engine* over the backlog markdown: the IDE pane +
+the deterministic broker + agent awareness all read a structured symbol model derived from the
+backlog/roadmap/vision `.md`. This is the `documentation-graph` sensor pattern applied to the backlog — a
+heading-section parser (`### B-XX: title — STATUS` + `**Dependencies:**`/`**Plan when:**` sub-fields → items,
+deps, epic-links, status, readiness, governance-tier) emitted two ways: `neurogrim sensory backlog` → live
+JSON (the IDE caches + change-refreshes it) and a CMDB feeding a new advisory `backlog-health` domain
+(staleness, dependency tangles, vision-drift, orphans). **This BACKLOG.md is itself the first corpus the
+sensor parses — the feature dogfoods this file's own `### B-NN:` lifecycle.** No dedicated backlog-symbol
+sensor exists yet (the pattern + this file exist; the sensor is new-but-patterned).
+
+**Plan when:**
+1. AND: the IDE-BACKLOG epic moves to active implementation (its discovery is RESOLVED — see
+   `neurogrim-ide/docs/plans/ide-backlog/`).
+2. ✅ MET 2026-06-17: the reuse audit (IDE-BACKLOG D1/WU-0.0) confirms **0-LOC reuse** of the CMDB envelope
+   (`build_cmdb`), the `Sensor` trait + `infallible_sensor!` registration, the `run_sensory` dispatch, the
+   `brain-registry.json` domain pattern, and `pulldown-cmark`; **~300–400 LOC build** = the parser +
+   scoring (no early backlog-brain work exists).
+
+**Reuse-vs-build (WU-0.0 audit, 2026-06-17):** REUSE (0 LOC) — CMDB envelope, Sensor trait + factory macro,
+CLI dispatch, domain declaration, `pulldown-cmark`. BUILD (~300–400 LOC) — the **multi-format** markdown
+walker + item parser (⚠ NeuroGrim `BACKLOG.md` is heading-sections `### B-XX:`; the IDE `ROADMAP.md` is
+epic **tables** `| ID | Subject | dep B0 |` — the parser handles both) + the `backlog-health` scoring.
+⚠ The sensor must take **explicit `--source` paths** (the IDE invokes `neurogrim` with cwd = the IDE repo;
+the backlog spans both repos' markdown).
+
+**What BACKLOG-SYMBOLS would deliver:**
+1. A new sensory tool (`neurogrim sensory backlog --source <paths>`) in `neurogrim-sensory` (the
+   `documentation_graph` template — async `analyze` → cmdb-envelope JSON), a **multi-format** parser
+   (heading-sections + table-rows), per-sensor feature-gated.
+2. The CMDB at `.claude/backlog-health-cmdb.json` (matching a new registered domain path).
+3. A `backlog-health` advisory domain in `brain-registry.json` (weight 0.0) — staleness / dependency-tangle
+   / vision-drift / orphan-item findings.
+4. The live-JSON model shape that the IDE caches (items + deps + status + readiness + source ranges).
+5. Conformance test against the trait-runner pattern (V5-FOUND-4).
+
+**Dependencies.** `documentation-graph` sensor ✅ (the template). V5-MOD-2 ✅ (Sensor trait + per-sensor
+feature gating). The IDE side (pane + broker + grooming) is tracked in `neurogrim-ide/docs/plans/ROADMAP.md`
+**IDE-BACKLOG** B1–B5; the IDE↔`neurogrim` seam already exists (IDE-AWARENESS B4).
+
+**Adversarial note.** Heading-section parsing is convention-bound — the parser + the doc conventions must
+co-evolve, or the symbol model silently drifts from the prose. Keep the conventions documented next to the
+sensor, and make a malformed/unparseable item a *finding* (not a silent drop), so the `backlog-health`
+domain surfaces structure rot rather than hiding it. The `backlog-health` finding-definition (what counts
+as "stale" / "drifted") needs a sharp Fork {strict / lenient} pinned at plan-critic time, like B-53.
+
+**Cross-references.** IDE epic: `neurogrim-ide/docs/plans/ide-backlog/{README,execution,discovery-01}.md`;
+VISION principle #22 (`roadmap/VISION.md`); the template: `crates/neurogrim-sensory/src/documentation_graph.rs`;
+the methodology lineage: `.claude/skills/archived/lsp.md` ("LSP-Powered Symbol Search").
+
 ---
 
 ## How to author a new backlog entry

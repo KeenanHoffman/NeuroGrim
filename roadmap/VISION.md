@@ -1,6 +1,6 @@
 # North Star: LSP Brains
 
-**Last updated:** 2026-06-14 (principle #16: right protocol for the role; principle #17: culture as substrate; principle #18: sensors need sensors; principle #19: agents are sensed [header was stale since #19 landed 2026-04 — V5-DOC-2 incidentally corrected]; principle #20: pluggability by use, not aspiration; principle #21: agents must perceive their own blind spots [added 2026-06-14])
+**Last updated:** 2026-06-14 (principle #16: right protocol for the role; principle #17: culture as substrate; principle #18: sensors need sensors; principle #19: agents are sensed [header was stale since #19 landed 2026-04 — V5-DOC-2 incidentally corrected]; principle #20: pluggability by use, not aspiration; principle #21: agents must perceive their own blind spots [added 2026-06-14]; principle #22: agents must perceive and steward their own work [added 2026-06-17])
 
 ---
 
@@ -375,6 +375,32 @@ These guide every decision. When in doubt, choose the option that advances these
     the right filter. Observability that requires knowing the question in
     advance is not observability. See NeuroGrim IDE epic **IDE-OBSERV** and
     METHODOLOGY-EVOLUTION (the cursor-resumable anomaly-stream pattern).
+
+22. **Agents must perceive — and steward — their own work.** Principle #21 turned
+    the lens inward on what an agent can *see*; this turns it on what an agent
+    *does*: the work itself — the backlog, the roadmap, the vision — must be a
+    **legible, governed overlay**, not a document an agent reads once and forgets.
+    The same move that makes a codebase legible (symbols over text) makes the work
+    legible: a **symbol overlay on the backlog markdown** — items, dependencies,
+    readiness, status, governance-tier — derived live from the human-authored
+    source, so the markdown stays the operator's tangible, git-diffable truth *and*
+    the agent's structured query surface, from one source with no drift. Three
+    obligations follow. (a) **Dispatch must not go stale:** what keeps a work-broker
+    honest is not smarter ranking but **change-triggered grooming** — when the code
+    moves, the backlog is re-derived, so "what's next" is always computed against
+    current reality, and the broker stays *deterministic* (straight questions,
+    straight answers) precisely because the judgment lives elsewhere. (b) **Agents
+    organize the work they pull:** an agent that discovers the backlog is wrong — a
+    hidden dependency, an un-filed critical fix, a shifted priority — must be able to
+    correct it *in the source*, not merely consume what it is handed; reading the
+    backlog becomes a service the agent converses with, not a static list. (c)
+    **Governance cascades:** vision constrains roadmap constrains backlog, with
+    different mutation rules per tier and the human holding the pins, vetoes, and
+    override lanes that agents cannot — the human governs the boundaries because they
+    set direction, not throughput, at a pace no human could match item-by-item. A
+    Brain that scores the codebase but not the *plan for changing it* is half-blind
+    to its own trajectory. See NeuroGrim IDE epic **IDE-BACKLOG** and principle #21
+    (the perception half this stewardship half completes).
 
 ---
 
