@@ -39,7 +39,7 @@ const SKIPPED_DIR_NAMES: &[&str] = &[
 ];
 
 /// One parsed work-item (a backlog "symbol").
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Default)]
 pub struct BacklogItem {
     pub id: String,
     pub title: String,
@@ -51,6 +51,36 @@ pub struct BacklogItem {
     pub line: usize,
     /// `"heading"` or `"table"`.
     pub format: &'static str,
+
+    // IDE-BACKLOG-PM schema fields (PM-A1). Parsed from the `**Field:**`
+    // body-line convention (mirrors the existing `**Dependencies:**` scan);
+    // empty when absent. Inference + defaults land in PM-A2. Empty fields
+    // are skip-serialized so back-compat consumers see the unchanged shape.
+    /// `story` / `bug` / `discovery` / `request` / `question` (D-TYPES).
+    #[serde(rename = "type", skip_serializing_if = "String::is_empty")]
+    pub item_type: String,
+    /// Lifecycle stage (D-PIPELINE): Proposed/Discovery/Ready/In-progress/…
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub stage: String,
+    /// Must / Should / Could / Won't (epic-relative, D-MOSCOW).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub moscow: String,
+    /// Container ref — the epic/stage this item belongs to (D-EPIC).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub epic: String,
+    /// Code/vision anchor (`file:line` / `vision:#N` / `change:seq`). The
+    /// capture anchor (D-WRITEBACK); distinct from `source_file` (the backlog file).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub source_anchor: String,
+    /// Deferred wake condition (`dep:X` / `date:…` / `flag:…` / `manual`).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub wake: String,
+    /// One-line rationale (`**Why:**`).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub why: String,
+    /// Pointer to the `ConfirmationRow` evidencing DoD (D-DONE); `run:<uuid>`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub evidence_run_id: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -132,6 +162,26 @@ fn split_title_status(text: &str) -> (String, String) {
     (t.to_string(), String::new())
 }
 
+/// Parse a `**Key:** value` schema body line → `(lowercase-key, value)`.
+/// Mirrors the existing `**Dependencies:**` convention for the
+/// IDE-BACKLOG-PM fields (`**Type:**`, `**MoSCoW:**`, `**Epic:**`,
+/// `**Stage:**`, `**Source:**`, `**Wake:**`, `**Why:**`, `**Evidence:**`).
+/// A trailing `<!-- … -->` template comment is stripped from the value.
+/// Returns `None` for non-field lines.
+fn parse_field_line(line: &str) -> Option<(String, String)> {
+    let body = line.trim().strip_prefix("**")?;
+    let close = body.find("**")?;
+    let key = body[..close].trim().trim_end_matches(':').trim().to_ascii_lowercase();
+    if key.is_empty() {
+        return None;
+    }
+    let mut val = body[close + 2..].trim();
+    if let Some(c) = val.find("<!--") {
+        val = val[..c].trim();
+    }
+    Some((key, val.to_string()))
+}
+
 fn is_backlog_file(rel: &str) -> bool {
     let base = Path::new(rel)
         .file_name()
@@ -186,6 +236,7 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                         source_file: rel.to_string(),
                         line: i + 1,
                         format: "heading",
+                        ..Default::default()
                     });
                     cur = Some(items.len() - 1);
                 }
@@ -221,13 +272,31 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                     source_file: rel.to_string(),
                     line: i + 1,
                     format: "table",
+                    ..Default::default()
                 });
             }
             continue;
         }
 
-        // Body line of the current heading item — attach declared deps.
+        // Body line of the current heading item.
         if let Some(idx) = cur {
+            // `**Field:** value` schema lines (PM-A1) — set the matching field.
+            if let Some((key, val)) = parse_field_line(line) {
+                if !val.is_empty() {
+                    match key.as_str() {
+                        "type" => items[idx].item_type = val,
+                        "stage" => items[idx].stage = val,
+                        "moscow" => items[idx].moscow = val,
+                        "epic" => items[idx].epic = val,
+                        "source" => items[idx].source_anchor = val,
+                        "wake" => items[idx].wake = val,
+                        "why" => items[idx].why = val,
+                        "evidence" => items[idx].evidence_run_id = val,
+                        _ => {}
+                    }
+                }
+            }
+            // Declared deps (`**Dependencies:**` / `dep` / `gates` / `blocked`).
             let low = line.to_lowercase();
             if low.contains("depend") || low.contains(" dep ") || low.contains("· dep")
                 || low.contains("gates ") || low.contains("blocked")
@@ -481,5 +550,45 @@ not an item (no id).
         assert_eq!(cmdb["item_count"], 2);
         assert_eq!(cmdb["items"].as_array().unwrap().len(), 2);
         assert_eq!(cmdb["items"][0]["id"], "B-01");
+    }
+
+    #[test]
+    fn parses_schema_field_body_lines() {
+        let md = "\
+### PM-A1: schema field parse — Ready
+**Type:** story            <!-- story | bug | discovery | request | question -->
+**MoSCoW:** Must
+**Epic:** IDE-BACKLOG-PM
+**Source:** crates/neurogrim-sensory/src/backlog.rs:43
+**Wake:** manual
+**Why:** the foundation everything reads
+**Evidence:** run:abc-123
+**Dependencies:** none
+";
+        let items = parse_file(md, "execution.md");
+        assert_eq!(items.len(), 1);
+        let it = &items[0];
+        assert_eq!(it.id, "PM-A1");
+        assert_eq!(it.item_type, "story", "**Type:** comment must be stripped");
+        assert_eq!(it.moscow, "Must");
+        assert_eq!(it.epic, "IDE-BACKLOG-PM");
+        assert_eq!(it.source_anchor, "crates/neurogrim-sensory/src/backlog.rs:43");
+        assert_eq!(it.wake, "manual");
+        assert_eq!(it.why, "the foundation everything reads");
+        assert_eq!(it.evidence_run_id, "run:abc-123");
+        // The `**Epic:**` ref must NOT be mis-parsed as a dependency.
+        assert!(it.deps.is_empty(), "deps: {:?}", it.deps);
+    }
+
+    #[test]
+    fn schema_fields_skip_serialize_when_absent() {
+        // A legacy item with no `**Field:**` lines serializes unchanged
+        // (back-compat: the new keys are omitted, not emitted as empty).
+        let items = parse_file("### B-01: legacy — CANDIDATE\n", "BACKLOG.md");
+        let v = serde_json::to_value(&items[0]).unwrap();
+        assert_eq!(v["id"], "B-01");
+        assert!(v.get("type").is_none(), "absent type must be omitted");
+        assert!(v.get("moscow").is_none());
+        assert!(v.get("stage").is_none());
     }
 }
