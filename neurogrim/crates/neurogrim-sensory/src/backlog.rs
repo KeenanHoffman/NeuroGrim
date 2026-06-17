@@ -62,6 +62,9 @@ pub struct BacklogItem {
     /// Lifecycle stage (D-PIPELINE): Proposed/Discovery/Ready/In-progress/…
     #[serde(skip_serializing_if = "String::is_empty")]
     pub stage: String,
+    /// `human` / `agent` / `system` (D-TYPES origin axis); defaults `agent`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub origin: String,
     /// Must / Should / Could / Won't (epic-relative, D-MOSCOW).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub moscow: String,
@@ -88,8 +91,12 @@ pub struct BacklogReport {
     pub items: Vec<BacklogItem>,
     pub files_scanned: usize,
     /// `(item_id, missing_dep)` — a dep referenced by an item that doesn't
-    /// resolve to any known item id (a dangling dependency).
+    /// resolve to any known item id (a dangling dependency, B-LIVE-2).
     pub dangling_deps: Vec<(String, String)>,
+    /// Dependency cycles, each the ordered member ids (B-LIVE-3).
+    pub cycles: Vec<Vec<String>>,
+    /// Item ids with no recognizable stage signal — need triage (B-LIVE-4).
+    pub untriaged: Vec<String>,
 }
 
 /// An item id: starts with an ASCII-uppercase letter, contains only
@@ -180,6 +187,126 @@ fn parse_field_line(line: &str) -> Option<(String, String)> {
         val = val[..c].trim();
     }
     Some((key, val.to_string()))
+}
+
+/// Narrative type inference (PM-A2, D-TYPES §6) — best-effort, default
+/// `story`. `question`/`request` are created typed (via Discuss), not
+/// inferred from markdown, so inference only yields story/bug/discovery.
+fn infer_type(it: &BacklogItem) -> &'static str {
+    let hay = format!("{} {} {}", it.title, it.status, it.why).to_ascii_lowercase();
+    let has = |kw: &str| hay.contains(kw);
+    if has("bug") || has("regression") || has("broken") || has("repro") || has("crash")
+        || has(" fix ") || hay.starts_with("fix ")
+    {
+        "bug"
+    } else if has("discovery") || has("research") || has("spike") || has("investigate")
+        || has("open question") || has("plan when")
+    {
+        "discovery"
+    } else {
+        "story"
+    }
+}
+
+/// Map the legacy status vocabulary to a lifecycle `stage` (D-PIPELINE,
+/// discovery-05 §F). `None` = no recognizable signal (→ untriaged). Order
+/// matters: a "done" marker (incl. `✅`) wins over an embedded keyword.
+fn status_to_stage(status: &str) -> Option<&'static str> {
+    let u = status.to_ascii_uppercase();
+    let done = u.contains("SHIPPED") || u.contains("COMPLETE") || u.contains("DONE")
+        || status.contains('\u{2705}'); // ✅
+    if done {
+        Some("Human-verified-done")
+    } else if u.contains("IN PROGRESS") || u.contains("IN-PROGRESS") || u.contains("WIP") {
+        Some("In-progress")
+    } else if u.contains("AGENT-DONE") || u.contains("AGENT DONE") {
+        Some("Agent-done")
+    } else if u.contains("READY") || u.contains("NEXT") {
+        Some("Ready")
+    } else if u.contains("DISCOVERY") {
+        Some("Discovery")
+    } else if u.contains("CANDIDATE") || u.contains("PROPOSED") || u.contains("PENDING") {
+        Some("Proposed")
+    } else if u.contains("BLOCKED") {
+        Some("Blocked")
+    } else if u.contains("DEFERRED") || u.contains("PARKED") || u.contains("ABSORBED")
+        || u.contains("STRETCH")
+    {
+        Some("Deferred")
+    } else {
+        None
+    }
+}
+
+/// Fill inferred defaults for fields the markdown didn't declare (PM-A2).
+/// Only fills when empty — an explicit `**Type:**`/`**Stage:**`/`**Origin:**`
+/// always wins.
+fn infer_item_fields(it: &mut BacklogItem) {
+    if it.item_type.is_empty() {
+        it.item_type = infer_type(it).to_string();
+    }
+    if it.stage.is_empty() {
+        it.stage = status_to_stage(&it.status).unwrap_or("Proposed").to_string();
+    }
+    if it.origin.is_empty() {
+        it.origin = "agent".to_string();
+    }
+}
+
+/// Detect dependency cycles over the known-item dep graph (B-LIVE-3) via
+/// colored DFS. Each cycle is the ordered member ids; deduped by member set.
+fn find_cycles(items: &[BacklogItem]) -> Vec<Vec<String>> {
+    use std::collections::HashMap;
+    let index: HashMap<&str, usize> =
+        items.iter().enumerate().map(|(i, it)| (it.id.as_str(), i)).collect();
+    let adj: Vec<Vec<usize>> = items
+        .iter()
+        .map(|it| it.deps.iter().filter_map(|d| index.get(d.as_str()).copied()).collect())
+        .collect();
+    let n = items.len();
+    let mut color = vec![0u8; n]; // 0 white, 1 gray (on stack), 2 black
+    let mut stack: Vec<usize> = Vec::new();
+    let mut cycles: Vec<Vec<String>> = Vec::new();
+
+    fn dfs(
+        u: usize,
+        adj: &[Vec<usize>],
+        color: &mut [u8],
+        stack: &mut Vec<usize>,
+        items: &[BacklogItem],
+        cycles: &mut Vec<Vec<String>>,
+    ) {
+        color[u] = 1;
+        stack.push(u);
+        for &v in &adj[u] {
+            if color[v] == 1 {
+                if let Some(pos) = stack.iter().position(|&x| x == v) {
+                    cycles.push(stack[pos..].iter().map(|&i| items[i].id.clone()).collect());
+                }
+            } else if color[v] == 0 {
+                dfs(v, adj, color, stack, items, cycles);
+            }
+        }
+        stack.pop();
+        color[u] = 2;
+    }
+
+    for i in 0..n {
+        if color[i] == 0 {
+            dfs(i, &adj, &mut color, &mut stack, items, &mut cycles);
+        }
+    }
+
+    // Dedup by sorted member set (the same cycle can be found from several entries).
+    let mut seen: BTreeSet<Vec<String>> = BTreeSet::new();
+    cycles
+        .into_iter()
+        .filter(|c| {
+            let mut key = c.clone();
+            key.sort();
+            seen.insert(key)
+        })
+        .collect()
 }
 
 fn is_backlog_file(rel: &str) -> bool {
@@ -285,6 +412,7 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                 if !val.is_empty() {
                     match key.as_str() {
                         "type" => items[idx].item_type = val,
+                        "origin" => items[idx].origin = val,
                         "stage" => items[idx].stage = val,
                         "moscow" => items[idx].moscow = val,
                         "epic" => items[idx].epic = val,
@@ -309,6 +437,10 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                 }
             }
         }
+    }
+    // PM-A2: fill inferred type/stage/origin for fields the markdown omitted.
+    for it in &mut items {
+        infer_item_fields(it);
     }
     items
 }
@@ -371,10 +503,22 @@ pub fn parse_backlog(root: &Path) -> BacklogReport {
         }
     }
 
+    let cycles = find_cycles(&items);
+    // Untriaged: ended at the default `Proposed` stage because the status
+    // gave no recognizable signal (an explicit stage or a CANDIDATE status
+    // is NOT untriaged).
+    let untriaged: Vec<String> = items
+        .iter()
+        .filter(|it| status_to_stage(&it.status).is_none() && it.stage == "Proposed")
+        .map(|it| it.id.clone())
+        .collect();
+
     BacklogReport {
         items,
         files_scanned: backlog_files.len(),
         dangling_deps: dangling,
+        cycles,
+        untriaged,
     }
 }
 
@@ -388,14 +532,19 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
     let table_items = report.items.iter().filter(|i| i.format == "table").count();
     let unknown_status = report.items.iter().filter(|i| i.status.trim().is_empty()).count();
     let dangling = report.dangling_deps.len();
+    let cycle_count = report.cycles.len();
+    let untriaged_count = report.untriaged.len();
 
-    // Health score: penalise dangling deps (broken structure) + a mild
-    // unknown-status drag (an item with no status marker is harder to
-    // dispatch). Advisory; floor 0.
+    // Health score: penalise broken structure — cycles (worst: deadlock a
+    // whole subgraph) > dangling deps > untriaged > a mild unknown-status
+    // drag. Advisory; floor 0.
     let unknown_ratio = if total == 0 { 0.0 } else { unknown_status as f64 / total as f64 };
     let unknown_penalty = (unknown_ratio * 20.0).min(20.0);
     let dangling_penalty = ((dangling as f64) * 5.0).min(40.0);
-    let score: i32 = (100.0 - unknown_penalty - dangling_penalty).clamp(0.0, 100.0) as i32;
+    let cycle_penalty = ((cycle_count as f64) * 10.0).min(40.0);
+    let untriaged_penalty = ((untriaged_count as f64) * 2.0).min(15.0);
+    let score: i32 = (100.0 - unknown_penalty - dangling_penalty - cycle_penalty - untriaged_penalty)
+        .clamp(0.0, 100.0) as i32;
 
     let mut findings: Vec<Finding> = Vec::new();
     if total == 0 {
@@ -433,6 +582,28 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
             )),
         });
     }
+    if cycle_count > 0 {
+        findings.push(Finding {
+            name: "dependency_cycles".into(),
+            status: "warn".into(),
+            points: -(cycle_penalty as i32),
+            detail: Some(format!(
+                "{cycle_count} dependency cycle(s) — first: [{}]",
+                report.cycles.first().map(|c| c.join(" -> ")).unwrap_or_default()
+            )),
+        });
+    }
+    if untriaged_count > 0 {
+        findings.push(Finding {
+            name: "untriaged_items".into(),
+            status: "info".into(),
+            points: -(untriaged_penalty as i32),
+            detail: Some(format!(
+                "{untriaged_count} item(s) have no recognizable stage — first 5: [{}]",
+                report.untriaged.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+            )),
+        });
+    }
     if unknown_status > 0 {
         findings.push(Finding {
             name: "items_without_status".into(),
@@ -443,13 +614,28 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
     }
 
     let items_json = serde_json::to_value(&report.items).unwrap_or(Value::Array(vec![]));
+    // The structured defect surface the broker maps to tier-3 groom dispatches
+    // and the pane renders as "needs attention" (D-LIVENESS B4).
+    let defects = serde_json::json!({
+        "dangling": report
+            .dangling_deps
+            .iter()
+            .map(|(item, dep)| serde_json::json!({ "item": item, "dep": dep }))
+            .collect::<Vec<_>>(),
+        "cycles": report.cycles,
+        "untriaged": report.untriaged,
+    });
     let extras: Vec<(&str, Value)> = vec![
         ("item_count", Value::Number(total.into())),
         ("heading_items", Value::Number(heading_items.into())),
         ("table_items", Value::Number(table_items.into())),
         ("unknown_status_count", Value::Number(unknown_status.into())),
         ("dangling_dep_count", Value::Number(dangling.into())),
+        ("cycle_count", Value::Number(cycle_count.into())),
+        ("untriaged_count", Value::Number(untriaged_count.into())),
         ("files_scanned", Value::Number(report.files_scanned.into())),
+        // The structured defect surface (D-LIVENESS B4).
+        ("defects", defects),
         // The live symbol model the IDE caches (the broker + pane read this).
         ("items", items_json),
     ];
@@ -581,14 +767,71 @@ not an item (no id).
     }
 
     #[test]
-    fn schema_fields_skip_serialize_when_absent() {
-        // A legacy item with no `**Field:**` lines serializes unchanged
-        // (back-compat: the new keys are omitted, not emitted as empty).
-        let items = parse_file("### B-01: legacy — CANDIDATE\n", "BACKLOG.md");
-        let v = serde_json::to_value(&items[0]).unwrap();
-        assert_eq!(v["id"], "B-01");
-        assert!(v.get("type").is_none(), "absent type must be omitted");
-        assert!(v.get("moscow").is_none());
-        assert!(v.get("stage").is_none());
+    fn inference_fills_type_stage_origin_omits_optional_fields() {
+        // A legacy item gets inferred type/stage/origin (always present); the
+        // genuinely-optional fields stay omitted (skip-serialized).
+        let items = parse_file("### B-01: legacy thing — CANDIDATE\n", "BACKLOG.md");
+        let it = &items[0];
+        assert_eq!(it.item_type, "story");
+        assert_eq!(it.stage, "Proposed"); // CANDIDATE -> Proposed
+        assert_eq!(it.origin, "agent");
+        let v = serde_json::to_value(it).unwrap();
+        assert_eq!(v["type"], "story");
+        assert_eq!(v["stage"], "Proposed");
+        assert!(v.get("moscow").is_none(), "absent moscow must be omitted");
+        assert!(v.get("wake").is_none());
+        assert!(v.get("evidence_run_id").is_none());
+    }
+
+    #[test]
+    fn infers_type_from_narrative() {
+        assert_eq!(parse_file("### X1: login crash on resume — CANDIDATE\n", "b")[0].item_type, "bug");
+        assert_eq!(parse_file("### X2: research the broker model — CANDIDATE\n", "b")[0].item_type, "discovery");
+        assert_eq!(parse_file("### X3: add a backlog pane — READY\n", "b")[0].item_type, "story");
+    }
+
+    #[test]
+    fn maps_status_to_stage() {
+        assert_eq!(status_to_stage("SHIPPED (2026-04-22)"), Some("Human-verified-done"));
+        assert_eq!(status_to_stage("discovery ✅; gates B0"), Some("Human-verified-done")); // ✅ wins
+        assert_eq!(status_to_stage("discovery; gates B0"), Some("Discovery"));
+        assert_eq!(status_to_stage("**next** — keystone"), Some("Ready"));
+        assert_eq!(status_to_stage("CANDIDATE"), Some("Proposed"));
+        assert_eq!(status_to_stage("PARKED 2026"), Some("Deferred"));
+        assert_eq!(status_to_stage("dep B0 + D2"), None); // a deps cell — no stage signal
+    }
+
+    #[test]
+    fn detects_dependency_cycle() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md",
+            "### A1: a — READY\nbody · dep B1\n### B1: b — READY\nbody · dep A1\n");
+        let report = parse_backlog(dir.path());
+        assert_eq!(report.cycles.len(), 1, "cycles: {:?}", report.cycles);
+        let mut members = report.cycles[0].clone();
+        members.sort();
+        assert_eq!(members, vec!["A1".to_string(), "B1".to_string()]);
+        assert!(report.dangling_deps.is_empty(), "both deps resolve — no dangling");
+    }
+
+    #[test]
+    fn flags_untriaged_items() {
+        let dir = TempDir::new().unwrap();
+        // C1 has an unrecognizable status (no stage signal); C2 is CANDIDATE (triaged).
+        write(dir.path(), "BACKLOG.md", "### C1: mystery — foobar\n### C2: known — CANDIDATE\n");
+        let report = parse_backlog(dir.path());
+        assert_eq!(report.untriaged, vec!["C1".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn analyze_backlog_emits_defects() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md",
+            "### A1: a — READY\n· dep B1\n### B1: b — READY\n· dep A1\n### C1: c — CANDIDATE\n· dep ZZ9\n");
+        let cmdb = analyze_backlog(&dir.path().to_string_lossy()).await;
+        assert_eq!(cmdb["cycle_count"], 1);
+        assert_eq!(cmdb["dangling_dep_count"], 1); // C1 -> ZZ9
+        assert_eq!(cmdb["defects"]["cycles"].as_array().unwrap().len(), 1);
+        assert_eq!(cmdb["defects"]["dangling"][0]["dep"], "ZZ9");
     }
 }
