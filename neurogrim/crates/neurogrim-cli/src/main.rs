@@ -18,6 +18,18 @@ struct Cli {
     command: Commands,
 }
 
+/// IDE-BACKLOG-PM broker subcommands.
+#[derive(Subcommand)]
+enum BacklogCmd {
+    /// The deterministic next-ready dispatch (tiers: implement/groom/capture/idle)
+    #[command(name = "next-ready")]
+    NextReady {
+        /// Project root path
+        #[arg(long, default_value = ".")]
+        project_root: String,
+    },
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Compute and display the unified health score
@@ -198,6 +210,12 @@ enum Commands {
         /// Project root path
         #[arg(long, default_value = ".")]
         project_root: String,
+    },
+
+    /// IDE-BACKLOG-PM broker — deterministic work dispatch over the backlog
+    Backlog {
+        #[command(subcommand)]
+        cmd: BacklogCmd,
     },
 
     /// Initialize a new brain-registry.json by scanning the project
@@ -543,6 +561,9 @@ async fn main() -> Result<()> {
         } => commands::ui::run(registry, port, bind, no_browser, allow_mutations).await,
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
+        Commands::Backlog { cmd } => match cmd {
+            BacklogCmd::NextReady { project_root } => run_backlog_next_ready(&project_root),
+        },
         Commands::Init {
             project_root,
             output,
@@ -674,5 +695,16 @@ async fn run_sensory(name: &str, project_root: &str) -> Result<()> {
     let result = sensor.analyze(project_root).await?;
 
     println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
+}
+
+/// IDE-BACKLOG-PM — `neurogrim backlog next-ready`: the deterministic tiered
+/// dispatch over the parsed backlog symbol model (the same broker logic the
+/// IDE runs, minus its runtime claim/lease state). Lets any agent session pull
+/// work without the IDE.
+fn run_backlog_next_ready(project_root: &str) -> Result<()> {
+    let report = neurogrim_sensory::backlog::parse_backlog(std::path::Path::new(project_root));
+    let dispatch = neurogrim_sensory::backlog::next_ready(&report);
+    println!("{}", serde_json::to_string_pretty(&dispatch)?);
     Ok(())
 }

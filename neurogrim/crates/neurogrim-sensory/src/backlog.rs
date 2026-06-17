@@ -746,6 +746,153 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
     build_cmdb("check-backlog", score.clamp(0, 100) as u8, findings, Some(extras), None)
 }
 
+/// The PM broker, CLI face (IDE-BACKLOG-PM): the deterministic tiered
+/// next-ready dispatch over the parsed symbol model — the *same* ranking the
+/// IDE's `backlog.next_ready` runs, minus the runtime claim/lease + freshness
+/// overlay (IDE-local state). Lets any agent session pull work without the IDE;
+/// the markdown `stage` field is the coordination source of truth. Tiers:
+/// implement → groom → capture → surfaced-idle; never invents filler.
+pub fn next_ready(report: &BacklogReport) -> Value {
+    use std::collections::{HashMap, HashSet};
+    let items = &report.items;
+    let ids: HashSet<&str> = items.iter().map(|i| i.id.as_str()).collect();
+    let is_done = |it: &BacklogItem| matches!(it.stage.as_str(), "Agent-done" | "Human-verified-done");
+    let is_deferred = |it: &BacklogItem| matches!(it.stage.as_str(), "Blocked" | "Deferred");
+    let done_ids: HashSet<&str> = items.iter().filter(|i| is_done(i)).map(|i| i.id.as_str()).collect();
+    let dangling_items: HashSet<&str> = report.dangling_deps.iter().map(|(i, _)| i.as_str()).collect();
+
+    // epic id -> priority rank (High=0/Medium=1/Low=2), from the epic items.
+    let mut epic_prio: HashMap<&str, u8> = HashMap::new();
+    for it in items {
+        if !it.priority.is_empty() {
+            let r = match it.priority.to_ascii_lowercase().trim() {
+                "high" => 0,
+                "medium" | "med" => 1,
+                "low" => 2,
+                _ => 3,
+            };
+            epic_prio.insert(it.id.as_str(), r);
+        }
+    }
+    let moscow_rank = |it: &BacklogItem| -> u8 {
+        match it.moscow.to_ascii_lowercase().trim() {
+            "must" => 0,
+            "should" => 1,
+            "could" => 2,
+            "won't" | "wont" | "will not" => 4,
+            _ => 3,
+        }
+    };
+    let pinned = |it: &BacklogItem| {
+        let t = format!("{} {}", it.title, it.status);
+        t.contains('\u{1F4CC}') || t.contains('\u{1F4CD}')
+            || t.to_uppercase().contains("[PIN]")
+            || t.to_uppercase().contains("PINNED")
+    };
+    let override_lane = |it: &BacklogItem| {
+        let t = format!("{} {}", it.title, it.status).to_lowercase();
+        t.contains("security") || t.contains("critical") || t.contains("vuln") || t.contains("cve")
+    };
+    let steering = |it: &BacklogItem| {
+        let t = format!("{} {}", it.title, it.status).to_lowercase();
+        (it.origin == "human" && it.item_type == "request")
+            || t.contains("rework")
+            || t.contains("needsredo")
+            || t.contains("needs-redo")
+    };
+
+    type Key = (u8, u8, u8, u8, usize);
+    let mut candidates: Vec<(Key, &BacklogItem)> = Vec::new();
+    let (mut blocked, mut deferred, mut done_count, mut in_progress) = (0usize, 0usize, 0usize, 0usize);
+    for (idx, it) in items.iter().enumerate() {
+        if is_done(it) {
+            done_count += 1;
+            continue;
+        }
+        if it.stage == "In-progress" {
+            in_progress += 1; // being worked (markdown coordination) — not re-served
+            continue;
+        }
+        if is_deferred(it) {
+            deferred += 1;
+            continue;
+        }
+        let mr = moscow_rank(it);
+        if mr == 4 {
+            deferred += 1; // Won't
+            continue;
+        }
+        if dangling_items.contains(it.id.as_str()) {
+            continue; // held back + tier-3 groom target
+        }
+        let unmet = it.deps.iter().any(|d| ids.contains(d.as_str()) && !done_ids.contains(d.as_str()));
+        if unmet {
+            blocked += 1;
+            continue;
+        }
+        let lane = if pinned(it) { 0 } else if override_lane(it) { 1 } else if steering(it) { 2 } else { 3 };
+        let eprio = epic_prio.get(it.epic.as_str()).copied().unwrap_or(3);
+        let dr = if it.stage == "Ready"
+            || it.status.to_uppercase().contains("READY")
+            || it.status.to_uppercase().contains("NEXT")
+        {
+            0
+        } else {
+            1
+        };
+        candidates.push(((lane, eprio, mr, dr, idx), it));
+    }
+    candidates.sort_by(|a, b| a.0.cmp(&b.0));
+
+    if let Some((key, it)) = candidates.first() {
+        let lane = key.0;
+        return serde_json::json!({
+            "tier": "implement", "ready": true,
+            "item": { "id": it.id, "title": it.title, "type": it.item_type, "stage": it.stage,
+                      "moscow": it.moscow, "epic": it.epic, "source_file": it.source_file, "line": it.line },
+            "rationale": { "lane": lane, "pinned": lane == 0, "override_lane": lane == 1,
+                           "steering": lane == 2, "epic_priority_rank": key.1, "moscow_rank": key.2 },
+            "ready_count": candidates.len(),
+            "explanation": format!("Next ready: {} — {}. Deps clear; not done/deferred.", it.id, it.title),
+        });
+    }
+
+    // Tier 3 — groom the top board defect (deterministic groom-id).
+    if let Some((item, dep)) = report.dangling_deps.first() {
+        return serde_json::json!({ "tier": "groom", "ready": false,
+            "groom": { "groom_id": format!("GROOM-dangling-{item}-{dep}"), "kind": "dangling_dep", "item": item, "dep": dep,
+                       "action": format!("Fix the phantom dependency `{dep}` on `{item}` — resolve or remove the ref.") },
+            "explanation": format!("No implementable item — groom: fix dangling dep {dep} on {item}. The broker never invents filler.") });
+    }
+    if let Some(cycle) = report.cycles.first() {
+        let mut m = cycle.clone();
+        m.sort();
+        return serde_json::json!({ "tier": "groom", "ready": false,
+            "groom": { "groom_id": format!("GROOM-cycle-{}", m.join("-")), "kind": "cycle", "members": m,
+                       "action": "Break the dependency cycle — one member must drop its blocking ref." },
+            "explanation": "No implementable item — groom: break a dependency cycle." });
+    }
+    if let Some(uid) = report.untriaged.first() {
+        return serde_json::json!({ "tier": "groom", "ready": false,
+            "groom": { "groom_id": format!("GROOM-triage-{uid}"), "kind": "untriaged", "item": uid,
+                       "action": format!("Triage `{uid}`: assign a type + stage so the broker can rank it.") },
+            "explanation": format!("No implementable item — groom: triage {uid}.") });
+    }
+
+    // Tier 4 — capture (board fully done; demand-driven refill).
+    if blocked + deferred + in_progress == 0 && done_count > 0 {
+        return serde_json::json!({ "tier": "capture", "ready": false,
+            "capture": { "scope": "recent-changes",
+                         "action": "Scan recent changes / code / vision for uncaptured work and propose anchored items (deduped; at Proposed)." },
+            "explanation": format!("Board fully done ({done_count} items). Capture: scan for uncaptured work to refill (demand-driven). The broker never invents filler.") });
+    }
+
+    // Tier 5 — surfaced idle.
+    serde_json::json!({ "tier": "idle", "ready": false,
+        "blocked_count": blocked, "deferred_count": deferred, "in_progress": in_progress, "done_count": done_count,
+        "explanation": format!("Idle: {blocked} blocked, {deferred} deferred, {in_progress} in-progress, {done_count} done, no groomable defect. The broker never invents filler.") })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -981,5 +1128,42 @@ not an item (no id).
         let lint = cmdb["lint"].as_array().unwrap();
         assert!(lint.iter().any(|l| l["item"] == "S1" && l["rule"] == "missing_moscow"));
         assert!(lint.iter().any(|l| l["item"] == "S1" && l["rule"] == "missing_epic"));
+    }
+
+    #[test]
+    fn next_ready_implements_top_ranked_by_moscow() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md", "\
+### R1: do the thing — READY
+**MoSCoW:** Could
+### R2: build the feature — READY
+**MoSCoW:** Must
+");
+        let report = parse_backlog(dir.path());
+        let d = next_ready(&report);
+        assert_eq!(d["tier"], "implement");
+        assert_eq!(d["item"]["id"], "R2", "Must outranks Could");
+    }
+
+    #[test]
+    fn next_ready_grooms_when_nothing_implementable() {
+        let dir = TempDir::new().unwrap();
+        // The only item is held back by a dangling dep → tier-3 groom.
+        write(dir.path(), "BACKLOG.md", "### X1: thing — READY\n· dep NOPE9\n");
+        let report = parse_backlog(dir.path());
+        let d = next_ready(&report);
+        assert_eq!(d["tier"], "groom");
+        assert_eq!(d["groom"]["kind"], "dangling_dep");
+        assert_eq!(d["groom"]["dep"], "NOPE9");
+    }
+
+    #[test]
+    fn next_ready_idle_when_all_done() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md", "### S1: a — SHIPPED\n### S2: b — COMPLETE\n");
+        let report = parse_backlog(dir.path());
+        let d = next_ready(&report);
+        // Everything done + nothing open → capture (demand-driven refill).
+        assert_eq!(d["tier"], "capture");
     }
 }
