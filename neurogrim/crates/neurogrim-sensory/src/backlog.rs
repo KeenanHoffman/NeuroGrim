@@ -30,7 +30,7 @@
 use crate::cmdb::{build_cmdb, Finding};
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 const SKIPPED_DIR_NAMES: &[&str] = &[
@@ -84,6 +84,12 @@ pub struct BacklogItem {
     /// Pointer to the `ConfirmationRow` evidencing DoD (D-DONE); `run:<uuid>`.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub evidence_run_id: String,
+    /// Epic/container declared value — the MoSCoW anchor (D-EPIC, D-MOSCOW).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub value: String,
+    /// Epic/container priority — the cross-epic ranking key (D-EPIC).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub priority: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -250,6 +256,12 @@ fn infer_item_fields(it: &mut BacklogItem) {
     }
     if it.origin.is_empty() {
         it.origin = "agent".to_string();
+    }
+    // PM-A4: bootstrap the epic ref from `ABSORBED into <EPIC>` (D-EPIC §C).
+    if it.epic.is_empty() && it.status.to_ascii_lowercase().contains("absorbed") {
+        if let Some(first) = extract_ids(&it.status).into_iter().find(|d| d != &it.id) {
+            it.epic = first;
+        }
     }
 }
 
@@ -420,6 +432,8 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                         "wake" => items[idx].wake = val,
                         "why" => items[idx].why = val,
                         "evidence" => items[idx].evidence_run_id = val,
+                        "value" => items[idx].value = val,
+                        "priority" => items[idx].priority = val,
                         _ => {}
                     }
                 }
@@ -613,6 +627,91 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
         });
     }
 
+    // PM-A4: derived epic/container rollup. The child `epic:` ref is the source
+    // of truth; this roster is computed (D-EPIC §C). value/priority are looked
+    // up from the epic's own item if one exists. value-complete ⇔ all Must
+    // members done (D-EPIC §D).
+    let is_done = |s: &str| s == "Human-verified-done" || s == "Agent-done";
+    let item_by_id: BTreeMap<&str, &BacklogItem> =
+        report.items.iter().map(|i| (i.id.as_str(), i)).collect();
+    let mut epic_members: BTreeMap<&str, Vec<&BacklogItem>> = BTreeMap::new();
+    for it in &report.items {
+        if !it.epic.is_empty() {
+            epic_members.entry(it.epic.as_str()).or_default().push(it);
+        }
+    }
+    let epics: Vec<Value> = epic_members
+        .iter()
+        .map(|(epic_id, members)| {
+            let total = members.len();
+            let done = members.iter().filter(|m| is_done(&m.stage)).count();
+            let blocked = members.iter().filter(|m| m.stage == "Blocked").count();
+            let musts: Vec<_> =
+                members.iter().filter(|m| m.moscow.eq_ignore_ascii_case("Must")).collect();
+            let must_done = musts.iter().filter(|m| is_done(&m.stage)).count();
+            let derived = if total > 0 && done == total {
+                "complete"
+            } else if blocked > 0 {
+                "blocked"
+            } else {
+                "active"
+            };
+            let (value, priority) = item_by_id
+                .get(epic_id)
+                .map(|e| (e.value.clone(), e.priority.clone()))
+                .unwrap_or_default();
+            serde_json::json!({
+                "id": epic_id,
+                "members": members.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),
+                "member_count": total,
+                "done_count": done,
+                "derived_status": derived,
+                "value_complete": !musts.is_empty() && must_done == musts.len(),
+                "value": value,
+                "priority": priority,
+            })
+        })
+        .collect();
+
+    // PM-A5: the lint gradient (required = f(type, stage), discovery-05 §C) +
+    // undeclared epic value. Advisory (enrichment guidance), not a health hit.
+    let mut lint: Vec<Value> = Vec::new();
+    let ready_or_beyond = |s: &str| {
+        matches!(s, "Ready" | "In-progress" | "Agent-done" | "Human-verified-done")
+    };
+    for it in &report.items {
+        let pipeline_type = matches!(it.item_type.as_str(), "story" | "bug" | "discovery");
+        if pipeline_type && ready_or_beyond(&it.stage) {
+            if it.moscow.is_empty() {
+                lint.push(serde_json::json!({"item": it.id, "rule": "missing_moscow", "stage": it.stage}));
+            }
+            if it.epic.is_empty() {
+                lint.push(serde_json::json!({"item": it.id, "rule": "missing_epic", "stage": it.stage}));
+            }
+        }
+        if pipeline_type
+            && matches!(it.stage.as_str(), "Agent-done" | "Human-verified-done")
+            && it.evidence_run_id.is_empty()
+        {
+            lint.push(serde_json::json!({"item": it.id, "rule": "missing_evidence", "stage": it.stage}));
+        }
+    }
+    for epic_id in epic_members.keys() {
+        let has_value = item_by_id.get(epic_id).map(|e| !e.value.is_empty()).unwrap_or(false);
+        if !has_value {
+            lint.push(serde_json::json!({"item": epic_id, "rule": "undeclared_epic_value"}));
+        }
+    }
+    let lint_count = lint.len();
+    if lint_count > 0 {
+        findings.push(Finding {
+            name: "lint".into(),
+            status: "info".into(),
+            points: 0,
+            detail: Some(format!("{lint_count} schema-lint enrichment hint(s) (missing moscow/epic/evidence, undeclared epic value)")),
+        });
+    }
+
     let items_json = serde_json::to_value(&report.items).unwrap_or(Value::Array(vec![]));
     // The structured defect surface the broker maps to tier-3 groom dispatches
     // and the pane renders as "needs attention" (D-LIVENESS B4).
@@ -634,8 +733,12 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
         ("cycle_count", Value::Number(cycle_count.into())),
         ("untriaged_count", Value::Number(untriaged_count.into())),
         ("files_scanned", Value::Number(report.files_scanned.into())),
+        ("lint_count", Value::Number(lint_count.into())),
         // The structured defect surface (D-LIVENESS B4).
         ("defects", defects),
+        // Derived epic/container rollup (D-EPIC) + the lint gradient (D-SCHEMA).
+        ("epics", Value::Array(epics)),
+        ("lint", Value::Array(lint)),
         // The live symbol model the IDE caches (the broker + pane read this).
         ("items", items_json),
     ];
@@ -833,5 +936,50 @@ not an item (no id).
         assert_eq!(cmdb["dangling_dep_count"], 1); // C1 -> ZZ9
         assert_eq!(cmdb["defects"]["cycles"].as_array().unwrap().len(), 1);
         assert_eq!(cmdb["defects"]["dangling"][0]["dep"], "ZZ9");
+    }
+
+    #[test]
+    fn infers_epic_from_absorbed_into() {
+        let items = parse_file("### B-01: thing — ABSORBED into S10-DOMAIN\n", "b");
+        assert_eq!(items[0].epic, "S10-DOMAIN");
+    }
+
+    #[tokio::test]
+    async fn rolls_up_epics_and_value_complete() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md", "\
+### EP1: the epic — active
+**Value:** deliver the thing
+**Priority:** High
+
+### S1: must story — SHIPPED
+**Epic:** EP1
+**MoSCoW:** Must
+
+### S2: could story — CANDIDATE
+**Epic:** EP1
+**MoSCoW:** Could
+");
+        let cmdb = analyze_backlog(&dir.path().to_string_lossy()).await;
+        let epics = cmdb["epics"].as_array().unwrap();
+        assert_eq!(epics.len(), 1);
+        let ep = &epics[0];
+        assert_eq!(ep["id"], "EP1");
+        assert_eq!(ep["member_count"], 2);
+        assert_eq!(ep["value"], "deliver the thing");
+        assert_eq!(ep["priority"], "High");
+        // The single Must (S1) is SHIPPED → value-complete, even though the
+        // Could story (S2) isn't done.
+        assert_eq!(ep["value_complete"], true);
+    }
+
+    #[tokio::test]
+    async fn lints_missing_required_fields_at_ready() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md", "### S1: ready story — READY\n");
+        let cmdb = analyze_backlog(&dir.path().to_string_lossy()).await;
+        let lint = cmdb["lint"].as_array().unwrap();
+        assert!(lint.iter().any(|l| l["item"] == "S1" && l["rule"] == "missing_moscow"));
+        assert!(lint.iter().any(|l| l["item"] == "S1" && l["rule"] == "missing_epic"));
     }
 }

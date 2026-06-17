@@ -231,7 +231,7 @@
         }
       },
       "backlog-health": {
-        "_doc": "IDE-BACKLOG B0 (2026-06-17): the backlog/roadmap/vision as a structured symbol model. Walks BACKLOG.md / ROADMAP.md / execution.md under project_root and parses work-items in two conventions (heading-sections `### B-XX: title — STATUS` + table-rows `| ID | Subject | dep B0 |`). Emits the `items` symbol model the IDE-BACKLOG pane + deterministic broker consume + a health score = 100 - dangling_dep_penalty(<=40) - unknown_status_penalty(<=20). Refresh: `neurogrim sensory backlog --project-root . > .claude/backlog-health-cmdb.json`. Advisory weight 0.0 in v1 — promotion requires §15.5-equivalent calibration (dangling-dep / staleness findings confirmed as genuine drift). Realizes VISION principle #22. See roadmap/BACKLOG.md B-54 + neurogrim-ide/docs/plans/ide-backlog/.",
+        "_doc": "IDE-BACKLOG B0 (2026-06-17): the backlog/roadmap/vision as a structured symbol model. Walks BACKLOG.md / ROADMAP.md / execution.md under project_root and parses work-items in two conventions (heading-sections `### B-XX: title — STATUS` + table-rows `| ID | Subject | dep B0 |`). Emits the `items` symbol model (now with IDE-BACKLOG-PM schema fields: type/stage/moscow/epic/origin/source_anchor/wake/evidence_run_id) the IDE-BACKLOG pane + deterministic broker consume, plus a `defects` surface (dangling/cycles/untriaged → tier-3 groom), an `epics` rollup, and a `lint` gradient. Health score = 100 - cycle_penalty(<=40) - dangling_dep_penalty(<=40) - untriaged_penalty(<=15) - unknown_status_penalty(<=20). Refresh: `neurogrim sensory backlog --project-root . > .claude/backlog-health-cmdb.json`. Advisory weight 0.0 in v1 — promotion requires §15.5-equivalent calibration (dangling-dep / staleness findings confirmed as genuine drift). Realizes VISION principle #22. See roadmap/BACKLOG.md B-54 + neurogrim-ide/docs/plans/ide-backlog/.",
         "scoring_source": {
           "type": "cmdb",
           "path": ".claude/backlog-health-cmdb.json"
@@ -239,6 +239,9 @@
         "exported_variables": {
           "backlog-health:item_count":          { "field": "item_count",          "type": "number" },
           "backlog-health:dangling_dep_count":  { "field": "dangling_dep_count",  "type": "number" },
+          "backlog-health:cycle_count":         { "field": "cycle_count",         "type": "number" },
+          "backlog-health:untriaged_count":     { "field": "untriaged_count",     "type": "number" },
+          "backlog-health:lint_count":          { "field": "lint_count",          "type": "number" },
           "backlog-health:unknown_status_count":{ "field": "unknown_status_count","type": "number" }
         }
       },
