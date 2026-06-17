@@ -34,6 +34,14 @@ pub mod decision_diversity;
 #[cfg(feature = "sensor-documentation-graph")]
 pub mod documentation_graph;
 
+// IDE-BACKLOG B0 (2026-06-17) — backlog-symbol sensor. Walks
+// BACKLOG.md / ROADMAP.md / execution.md, parses work-items in two
+// conventions (heading-sections + table-rows), emits a CMDB with the
+// `items` symbol model the IDE-BACKLOG pane + broker consume + a
+// `backlog-health` score.
+#[cfg(feature = "sensor-backlog")]
+pub mod backlog;
+
 // v2-Feature 6 Phase 6.4 (2026-05-09) — external-content-safety
 // advisory domain. Reads `<project>/.claude/audit.jsonl` for
 // `category=external_content` rows produced by the IDE's

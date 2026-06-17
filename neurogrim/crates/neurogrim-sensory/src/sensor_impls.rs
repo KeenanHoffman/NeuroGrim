@@ -71,6 +71,8 @@ use crate::deploy_readiness::analyze_deploy_readiness;
 use crate::docker_topology::analyze_docker_topology;
 #[cfg(feature = "sensor-documentation-graph")]
 use crate::documentation_graph::analyze_documentation_graph;
+#[cfg(feature = "sensor-backlog")]
+use crate::backlog::analyze_backlog;
 #[cfg(feature = "sensor-domain-calibration")]
 use crate::domain_calibration::analyze_domain_calibration;
 #[cfg(feature = "sensor-federated-patterns")]
@@ -214,6 +216,8 @@ infallible_sensor!(DecisionDiversitySensor, DecisionDiversitySensorFactory, "dec
 infallible_sensor!(DeployReadinessSensor, DeployReadinessSensorFactory, "deploy-readiness", analyze_deploy_readiness);
 #[cfg(feature = "sensor-documentation-graph")]
 infallible_sensor!(DocumentationGraphSensor, DocumentationGraphSensorFactory, "documentation-graph", analyze_documentation_graph);
+#[cfg(feature = "sensor-backlog")]
+infallible_sensor!(BacklogSensor, BacklogSensorFactory, "backlog", analyze_backlog);
 #[cfg(feature = "sensor-domain-calibration")]
 infallible_sensor!(DomainCalibrationSensor, DomainCalibrationSensorFactory, "domain-calibration", analyze_domain_calibration);
 #[cfg(feature = "sensor-federated-patterns")]
@@ -307,6 +311,8 @@ pub fn built_in_factories() -> Vec<Box<dyn SensorFactory>> {
     factories.push(Box::new(DeployReadinessSensorFactory));
     #[cfg(feature = "sensor-documentation-graph")]
     factories.push(Box::new(DocumentationGraphSensorFactory));
+    #[cfg(feature = "sensor-backlog")]
+    factories.push(Box::new(BacklogSensorFactory));
     #[cfg(feature = "sensor-domain-calibration")]
     factories.push(Box::new(DomainCalibrationSensorFactory));
     #[cfg(feature = "sensor-federated-patterns")]
@@ -424,6 +430,9 @@ mod tests {
             // wired into dispatch alongside its brain-registry domain.
             #[cfg(feature = "sensor-documentation-graph")]
             "documentation-graph",
+            // IDE-BACKLOG B0 (2026-06-17) — backlog-symbol sensor.
+            #[cfg(feature = "sensor-backlog")]
+            "backlog",
             // v2-Feature 7 (2026-05-09) — decision-diversity research
             // sensor wired into dispatch. Always scores 100 (advisory).
             #[cfg(feature = "sensor-decision-diversity")]

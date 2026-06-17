@@ -28,7 +28,8 @@
       "operator-calibration": 0.0,
       "federated-patterns": 0.0,
       "documentation-graph": 0.0,
-      "decision-diversity": 0.0
+      "decision-diversity": 0.0,
+      "backlog-health": 0.0
     },
     "_todo_subagent-health": "Reserved for multi-agent task completion scoring. Add back once a Rust sensory tool exists; the name is preserved in VISION.md + docs as a design target.",
     "domain_definitions": {
@@ -227,6 +228,18 @@
           "documentation-graph:orphan_count":    { "field": "orphan_count",    "type": "number" },
           "documentation-graph:broken_count":    { "field": "broken_count",    "type": "number" },
           "documentation-graph:cycle_count":     { "field": "cycle_count",     "type": "number" }
+        }
+      },
+      "backlog-health": {
+        "_doc": "IDE-BACKLOG B0 (2026-06-17): the backlog/roadmap/vision as a structured symbol model. Walks BACKLOG.md / ROADMAP.md / execution.md under project_root and parses work-items in two conventions (heading-sections `### B-XX: title — STATUS` + table-rows `| ID | Subject | dep B0 |`). Emits the `items` symbol model the IDE-BACKLOG pane + deterministic broker consume + a health score = 100 - dangling_dep_penalty(<=40) - unknown_status_penalty(<=20). Refresh: `neurogrim sensory backlog --project-root . > .claude/backlog-health-cmdb.json`. Advisory weight 0.0 in v1 — promotion requires §15.5-equivalent calibration (dangling-dep / staleness findings confirmed as genuine drift). Realizes VISION principle #22. See roadmap/BACKLOG.md B-54 + neurogrim-ide/docs/plans/ide-backlog/.",
+        "scoring_source": {
+          "type": "cmdb",
+          "path": ".claude/backlog-health-cmdb.json"
+        },
+        "exported_variables": {
+          "backlog-health:item_count":          { "field": "item_count",          "type": "number" },
+          "backlog-health:dangling_dep_count":  { "field": "dangling_dep_count",  "type": "number" },
+          "backlog-health:unknown_status_count":{ "field": "unknown_status_count","type": "number" }
         }
       },
       "decision-diversity": {

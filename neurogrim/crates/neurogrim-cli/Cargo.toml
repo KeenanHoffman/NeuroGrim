@@ -93,6 +93,7 @@ default = [
     "sensor-deploy-readiness",
     "sensor-docker-topology",
     "sensor-documentation-graph",
+    "sensor-backlog",
     "sensor-domain-calibration",
     "sensor-federated-patterns",
     "sensor-git-health",
@@ -121,6 +122,7 @@ sensor-decision-diversity = ["neurogrim-sensory/sensor-decision-diversity"]
 sensor-deploy-readiness = ["neurogrim-sensory/sensor-deploy-readiness"]
 sensor-docker-topology = ["neurogrim-sensory/sensor-docker-topology"]
 sensor-documentation-graph = ["neurogrim-sensory/sensor-documentation-graph"]
+sensor-backlog = ["neurogrim-sensory/sensor-backlog"]
 sensor-domain-calibration = ["neurogrim-sensory/sensor-domain-calibration"]
 sensor-federated-patterns = ["neurogrim-sensory/sensor-federated-patterns"]
 sensor-git-health = ["neurogrim-sensory/sensor-git-health"]
