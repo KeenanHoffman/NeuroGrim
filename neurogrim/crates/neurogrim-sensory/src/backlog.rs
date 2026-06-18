@@ -90,6 +90,12 @@ pub struct BacklogItem {
     /// Epic/container priority — the cross-epic ranking key (D-EPIC).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub priority: String,
+    /// The backlog's `**Plan when:**` convention — `Some` when the field is
+    /// present (even if blank). A non-"always" condition means the item is
+    /// deferred until that condition (grooming sweep): the stage is set to
+    /// Deferred and the condition becomes the wake.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_when: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -227,32 +233,71 @@ fn status_to_stage(status: &str) -> Option<&'static str> {
         Some("In-progress")
     } else if u.contains("AGENT-DONE") || u.contains("AGENT DONE") {
         Some("Agent-done")
+    } else if u.contains("DEFERRED") || u.contains("PARKED") || u.contains("ABSORBED")
+        || u.contains("STRETCH") || u.contains("HORIZON") || u.contains("SUCCESSOR")
+        || u.contains("NO CURRENT PLAN")
+    {
+        // A deferral tag (e.g. "CANDIDATE (v5.5 horizon)") wins over the bare
+        // CANDIDATE/READY token — the item is deferred, not available.
+        Some("Deferred")
+    } else if u.contains("BLOCKED") {
+        Some("Blocked")
     } else if u.contains("READY") || u.contains("NEXT") {
         Some("Ready")
     } else if u.contains("DISCOVERY") {
         Some("Discovery")
     } else if u.contains("CANDIDATE") || u.contains("PROPOSED") || u.contains("PENDING") {
         Some("Proposed")
-    } else if u.contains("BLOCKED") {
-        Some("Blocked")
-    } else if u.contains("DEFERRED") || u.contains("PARKED") || u.contains("ABSORBED")
-        || u.contains("STRETCH")
-    {
-        Some("Deferred")
     } else {
         None
     }
+}
+
+/// Whether a `**Plan when:**` condition is an "always/now" word (so the item
+/// is NOT deferred — it's plannable anytime). Empty conditions still defer
+/// (the field's presence signals "to be planned").
+fn plan_when_is_always(cond: &str) -> bool {
+    let c = cond.to_ascii_lowercase();
+    c.contains("anytime")
+        || c.contains("immediately")
+        || c.contains(" now")
+        || c.starts_with("now")
+        || c.contains("complete")
+        || c.contains("opportunistic")
+        || c.contains("no blocker")
+        || c.contains("no precondition")
 }
 
 /// Fill inferred defaults for fields the markdown didn't declare (PM-A2).
 /// Only fills when empty — an explicit `**Type:**`/`**Stage:**`/`**Origin:**`
 /// always wins.
 fn infer_item_fields(it: &mut BacklogItem) {
+    let explicit_stage = !it.stage.is_empty();
     if it.item_type.is_empty() {
         it.item_type = infer_type(it).to_string();
     }
     if it.stage.is_empty() {
         it.stage = status_to_stage(&it.status).unwrap_or("Proposed").to_string();
+    }
+    // Grooming sweep: a `**Plan when:**` field (and the item isn't already
+    // done/terminal or explicitly staged) means "deferred until that
+    // condition" — UNLESS the condition is an always/now word. The condition
+    // becomes the wake. This makes the backlog's own deferral convention
+    // machine-readable so the broker stops dispatching deferred items.
+    if !explicit_stage && !matches!(it.stage.as_str(), "Human-verified-done" | "Agent-done") {
+        if let Some(cond) = it.plan_when.clone() {
+            if !plan_when_is_always(&cond) {
+                it.stage = "Deferred".to_string();
+                if it.wake.is_empty() {
+                    let c = cond.trim();
+                    it.wake = if c.is_empty() {
+                        "manual — see Plan-when".to_string()
+                    } else {
+                        format!("manual — {c}")
+                    };
+                }
+            }
+        }
     }
     if it.origin.is_empty() {
         it.origin = "agent".to_string();
@@ -399,10 +444,25 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
             }
             if let Some((id, _rest)) = leading_id(&cells[0]) {
                 let title = cells.get(1).cloned().unwrap_or_default();
-                let deps_cell = cells.last().cloned().unwrap_or_default();
-                let status = deps_cell.clone();
-                let mut deps = extract_ids(&deps_cell);
-                deps.retain(|d| d != &id);
+                // Status: the col-2+ cell carrying a recognized status word
+                // (ROADMAP tables put Status in a middle column with Effort
+                // last, e.g. `| S5-TP-1 | … | **Complete** | XL |`); fall back
+                // to the last cell (the `Status / deps` convention).
+                let status = cells
+                    .iter()
+                    .skip(2)
+                    .find(|c| status_to_stage(c).is_some())
+                    .cloned()
+                    .unwrap_or_else(|| cells.last().cloned().unwrap_or_default());
+                // Deps: scan every col-2+ cell (status / deps / notes).
+                let mut deps: Vec<String> = Vec::new();
+                for c in cells.iter().skip(2) {
+                    for d in extract_ids(c) {
+                        if d != id && !deps.contains(&d) {
+                            deps.push(d);
+                        }
+                    }
+                }
                 items.push(BacklogItem {
                     id,
                     title: title.trim_matches('`').trim().to_string(),
@@ -421,6 +481,11 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
         if let Some(idx) = cur {
             // `**Field:** value` schema lines (PM-A1) — set the matching field.
             if let Some((key, val)) = parse_field_line(line) {
+                // The `**Plan when:**` deferral convention — record its presence
+                // even when blank (grooming sweep, handled in infer_item_fields).
+                if key == "plan when" {
+                    items[idx].plan_when = Some(val.clone());
+                }
                 if !val.is_empty() {
                     match key.as_str() {
                         "type" => items[idx].item_type = val,
@@ -957,6 +1022,22 @@ not an item (no id).
     }
 
     #[test]
+    fn table_status_in_middle_column_maps_to_done() {
+        // ROADMAP stage tables: Status in col 3, Effort last.
+        let md = "\
+| ID | Subject | Status | Effort |
+|---|---|---|---|
+| S5-TP-1 | Starter Kit | **Complete** | XL |
+| S6-DB-2 | A2A envelope | next — keystone | M |
+";
+        let items = parse_file(md, "ROADMAP.md");
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].id, "S5-TP-1");
+        assert_eq!(items[0].stage, "Human-verified-done", "Complete in a middle col → done");
+        assert_eq!(items[1].stage, "Ready", "'next' in a middle col → ready");
+    }
+
+    #[test]
     fn ignores_headings_inside_code_fences() {
         let md = "```\n### B0 — fake item in a fence\n```\n\n### B1 — real item\n";
         let items = parse_file(md, "execution.md");
@@ -1155,6 +1236,29 @@ not an item (no id).
         assert_eq!(d["tier"], "groom");
         assert_eq!(d["groom"]["kind"], "dangling_dep");
         assert_eq!(d["groom"]["dep"], "NOPE9");
+    }
+
+    #[test]
+    fn grooming_sweep_defers_plan_when_and_horizon() {
+        // "Plan when: <condition>" → Deferred + wake (the condition).
+        let d = parse_file("### B1: thing — CANDIDATE\n**Plan when:** we have a gpt-proxy\n", "b");
+        assert_eq!(d[0].stage, "Deferred");
+        assert!(d[0].wake.contains("gpt-proxy"), "wake: {}", d[0].wake);
+        // "Plan when: anytime" → NOT deferred (plannable now).
+        let a = parse_file("### B2: x — READY\n**Plan when:** anytime — no preconditions\n", "b");
+        assert_eq!(a[0].stage, "Ready");
+        // A blank "Plan when:" still defers (presence = to-be-planned).
+        let e = parse_file("### B3: x — CANDIDATE\n**Plan when:**\n", "b");
+        assert_eq!(e[0].stage, "Deferred");
+        // An explicit `**Stage:**` wins over plan-when.
+        let x = parse_file("### B4: x — CANDIDATE\n**Stage:** Ready\n**Plan when:** someday\n", "b");
+        assert_eq!(x[0].stage, "Ready");
+        // Horizon / successor / no-current-plan status tags → Deferred (over CANDIDATE).
+        assert_eq!(parse_file("### B5: x — CANDIDATE (v5.5 horizon)\n", "b")[0].stage, "Deferred");
+        assert_eq!(parse_file("### B6: x — CANDIDATE (v5.5 successor)\n", "b")[0].stage, "Deferred");
+        assert_eq!(parse_file("### B7: x — CANDIDATE (no current plan)\n", "b")[0].stage, "Deferred");
+        // A plain CANDIDATE with no deferral signal stays a candidate.
+        assert_eq!(parse_file("### B8: x — CANDIDATE\n", "b")[0].stage, "Proposed");
     }
 
     #[test]
