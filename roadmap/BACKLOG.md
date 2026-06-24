@@ -2333,6 +2333,109 @@ R-X-6 + R-X-11 + R-T-2. Related BBs: BB #28, BB #32, BB #36.
 
 ---
 
+### B-60: AGENT-CARD-SCHEMA-RECONCILIATION — broker-framework extends LSP-Brains §13 schema — CANDIDATE (2026-06-24)
+
+**Problem.** Phase 9 R-O-6 closure declared a canonical Agent Card schema in BB #31
+(broker framework) to close A2A protocol pluralism — but P8 pre-implementation
+discovery revealed LSP-Brains spec §13 already has a comprehensive normative Agent
+Card schema (`agent-card-v1.schema.json`) with significant divergence: different
+field names (`id` vs `agent_id`), different capability model (typed message types
+vs cluster-pipelines), different transport shape (`transport.{protocol, endpoint,
+tasks_path}` vs flat `public_a2a_endpoint`), missing fields (`interface_version`,
+`authentication.scheme`). The LSP-Brains schema is the methodology-level authority;
+the BB #31 schema must be reframed as EXTENSION not replacement.
+
+**Plan when:**
+1. Before S0-T A2A integration work begins (currently scheduled for S1-T concrete
+   brokers + S0-C cluster federation).
+2. LSP-Brains spec touch is on the agenda (e.g., another spec amendment session)
+   — bundle the §13 amendment with it to amortize cross-project coordination cost.
+
+**Dependencies.** LSP-Brains spec session (the §13 schema change is a v2.13+ spec
+amendment for LSP-Brains; requires changelog + METHODOLOGY-EVOLUTION entry).
+NeuroGrim BB #31 spec edit (BROKER-INTERNALS.md amendment).
+
+**What B-60 would deliver:**
+1. **LSP-Brains spec §13 amendment** — add an `extensions: { <key>: <object> }`
+   field to `agent-card-v1.schema.json` allowing downstream consumers to declare
+   extension subkeys.
+2. **NeuroGrim BB #31 spec rewrite** — reference `agent-card-v1.schema.json` as the
+   canonical schema; declare broker-framework extension as `extensions.broker_framework: { cluster_id, cluster_roles, broker_role_set, advertised_cluster_pipelines, generated_at, signature_placeholder_for_b58 }`.
+3. **Cluster-pipeline-dispatch message type** registered in
+   `agent-card-v1.schema.json` `capabilities.accepts/emits[]`. Allows brokers to
+   declare cluster-pipeline support via the standard message-type mechanism.
+4. **trusted_peer_agents schema update** — uses `id` (not `agent_id`) for
+   consistency with LSP-Brains naming convention.
+5. **Migration plan** — any in-flight broker manifests with `agent_id` are migrated
+   to `id` via R-O-2 workflow re-snapshot ceremony.
+
+**Adversarial note.** Cross-project schema reconciliation is a coordination cost;
+the temptation is to delay until "we really need it" — but LSP-Brains spec is
+already at v2.7+ and the schema is in active use by NeuroGrim's A2A clients. Each
+day BB #31's diverged schema persists is a day implementer-confusion grows. Land
+the reconciliation early.
+
+**Cross-references.** Phase 9 R-O-6 closure in
+[`../docs/BROKER-INTERNALS.md`](../docs/BROKER-INTERNALS.md) BB #31. LSP-Brains
+spec §13 at `D:/Brains/LSP-Brains/spec/LSP-BRAINS-SPEC.md` §13.2 Agent Card. P8
+audit at [`../../cereGrim/docs/DISCOVERY-RESULTS.md`](../../cereGrim/docs/DISCOVERY-RESULTS.md)
+P8 section.
+
+---
+
+### B-61: BROWSER-BROKER-SUBSTRATE — v10/v11/v12 browser-band primitives (capability_checker, dom_diff, kill-switch, replay ledger) — CANDIDATE (2026-06-24)
+
+**Problem.** Phase 9 + cereGrim BROKER-COMPOSITION.md reference a "v10/v11/v12
+browser-band substrate" — specifically capability_checker, dom_diff, kill-switch,
+replay ledger — as the foundation for the Browser Broker (cereGrim's Embodiment
+broker for browser automation). P13 pre-implementation discovery confirmed this
+substrate does NOT exist in NeuroGrim code; only the docs reference it. The
+Browser Broker is S2-T scope (multi-role `[Sense, Embodiment]` broker; lands when
+Workspace Manager + Effectors are concrete) so this work is not on the S0-T
+critical path, but the substrate gap must be flagged + scoped before S2-T.
+
+**Plan when:**
+1. S2-T scope discussion (when Workspace Manager + Effector concretes are being
+   planned).
+2. Browser automation use case is in scope for the consuming project (cereGrim's
+   case: web-browsing agent capability).
+
+**Dependencies.** S2-T scope decision (does this deployment need browser
+capability?). If yes, multi-week multi-component build is required. Decisions on
+WebView technology (CDP / Playwright / WebDriver / Tauri's wry); on capability
+boundary (what URLs are allowed; what mutations are kill-switched); on replay
+fidelity (per-action ledger granularity).
+
+**What B-61 would deliver:**
+1. `capability_checker` — predicate evaluator over browser actions (URL allowlist,
+   action-type allowlist, DOM-mutation constraints). Loaded from broker manifest
+   per Browser-Broker config.
+2. `dom_diff` — DOM-state-snapshot + diff machinery for sense-portion of Browser
+   Broker (reports DOM changes via Sensory Queue per Sense-role contract).
+3. `kill-switch` — Browser-specific kill-switch composing into governance pipelines
+   (e.g., `arm-browser-kill-switch` halts all browser actions immediately).
+4. `replay ledger` — per-action audit trail for browser interactions; subsumes BB
+   #13 Replay tooling at the Browser Effector level.
+
+**Reuse-vs-build.** REUSE — BB #12 Trace Sink + BB #13 Replay tooling + BB #19
+Governance Composer (kill-switch composition pattern). BUILD — net-new browser-
+specific machinery (capability_checker, dom_diff, kill-switch action handler,
+replay ledger format). Estimated effort: large multi-week (browser automation
+is its own non-trivial domain).
+
+**Adversarial note.** Browser-as-broker is a high-blast-radius capability;
+default-deny posture (capability_checker denies any URL/action not explicitly
+allowed) is mandatory. The replay ledger is forensic-grade (every action recorded,
+including failed actions, for post-incident triage).
+
+**Cross-references.** Spec mention: cereGrim `BROKER-COMPOSITION.md` §"Effectors";
+NeuroGrim `BROKER-INTERNALS.md` Effector references. Discovery audit:
+[`../../cereGrim/docs/DISCOVERY-RESULTS.md`](../../cereGrim/docs/DISCOVERY-RESULTS.md)
+P13 section. Future cereGrim deployment use case where this is needed lives in
+cereGrim's own roadmap (not yet declared).
+
+---
+
 ### B-58: BROKER-BOOTSTRAP-SUPPLY-CHAIN-SIGNING — Tier 3 cryptographic hardening — CANDIDATE (2026-06-24)
 
 **Problem.** Phase 9 risk triage closed R-S-15 (Tier 3 bootstrap as supply-chain attack

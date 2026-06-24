@@ -405,6 +405,105 @@ alive/dead/new classification per hygiene (BB #20) included; ≤1,536 char per
 pipeline routing signal validated.
 **Reuse:** new code; segment format mirrors skill manifest format.
 
+#### BRK-11-WORKFLOW-STRESS (P5 test plan, R-O-1 validation)
+
+**Description:** Stress test the Workflow Engine's two-phase-commit ordering
+(R-O-1 closure in BB #27). Validates that cross-broker dispatches under
+concurrent load preserve atomicity invariant + double-debit ledger consistency.
+
+**Test scenarios:**
+1. **Baseline concurrent dispatch** — 10 brokers, 100 concurrent workflows,
+   each with 3-step cross-broker compositions. Run for 1000 ticks. **Expected:**
+   zero torn checkpoints; debit ledger balanced across all 100 workflows.
+2. **Callee-crash-pre-commit injection** — at random intervals during baseline
+   load, deliberately crash a callee broker BEFORE its commit lands. **Expected:**
+   caller times out per `cross_broker_call_timeout_ms` (cluster manifest); caller
+   rolls back locally; parent workflow checkpoint preserves consistency.
+3. **Caller-crash-post-callee-commit injection** — callee commits successfully;
+   caller process crashes before caller-side commit. **Expected:** on caller
+   restart, framework detects unfinalized cross-broker entry; either completes
+   the caller-side commit (if callee's state matches expected output) OR issues
+   compensating call (callee's `on_compensate` handler runs); debit ledger ends
+   balanced.
+4. **Network-partition-mid-dispatch injection** (cluster federation scope) — a
+   cross-cluster dispatch loses connectivity during the callee's commit window.
+   **Expected:** caller times out + retries via configured backoff; or
+   `failure_reason: cross_cluster_dispatch_timeout` propagates to parent
+   workflow's `on_cancel` handler.
+
+**Pass criteria:** zero workflow data corruption across all 4 scenarios; debit
+ledger balanced at end of test; trace records show clean compensation paths
+where applicable.
+
+**Tools:** Rust test harness using `tokio` + `proptest` for randomized injection;
+mock broker implementations that can be deliberately crashed; replay harness (BB
+#13) for post-mortem trace inspection.
+
+**When this runs:** post-S0-T (BB #10/#11/#27 must be implemented); part of S1-T
+exit criteria.
+
+#### BRK-04-COLD-STORE-CONTENTION (P6 test plan, R-O-4 validation)
+
+**Description:** Benchmark the per-broker SQLite file isolation default (R-O-4
+closure) against the originally-feared shared-file contention scenario.
+
+**Benchmark scenarios:**
+1. **Shared SQLite (anti-pattern, for comparison)** — 10 brokers writing to the
+   SAME SQLite file at 100 writes/sec each. Measure: per-write latency P50/P95/P99;
+   lock-wait-time distribution; throughput ceiling.
+2. **Per-broker SQLite (R-O-4 default)** — 10 brokers each with own SQLite file
+   at 100 writes/sec. Same metrics. **Expected:** zero lock-wait-time; throughput
+   linear in broker count.
+3. **JSONL append-only** — 10 brokers writing to per-broker JSONL files at 100
+   writes/sec. Same metrics. **Expected:** lowest write-latency (no transaction
+   overhead); query-latency higher (per-record scan).
+4. **Mixed** — Sensory Broker on JSONL (high throughput), Work Broker on SQLite
+   (transactional queries). Measure end-to-end performance under realistic
+   broker mix.
+
+**Pass criteria:** per-broker SQLite default eliminates lock contention; mixed
+deployment performs predictably; backend-choice guidance documented at the per-BB
+level for operators.
+
+**Tools:** Rust criterion benchmark suite; synthetic write/read workloads.
+
+**When this runs:** post-S0-T (BB #6 + #11 must be implemented); part of S1-T
+performance validation.
+
+#### BRK-35-FRAME-EVAL-COST (P7 test plan, R-O-5 validation)
+
+**Description:** Microbenchmark Frame stack evaluation cost under nested
+sub-pipeline dispatch (R-O-5 latency risk).
+
+**Benchmark scenarios:**
+1. **Flat dispatch baseline** — single Surfaced pipeline with no Frame
+   inheritance; just `legal_pipelines()` rank evaluation. **Expected:** <500µs
+   per dispatch on target hardware.
+2. **Single-level Frame inheritance** — pipeline with broker-default Frames;
+   cluster manifest declares cluster-default Frames. Measure dispatch latency.
+   **Expected:** <800µs per dispatch.
+3. **Five-level deep Frame stack** — cluster → broker → role → pipeline →
+   dispatch overrides; all 7 Frame types populated at every level. Measure
+   dispatch latency. **Expected:** <2ms per dispatch (per R-O-5 mitigation; with
+   memoization).
+4. **`with_frame:` sub-pipeline modifier** — pipeline step includes
+   `with_frame:`; Skill Filter recomputes `legal_pipelines()` under new Frame
+   stack. **Expected:** sub-recompute adds <1ms per `with_frame:` step.
+5. **Frame-rotation pipeline** — `frame_rotation:` step rotates 5 Frame values;
+   load-time budget validation per BB #9. Measure load-time validation cost.
+   **Expected:** <5ms catalog-load overhead per rotation pipeline.
+
+**Pass criteria:** under nested + rotated dispatch, per-tick latency stays
+within the consuming-project's latency budget (cereGrim's target: <1500ms
+end-to-end per turn including LLM inference; substrate should consume <400ms).
+
+**Tools:** Rust criterion benchmark suite; representative Frame stack fixtures.
+
+**When this runs:** post-S0-T (BB #35 implemented; BB #20 Skill Filter
+implemented); part of S1-T performance validation.
+
+---
+
 #### BRK-27-CROSS-BROKER (BB #27) — contract in S0-T; impl in S1-T
 **Description:** Cross-Broker Composition Policy — atomicity rule (cross-broker
 sub-pipelines within single workflow checkpoint); ACL governance via Topology Broker;
