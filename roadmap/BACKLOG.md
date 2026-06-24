@@ -2156,6 +2156,73 @@ the methodology lineage: `.claude/skills/archived/lsp.md` ("LSP-Powered Symbol S
 
 ---
 
+### B-55: BROKER-FRAMEWORK — 35-building-block broker pattern substrate — EPIC (2026-06-24)
+
+**Problem.** Five phases of logical scaffolding (2026-06-21..24) produced a spec-stable
+broker pattern framework — a structured-store + deterministic-dispatcher substrate that
+consuming agent harnesses (e.g., the cereGrim dual-lobe project) build on. The
+framework decomposes into **35 building blocks** (Layer A pattern primitives, Layer B
+pipeline primitives, Layer C substrate composition) plus one sub-numbered BB (#22a
+Materializer Composer). Spec lives at [`../docs/BROKER-CONTRACT.md`](../docs/BROKER-CONTRACT.md)
++ [`../docs/BROKER-INTERNALS.md`](../docs/BROKER-INTERNALS.md) + the BROKER-AWARENESS /
+WRAPPING / MANIFEST-SCHEMA / FRAMES / PUBLIC-VS-PROPRIETARY / CLUSTER-MANIFEST-SCHEMA
+companions. The dedicated per-BB implementation backlog (acceptance criteria + layer
+sequencing + stage mapping + reuse-vs-build summary) lives at
+[`broker-framework-backlog.md`](broker-framework-backlog.md). This entry is the
+epic-level pointer that surfaces the framework in the project backlog.
+
+**Plan when:**
+1. NeuroGrim v5.x stage exit work clears (current v5.5-horizon items have priority).
+2. cereGrim's S0-T stage begins (the consuming-project demand makes the framework
+   load-bearing).
+3. A new sibling crate `neurogrim-brokers/` is greenlit alongside `neurogrim-core` (per
+   the reuse audit in [`../../cereGrim/docs/SCAFFOLDING.md`](../../cereGrim/docs/SCAFFOLDING.md)).
+
+**Reuse-vs-build (from broker-framework-backlog.md reuse table):** REUSE — `neurogrim_core::queue`
+(BB #4), `queue_backend::QueueBackend` trait shape (BB #6), sensor factory pattern (BB
+#5 shape), `BrainContext::load()` (S1-T Context Broker), `next_ready()` (S1-T Work
+Broker), TaskServer A2A trait, `proposal-ledger.json` (BB #21), `invocation-ledger.jsonl`
+(BB #20 extended), PostToolUse hook pattern (BB #15). BUILD — the 35 BBs themselves:
+Broker trait + Overlay primitive + InternalService + ExternalService + Pipeline +
+Step + Catalog + Runner + Workflow Engine + Trace Sink + Replay + Cancellation +
+WPVC + Registry + Tick + Workspace Manager + Topology + Awareness Service +
+Governance + Skill Filter + Materializer + Composer + Role-set + Awareness Materializer
++ Cross-Broker Composition + Diagnostics + Lifecycle + Onboarding + Cluster Federation
++ Telemetry + Pipeline Proposal + Schema Migration + Frame stack.
+
+**What BROKER-FRAMEWORK would deliver:**
+1. A new `neurogrim-brokers/` workspace crate housing the framework substrate +
+   reference broker.
+2. S0-T exit gate: reference broker authorable end-to-end in under half a day by the
+   framework author against a frozen test fixture (per cereGrim's roadmap).
+3. S1-T concrete brokers: Topology, Context, Workspace (Sense), Sensory, Work.
+4. S2-T Workspace Manager + Effectors (IDE, Browser, Custom Sensor).
+5. S3-T Awareness Service hardened (rate-limit + validation + redaction enforced).
+6. S\*-C cluster work (Cluster Federation Topology + IAB substrate concretes).
+
+**Dependencies.** Workspace crate scaffold (1 new crate); cereGrim S0-T staging branch
+ready; A2A protocol bumps for cross-machine pipeline dispatch (S0-C work).
+
+**Adversarial note.** 35 BBs is a lot of substrate to land before any consumer sees
+value. Sequence per [`broker-framework-backlog.md`](broker-framework-backlog.md) — Layer
+A + foundational Layer B first; concrete reference broker visible by end of wave 2.
+S0-T exit gate (reference broker in under half a day) is the falsification check: if
+authoring takes longer, the substrate isn't yet substrate. Don't bundle more BBs into
+S0-T to "finish faster" — better to ship S0-T with #16/#17/#18/#27 still scaffold-only
+and gain real-world feedback from concrete brokers in S1-T.
+
+**Cross-references.** Per-BB backlog: [`broker-framework-backlog.md`](broker-framework-backlog.md).
+Spec: [`../docs/BROKER-CONTRACT.md`](../docs/BROKER-CONTRACT.md) +
+[`../docs/BROKER-INTERNALS.md`](../docs/BROKER-INTERNALS.md). Consuming project: cereGrim
+([`../../cereGrim/docs/BROKER-COMPOSITION.md`](../../cereGrim/docs/BROKER-COMPOSITION.md) +
+[`../../cereGrim/roadmap/ROADMAP.md`](../../cereGrim/roadmap/ROADMAP.md) S\*-T staging).
+IP boundary policy: [`../docs/PUBLIC-VS-PROPRIETARY.md`](../docs/PUBLIC-VS-PROPRIETARY.md).
+Visual reference: [`../docs/diagrams/DIAGRAM-V4-SPEC.md`](../docs/diagrams/DIAGRAM-V4-SPEC.md).
+v3 diagram: [`../docs/diagrams/broker-pattern.drawio.svg`](../docs/diagrams/broker-pattern.drawio.svg)
+(v4 update pending operator authoring).
+
+---
+
 ## How to author a new backlog entry
 
 1. Pick a short ID (`B-NN`, increment from the last one).
