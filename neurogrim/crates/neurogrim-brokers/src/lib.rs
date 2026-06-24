@@ -42,6 +42,7 @@ pub mod trace;
 pub mod governance;
 pub mod materializer;
 pub mod registry;
+pub mod work_broker;
 
 // Re-exports for downstream consumers
 pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
@@ -60,6 +61,7 @@ pub use registry::{
 };
 pub use runner::{DispatchError, DispatchOutcome, LeafContext, LeafError, PipelineRunner};
 pub use trace::{SnapshotDelta, TraceError, TraceRecord, TraceSink};
+pub use work_broker::{ActiveWorkOverlay, BacklogState, WorkBroker, WorkUnit, WorkUnitStatus};
 
 // Re-export major errors for ergonomic consumer error handling
 pub use anyhow::{Error, Result};
