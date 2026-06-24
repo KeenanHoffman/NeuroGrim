@@ -1,0 +1,59 @@
+[package]
+name = "neurogrim-brokers"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+description = "Broker framework for NeuroGrim: deterministic-dispatch substrate (Wave 0 scaffold)"
+
+# S*-T MVP scope — see C:/Users/koff0/.claude/plans/for-your-new-session-modular-pretzel.md
+# This crate implements ~12 of the 38 building blocks documented in
+# D:/Brains/NeuroGrim/docs/BROKER-INTERNALS.md as the "useful MVP" broker
+# harness for Claude Code as Primary substitute.
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+
+# Async runtime + trait support
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Time (audit timestamps; trace records)
+chrono = { workspace = true }
+
+# Tracing (for debug + diagnostics; not BB #28 Diagnostics yet)
+tracing = { workspace = true }
+
+# arc-swap — chosen for BB #2a Overlay atomic-swap mechanism per
+# BROKER-SPEC-GAPS.md gap #5 resolution. Cheap atomic read/write swap
+# for read-mostly state with single-writer (the broker) + many readers
+# (consumers). Pre-validated as the canonical Rust idiom.
+arc-swap = "1"
+
+# Reuse: NeuroGrim core primitives (verified PRESENT per P1 audit at
+# cereGrim/docs/DISCOVERY-RESULTS.md). Brokers reuse:
+# - queue + queue_backend for trace-sink + cross-broker bus messaging
+# - sensor for broker leaf-ops that wrap existing sensors
+neurogrim-core = { workspace = true }
+
+[dev-dependencies]
+# Property testing for Overlay<T> atomic-swap concurrency tests
+proptest = { workspace = true }
+tempfile = "3"
+
+# Tokio test macros (for async tests)
+tokio = { workspace = true, features = ["macros", "rt"] }

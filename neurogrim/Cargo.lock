@@ -1797,6 +1797,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "neurogrim-brokers"
+version = "5.0.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "async-trait",
+ "chrono",
+ "neurogrim-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "neurogrim-cli"
 version = "5.0.0"
 dependencies = [

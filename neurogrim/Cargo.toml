@@ -9,6 +9,14 @@ members = [
     "crates/neurogrim-dashboard",
     "crates/neurogrim-cli",
     "crates/neurogrim-secrets",
+    # S*-T MVP (broker harness for Claude Code, 2026-06-24+) —
+    # implements ~12-of-38 building blocks from BROKER-INTERNALS.md
+    # spec as the "useful MVP" broker substrate. See plan at
+    # C:/Users/koff0/.claude/plans/for-your-new-session-modular-pretzel.md
+    # for the full S*-T Wave 0-5 sequence. Defers Workflow Engine,
+    # Skill Filter, Frame stack, Topology Broker, and the Phase 8
+    # additions until S1-T.
+    "crates/neurogrim-brokers",
     # v2-Feature 9 (NG-PENTEST, 2026-05-09) — optional pen-testing
     # harness. Workspace member so `cargo test --workspace` exercises
     # it, but NOT a default dependency of any other crate. Operators
@@ -187,3 +195,5 @@ neurogrim-mcp = { path = "crates/neurogrim-mcp", version = "5.0.0" }
 neurogrim-a2a = { path = "crates/neurogrim-a2a", version = "5.0.0" }
 neurogrim-ecosystem = { path = "crates/neurogrim-ecosystem", version = "5.0.0" }
 neurogrim-dashboard = { path = "crates/neurogrim-dashboard", version = "5.0.0" }
+# S*-T MVP broker harness (2026-06-24+) — see workspace member comment above.
+neurogrim-brokers = { path = "crates/neurogrim-brokers", version = "5.0.0" }
