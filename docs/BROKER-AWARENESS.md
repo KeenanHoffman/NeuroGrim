@@ -17,6 +17,24 @@ defined in CONTRACT §"Glossary."
 NeuroGrim's existing awareness substrate is the right shape; brokers extend it rather
 than replace it. Three substrate layers already in production:
 
+> **⚠ Architectural elevation (V0-RETROSPECTIVE.md §C1; post-Wave-5 finding).** When
+> the broker harness is deployed against Claude Code (or any agent harness using a
+> **single generic `dispatch_pipeline` MCP tool** + L1-discovery design), the
+> **Materializer Composer (BB #22a) IS the primary agent-facing interface** — not
+> "one of 38 building blocks." Everything that determines the agent's behavior —
+> pipeline visibility, ranking, per-pipeline parameter schemas, governance
+> reachability, currently-legal status — lives in `current-projection.md`. MCP is
+> reduced to a wire protocol for the dispatch action; the materializer output is
+> where the agent learns what's dispatchable + why + with what params. **Without a
+> high-quality Materializer Composer + Awareness Materializer (BB #24) output, the
+> broker pattern's value collapses** (the agent can't curate from an opaque dispatch
+> tool surface). The R-O-3 closure governance-first discipline + the U1 closure
+> per-pipeline param schema surfacing make this elevation operationally
+> well-supported in V0; treat the Materializer Composer's design importance + its
+> output discipline as commensurate with the architectural role it plays, not just
+> the BB-row weight.
+
+
 | Layer | NeuroGrim mechanism | Broker extension |
 |---|---|---|
 | **Routing signal** | Skill manifests (`description` + `when_to_use` ≤1,536 chars; per `write-skill/SKILL.md`) | Every Surfaced pipeline carries the same fields with the same budget |
