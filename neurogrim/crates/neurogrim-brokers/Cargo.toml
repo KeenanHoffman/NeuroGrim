@@ -44,6 +44,9 @@ tracing = { workspace = true }
 # (consumers). Pre-validated as the canonical Rust idiom.
 arc-swap = "1"
 
+# UUID v4 for trace IDs + dispatch IDs (same pattern as neurogrim-mcp).
+uuid = { version = "1", features = ["v4", "serde"] }
+
 # Reuse: NeuroGrim core primitives (verified PRESENT per P1 audit at
 # cereGrim/docs/DISCOVERY-RESULTS.md). Brokers reuse:
 # - queue + queue_backend for trace-sink + cross-broker bus messaging

@@ -131,6 +131,20 @@ pub trait Broker: Send + Sync {
     /// Tick handler: re-project Overlays in response to world events. Called
     /// by the Tick Source (MVP: PostToolUse hook + manual operator command).
     async fn tick(&self, event: WorldEvent) -> Result<(), BrokerError>;
+
+    /// Execute a named leaf-op (Tier 3 plain function) registered by this
+    /// broker. Called by the Pipeline Runner during step execution. Brokers
+    /// typically implement this with a `match name { ... }` over their
+    /// registered leaf-op names.
+    ///
+    /// Per BROKER-INTERNALS.md §1.4 Tier 3 minimization: leaf-ops are the
+    /// small set of plain functions a broker exposes; everything else
+    /// (preconditions, governance, materialization, etc.) is framework-handled.
+    async fn execute_leaf(
+        &self,
+        name: &str,
+        ctx: crate::runner::LeafContext,
+    ) -> Result<serde_json::Value, crate::runner::LeafError>;
 }
 
 #[cfg(test)]
@@ -182,6 +196,17 @@ mod tests {
             let mut count = self.tick_count.lock().await;
             *count += 1;
             Ok(())
+        }
+
+        async fn execute_leaf(
+            &self,
+            name: &str,
+            _ctx: crate::runner::LeafContext,
+        ) -> Result<serde_json::Value, crate::runner::LeafError> {
+            match name {
+                "echo" => Ok(serde_json::json!({"mock_echo": true})),
+                _ => Err(crate::runner::LeafError::NotFound(name.to_string())),
+            }
         }
     }
 
