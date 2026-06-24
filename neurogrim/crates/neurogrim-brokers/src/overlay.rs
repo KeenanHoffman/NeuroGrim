@@ -80,6 +80,8 @@ impl<W> WorkingState<W> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+    use std::sync::Arc;
 
     #[test]
     fn overlay_swap_publishes_new_state() {
@@ -89,5 +91,74 @@ mod tests {
         let snap2 = o.load();
         assert_eq!(*snap1, vec![1, 2, 3]); // snap1 unaffected
         assert_eq!(*snap2, vec![4, 5, 6]); // snap2 sees new state
+    }
+
+    proptest! {
+        /// Property: under arbitrary concurrent reads + writes, every read
+        /// returns ONE of the published versions (no torn reads).
+        #[test]
+        fn overlay_no_torn_reads_under_concurrent_access(
+            values in proptest::collection::vec(0i32..1000, 1..50)
+        ) {
+            let o = Arc::new(Overlay::new(vec![0i32]));
+            let writer_handles: Vec<_> = values
+                .iter()
+                .enumerate()
+                .map(|(i, &v)| {
+                    let o = o.clone();
+                    std::thread::spawn(move || {
+                        o.swap(vec![v; i + 1]);
+                    })
+                })
+                .collect();
+
+            let reader_handles: Vec<_> = (0..20)
+                .map(|_| {
+                    let o = o.clone();
+                    std::thread::spawn(move || {
+                        for _ in 0..50 {
+                            let snap = o.load();
+                            // No-torn-read invariant: every element of the
+                            // snapshot equals the first element (since each
+                            // write publishes a vector where all elements
+                            // are identical). If snap is torn (mixed from
+                            // two writes), this would fail.
+                            if !snap.is_empty() {
+                                let first = snap[0];
+                                prop_assert!(snap.iter().all(|&x| x == first),
+                                    "torn read detected: {:?}", *snap);
+                            }
+                        }
+                        Ok(())
+                    })
+                })
+                .collect();
+
+            for h in writer_handles {
+                h.join().unwrap();
+            }
+            for h in reader_handles {
+                h.join().unwrap().unwrap();
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn working_state_lock_serializes_writes() {
+        let ws = Arc::new(WorkingState::new(0i32));
+        let tasks: Vec<_> = (0..100)
+            .map(|_| {
+                let ws = ws.clone();
+                tokio::spawn(async move {
+                    let mut guard = ws.lock().await;
+                    *guard += 1;
+                })
+            })
+            .collect();
+        for t in tasks {
+            t.await.unwrap();
+        }
+        // If the Mutex was broken, increments would race + total < 100.
+        assert_eq!(*ws.lock().await, 100);
     }
 }

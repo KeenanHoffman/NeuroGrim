@@ -1,59 +1,75 @@
 //! BB #1 — Broker capsule.
 //!
-//! The `Broker` trait every broker implements. Defines the contract surface
-//! between framework + broker authors. Wave 1 fleshes this out per
-//! BROKER-SPEC-GAPS.md gap #1 resolution.
+//! The `Broker` trait every broker implements. Resolves
+//! BROKER-SPEC-GAPS.md gap #1: trait signature finalized via async_trait +
+//! interior-mutability pattern (so `Arc<dyn Broker>` is dyn-compatible
+//! despite mutation-during-tick).
 //!
-//! ## Trait shape (Wave 0 sketch; Wave 1 finalizes)
+//! ## Type-erasure choice (Wave 1 decision)
 //!
-//! ```ignore
-//! #[async_trait::async_trait]
-//! pub trait Broker: Send + Sync {
-//!     type OverlayShape: Send + Sync + serde::Serialize;
-//!     type WorkingState: Send;
+//! The trait surface uses `serde_json::Value` for overlay state (type-erased)
+//! rather than associated types. This sacrifices Rust type-safety at the
+//! consumer boundary for **dyn-compatibility** — the Broker Registry (BB #14)
+//! holds `Vec<Arc<dyn Broker>>` across heterogeneous broker implementations.
+//! Concrete brokers retain typed Overlay<T> + WorkingState<W> internally;
+//! they JSON-serialize at the trait boundary.
 //!
-//!     /// Returns the consumer-facing read-only Overlay state.
-//!     /// Per BROKER-CONTRACT.md §"The Overlay contract": atomic-swap,
-//!     /// no-torn-read, versioned.
-//!     async fn read_overlay(&self) -> Self::OverlayShape;
-//!
-//!     /// Returns the currently-legal pipelines per BROKER-CONTRACT.md
-//!     /// central invariant.
-//!     async fn legal_pipelines(&self, state: &Self::WorkingState)
-//!         -> Vec<crate::Pipeline>;
-//!
-//!     /// Returns the governance-pipelines sidecar per §4 reachability
-//!     /// channel split (LB-3 closure).
-//!     async fn governance_pipelines(&self) -> Vec<crate::Pipeline>;
-//!
-//!     /// Tick handler. Brokers re-project Overlays in response to world
-//!     /// events (per BB #15 Tick Source — MVP uses PostToolUse hook).
-//!     async fn tick(&mut self, event: WorldEvent) -> Result<(), BrokerError>;
-//!
-//!     /// Role-set declaration per BROKER-CONTRACT.md role-set framing.
-//!     fn role_set(&self) -> RoleSet;
-//! }
-//! ```
+//! Trade-off: agents and other consumers see Value not typed structs. The
+//! Awareness Materializer (BB #24) projects to human-readable Markdown
+//! anyway, so the loss is minor at the boundary that matters.
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// World events that drive broker tick re-projection. MVP shape; Wave 1
-/// finalizes per BROKER-SPEC-GAPS.md gap #4 resolution.
+use crate::pipeline::Pipeline;
+
+/// World events that drive broker tick re-projection. Per BB #15 Tick Source
+/// spec; MVP triggered by PostToolUse hook + manual operator command.
+/// Resolves BROKER-SPEC-GAPS.md gap #4 (WorldEvent shape).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldEvent {
     /// Bus topic the event arrived on (per BB #4 queue conventions).
     pub topic: String,
-    /// Payload (typed at the consuming broker's discretion).
+
+    /// Source class — `system-diagnostics` | `sensor` | `agent-action` |
+    /// `operator-command` | `tick-cadence`. Wave 2 may expand the enum.
+    pub source_class: String,
+
+    /// Typed payload (broker decides shape per topic).
     pub payload: serde_json::Value,
-    /// ISO 8601 timestamp.
+
+    /// ISO 8601 UTC timestamp.
     pub ts: String,
 }
 
-/// Role-set per BROKER-CONTRACT.md §"Broker roles".
+impl WorldEvent {
+    /// Convenience: create a tick-cadence event (the default trigger).
+    pub fn tick_cadence(ts: impl Into<String>) -> Self {
+        Self {
+            topic: "_neurogrim/tick".into(),
+            source_class: "tick-cadence".into(),
+            payload: serde_json::Value::Null,
+            ts: ts.into(),
+        }
+    }
+}
+
+/// Role-set per BROKER-CONTRACT.md §"Broker roles". Brokers carry a SUBSET of
+/// `{Sense, InnateAbility, Embodiment}`; multi-role brokers are first-class.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RoleSet {
     pub roles: Vec<Role>,
+}
+
+impl RoleSet {
+    pub fn single(role: Role) -> Self {
+        Self { roles: vec![role] }
+    }
+
+    pub fn contains(&self, role: &Role) -> bool {
+        self.roles.contains(role)
+    }
 }
 
 /// One of the three architectural role classes.
@@ -65,7 +81,7 @@ pub enum Role {
     Embodiment,
 }
 
-/// Errors brokers can produce. Wave 1 expands this enum per spec gaps.
+/// Errors brokers can produce.
 #[derive(Debug, Error)]
 pub enum BrokerError {
     #[error("broker not initialized: {0}")]
@@ -81,10 +97,151 @@ pub enum BrokerError {
     Other(#[from] anyhow::Error),
 }
 
-/// Marker trait the actual `Broker` definition lands on in Wave 1.
-/// This placeholder exists so consuming crates can begin to import
-/// `neurogrim_brokers::Broker` ahead of Wave 1 without breaking compilation
-/// when Wave 1 lands the real trait.
+/// The Broker capsule contract. All methods use `&self` + interior mutability
+/// (typically via `Arc<Mutex<WorkingState<W>>>`) so the trait is
+/// dyn-compatible AND brokers can mutate state during tick.
+#[async_trait]
 pub trait Broker: Send + Sync {
+    /// Unique broker identifier (matches manifest `id` field; used as the
+    /// prefix in pipeline IDs like `<broker_id>/<pipeline_name>`).
+    fn id(&self) -> &str;
+
+    /// Role-set declaration. Wave 3 Broker Registry composes role-specific
+    /// scaffolding from this.
     fn role_set(&self) -> RoleSet;
+
+    /// Returns the consumer-facing read-only Overlay state, JSON-serialized.
+    /// Per BROKER-CONTRACT.md §"The Overlay contract": atomic-swap snapshot.
+    /// Concrete brokers internally use `Overlay<T>` + arc-swap; the trait
+    /// surface returns a Value.
+    async fn read_overlay(&self) -> serde_json::Value;
+
+    /// Returns the currently-legal Surfaced pipelines. Per BROKER-CONTRACT.md
+    /// central invariant: the LLM never sees a capability whose preconditions
+    /// aren't met. MVP version returns all Surfaced pipelines from the
+    /// catalog (Wave 2 catalog loader gates by precondition evaluation
+    /// against hot store).
+    async fn legal_pipelines(&self) -> Vec<Pipeline>;
+
+    /// Returns governance pipelines via the sidecar channel split (per
+    /// BROKER-INTERNALS.md §4 reachability invariant). NOT subject to Skill
+    /// Filter ranking; always-reachable per LB-3 closure.
+    async fn governance_pipelines(&self) -> Vec<Pipeline>;
+
+    /// Tick handler: re-project Overlays in response to world events. Called
+    /// by the Tick Source (MVP: PostToolUse hook + manual operator command).
+    async fn tick(&self, event: WorldEvent) -> Result<(), BrokerError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipeline::Visibility;
+    use std::sync::Arc;
+
+    /// Minimal mock broker for testing the Broker trait contract.
+    pub struct MockBroker {
+        id: String,
+        roles: RoleSet,
+        tick_count: tokio::sync::Mutex<u32>,
+    }
+
+    impl MockBroker {
+        pub fn new(id: impl Into<String>, roles: RoleSet) -> Self {
+            Self {
+                id: id.into(),
+                roles,
+                tick_count: tokio::sync::Mutex::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl Broker for MockBroker {
+        fn id(&self) -> &str {
+            &self.id
+        }
+
+        fn role_set(&self) -> RoleSet {
+            self.roles.clone()
+        }
+
+        async fn read_overlay(&self) -> serde_json::Value {
+            serde_json::json!({"mock": true, "broker_id": self.id})
+        }
+
+        async fn legal_pipelines(&self) -> Vec<Pipeline> {
+            vec![]
+        }
+
+        async fn governance_pipelines(&self) -> Vec<Pipeline> {
+            vec![]
+        }
+
+        async fn tick(&self, _event: WorldEvent) -> Result<(), BrokerError> {
+            let mut count = self.tick_count.lock().await;
+            *count += 1;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn broker_trait_is_dyn_compatible_via_arc() {
+        let brokers: Vec<Arc<dyn Broker>> = vec![
+            Arc::new(MockBroker::new("a", RoleSet::single(Role::Sense))),
+            Arc::new(MockBroker::new(
+                "b",
+                RoleSet {
+                    roles: vec![Role::Sense, Role::Embodiment],
+                },
+            )),
+            Arc::new(MockBroker::new(
+                "c",
+                RoleSet::single(Role::InnateAbility),
+            )),
+        ];
+        assert_eq!(brokers.len(), 3);
+
+        for broker in &brokers {
+            let overlay = broker.read_overlay().await;
+            assert!(overlay.get("mock").is_some());
+            assert_eq!(broker.role_set().roles.len() >= 1, true);
+        }
+    }
+
+    #[tokio::test]
+    async fn broker_tick_uses_interior_mutability() {
+        let b = MockBroker::new("tick-test", RoleSet::single(Role::Sense));
+        // tick() takes &self, not &mut self — but updates internal state via Mutex.
+        b.tick(WorldEvent::tick_cadence("2026-06-24T00:00:00Z"))
+            .await
+            .unwrap();
+        b.tick(WorldEvent::tick_cadence("2026-06-24T00:00:01Z"))
+            .await
+            .unwrap();
+        assert_eq!(*b.tick_count.lock().await, 2);
+    }
+
+    #[tokio::test]
+    async fn broker_returns_legal_and_governance_pipelines_separately() {
+        let b = MockBroker::new("split-test", RoleSet::single(Role::Sense));
+        let legal = b.legal_pipelines().await;
+        let governance = b.governance_pipelines().await;
+        // Reachability channel split: both surfaces accessible independently.
+        assert_eq!(legal.len(), 0);
+        assert_eq!(governance.len(), 0);
+        // The fact that these are SEPARATE methods (not a flag on one method)
+        // is the structural guarantee per §4 reachability invariant.
+        let _ = Visibility::Surfaced; // sanity: pipeline types reachable
+    }
+
+    #[test]
+    fn role_set_contains() {
+        let rs = RoleSet {
+            roles: vec![Role::Sense, Role::Embodiment],
+        };
+        assert!(rs.contains(&Role::Sense));
+        assert!(rs.contains(&Role::Embodiment));
+        assert!(!rs.contains(&Role::InnateAbility));
+    }
 }
