@@ -82,10 +82,13 @@ construction.
 
 | Materializer | File | Content |
 |---|---|---|
-| Hot-Store Materializer (#22) | `.claude/brain/broker/segments/overlay.md` | Per-broker Overlay state (the LLM-readable hot-tier projections) |
-| Awareness Materializer (#24) | `.claude/brain/broker/segments/awareness-routing.md` | Pipeline catalog routing signals (description + when_to_use per Surfaced pipeline; alive/dead/new status per per-broker capability-hygiene) |
+| Hot-Store Materializer (#22) | `.claude/brain/broker/segments/overlay.md` | Per-broker Overlay state (the LLM-readable hot-tier projections) — steady-state |
+| Awareness Materializer (#24) | `.claude/brain/broker/segments/awareness-routing.md` | Pipeline catalog routing signals (description + when_to_use per Surfaced pipeline; alive/dead/new status per per-broker capability-hygiene) — steady-state |
+| Onboarding Projection (#30) | `.claude/brain/broker/segments/onboarding-<broker_id>.md` | First-encounter awareness — surfaces broker purpose + role-set + top-N pipelines with routing signals + governance posture + skill-body cross-refs. Auto-injected on agent's first tick with this broker; replaced by steady-state segments on subsequent ticks. **Distinct from #22 / #24** — different cadence (once per broker-per-agent vs every projection cycle) and richer content (full onboarding briefing vs delta-update). |
 
-The Composer writes both into `current-projection.md` per the operator's declared order.
+The Materializer Composer (#22a) concatenates all three into `current-projection.md`
+per the operator's declared order (typically `[onboarding-*, overlay, awareness-routing]`
+so onboarding flows naturally into steady-state on the first tick).
 
 **Cadence:** session-start by default (writes once, agent reads on auto-load). Optional
 hook-triggered re-projection per PreToolUse for finer cadence (replaces file in-place

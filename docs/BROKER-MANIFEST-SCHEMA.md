@@ -110,6 +110,9 @@ full example. Per-pipeline shape:
     - branch: { predicate: <expr>, then: <step>, else: <step> }
   governance:                               # optional; framework composes defaults
     compose: [<governance-pipeline-id>, ...]
+  on_cancel:                                # optional; per BB #25 Pipeline Cancellation Handler
+    steps: [<cleanup-step-id>, <log-step-id>, ...]
+    terminal_state: cancelled | paused-for-resume    # default: cancelled (no auto-resume)
   expected_effect: <effect-class>           # for idempotency reasoning + audit grouping
 ```
 

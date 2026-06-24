@@ -7,7 +7,7 @@ sharing + adds two structural extensions: broker-prescribed Frames and Frame-rot
 pipelines. Full content lands as the design questions below resolve.
 
 Companion to [`BROKER-CONTRACT.md`](BROKER-CONTRACT.md) (the named primitive),
-[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) (framework internals + 24 building blocks),
+[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) (framework internals + 30 building blocks),
 [`BROKER-AWARENESS.md`](BROKER-AWARENESS.md) (how agents see broker output), and
 cereGrim's [`INTER-AGENT-BROKER.md`](../../cereGrim/docs/INTER-AGENT-BROKER.md) (the
 cluster-level recursion where Frame negotiation between peer-agents becomes
@@ -91,7 +91,7 @@ active Frame stack. Four consumption surfaces:
    time-horizon: long-term}` gets a longer TTL + more aggressive checkpointing. With
    `{tempo: rapid-prototype}`, shorter TTL + lighter checkpointing.
 
-The 24 building blocks stay uniform; Frames change *how* they apply. The Frame stack is
+The 30 building blocks stay uniform; Frames change *how* they apply. The Frame stack is
 a typed map in broker state; framework reads it at every consumption point.
 
 ---
@@ -300,13 +300,16 @@ This stub becomes a real spec when these resolve:
 
 ## §8 — What this commits the framework to
 
-The Frame primitive becomes building block **#25** in
-[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3 — Layer C (Substrate composition).
-Specifically:
+The Frame primitive **will become a new building block** in
+[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3 — Layer C (Substrate composition) when
+this stub matures into a real spec. **No BB number is assigned yet** (numbers #25-#30
+were taken by Phase 3 hole-closure additions: Pipeline Cancellation Handler, Schema
+Migration Runner, Cross-Broker Composition Policy, Diagnostics Collector, Broker
+Lifecycle, Onboarding Projection). Indicative table entry (numbering deferred):
 
 | # | Building block | Framework provides | Broker author provides |
 |---|---|---|---|
-| 25 | **Frame stack** | The typed Frame map in broker state; the merge order across inheritance levels; the consumption surfaces in Governance Composer / Skill Filter / Overlay curation / Workflow Engine; the `with_frame:` step modifier; the `frame_rotation:` step sugar; the IAB negotiation protocol | Per-broker Frame defaults; per-pipeline Frame requirements; per-cluster Frame manifest values |
+| TBD | **Frame stack** | The typed Frame map in broker state; the merge order across inheritance levels; the consumption surfaces in Governance Composer / Skill Filter / Overlay curation / Workflow Engine; the `with_frame:` step modifier; the `frame_rotation:` step sugar; the IAB negotiation protocol | Per-broker Frame defaults; per-pipeline Frame requirements; per-cluster Frame manifest values |
 
 `displaces / deprecates: nothing` — net-new substrate surface. Mirrors the hats system's
 substrate-level discipline but applies to six other context dimensions.
@@ -324,8 +327,9 @@ spec.
 - [`BROKER-CONTRACT.md`](BROKER-CONTRACT.md) §"Glossary" — Frame-related terms will land
   here when stub matures (currently the Glossary documents broker-role / cluster-role
   / Overlay tiers but not Frame types).
-- [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3 — Frame stack as building block #25
-  (additive).
+- [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3 — Frame stack as a future Layer C
+  building block (number deferred until stub matures; #25-#30 occupied by Phase 3
+  hole-closure additions).
 - [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §4 critical invariants — Frame
   manipulation safeguards (tunability tiers per Frame type); Frame-rotation max
   iterations; Frame-loop escape clauses.
@@ -352,7 +356,8 @@ This stub becomes the design note (no longer stub) when:
 2. The IAB Frame negotiation protocol is specified concretely (caller-requested +
    cluster-enforced + peer-prescribed shapes documented in
    `INTER-AGENT-BROKER.md`).
-3. Building block #25 lands in `BROKER-INTERNALS.md` §3 with full framework-vs-author
+3. The Frame-stack building block (number deferred; see §8) lands in
+   `BROKER-INTERNALS.md` §3 with full framework-vs-author
    split.
 4. The first reference Frame-rotation pipeline (likely a cereGrim-specific
    `comprehensive-change-review-rotation`) is authored and tested against a real

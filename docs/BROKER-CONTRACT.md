@@ -43,6 +43,13 @@ re-spelling them.
 | **OverlayView** | (tier-2) A derived/filtered projection layered on top of one or more Overlays. The Topology Broker's per-consumer ACL-filtered topology is an OverlayView (each consumer-broker sees a different filtered view of the broker registry). |
 | **OverlayMesh** | (tier-3) A cluster-aggregated projection across multiple peer-agents' Overlays. The IAB's cluster-Sense projection (when wired) is an OverlayMesh. Consistency model is explicit per the IAB stub (snapshot-on-read or arbiter-mediated). |
 
+**See also (Frame-related terms):** the Frame primitive is documented in
+[`BROKER-FRAMES.md`](BROKER-FRAMES.md) (currently a stub). When it matures, this
+glossary will absorb the seven Frame-type terms — `Hat`, `Stakes`, `Tempo`, `Mode`,
+`Confidence`, `Audience`, `Scope` — plus `Frame stack` and `Frame-rotation` and
+`broker-prescribed Frame`. Until then, refer to BROKER-FRAMES §2 for the Frame-type
+taxonomy.
+
 ---
 
 ## What a broker IS
@@ -207,7 +214,7 @@ delivery vs. queuing on the broker's behalf.
 ## The Workspace Manager — the canonical Embodiment broker
 
 The Workspace Manager is the **agent's motor cortex** — the only canonical instance of
-the Embodiment role-class, and the framework's reference for what an Embodiment
+the Embodiment role (per the role-set vocabulary in §"Broker roles" above), and the framework's reference for what an Embodiment
 spinal cord does. It has three responsibilities:
 
 1. **Coordinate Effector brokers.** IDE Broker, Browser Broker, Custom Sensor (and
@@ -233,9 +240,9 @@ Effector cold stores hold *that effector's* config; Workspace Details holds
 *cross-effector* state owned by the Manager.
 
 **Note on naming:** the Workspace Manager and the [Workspace Broker (Sense)](#the-workspace-broker--workspace-manager-distinction--the-subtle-boundary)
-share subject matter (the workspace) but belong to different role-classes. Keeping them
+share subject matter (the workspace) but carry different role-sets. Keeping them
 separate is the load-bearing discipline — perception of the workspace and action on it
-are different concerns, served by different brokers in different role-classes.
+are different concerns, served by different brokers carrying different role-sets.
 
 ---
 
@@ -332,7 +339,7 @@ manifest declares this as its single self-bypass. Documented as part of building
 ### The Workspace Broker / Workspace Manager distinction — the subtle boundary
 
 These two brokers share subject matter (the workspace) but belong to different
-role-classes, and the distinction is **load-bearing**:
+role-sets, and the distinction is **load-bearing**:
 
 | | Workspace Broker (Sense) | Workspace Manager (Embodiment) |
 |---|---|---|
@@ -343,9 +350,9 @@ role-classes, and the distinction is **load-bearing**:
 | Failure mode if conflated | LLM perception and action collide in one Overlay; read-only contract breaks; audit trail merges senses and dispatches |
 
 The temptation to conflate them is real — "workspace" suggests one concern. The
-discipline of keeping them separate is what makes the role-class taxonomy coherent.
+discipline of keeping them separate is what makes the role-set taxonomy coherent.
 A future contributor reading this contract should leave knowing: **perception of the
-workspace and action on the workspace are different brokers, in different role-classes,
+workspace and action on the workspace are different brokers, carrying different role-sets,
 sharing only the substrate they observe and act upon.**
 
 ## The Overlay contract
@@ -378,6 +385,21 @@ it. The contract has three obligations:
    surfaced pipelines the broker offers (which the broker then translates into Overlay
    updates via its internal pipelines). This is the load-bearing safety property that
    makes the broker the sole authority over what the LLM sees.
+
+4. **Budget + eviction discipline.** Curation policy is re-evaluated on **every
+   projection cycle** (not memoized across ticks — broker state changes between ticks
+   and curation must reflect current state). The broker declares a budget per Overlay
+   (operator-tunable per cluster manifest, default 4KB hot-state per broker). The
+   curation function MUST produce an Overlay that fits the budget; if it cannot:
+   - The broker raises a `curation-budget-exceeded` alarm to the Diagnostics Collector
+     (see [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) building block #28).
+   - The broker falls back to the **last-known-fitting Overlay** (no torn read; no
+     incomplete state surfaced).
+   - The fallback is logged in the audit trail with `audit_class: governance` +
+     `failure_reason: curation_budget_exceeded`.
+   This closes the failure mode where long-running deployments grow the broker's
+   working state beyond the curation policy's ability to summarize it — the broker
+   degrades visibly rather than silently truncating mid-Overlay.
 
 The Overlay is **distinct from the broker's private working state** — the loaded
 Pipeline Catalog, workflow position pointers, Skill Filter weight cache, rate-limit
@@ -456,6 +478,30 @@ all pipelines this broker *could* emit before legality is checked. The broker's
 projection function filters that catalog against current hot-store state to produce
 `legal_pipelines(state)`.
 
+### Cross-broker pipeline composition
+
+A pipeline can declare a sub-step that calls another broker's surfaced pipeline (e.g.,
+the Work broker's `dispatch-work-unit` includes `sensory-broker/read-awareness-summary`
+as a step). Per [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) building block #27
+(Cross-Broker Composition Policy), the framework enforces three contracts:
+
+1. **Atomicity.** Cross-broker sub-pipelines must complete within a single workflow
+   checkpoint of the parent broker. If the cross-broker sub-step fails, the parent
+   workflow checkpoint rolls back per §"Workflow Engine" atomicity (no torn workflow
+   state across the broker boundary).
+2. **ACL governance.** The Topology Broker (see Canonical broker list above) mediates
+   the cross-broker call per its per-consumer OverlayView; the calling broker requires
+   an ACL grant for the target broker's surfaced pipeline. Calls without the grant
+   refuse at dispatch + are recorded with `failure_reason: cross_broker_acl_denied`.
+3. **Trust-budget double-debit.** The calling broker debits its own trust budget for
+   the cross-broker call AND the called broker debits its budget for the dispatch
+   it performs. Prevents free-riding on another broker's budget; ensures cluster-level
+   trust accounting stays honest.
+
+YAML shape (per [`BROKER-MANIFEST-SCHEMA.md`](BROKER-MANIFEST-SCHEMA.md)):
+`sub_pipeline: <broker_id>/<pipeline_id>` with optional
+`composition_mode: [allowed | requires-acl | requires-trust-boost]`.
+
 ---
 
 ## Hardware seam (the placement boundary the queue makes possible)
@@ -504,7 +550,7 @@ terminal broker.
   primitive).
 
 A NeuroGrim contributor reading this contract should be able to file NeuroGrim backlog
-items against any of the 24 building blocks in [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md)
+items against any of the 30 building blocks in [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md)
 §3. A consuming-project contributor reading this contract should be able to declare a
 broker (manifest + role-set + cold schema + catalog + leaf-ops) and have the framework
 compose the role-scaffolding automatically.
@@ -548,6 +594,6 @@ questions:
   catalog + leaf-op functions + manifest); everything else is inherited from the
   framework.
 
-The internals doc lists the **24 building blocks** across three layers (Pattern
+The internals doc lists the **30 building blocks** across three layers (Pattern
 primitives / Pipeline primitives / Substrate composition), with the framework-vs-author
 split. NeuroGrim-side backlog items are filed against that map.
