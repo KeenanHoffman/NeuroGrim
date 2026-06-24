@@ -21,7 +21,8 @@
 
 use crate::broker::Broker;
 use crate::catalog;
-use crate::pipeline::{ParamMap, Pipeline, PipelineId, Step};
+use crate::governance::{GovernanceComposer, GovernanceRefusal};
+use crate::pipeline::{ParamMap, Pipeline, PipelineId, Step, Visibility};
 use crate::trace::{SnapshotDelta, TraceRecord, TraceSink};
 use chrono::Utc;
 use std::sync::Arc;
@@ -45,8 +46,8 @@ pub enum DispatchError {
     #[error("precondition evaluation error: {0}")]
     PreconditionEvalFailed(#[from] crate::catalog::CatalogError),
 
-    #[error("governance refused dispatch: {failure_reason}")]
-    GovernanceRefused { failure_reason: String },
+    #[error("governance refused dispatch: {0}")]
+    GovernanceRefused(#[from] GovernanceRefusal),
 
     #[error("leaf-op failed: {leaf_op}: {error}")]
     LeafOpFailed {
@@ -105,10 +106,12 @@ pub struct DispatchOutcome {
     pub duration_ms: u64,
 }
 
-/// Pipeline Runner. Holds shared infrastructure (trace sink, prior-snapshot
-/// cache for delta computation); brokers + catalogs are passed per dispatch.
+/// Pipeline Runner. Holds shared infrastructure (trace sink, governance
+/// composer, prior-snapshot cache for delta computation); brokers + catalogs
+/// are passed per dispatch.
 pub struct PipelineRunner {
     trace_sink: Arc<TraceSink>,
+    governance: Arc<GovernanceComposer>,
     /// Most recent overlay snapshot per broker, used for trace delta
     /// computation. tokio Mutex because dispatches are async.
     prior_snapshots: tokio::sync::Mutex<
@@ -117,11 +120,17 @@ pub struct PipelineRunner {
 }
 
 impl PipelineRunner {
-    pub fn new(trace_sink: Arc<TraceSink>) -> Self {
+    pub fn new(trace_sink: Arc<TraceSink>, governance: Arc<GovernanceComposer>) -> Self {
         Self {
             trace_sink,
+            governance,
             prior_snapshots: tokio::sync::Mutex::new(std::collections::HashMap::new()),
         }
+    }
+
+    /// Access the governance composer (for operator-side admin commands).
+    pub fn governance(&self) -> Arc<GovernanceComposer> {
+        self.governance.clone()
     }
 
     /// Dispatch a pipeline against a broker.
@@ -145,18 +154,30 @@ impl PipelineRunner {
             })?
             .clone();
 
-        // 2. Param validation (Wave 4 elevates to JSON Schema; MVP minimal)
+        // 2. Governance pre-dispatch checks (BB #19; Surfaced only — Internal
+        //    pipelines skip governance per BROKER-INTERNALS.md §2.4)
+        if matches!(pipeline.visibility, Visibility::Surfaced) {
+            self.governance.pre_dispatch_checks()?;
+        }
+
+        // 3. Param validation (Wave 5+ elevates to JSON Schema; MVP minimal)
         validate_params_minimal(&pipeline, &params)?;
 
-        // 3. Read broker Overlay snapshot for precondition + leaf-op ctx
+        // 4. Read broker Overlay snapshot for precondition + leaf-op ctx
         let overlay_snapshot = broker.read_overlay().await;
 
-        // 4. Precondition evaluation
+        // 5. Precondition evaluation
         for predicate in &pipeline.preconditions {
             let holds = catalog::evaluate_precondition(predicate, &overlay_snapshot, &params)?;
             if !holds {
                 return Err(DispatchError::PreconditionUnmet(predicate.clone()));
             }
+        }
+
+        // 6. Governance record_dispatch (consumes 1 trust-budget unit;
+        //    Surfaced only)
+        if matches!(pipeline.visibility, Visibility::Surfaced) {
+            self.governance.record_dispatch();
         }
 
         // 5. Step execution
@@ -411,11 +432,16 @@ mod tests {
     }
 
     async fn make_runner() -> (Arc<TraceSink>, PipelineRunner) {
+        make_runner_with_budget(10_000).await
+    }
+
+    async fn make_runner_with_budget(budget: u64) -> (Arc<TraceSink>, PipelineRunner) {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         let path = tmp.path().to_path_buf();
         std::mem::forget(tmp); // keep file alive for test
         let sink = Arc::new(TraceSink::new(path));
-        let runner = PipelineRunner::new(sink.clone());
+        let governance = Arc::new(GovernanceComposer::new(budget));
+        let runner = PipelineRunner::new(sink.clone(), governance);
         (sink, runner)
     }
 
@@ -499,6 +525,92 @@ mod tests {
             .await
             .unwrap();
         assert!(outcome.output["echoed"].is_object());
+    }
+
+    #[tokio::test]
+    async fn governance_refuses_dispatch_when_trust_budget_exhausted() {
+        let (_, runner) = make_runner_with_budget(1).await;
+        let pipeline = make_pipeline(
+            "t/echo",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        let broker = Arc::new(TestBroker::new("t", vec![pipeline.clone()], serde_json::json!({})));
+        // First dispatch succeeds (budget 1 → consumes 1)
+        runner
+            .dispatch(broker.clone(), &[pipeline.clone()], "t/echo".to_string(), ParamMap::new())
+            .await
+            .unwrap();
+        // Second dispatch fails (budget exhausted)
+        let err = runner
+            .dispatch(broker, &[pipeline], "t/echo".to_string(), ParamMap::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DispatchError::GovernanceRefused(_)));
+    }
+
+    #[tokio::test]
+    async fn governance_kill_switch_refuses_subsequent_dispatches() {
+        let (_, runner) = make_runner_with_budget(100).await;
+        let pipeline = make_pipeline(
+            "t/echo",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        let broker = Arc::new(TestBroker::new("t", vec![pipeline.clone()], serde_json::json!({})));
+        // Pre-arm: dispatch ok
+        runner
+            .dispatch(broker.clone(), &[pipeline.clone()], "t/echo".to_string(), ParamMap::new())
+            .await
+            .unwrap();
+        // Arm the kill switch via the governance composer
+        runner.governance().arm_kill_switch();
+        // Now dispatch fails
+        let err = runner
+            .dispatch(broker.clone(), &[pipeline.clone()], "t/echo".to_string(), ParamMap::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DispatchError::GovernanceRefused(_)));
+        // Disarm
+        runner.governance().disarm_kill_switch();
+        runner
+            .dispatch(broker, &[pipeline], "t/echo".to_string(), ParamMap::new())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn governance_skips_for_internal_pipelines() {
+        let (_, runner) = make_runner_with_budget(1).await;
+        // Make an Internal pipeline; governance should NOT consume budget
+        let mut internal = make_pipeline(
+            "t/internal-tick",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        internal.visibility = Visibility::Internal;
+        let broker = Arc::new(TestBroker::new("t", vec![internal.clone()], serde_json::json!({})));
+        // Dispatch the Internal pipeline 5 times; budget should still allow
+        // the 1 Surfaced dispatch below
+        for _ in 0..5 {
+            runner
+                .dispatch(
+                    broker.clone(),
+                    &[internal.clone()],
+                    "t/internal-tick".to_string(),
+                    ParamMap::new(),
+                )
+                .await
+                .unwrap();
+        }
+        let (used, _) = runner.governance().trust_budget_state();
+        assert_eq!(used, 0); // Internal pipelines don't consume budget
     }
 
     #[tokio::test]
