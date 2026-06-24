@@ -384,16 +384,17 @@ within a Layer's table.
 | 32 | **Operator Telemetry Summarizer** | Human-readable broker status summary (distinct from BB #28 Diagnostics Collector which emits machine metrics). Reads Diagnostics output + projection state + audit trail + governance-block frequencies; emits Markdown summary to `.claude/brain/broker-telemetry-summary.md` (auto-loaded into operator CLAUDE.md via the standard CLAUDE.md mechanism). Sections: per-broker health snapshot (active / idle / errored / overloaded), recent governance decisions (kill-switches armed, proposals pending), trust-budget consumption across active units, peer-dialogue cycle state (if any active), workflow checkpoint depths. Operator-tunable refresh cadence per cluster manifest (default: every 60s). Closes "operator wants to see what brokers are doing without parsing JSON" — gives ops-grade insight on top of #28's data layer. | Summary template (Markdown skeleton) per cluster |
 | 33 | **Pipeline Proposal Mechanism** (extends BB #21) | New entry type for [`Proposal Ledger`](#bb-21) — `type: pipeline-proposal` distinct from `type: tuning-proposal`. Schema: `{pipeline_id, proposed_yaml, preconditions, reasoning, operator_decision, decision_timestamp}`. LLM (or operator) authors a proposal entry when it observes a recurring pattern worth baking as a pipeline (or wants to add a new capability). Awareness Materializer (#24) surfaces pending proposals in L1 context as a `pipeline-proposals` segment so operators see what's queued. On operator approval, framework hot-reloads the new pipeline into the catalog (per BB #9) atomically. On rejection, proposal records the rejection reason for future calibration. Tunability: `OperatorConfirmed` (LLM proposes; operator decides — never autonomous catalog growth). Closes "LLM observes pattern → wants to bake as pipeline → operator reviews" path which had no protocol. | Proposal-ledger entries (operator-authored or LLM-authored); approval-decision overrides per cluster |
 | 34 | **Workflow-Pipeline Versioning Contract** (Layer B addition — core gap from Phase 4 audit) | A pipeline declares `contract_version: N` (distinct from schema_version; this is the *semantic contract* — what fields it emits, what preconditions it accepts, what governance it composes). Workflow checkpoints declare `compatible_contracts: [N, N-1]` at workflow start (operator-tunable per pipeline's contract-evolution policy). At dispatch, framework validates that the running pipeline's contract_version is in the workflow's compatible_contracts set; refuses dispatch with `failure_reason: contract_version_mismatch` if not. **Contract-evolution policy per broker manifest:** `allow_backward_compatible_only` (new contracts must be supersets of old) \| `allow_forward_compatible_upgrades` (workflows can adopt newer pipeline contracts) \| `manual-operator-approval-per-contract` (each contract version requires operator sign-off). Closes the gap where pipeline contract evolution mid-deployment (operator updates a pipeline to require additional output fields) leaves in-flight workflows silently broken. Distinct from BB #26 (Schema Migration handles data-shape changes; #34 handles contract-shape changes). | Per-pipeline `contract_version` declaration + per-broker contract-evolution policy |
+| 35 | **Frame stack** | Typed Frame map in broker state ([`BROKER-FRAMES.md`](BROKER-FRAMES.md) §1); seven canonical Frame types (Hat / Stakes / Tempo / Mode / Confidence / Audience / Scope; §2); merge order across inheritance levels (dispatch → pipeline → role → broker → cluster; §7.2); consumption surfaces (Governance Composer / Skill Filter / Overlay curation / Workflow Engine; §3); `with_frame:` step modifier; `frame_rotation:` step sugar with MaxFrameRotationDepth bound (§4); IAB negotiation protocol with refusal schema (§7.6); conflict precedence matrix (§7.1); rotation budget arithmetic per Tempo (§7.3); coverage-audit pipeline (§7.4); extension protocol (§7.5); L1 awareness injection format (§7.7). Phase 5 closure: all 7 open design questions pinned. | Per-broker Frame defaults; per-pipeline Frame requirements; per-cluster Frame manifest + conflict-precedence overrides; per-Frame-type weight cells |
 
-**Totals:** ~25 framework-side blocks (write once for NeuroGrim, all brokers benefit
+**Totals:** ~26 framework-side blocks (write once for NeuroGrim, all brokers benefit
 across all role-set compositions); ~12 broker-author blocks (mostly declarative — YAML
 schemas, manifest with role-set declaration, weight cells, curation policies, migration
-files, composition-order declarations, contract-version declarations, ACL grants, a
-handful of leaf-op functions). **34 main building blocks (numbered #1–#34) across
-three layers, plus 1 sub-numbered entry (#22a Materializer Composer, promoted from
-implicit Tier 3 to named substrate).** The main count is 34; #22a is a sub-component
-within the materializer cluster, not a separate primitive, so the framework's primary
-surface is "34 building blocks."
+files, composition-order declarations, contract-version declarations, ACL grants, Frame
+defaults, a handful of leaf-op functions). **35 main building blocks (numbered #1–#35)
+across three layers, plus 1 sub-numbered entry (#22a Materializer Composer, promoted
+from implicit Tier 3 to named substrate).** The main count is 35; #22a is a
+sub-component within the materializer cluster, not a separate primitive, so the
+framework's primary surface is "35 building blocks."
 
 **Framework-provided pipelines' default `audit_class` values** (operators need not
 re-declare; Broker Registry reads from framework defaults):
@@ -443,6 +444,9 @@ lands as the table evolves) but enforced going forward. Examples:
   addition closing the contract-evolution gap that BB #26 (Schema Migration) doesn't
   cover (schema = data shape; contract = semantic surface; both can evolve
   independently).
+- BB #35 (Frame stack) `displaces: nothing` — Layer C addition closing the
+  Phase-3-deferred BROKER-FRAMES stub; substrate primitive for the seven canonical
+  Frame types (Hat / Stakes / Tempo / Mode / Confidence / Audience / Scope).
 - BB #22a (Materializer Composer) `promoted from Tier 3 to named substrate` — composition
   order is operator-tunable; not implementation detail.
 - A hypothetical future "Unified Materializer" replacing #22 + #24 + #30 would carry
@@ -801,7 +805,7 @@ The S0-T deliverables, in dependency order:
    Ledger protocol, Hot-Store Materializer). Most reuse shipped substrate; the net-new
    code is the Awareness Service enforcer + the Materializer.
 
-Concrete next-step work item: file NeuroGrim-side tickets for the 34 building blocks,
+Concrete next-step work item: file NeuroGrim-side tickets for the 35 building blocks,
 sequenced per the above, with cross-references back to the relevant sections of this
 doc. That backlog is what S0-T tracks against. **Building blocks #16 (Workspace Manager)
 and #17 (Topology Broker) get trait scaffolds + role-spinal-cord defaults in S0-T;

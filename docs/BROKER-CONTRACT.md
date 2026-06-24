@@ -550,7 +550,7 @@ terminal broker.
   primitive).
 
 A NeuroGrim contributor reading this contract should be able to file NeuroGrim backlog
-items against any of the 34 building blocks in [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md)
+items against any of the 35 building blocks in [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md)
 §3. A consuming-project contributor reading this contract should be able to declare a
 broker (manifest + role-set + cold schema + catalog + leaf-ops) and have the framework
 compose the role-scaffolding automatically.
@@ -594,6 +594,6 @@ questions:
   catalog + leaf-op functions + manifest); everything else is inherited from the
   framework.
 
-The internals doc lists the **34 building blocks** across three layers (Pattern
+The internals doc lists the **35 building blocks** across three layers (Pattern
 primitives / Pipeline primitives / Substrate composition), with the framework-vs-author
 split. NeuroGrim-side backlog items are filed against that map.

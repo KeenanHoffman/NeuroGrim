@@ -1,13 +1,16 @@
-# NeuroGrim — Broker Frames (design stub)
+# NeuroGrim — Broker Frames
 
-**Status:** STUB. This doc introduces the **Frame primitive** — a brief named lens that
-shifts how brokers process work without changing what the work is. Hats are one
-*type* of Frame; this doc generalizes the pattern to six other dimensions of context
-sharing + adds two structural extensions: broker-prescribed Frames and Frame-rotation
-pipelines. Full content lands as the design questions below resolve.
+**Status:** SPEC-STABLE (Phase 5 closure). The Frame primitive is now BB #35
+(Layer C, Substrate composition). The seven open design questions are pinned in §7;
+implementation can begin against this contract.
+
+The Frame primitive — a brief named lens that shifts how brokers process work without
+changing what the work is. Hats are one *type* of Frame; this doc generalizes the
+pattern to six other dimensions of context sharing + adds two structural extensions:
+broker-prescribed Frames and Frame-rotation pipelines.
 
 Companion to [`BROKER-CONTRACT.md`](BROKER-CONTRACT.md) (the named primitive),
-[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) (framework internals + 34 building blocks),
+[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) (framework internals + 35 building blocks),
 [`BROKER-AWARENESS.md`](BROKER-AWARENESS.md) (how agents see broker output), and
 cereGrim's [`INTER-AGENT-BROKER.md`](../../cereGrim/docs/INTER-AGENT-BROKER.md) (the
 cluster-level recursion where Frame negotiation between peer-agents becomes
@@ -91,7 +94,7 @@ active Frame stack. Four consumption surfaces:
    time-horizon: long-term}` gets a longer TTL + more aggressive checkpointing. With
    `{tempo: rapid-prototype}`, shorter TTL + lighter checkpointing.
 
-The 34 building blocks stay uniform; Frames change *how* they apply. The Frame stack is
+The 35 building blocks stay uniform; Frames change *how* they apply. The Frame stack is
 a typed map in broker state; framework reads it at every consumption point.
 
 ---
@@ -270,54 +273,189 @@ agent can request lighter governance but cannot grant it to itself.
 
 ---
 
-## §7 — Open design questions
+## §7 — Resolved design questions (Phase 5)
 
-This stub becomes a real spec when these resolve:
+### 7.1 — Frame conflict resolution (PINNED)
 
-1. **Frame conflict resolution.** What if `hat: rubber-duck` (listen, don't solve)
-   conflicts with `tempo: rapid-prototype` (move fast)? Operator declares per-cluster
-   Frame conflict precedence rules — but the syntax + the conflict-detection mechanism
-   are open.
-2. **Frame stack inheritance semantics.** Cluster defaults → broker defaults → role
-   defaults → pipeline defaults → dispatch overrides. The framework must enforce a
-   merge order. Likely: dispatch wins, then pipeline, then role, then broker, then
-   cluster (innermost wins). But the override-vs-deep-merge question for nested Frame
-   structures needs a pin.
-3. **Frame-rotation budget arithmetic.** A 7-Frame rotation × 7-tier governance compose
-   = N×M cost. Per-rotation budgets + tempo-driven scaling: needs concrete formulas,
-   not vibes.
-4. **Frame-set coverage audit.** Frame-rotation only covers Frames you've enumerated.
-   What ensures we don't miss "hidden quality" axes? Periodic operator-run
-   `frame-set-coverage-review` pipeline that rotates through "what could we be
-   missing" lenses — but the pattern itself is recursive (a Frame for auditing the
-   Frame set) and needs design.
-5. **Frame extension protocol.** Operators add new Frame *values* via manifest. New
-   Frame *types* are contract amendments. What's the path between the two — when does
-   a recurring custom Frame justify promotion to a canonical type?
-6. **Frame negotiation refusal protocol at IAB.** When a target peer-agent refuses a
-   requested Frame (per the negotiation shape in §5), what's the structured refusal
-   message + the calling agent's fallback path? Needs schema design alongside the
-   IAB's contract-version webhook protocol.
-7. **Frame visibility in the awareness mechanism.** Should the LLM see the *current
-   Frame stack* in its L1 context (per [`BROKER-AWARENESS.md`](BROKER-AWARENESS.md)
-   §2)? Strong prior: yes — the agent should know what stance it's operating under,
-   especially when the broker prescribed Frames the agent didn't request. But the
-   injection format + budget cost need design.
+Conflicts between Frame values are declared at the cluster manifest level as a
+**precedence matrix**. When two active Frames carry mutually-incompatible operational
+implications (e.g., `hat: rubber-duck` says "listen, don't solve" while
+`tempo: rapid-prototype` says "move fast"), the framework consults the precedence
+matrix to resolve. Default precedence (operator-overridable):
+
+```
+Stakes > Hat > Mode > Confidence > Tempo > Audience > Scope
+```
+
+Rationale: governance-bearing Frames win (Stakes is most governance-relevant; Scope
+least). Within the matrix, when Frame A has precedence over Frame B and they conflict,
+Frame A's operational implications apply and Frame B is annotated `suppressed-by: A`
+in the active Frame stack. The agent sees both Frames AND the suppression annotation,
+preserving mutual visibility — operator and LLM can both reason about *why* the
+unexpected behavior held.
+
+**Conflict-detection mechanism:** each Frame type's value enum carries an
+optional `incompatible_with` field per value (e.g., `rubber-duck` declares
+`incompatible_with: [rapid-prototype, campaign]`). Framework validates conflicts at
+Frame-stack merge time; logs annotations to the audit trail with `audit_class:
+governance`.
+
+### 7.2 — Frame stack inheritance semantics (PINNED)
+
+Merge order: **dispatch overrides win innermost, cluster defaults are outermost.** The
+full hierarchy:
+
+```
+dispatch override
+  → pipeline default
+    → role default (the broker's role-set declaration in manifest)
+      → broker default (the broker's manifest)
+        → cluster default (cluster manifest)
+```
+
+Each level overlays the next; the innermost-specified value wins. For nested Frame
+structures (e.g., a Hat value with sub-fields), the merge is **shallow override per
+Frame type** — the entire Frame value is replaced, not deep-merged. Deep merge was
+rejected because nested-field-level merges create surprising emergent values not
+declared at any level; shallow override is predictable.
+
+### 7.3 — Frame-rotation budget arithmetic (PINNED)
+
+A Frame-rotation pipeline runs N sub-pipelines under N Frame stacks + 1 synthesis
+step. Compute cost = N × (single-pipeline cost) + (synthesis cost). Budget formula:
+
+```
+rotation_budget = N * single_pipeline_budget * tempo_multiplier + synthesis_budget
+
+where:
+  N = count of Frames in the rotation
+  single_pipeline_budget = base cost per pipeline dispatch (in trust-budget units)
+  tempo_multiplier:
+    rapid-prototype: 0.3 (minimal review; many Frames may be dropped)
+    deliberate: 1.0 (default)
+    campaign: 1.5 (sustained reasoning; richer rotation justified)
+    steady: 1.0
+  synthesis_budget = 2 * single_pipeline_budget (synthesis sees N inputs)
+```
+
+**Per-tempo Frame-count override:** `rapid-prototype` drops rotation to minimum N=2
+(one review + synthesis); `deliberate` runs full operator-declared rotation;
+`campaign` may extend rotation by up to 50% with operator-confirmed budget grant.
+
+**Budget enforcement:** the calling pipeline's `check-trust-budget` step (composed by
+governance) computes the rotation_budget at dispatch time and refuses if the broker's
+remaining budget can't cover it. No partial-rotation execution — either full rotation
+or refusal (preserves the rotation's discipline-enforcement guarantee).
+
+### 7.4 — Frame-set coverage audit (PINNED)
+
+A meta-rotation pipeline — `frame-set-coverage-review` — runs operator-scheduled
+(default: weekly) to audit whether the operator-declared Frame set covers known
+quality concerns. The pipeline:
+
+1. Reads the broker's invocation ledger for the past N days (default 30).
+2. For each dispatched pipeline, computes which Frames were active during dispatch.
+3. Emits a coverage matrix: Frame-type × pipeline-class × frequency.
+4. Flags Frame types with anomalously low usage (potential operator dead values to
+   retire) AND Frame types absent from high-frequency pipeline-classes (potential
+   missing coverage on common work).
+5. Surfaces findings to operator via Operator Telemetry Summarizer (BB #32) in a
+   `frame-coverage-report` segment.
+
+**No recursive Frame-on-Frame design needed.** The coverage audit is a Tier 2
+internal pipeline running periodic analysis, not a meta-Frame on top of Frames.
+Operator reviews findings + decides whether to add new Frame values, retire dead
+ones, or expand rotations to cover gaps.
+
+### 7.5 — Frame extension protocol (PINNED)
+
+Three tiers of extension, formalized:
+
+| Extension | Authority | Mechanism |
+|---|---|---|
+| **New Frame value** (within an existing Frame type) | Operator-only via cluster manifest | Add to the Frame type's value enum; framework validates against the type's value-rule constraints; hot-reload picks it up |
+| **Promotion of a recurring custom Frame value to baseline** | Operator-initiated, framework-recorded | Operator declares promotion; framework records `promoted_from: <cluster_id>` in the substrate Frame-type definition; baseline value enum updated in a framework release |
+| **New Frame type** (e.g., `Trust`, `Audience-Specificity`) | Contract amendment (framework spec change) | Requires BROKER-FRAMES.md amendment + new BB-table entry if substrate-bearing + version bump |
+
+Promotion path: when a custom Frame value appears in 3+ unrelated clusters' manifests,
+the framework's `frame-promotion-candidates` periodic report (under BB #32 Operator
+Telemetry Summarizer) flags it for operator consideration. Operator decides whether to
+promote to baseline.
+
+### 7.6 — Frame negotiation refusal protocol at IAB (PINNED)
+
+When a target peer-agent's IAB refuses a requested Frame (per §5 negotiation
+patterns), the refusal carries a structured response:
+
+```json
+{
+  "schema_version": "1",
+  "negotiation_id": "<UUID>",
+  "calling_peer_agent": "<id>",
+  "target_peer_agent": "<id>",
+  "requested_frames": {<Frame stack>},
+  "accepted_frames": {<subset that target accepts>},
+  "modified_frames": {<frames target proposes alternative values for>},
+  "rejected_frames": [
+    {
+      "frame_type": "<type>",
+      "requested_value": "<value>",
+      "rejection_reason": "incompatible-with-cluster-default | violates-target-frame-constraint | governance-policy-blocks | target-broker-lacks-capability",
+      "suggested_alternative": "<value | null>"
+    }
+  ],
+  "calling_agent_fallback": "accept-modified | retry-with-suggestions | escalate-to-operator | abort-dispatch"
+}
+```
+
+The calling peer-agent's IAB consumes this response and (per the `calling_agent_fallback`
+field, which the calling agent declared in its original request) takes the
+appropriate path. Default fallback: `escalate-to-operator` (no silent acceptance of
+modified Frames). Operator can override per cluster-pipeline to allow autonomous
+fallback for low-stakes routing.
+
+### 7.7 — Frame visibility in awareness (PINNED)
+
+**The LLM SEES its current Frame stack in L1 context.** Mutual-visibility of stance
+is load-bearing — agents reasoning under a Frame they didn't declare (broker-
+prescribed Frames per §5) need to know about it to act coherently.
+
+Injection format (operator-tunable per cluster manifest):
+
+```markdown
+## Active Frame Stack
+
+| Frame | Value | Source |
+|---|---|---|
+| hat | adversary | dispatch override |
+| stakes | production | broker default |
+| tempo | deliberate | cluster default |
+| mode | implementation | broker default |
+| confidence | tentative | dispatch override |
+| audience | operator-direct | cluster default |
+| scope | local | cluster default |
+
+Suppressed (per conflict resolution): none
+Source-of-truth: see BROKER-FRAMES.md §7.2 inheritance order
+```
+
+Surface lives in a dedicated `.claude/brain/broker/segments/active-frame-stack.md`
+segment, composed by the Materializer Composer (#22a) into `current-projection.md`.
+Budget: ~200 tokens per agent at session-start; updates per tick if Frame stack
+changes (rare). Operator can disable per cluster manifest for context-tight
+deployments (single-Frame deployments don't need the table).
 
 ---
 
 ## §8 — What this commits the framework to
 
-The Frame primitive **will become a new building block** in
-[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3 — Layer C (Substrate composition) when
-this stub matures into a real spec. **No BB number is assigned yet** (numbers #25-#30
-were taken by Phase 3 hole-closure additions: Pipeline Cancellation Handler, Schema
-Migration Runner, Cross-Broker Composition Policy, Diagnostics Collector, Broker
-Lifecycle, Onboarding Projection). Indicative table entry (numbering deferred):
+The Frame primitive is **building block #35** in
+[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3 — Layer C (Substrate composition).
+Phase 5 closure assigns the number (#25-#34 occupied by Phase 3 + Phase 4 additions).
 
 | # | Building block | Framework provides | Broker author provides |
 |---|---|---|---|
-| TBD | **Frame stack** | The typed Frame map in broker state; the merge order across inheritance levels; the consumption surfaces in Governance Composer / Skill Filter / Overlay curation / Workflow Engine; the `with_frame:` step modifier; the `frame_rotation:` step sugar; the IAB negotiation protocol | Per-broker Frame defaults; per-pipeline Frame requirements; per-cluster Frame manifest values |
+| 35 | **Frame stack** | The typed Frame map in broker state per §1; the merge order across inheritance levels (§7.2); the consumption surfaces in Governance Composer / Skill Filter / Overlay curation / Workflow Engine (§3); the `with_frame:` step modifier; the `frame_rotation:` step sugar with MaxFrameRotationDepth bound (§4); the IAB negotiation protocol with refusal schema (§7.6); the seven canonical Frame types (§2); conflict precedence matrix (§7.1); rotation budget arithmetic (§7.3); coverage audit pipeline (§7.4); extension protocol (§7.5); awareness L1 injection format (§7.7) | Per-broker Frame defaults; per-pipeline Frame requirements; per-cluster Frame manifest values; conflict precedence overrides; per-Frame-type weight cells |
 
 `displaces / deprecates: nothing` — net-new substrate surface. Mirrors the hats system's
 substrate-level discipline but applies to six other context dimensions.
