@@ -345,7 +345,7 @@ within a Layer's table.
 | 4 | **Queue** | Reuse `neurogrim_core::queue` (shipped) | Topic names + payload schemas |
 | 5 | **External Service** | `ExternalService` trait + queue-consumer scaffold | impl: ingest world → cold |
 | 6 | **Cold Store** | Trait over SQLite/JSONL backends (reuse) | Schema migration files (consumed by #26) |
-| 26 | **Schema Migration Runner** | `SchemaVersion` field on every workflow checkpoint + a `SchemaVersionManifest` in the broker's cold store declaring current + historical versions. On broker startup: detects current schema version → applies outstanding migrations in order (idempotent, journaled) → on failure stops before touching the store (safe-to-retry) → logs migration success + timestamp. **Failed migrations abort broker startup loudly** (operator must resolve; no silent degradation). Replay tooling (#13) uses the SchemaVersion to apply version-appropriate deserializers for historical states. | Migration files in `<cold-store>/migrations/<version>.sql` (or equivalent for JSONL backends); declare current schema version in manifest |
+| 26 | **Schema Migration Runner** | `SchemaVersion` field on every workflow checkpoint + a `SchemaVersionManifest` in the broker's cold store declaring current + historical versions. On broker startup: detects current schema version → applies outstanding migrations in order (idempotent, journaled) → on failure stops before touching the store (safe-to-retry) → logs migration success + timestamp. **Failed migrations abort broker startup loudly** (operator must resolve; no silent degradation). Replay tooling (#13) uses the SchemaVersion to apply version-appropriate deserializers for historical states. **Workflow resumption contract:** when a workflow resumes from a checkpoint whose `SchemaVersion` is older than the broker's current schema, framework runs forward-migrations atomically against the checkpoint's serialized state before step resumption. If forward-migration is not feasible (e.g., destructive schema change), framework rejects the resumption with `failure_reason: schema_forward_migration_unavailable` + operator-confirmable rollback path. **Idempotency class:** each migration declares `idempotency_class: pure \| deterministic \| manual-verification-required`. Framework refuses to auto-apply `manual-verification-required` migrations without operator confirm; logs idempotency-violation-risk if a retry of a non-pure migration is detected. **Partial schema coexistence:** broker can run two schema versions concurrently for a bounded window — `workflow.schema_version_pinned_at: <ts>` lets old workflows complete under their version while new workflows adopt the new schema; operator declares the coexistence window per broker. | Migration files + idempotency_class declaration per migration; coexistence window declaration in broker manifest |
 
 ### Layer B — Pipeline primitives (universal unit)
 
@@ -358,7 +358,7 @@ within a Layer's table.
 | 11 | **Workflow Engine** | Cold-store-as-truth + hot-store positions + resume | — (just author pipelines that span ticks) |
 | 12 | **Trace Sink** | Trace format + write path + replay-against-historical-state harness | — (trace is automatic) |
 | 13 | **Replay tooling** | Three replay scopes (single-pipeline / broker-tick / workflow); read-only by default with opt-in write-mode for golden regeneration; **subsumes test-fixture machinery** (frozen-state-snapshot + expected-output are replay test cases — same harness). See §4 invariant "Replay scope contract" | Test fixtures authored as replay inputs in cold store |
-| 25 | **Pipeline Cancellation Handler** | Framework guarantees `on_cancel` step runs even if kill-switch interrupts mid-step; Workflow Engine atomicity contract (partial-step output rolled back; workflow resumes from last checkpoint on next tick OR transitions to `cancelled` state per pipeline policy); per-pipeline cancellation behavior declarable in YAML | `on_cancel: [cleanup-step, log-step]` per pipeline (optional) |
+| 25 | **Pipeline Cancellation Handler** | Framework guarantees `on_cancel` step runs even if kill-switch interrupts mid-step; Workflow Engine atomicity contract (partial-step output rolled back; workflow resumes from last checkpoint on next tick OR transitions to `cancelled` state per pipeline policy); per-pipeline cancellation behavior declarable in YAML. **Cancellation depth bound:** `cancellation_depth_max` (default 1, operator-tunable per pipeline) prevents handler-chain recursion — framework rejects `on_cancel` steps that themselves carry `on_cancel`. Audit trail records handler nesting depth per dispatch. | `on_cancel: { steps: [cleanup, log], terminal_state, cancellation_depth_max }` per pipeline (optional) |
 
 ### Layer C — Substrate composition (cross-broker glue)
 
@@ -376,17 +376,39 @@ within a Layer's table.
 | 22a | **Materializer Composer** (named substrate, promoted from Tier 3) | Concatenates materializer segment files in **operator-declared order** into the auto-loaded `current-projection.md`. Order is operator-tunable per cluster manifest (`materializer_composition_order: [overlay, awareness-routing, ...]`). Each materializer owns one segregated file; the Composer enforces collision-safety by construction (no last-writer-wins). Promoted from implicit Tier 3 plain function because composition order matters for L1 context flow (per [`BROKER-AWARENESS.md`](BROKER-AWARENESS.md) §2 token budget). | Composition order declaration in cluster manifest |
 | 23 | **Role-set scaffolding** | Per-role defaults the framework wires automatically on broker registration (Sense / InnateAbility / Embodiment spinal cords); composes for multi-role brokers | Role-set declaration in manifest |
 | 24 | **Awareness Materializer** | Writes pipeline catalog routing signals (description + when_to_use per Surfaced pipeline + alive/dead/new hygiene status) to `.claude/brain/broker/segments/awareness-routing.md`; composed by the Materializer Composer (#22a) into `current-projection.md`. See [`BROKER-AWARENESS.md`](BROKER-AWARENESS.md) §2 for the L1 awareness slot details. | — |
-| 27 | **Cross-Broker Composition Policy** | A pipeline may declare a sub-step calling another broker's surfaced pipeline (`sub_pipeline: <broker_id>/<pipeline_id>`). Framework enforces: **(a) Atomicity** — cross-broker sub-pipelines must complete within a single workflow checkpoint of the parent broker; failure of the cross-broker sub-step rolls back the parent workflow checkpoint per §2.2. **(b) ACL governance** — Topology Broker (#17) mediates the call per its per-consumer OverlayView; calling broker requires ACL grant for target broker's surfaced pipeline. **(c) Trust budget double-debit** — calling broker debits its own trust budget for the cross-broker call AND the called broker debits its budget for the dispatch (prevents free-riding on another broker's budget). YAML: `composition_mode: [allowed \| requires-acl \| requires-trust-boost]`. | Per-pipeline `sub_pipeline:` declarations with `composition_mode` |
-| 28 | **Diagnostics Collector** | Unified live observability: per-pipeline latency histograms (P50 / P95 / P99) + dispatch counts + success/failure rates + governance-block frequency + broker-health indicators (cold-store accessibility, hot-store write atomicity, projection-latency ceiling). Emits to reserved bus topics `_neurogrim/diagnostics/{latency,dispatch-stats,broker-health}`. Sensory Broker (or consuming-project's Diagnostics Broker per BROKER-COMPOSITION composition decision) surfaces these as Overlay cylinders or Awareness Materializer segments. Framework provides the collector; operator declares emission cadence + retention window per broker manifest. Closes the "blind-debug from user complaints" failure mode — operators get live signals to attribute degradation. | Emission cadence + retention window per manifest |
-| 29 | **Broker Lifecycle** | `BrokerShutdown` pipeline (Tier 2 internal, untunable): stops accepting new dispatches → waits for in-flight pipelines to complete (configurable timeout) → flushes queue → writes final audit snapshot → emits shutdown-complete signal to operator + cluster peers (via IAB if cluster mode). `BrokerVersionTransition` (Tier 3 bootstrap, OperatorOnly): validates schema compatibility via #26 → snapshots broker state → atomically swaps cold-store backing → resumes from checkpoint. Idempotent + retryable. **Hot-swap protocol:** operator can transition a broker's version mid-cluster; in-flight workflows pin their broker version at workflow start (mirrors cluster-pipeline version-pinning from cereGrim's IAB stub Q5). | Optional `broker_lifecycle_policy` overrides (shutdown timeout, hot-swap allowed) in manifest |
-| 30 | **Agent-Broker Onboarding Projection** | `OnboardingProjection` (distinct from steady-state Overlay + Awareness materializers): runs **once per broker-per-agent on first registration**. Surfaces (1) broker purpose + role-set declaration, (2) top-N Surfaced pipelines with full routing signals + when-to-use phrases, (3) governance posture (which Frame defaults apply per [`BROKER-FRAMES.md`](BROKER-FRAMES.md), what's Untunable), (4) cross-references to relevant skill bodies via Context Broker. Auto-injected into L1 context on the agent's first tick interacting with this broker via the Materializer Composer (#22a) as a separate segment. Subsequent ticks fall back to steady-state projections (#22 + #24). Closes "agent encounters new broker with no awareness of its capabilities" failure mode — particularly load-bearing for IAB cluster work where peer-agents register dynamically. | Onboarding content template (one-time projection contents) in broker config |
+| 27 | **Cross-Broker Composition Policy** | A pipeline may declare a sub-step calling another broker's surfaced pipeline (`sub_pipeline: <broker_id>/<pipeline_id>`). Framework enforces: **(a) Atomicity** — cross-broker sub-pipelines must complete within a single workflow checkpoint of the parent broker; failure of the cross-broker sub-step rolls back the parent workflow checkpoint per §2.2. **(b) ACL governance** — Topology Broker (#17) mediates the call per its per-consumer OverlayView; calling broker requires ACL grant for target broker's surfaced pipeline. **(c) Trust budget double-debit** — calling broker debits its own trust budget for the cross-broker call AND the called broker debits its budget for the dispatch (prevents free-riding); both parties must use the same trust-budget unit per §4 unit-composition rule. **(d) Cycle detection** — a `broker-reachability-analyzer` (Tier 3 bootstrap function) runs at startup: BFS through each broker's catalog `sub_pipeline:` edges, flags cycles, refuses broker registration on a detected cycle. Output graph at `.claude/brain/broker-reachability-graph.json` for operator inspection. **(e) Cluster-pipeline extension** — same (a)/(b)/(c)/(d) contracts apply to cluster-pipeline composition through the IAB; cluster-pipelines calling other cluster-pipelines compose with the same atomicity + ACL + trust-budget + cycle-detection invariants (see [`../../cereGrim/docs/INTER-AGENT-BROKER.md`](../../cereGrim/docs/INTER-AGENT-BROKER.md)). YAML: `composition_mode: [allowed \| requires-acl \| requires-trust-boost]`. | Per-pipeline `sub_pipeline:` declarations with `composition_mode` |
+| 28 | **Diagnostics Collector** | Unified live observability: per-pipeline latency histograms (P50 / P95 / P99) + dispatch counts + success/failure rates + governance-block frequency + broker-health indicators (cold-store accessibility, hot-store write atomicity, projection-latency ceiling) + **current trust-budget state per active unit** (e.g., if unit=token-spend, surfaces current-tokens-consumed / ceiling-tokens). Emits to reserved bus topics `_neurogrim/diagnostics/{latency,dispatch-stats,broker-health,trust-budget}`. **Source-class quota:** the Diagnostics Collector emits under source-class `system-diagnostics`; Sensory Queue enforcer applies per-source rate quota (default: 1 emission per second per broker per topic) to prevent storm-loop where another broker's processing of diagnostics generates more diagnostics. **Feedback predicate:** Diagnostics entries about the Diagnostics Collector itself are excluded from re-sampling decisions (`audit_class: meta-observation` per §2.3 exclusion rule); closes the self-referential loop. Sensory Broker (or consuming-project's Diagnostics Broker per BROKER-COMPOSITION composition decision) surfaces these as Overlay cylinders or Awareness Materializer segments. Framework provides the collector; operator declares emission cadence + retention window per broker manifest. | Emission cadence + retention window per manifest |
+| 29 | **Broker Lifecycle** | `BrokerShutdown` pipeline (Tier 2 internal, untunable): stops accepting new dispatches → waits for in-flight pipelines to complete (with `shutdown_timeout_per_pipeline`, default 5000ms — per-pipeline, NOT global, to prevent inter-broker deadlock) → after timeout, in-flight pipeline is force-killed + recorded with `failure_reason: shutdown_timeout` + cancellation handler (#25) runs → flushes queue → writes final audit snapshot → emits shutdown-complete signal to operator + cluster peers (via IAB if cluster mode). **Cluster-pipeline shutdown discipline:** cluster-pipelines declare `allowed_during_shutdown: true \| false` (default: false). When a broker enters shutdown, peers' cluster-pipelines to it that require `allowed_during_shutdown: true` proceed; the rest receive `failure_reason: peer_shutting_down` immediately (closes inter-broker deadlock: A and B both shutting down with cross-calls won't wait on each other indefinitely). `BrokerVersionTransition` (Tier 3 bootstrap, OperatorOnly): validates schema compatibility via #26 → snapshots broker state → atomically swaps cold-store backing → resumes from checkpoint. Idempotent + retryable. **Hot-swap protocol:** operator can transition a broker's version mid-cluster; in-flight workflows pin their broker version at workflow start (mirrors cluster-pipeline version-pinning from cereGrim's IAB stub Q5). | Optional `broker_lifecycle_policy` overrides (shutdown timeout, hot-swap allowed, per-cluster-pipeline allowed_during_shutdown) in manifest |
+| 30 | **Agent-Broker Onboarding Projection** | `OnboardingProjection` (distinct from steady-state Overlay + Awareness materializers): runs **once per broker-per-agent on first registration**. Surfaces (1) broker purpose + role-set declaration, (2) top-N Surfaced pipelines with full routing signals + when-to-use phrases, (3) governance posture (which Frame defaults apply per [`BROKER-FRAMES.md`](BROKER-FRAMES.md), what's Untunable), (4) cross-references to relevant skill bodies via Context Broker. Auto-injected into L1 context on the agent's first tick interacting with this broker via the Materializer Composer (#22a) as a separate segment. Subsequent ticks fall back to steady-state projections (#22 + #24). **State persistence:** per-agent registration timestamps live in the broker's cold store at `<cold-store>/onboarding-registrations.jsonl` (per-broker, append-only). Framework marks registration on first dispatch from agent. **Cold-store reset detection:** if framework detects the broker's cold store has been wiped (SchemaVersion reset to baseline, or registration ledger missing), it emits a `broker-cold-store-reset` event (`audit_class: governance`, reason: `cold_store_reset_detected`); Materializer Composer re-injects OnboardingProjection on next tick for all known agents. Closes "agent encounters new broker with no awareness of its capabilities" + "silent awareness loss after cold-store reset" failure modes. Particularly load-bearing for IAB cluster work where peer-agents register dynamically. | Onboarding content template (one-time projection contents) in broker config |
+| 31 | **Cluster Federation Topology** | Cross-CLUSTER federation (distinct from BB #27 which extends to cluster-pipeline composition within one cluster). Cluster-A discovers Cluster-B's advertised cluster-pipelines via inter-cluster Topology Broker handshake (over A2A); ACL composes **transitively** (Cluster-A's broker-X can reach Cluster-B's broker-Y if Cluster-A's IAB has ACL grant AND Cluster-B's inter-cluster ACL grants Cluster-A access; chains rejected otherwise). **Version cascade:** cluster-version pinning is per-cluster-pipeline at workflow start; cross-cluster dispatches pin BOTH calling cluster's version AND called cluster's version (version mismatch refuses dispatch with `failure_reason: inter_cluster_version_mismatch`). **Bootstrap policy parallel to IAB's per-cluster modes:** `inter_cluster_bootstrap: federated-mesh \| arbiter-service \| static`. Closes the "cereGrim-cluster-1 wants to dispatch a cluster-pipeline to cereGrim-cluster-2" scenario the IAB stub flagged as future work. | Per-cluster inter-cluster ACL declarations + version-pinning policy in cluster manifest |
+| 32 | **Operator Telemetry Summarizer** | Human-readable broker status summary (distinct from BB #28 Diagnostics Collector which emits machine metrics). Reads Diagnostics output + projection state + audit trail + governance-block frequencies; emits Markdown summary to `.claude/brain/broker-telemetry-summary.md` (auto-loaded into operator CLAUDE.md via the standard CLAUDE.md mechanism). Sections: per-broker health snapshot (active / idle / errored / overloaded), recent governance decisions (kill-switches armed, proposals pending), trust-budget consumption across active units, peer-dialogue cycle state (if any active), workflow checkpoint depths. Operator-tunable refresh cadence per cluster manifest (default: every 60s). Closes "operator wants to see what brokers are doing without parsing JSON" — gives ops-grade insight on top of #28's data layer. | Summary template (Markdown skeleton) per cluster |
+| 33 | **Pipeline Proposal Mechanism** (extends BB #21) | New entry type for [`Proposal Ledger`](#bb-21) — `type: pipeline-proposal` distinct from `type: tuning-proposal`. Schema: `{pipeline_id, proposed_yaml, preconditions, reasoning, operator_decision, decision_timestamp}`. LLM (or operator) authors a proposal entry when it observes a recurring pattern worth baking as a pipeline (or wants to add a new capability). Awareness Materializer (#24) surfaces pending proposals in L1 context as a `pipeline-proposals` segment so operators see what's queued. On operator approval, framework hot-reloads the new pipeline into the catalog (per BB #9) atomically. On rejection, proposal records the rejection reason for future calibration. Tunability: `OperatorConfirmed` (LLM proposes; operator decides — never autonomous catalog growth). Closes "LLM observes pattern → wants to bake as pipeline → operator reviews" path which had no protocol. | Proposal-ledger entries (operator-authored or LLM-authored); approval-decision overrides per cluster |
+| 34 | **Workflow-Pipeline Versioning Contract** (Layer B addition — core gap from Phase 4 audit) | A pipeline declares `contract_version: N` (distinct from schema_version; this is the *semantic contract* — what fields it emits, what preconditions it accepts, what governance it composes). Workflow checkpoints declare `compatible_contracts: [N, N-1]` at workflow start (operator-tunable per pipeline's contract-evolution policy). At dispatch, framework validates that the running pipeline's contract_version is in the workflow's compatible_contracts set; refuses dispatch with `failure_reason: contract_version_mismatch` if not. **Contract-evolution policy per broker manifest:** `allow_backward_compatible_only` (new contracts must be supersets of old) \| `allow_forward_compatible_upgrades` (workflows can adopt newer pipeline contracts) \| `manual-operator-approval-per-contract` (each contract version requires operator sign-off). Closes the gap where pipeline contract evolution mid-deployment (operator updates a pipeline to require additional output fields) leaves in-flight workflows silently broken. Distinct from BB #26 (Schema Migration handles data-shape changes; #34 handles contract-shape changes). | Per-pipeline `contract_version` declaration + per-broker contract-evolution policy |
 
-**Totals:** ~22 framework-side blocks (write once for NeuroGrim, all brokers benefit
-across all role-set compositions); ~10 broker-author blocks (mostly declarative — YAML
+**Totals:** ~25 framework-side blocks (write once for NeuroGrim, all brokers benefit
+across all role-set compositions); ~12 broker-author blocks (mostly declarative — YAML
 schemas, manifest with role-set declaration, weight cells, curation policies, migration
-files, composition-order declarations, a handful of leaf-op functions). **30 building
-blocks total across three layers (plus #22a Materializer Composer promoted from
-implicit Tier 3 to named substrate; doesn't increment the count of new primitives).**
+files, composition-order declarations, contract-version declarations, ACL grants, a
+handful of leaf-op functions). **34 main building blocks (numbered #1–#34) across
+three layers, plus 1 sub-numbered entry (#22a Materializer Composer, promoted from
+implicit Tier 3 to named substrate).** The main count is 34; #22a is a sub-component
+within the materializer cluster, not a separate primitive, so the framework's primary
+surface is "34 building blocks."
+
+**Framework-provided pipelines' default `audit_class` values** (operators need not
+re-declare; Broker Registry reads from framework defaults):
+- `check-trust-budget`, `check-kill-switch`, `arm-kill-switch`, `record-dispatch`,
+  `record-outcome`, `enforce-rate-limit` — `audit_class: governance`
+- `parse-backlog`, `rank-by-tier`, `materialize-overlay`, `project-cold-to-hot`,
+  `rank-legal-pipelines` and other internal projection/ranking pipelines —
+  `audit_class: capability` (they're broker plumbing for capability work, not
+  governance)
+- Diagnostics Collector pipelines (#28 emissions), trace-sink reads, hygiene scoring,
+  ledger-introspection pipelines — `audit_class: meta-observation` (excluded from the
+  feed they themselves consume, per §2.3)
+
+Operator-authored pipelines MUST declare `audit_class` explicitly per
+[`BROKER-MANIFEST-SCHEMA.md`](BROKER-MANIFEST-SCHEMA.md) validation rules.
 
 **Deprecation discipline.** Every new building block added to this table MUST carry a
 `displaces` / `deprecates` consideration (may be explicitly empty — `displaces: nothing`
@@ -409,6 +431,18 @@ lands as the table evolves) but enforced going forward. Examples:
   #14 (Broker Registry; startup only).
 - BB #30 (Onboarding Projection) `displaces: nothing` — first-encounter awareness tier
   complementing #22/#24 (steady-state materializers).
+- BB #31 (Cluster Federation Topology) `displaces: nothing` — net-new substrate for
+  cross-cluster federation; parallel to BB #27's intra-cluster cross-broker composition
+  but at the cluster-of-clusters level.
+- BB #32 (Operator Telemetry Summarizer) `displaces: nothing` — human-readable layer
+  on top of BB #28 (machine metrics); operator-facing surface distinct from agent-facing
+  awareness projections.
+- BB #33 (Pipeline Proposal Mechanism) `extends #21` — adds a new entry type to the
+  existing Proposal Ledger; not a separate ledger.
+- BB #34 (Workflow-Pipeline Versioning Contract) `displaces: nothing` — Layer B
+  addition closing the contract-evolution gap that BB #26 (Schema Migration) doesn't
+  cover (schema = data shape; contract = semantic surface; both can evolve
+  independently).
 - BB #22a (Materializer Composer) `promoted from Tier 3 to named substrate` — composition
   order is operator-tunable; not implementation detail.
 - A hypothetical future "Unified Materializer" replacing #22 + #24 + #30 would carry
@@ -492,11 +526,51 @@ The `governance_pipelines()` sidecar exposes the current trust-budget state per 
 the LLM (read-only — agent sees its budget but cannot adjust without OperatorConfirmed
 tuning per [`BROKER-FRAMES.md`](BROKER-FRAMES.md) tunability tiers).
 
+**Cross-broker trust-budget composition (per BB #27):** when a pipeline composes a
+sub-step from another broker, both parties debit. The **unit-composition rule**: both
+brokers must use the same trust-budget unit (`dispatch-count` matches `dispatch-count`,
+`token-spend` matches `token-spend`). If a call crosses unit boundaries (calling broker
+on `token-spend`, target broker on `dispatch-count`), the framework refuses the call
+with `failure_reason: trust_budget_unit_mismatch` — operator must configure compatible
+units across the composition graph OR declare an auto-conversion table per broker
+manifest (`unit_conversion: { from: token-spend, to: dispatch-count, rate: 1000 }`).
+Default: refuse on mismatch (no silent unit coercion).
+
+**Critical invariant — authority hierarchy:** when authority claims collide, the
+hierarchy is:
+
+> **Kill-switch (Untunable governance) > broker authority (cold/hot store decisions)
+> > peer-dialogue Meta-lobe consideration**
+
+This pins precedence across the framework: kill-switch sits *above* the dialogue, not
+within it; broker decisions don't override kill-switch even when the broker has full
+authority over its own state per the peer-dialogue contract; peer-dialogue
+consensus emerges *within* broker authority's scope (Meta can't override the broker;
+the broker can't override the kill-switch). See
+[`../../cereGrim/docs/COGNITION-LOOP.md`](../../cereGrim/docs/COGNITION-LOOP.md)
+§"Peer-dialogue integration contract" for the full integration details.
+
+**Critical invariant — escalation finality:** when a recursion guard fires in a
+peer-dialogue cycle and the framework escalates to operator, **operator input is
+final, not a continuation of the dialogue.** Framework does NOT loop operator input
+back into the cycle as a third party's "consideration." `escalation_is_final_when_recursion_guard_fires:
+true` is the framework invariant; closes the "recursive recursion-guard" risk that
+would have no bounded fixed point. Operator's decision becomes the workflow outcome
+directly (accept Primary's last action, reject + rollback, or replace with
+operator-specified output); auditable + recorded with `audit_class: governance` +
+`decision_source: operator_escalation`.
+
 **Critical invariant — `MaxBrokerDepth`:** the framework enforces a maximum
 broker-wrapping depth at registration time. A broker wrapping a broker wrapping a
 broker is *bounded* — the recursion has a fixed-point declaration the framework refuses
 to exceed. Default `MaxBrokerDepth = 3` (broker → wrapper-broker → meta-wrapper);
-operator-tunable per cluster manifest. Closes the "absorbing more decisions into
+operator-tunable per cluster manifest. **Distinct from cross-broker composition (BB
+#27):** MaxBrokerDepth bounds *static* broker wrapping (the pattern diagram).
+Cross-broker composition is *dynamic dispatch* and does NOT increase wrapping depth;
+instead, a separate `MaxCrossBrokerCompositionDepth` (default 2, operator-tunable)
+bounds the depth of sub-pipeline calls across broker boundaries. A → B → C
+(cross-broker calls) is depth 2, allowed by default; A → B → C → D requires explicit
+operator opt-in. Closes the "absorbing more decisions into
 deterministic pipelines absorbs the agent itself" failure mode: at some level of
 wrapping, the agent becomes a passive recipient of pre-decided actions with no
 judgment surface. The depth bound prevents that by construction.
@@ -727,7 +801,7 @@ The S0-T deliverables, in dependency order:
    Ledger protocol, Hot-Store Materializer). Most reuse shipped substrate; the net-new
    code is the Awareness Service enforcer + the Materializer.
 
-Concrete next-step work item: file NeuroGrim-side tickets for the 30 building blocks,
+Concrete next-step work item: file NeuroGrim-side tickets for the 34 building blocks,
 sequenced per the above, with cross-references back to the relevant sections of this
 doc. That backlog is what S0-T tracks against. **Building blocks #16 (Workspace Manager)
 and #17 (Topology Broker) get trait scaffolds + role-spinal-cord defaults in S0-T;

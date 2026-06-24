@@ -14,7 +14,7 @@ proprietary documentation and not in this public NeuroGrim spec.
 
 **NeuroGrim publishes the broker pattern as architectural infrastructure.** The trait, the
 Pipeline primitive, the role-set scaffolding, the Overlay contract, the governance composer,
-the 30 building blocks, the canonical brokers, the contract that consuming projects
+the 34 building blocks, the canonical brokers, the contract that consuming projects
 implement against. All of this is **public** because NeuroGrim is a public open-source
 project and the broker pattern is the substrate it provides.
 

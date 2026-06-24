@@ -7,7 +7,7 @@ sharing + adds two structural extensions: broker-prescribed Frames and Frame-rot
 pipelines. Full content lands as the design questions below resolve.
 
 Companion to [`BROKER-CONTRACT.md`](BROKER-CONTRACT.md) (the named primitive),
-[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) (framework internals + 30 building blocks),
+[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) (framework internals + 34 building blocks),
 [`BROKER-AWARENESS.md`](BROKER-AWARENESS.md) (how agents see broker output), and
 cereGrim's [`INTER-AGENT-BROKER.md`](../../cereGrim/docs/INTER-AGENT-BROKER.md) (the
 cluster-level recursion where Frame negotiation between peer-agents becomes
@@ -91,7 +91,7 @@ active Frame stack. Four consumption surfaces:
    time-horizon: long-term}` gets a longer TTL + more aggressive checkpointing. With
    `{tempo: rapid-prototype}`, shorter TTL + lighter checkpointing.
 
-The 30 building blocks stay uniform; Frames change *how* they apply. The Frame stack is
+The 34 building blocks stay uniform; Frames change *how* they apply. The Frame stack is
 a typed map in broker state; framework reads it at every consumption point.
 
 ---
@@ -160,6 +160,14 @@ Sugar over manually-authored rotations; framework expands at load time:
 Operator-extensible (add a new hat value to the rotation list; framework picks up
 without code change). Default implementation: expand at load time into the explicit
 `steps:` form above.
+
+**Depth bound — `MaxFrameRotationDepth`:** Frame-rotation steps can technically nest
+(a rotation's sub-pipeline could itself be a rotation pipeline). Without a bound, the
+expansion balloons. Framework enforces `MaxFrameRotationDepth` (default 2,
+operator-tunable per cluster manifest) — catalog loader rejects pipelines whose
+`frame_rotation:` nesting exceeds this. Validated at load time (not runtime); startup
+fails loudly on violation. Distinct from MaxBrokerDepth (which bounds broker wrapping)
+and MaxCrossBrokerCompositionDepth (which bounds sub-pipeline calls across brokers).
 
 ### Conditional Frame loops
 
