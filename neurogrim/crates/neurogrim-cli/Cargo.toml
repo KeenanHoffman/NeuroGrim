@@ -41,6 +41,12 @@ async-trait = { workspace = true }
 # `cargo build --bin neurogrim --no-default-features --features sensor-X`.
 neurogrim-sensory = { workspace = true, default-features = false }
 neurogrim-mcp = { workspace = true }
+# Wave 5.5 (S*-T MVP broker harness; 2026-06-24) — `neurogrim broker-serve`
+# CLI subcommand loads the broker substrate + exposes single dispatch_pipeline
+# MCP tool to Claude Code.
+neurogrim-brokers = { workspace = true }
+# rmcp's tool-router macros need schemars for the typed param schemas.
+schemars = { workspace = true }
 neurogrim-a2a = { workspace = true }
 neurogrim-ecosystem = { workspace = true }
 # v4.2 S14-S-4.5 — secrets crate for `neurogrim secrets tls-cert`

@@ -195,6 +195,32 @@ enum Commands {
         allow_mutations: bool,
     },
 
+    /// Start the broker harness as an MCP server on stdio.
+    /// Wave 5.5 S*-T MVP: loads cluster manifest, registers concrete brokers,
+    /// exposes a single `dispatch_pipeline` tool to Claude Code. Discovery
+    /// happens via `current-projection.md` (auto-loaded via CLAUDE.md); the
+    /// MCP tool is the wire protocol for the dispatch action.
+    #[command(name = "broker-serve")]
+    BrokerServe {
+        /// Path to the cluster manifest TOML
+        #[arg(short, long, default_value = ".claude/brain/broker/cluster.toml")]
+        cluster: String,
+    },
+
+    /// Initialize broker-harness directory structure + sample manifests in
+    /// the project. Creates .claude/brain/broker/, .mcp.json registration,
+    /// CLAUDE.md auto-load wiring. Idempotent: re-running preserves existing
+    /// files.
+    #[command(name = "broker-init")]
+    BrokerInit {
+        /// Project root directory
+        #[arg(short, long, default_value = ".")]
+        project_root: String,
+        /// Skip confirmation prompts (currently always non-interactive)
+        #[arg(long)]
+        yes: bool,
+    },
+
     /// Start the Brain as an MCP server
     #[command(visible_alias = "summon")]
     Serve {
@@ -559,6 +585,10 @@ async fn main() -> Result<()> {
             no_browser,
             allow_mutations,
         } => commands::ui::run(registry, port, bind, no_browser, allow_mutations).await,
+        Commands::BrokerServe { cluster } => commands::broker_serve::run(&cluster).await,
+        Commands::BrokerInit { project_root, yes } => {
+            commands::broker_init::run(&project_root, yes).await
+        }
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
         Commands::Backlog { cmd } => match cmd {

@@ -1,3 +1,9 @@
+// Wave 5.5 (S*-T MVP broker harness; 2026-06-24) — broker-serve subcommand
+// loads cluster manifest + starts MCP server with single dispatch_pipeline
+// tool. See C:/Users/koff0/.claude/plans/for-your-new-session-modular-pretzel.md
+// for the full design.
+pub mod broker_serve;
+pub mod broker_init;
 pub mod a2a_discover;
 pub mod a2a_invoke;
 pub mod a2a_serve;
