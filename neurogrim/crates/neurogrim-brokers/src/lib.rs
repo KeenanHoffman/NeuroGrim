@@ -45,10 +45,20 @@ pub mod registry;
 
 // Re-exports for downstream consumers
 pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
+pub use catalog::{evaluate_precondition, load_catalog, validate_catalog, CatalogError};
+pub use materializer::{
+    awareness::AwarenessMaterializer, hot_store::HotStoreMaterializer, MaterializerComposer,
+    MaterializerError,
+};
 pub use overlay::{Overlay, OverlayReadGuard, WorkingState};
 pub use pipeline::{
     AuditClass, EffectClass, ParamMap, Pipeline, PipelineId, Step, Tunability, Visibility,
 };
+pub use registry::{
+    BrokerConfig, BrokerManifest, BrokerRegistry, ClusterConfig, ClusterManifest, RegistryError,
+};
+pub use runner::{DispatchError, DispatchOutcome, LeafContext, LeafError, PipelineRunner};
+pub use trace::{SnapshotDelta, TraceError, TraceRecord, TraceSink};
 
 // Re-export major errors for ergonomic consumer error handling
 pub use anyhow::{Error, Result};

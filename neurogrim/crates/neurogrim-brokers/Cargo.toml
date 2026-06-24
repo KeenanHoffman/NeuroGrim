@@ -47,6 +47,10 @@ arc-swap = "1"
 # UUID v4 for trace IDs + dispatch IDs (same pattern as neurogrim-mcp).
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# TOML for cluster + broker manifests (per CLUSTER-MANIFEST-SCHEMA.md +
+# BROKER-MANIFEST-SCHEMA.md).
+toml = { workspace = true }
+
 # Reuse: NeuroGrim core primitives (verified PRESENT per P1 audit at
 # cereGrim/docs/DISCOVERY-RESULTS.md). Brokers reuse:
 # - queue + queue_backend for trace-sink + cross-broker bus messaging
