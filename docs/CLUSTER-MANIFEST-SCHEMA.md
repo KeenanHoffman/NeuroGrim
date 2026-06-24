@@ -219,6 +219,46 @@ models would declare their own cycle parameters.)
 
 ---
 
+## Per-parameter tunability surface (M-13 closure)
+
+The framework's parameters are tunable at different scopes; not every parameter has a
+per-broker override. This table enumerates which parameters are tunable at which level
++ what the inheritance/override semantics are:
+
+| Parameter | Cluster-level | Per-broker-level | Per-pipeline-level | Per-dispatch-level | Override semantics |
+|---|---|---|---|---|---|
+| **Trust-budget ceiling** | required | optional override | — | — | Per-broker overrides cluster; cluster-global is ceiling sum-cap |
+| **Trust-budget unit** | required (global) | — | — | — | Cluster-only; per-broker mismatch refused at composition per §4 unit-composition rule |
+| **Trust-budget allocation strategy** | required | optional override | — | — | Per-broker overrides cluster default |
+| **Unit-conversion table** | optional | — | — | — | Cluster-only AND Untunable; Autonomous tuners cannot modify |
+| **Frame defaults (Hat/Stakes/Tempo/Mode/Confidence/Audience/Scope)** | optional | optional | optional | optional | Innermost wins per BROKER-FRAMES.md §7.2 inheritance order |
+| **Frame conflict-precedence matrix** | optional override | — | — | — | Cluster-only; defaults to BROKER-FRAMES.md §7.1 |
+| **MaxFrameRotationDepth** | required | — | — | — | Cluster-only |
+| **MaxBrokerDepth** | required | — | — | — | Cluster-only |
+| **MaxCrossBrokerCompositionDepth** | required | — | — | — | Cluster-only |
+| **MaxCognitionCycleIterations** | required default | — | — | — | Cluster-only; per-Tempo overrides per cluster manifest §cognition_cycle |
+| **rotation_budget_ceiling** | required | optional override | — | — | Per-broker overrides cluster |
+| **Skill Filter weight cells** | — | required defaults | optional override | — | Operator-tunable (per declared bounds); Autonomous bounds enforced at write |
+| **Governance composition (per Surfaced pipeline)** | optional defaults | optional defaults | required declaration | — | Innermost wins; Untunable governance always composed regardless |
+| **Pipeline `audit_class`** | — | — | required declaration | — | Per-pipeline; framework defaults documented in §3 |
+| **Pipeline `tunability` tier** | — | — | required declaration | — | Per-pipeline; default is OperatorOnly |
+| **Cancellation depth max** | optional default | — | optional override | — | Per-pipeline overrides cluster default |
+| **Schema coexistence window** | — | required | — | — | Per-broker only |
+| **Cluster-pipeline `allowed_during_shutdown`** | optional defaults | — | required declaration | — | Per-cluster-pipeline; default false |
+| **Inter-cluster ACL grants** | required | — | — | — | Cluster-only; transitive composition per BB #31 |
+| **Materializer composition order** | required | — | — | — | Cluster-only |
+| **Deprecated pipelines registry** | required | — | — | — | Cluster-only (per BB #37) |
+| **Quarantined sensors registry** | required | — | — | — | Cluster-only (per BB #38) |
+| **Action-ledger retention window** | required | — | — | — | Cluster-only (per BB #36) |
+
+Parameters not listed here are framework-internal (not operator-tunable; code change
+required). When in doubt: cluster manifest declares cluster-wide defaults; broker
+manifest declares per-broker overrides where the per-broker column is non-empty above;
+pipeline-declaration in the YAML catalog declares per-pipeline values where the
+per-pipeline column is non-empty.
+
+---
+
 ## Validation rules
 
 Framework validates at startup:

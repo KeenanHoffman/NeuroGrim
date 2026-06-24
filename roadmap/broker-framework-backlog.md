@@ -1,4 +1,4 @@
-# Broker Framework Backlog (35 building blocks)
+# Broker Framework Backlog (38 building blocks)
 
 The implementation backlog for the broker framework specified across
 [`../docs/BROKER-CONTRACT.md`](../docs/BROKER-CONTRACT.md) +
@@ -11,10 +11,15 @@ The implementation backlog for the broker framework specified across
 [`../docs/PUBLIC-VS-PROPRIETARY.md`](../docs/PUBLIC-VS-PROPRIETARY.md). 35 main
 building blocks + 1 sub-numbered (#22a Materializer Composer).
 
-**Status (2026-06-24):** spec-stable across Phases 1–5; implementation backlog
-filed. Stage mapping reflects cereGrim's S\*-T roadmap branch (S0-T framework
-foundation → S1-T Sense+InnateAbility brokers → S2-T Embodiment + Effectors →
-S3-T Awareness Service hardening → S\*-C cluster work).
+**Status (2026-06-24, Phase 8):** spec-stable across Phases 1–8 (Phase 8 added 3
+new BBs: #36 Agent-Behavior Observability, #37 Pipeline Deprecation Manager, #38
+Sensor Quarantine Manager; resolved 11 load-bearing + 14 medium findings from the
+Phase 7 audit). Stage mapping reflects cereGrim's S\*-T roadmap branch (S0-T
+framework foundation → S1-T Sense+InnateAbility brokers → S2-T Embodiment +
+Effectors → S3-T Awareness Service hardening → S\*-C cluster work). Phase 7.5
+verification corrected ultra-pass-flagged audit-misreads (LB-2 was a misread; LB-7
+deferred to a separate cluster-federation-bootstrap planning session per its
+chicken-and-egg open-design status).
 
 **Naming convention:** ticket IDs `BRK-<BB>-<NAME>` (e.g., `BRK-01-BROKER-TRAIT`).
 Crate target: `D:\Brains\NeuroGrim\neurogrim\crates\neurogrim-brokers\` (new crate,
@@ -64,6 +69,9 @@ sibling of `neurogrim-core`, per the substrate inventory in
 | BRK-32-TELEMETRY | #32 Operator Telemetry Summarizer | C | S0-T | M | #28 |
 | BRK-33-PIPELINE-PROPOSAL | #33 Pipeline Proposal Mechanism | C | S0-T | M | #21, #9 |
 | BRK-35-FRAME-STACK | #35 Frame stack | C | S0-T | L | #19, #20, #22, #11 |
+| BRK-36-AGENT-BEHAVIOR-OBS | #36 Agent-Behavior Observability | C | S0-T | M | #10, #20, #22a |
+| BRK-37-PIPELINE-DEPRECATION | #37 Pipeline Deprecation Manager | C | S0-T | M | #10, #29, #33 |
+| BRK-38-SENSOR-QUARANTINE | #38 Sensor Quarantine Manager | C | S0-T (scaffold); S3-T (hardened) | M | #18, #28 |
 
 **Effort tiers (rough):** S = small (<1 day); M = medium (1-3 days); L = large (3-7 days).
 These are guesses pre-implementation; refine after first 2-3 BBs land.
@@ -481,8 +489,49 @@ pipeline; extension protocol; L1 awareness injection format.
 **Acceptance:** Frame stack threads through all 4 consumption surfaces; inheritance
 order validated against per-level overrides; Frame-rotation pipeline expands at load
 time + executes correctly; conflict precedence resolves conflicting Frame values per
-declared matrix; `active-frame-stack.md` segment surfaces in L1 context.
+declared matrix; `active-frame-stack.md` segment surfaces in L1 context with
+"Frame Conflicts Resolved" subsection when conflicts active.
 **Effort: LARGE** — Frame stack is cross-cutting; touches many other BBs.
+
+#### BRK-36-AGENT-BEHAVIOR-OBS (BB #36)
+**Description:** Per-agent action-ledger keyed by `{agent_id, dispatch_id, broker_id,
+pipeline_id, outcome, governance_blocks_fired, frame_stack_snapshot}`. Closes the
+VISION-principle #21 (agents must perceive their own blind spots) + #22 (agents must
+perceive and steward their own work) alignment gap by giving the agent self-observability
+over its own behavior (which actions succeeded, failed, were governance-blocked) —
+complements BB #20 hygiene (which sees pipelines from the broker side).
+**Acceptance:** action-ledger entry written on every Pipeline Runner dispatch (success
+/ fail / block); `agent-behavior-summary.md` segment projects per-agent counters; L1
+visibility respects retention window (default 7 days hot); redaction rules apply
+identically to BB #18; hygiene rollup feeds BB #20 with per-pipeline action density.
+**Reuse:** invocation-ledger v3 schema extension (separate keyed-by-agent variant);
+Materializer Composer segment slot.
+**Effort: MEDIUM**
+
+#### BRK-37-PIPELINE-DEPRECATION (BB #37)
+**Description:** Operator-side inverse of BB #33 Pipeline Proposal Mechanism. Cluster
+manifest declares `deprecated_pipelines: [{id, effective_date, archive_path, reason}]`;
+Pipeline Runner checks before `check-trust-budget`; workflows pinned to pre-effective-date
+versions continue, new dispatches refuse with `failure_reason: pipeline_deprecated`.
+**Acceptance:** deprecated-pipelines surface in BB #24 Awareness Materializer as a
+`retired-pipelines` subsection distinct from dead-pipeline tombstones; archive path
+preserves audit trail; composition with BB #29 shutdown ceremony works; BB #33 approval
+of replacement pipeline can carry implicit deprecation via `displaces:`.
+**Effort: MEDIUM**
+
+#### BRK-38-SENSOR-QUARANTINE (BB #38)
+**Description:** Operator surface for isolating + inspecting + restoring misbehaving
+custom sensors. Cluster manifest declares `quarantined_sources: [{source_id, reason,
+quarantine_date, test_mode_enabled}]`; Awareness Service enforcer routes quarantined
+sources to a shadow Awareness Map; operator inspects via `inspect-quarantined-source`
++ restores via `restore-quarantined-source`.
+**Acceptance (S0-T scaffold):** quarantine list checked on every Sensory Queue write;
+shadow Awareness Map separate from live map; quarantined-source emissions never reach
+agent perception; `inspect` + `restore` pipelines Surfaced (operator-only tunability).
+**Acceptance (S3-T hardened):** test mode allows operator to validate fix before
+restore; chronic-quarantine sensors emit `chronic-sensor-warning` after >3 cycles in
+30 days; BB #5 drop-count feed surfaces quarantine candidates.
+**Effort: MEDIUM**
 
 ---
 
@@ -528,6 +577,9 @@ declared matrix; `active-frame-stack.md` segment surfaces in L1 context.
 31. BRK-32-TELEMETRY (depends on #28)
 32. BRK-33-PIPELINE-PROPOSAL (depends on #21 + #9)
 33. BRK-35-FRAME-STACK (depends on #19 + #20 + #22 + #11)
+34. BRK-36-AGENT-BEHAVIOR-OBS (depends on #10 + #20 + #22a)
+35. BRK-37-PIPELINE-DEPRECATION (depends on #10 + #29 + #33)
+36. BRK-38-SENSOR-QUARANTINE (scaffold only S0-T; depends on #18 + #28)
 
 **S0-T exit gate:** reference broker authored against the above + frozen test fixture
 in under half a day by the framework author. Measures the "primitive is real" claim.

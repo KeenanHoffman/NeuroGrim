@@ -71,6 +71,12 @@ in [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3, new Frame types must justif
 net-new surface or replacement of existing surface. Adding a Frame type is a contract
 amendment; adding Frame *values* within an existing type is a manifest declaration.
 
+**Capitalization convention (P-7).** Canonical Frame type names are capitalized in
+spec prose (Hat, Stakes, Tempo, Mode, Confidence, Audience, Scope). TOML field names
+in cluster + broker manifests are lowercase per TOML convention (`hat = "architect"`,
+`stakes = "production"`, etc.). The two are interchangeable references to the same
+Frame type; prefer capitalized in prose, lowercase in code/config examples.
+
 ---
 
 ## §3 — How brokers consume Frames
@@ -171,6 +177,16 @@ operator-tunable per cluster manifest) — catalog loader rejects pipelines whos
 `frame_rotation:` nesting exceeds this. Validated at load time (not runtime); startup
 fails loudly on violation. Distinct from MaxBrokerDepth (which bounds broker wrapping)
 and MaxCrossBrokerCompositionDepth (which bounds sub-pipeline calls across brokers).
+
+**Budget bound — load-time `rotation_budget` validation (per
+[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) BB #9):** the depth bound alone does not
+prevent a *wide* rotation (e.g., `frame_rotation:` over 100 Frame values at depth 1)
+from blowing budget at dispatch. The Pipeline Catalog loader pre-computes
+`rotation_budget = N × single_pipeline_budget × tempo_multiplier + synthesis_budget`
+(per §7.3 below) against the active Tempo's multiplier and per-broker budget ceiling;
+catalogs whose rotations exceed ceiling are rejected at load with
+`failure_reason: rotation_budget_exceeds_ceiling`. Depth and budget are independent
+constraints — both validated at load, neither at dispatch.
 
 ### Conditional Frame loops
 
@@ -414,6 +430,22 @@ appropriate path. Default fallback: `escalate-to-operator` (no silent acceptance
 modified Frames). Operator can override per cluster-pipeline to allow autonomous
 fallback for low-stakes routing.
 
+**Escalation routing (M-8 closure).** "Escalate-to-operator" requires pinning WHICH
+operator receives the escalation. The framework dispatches a
+**`FrameNegotiationFailure`** event to **both** the calling agent's operator AND the
+target agent's operator simultaneously (each via their cluster's Sensory Queue under
+`audit_class: governance`). Both events carry the full negotiation payload (above) +
+a shared `negotiation_id`. The event is tracked in a per-cluster
+**escalation ledger** (`<cold-store>/escalation-ledger.jsonl`); operators see a
+chronological list of in-flight Frame negotiations. Resolution: either operator may
+post a resolution (calling-side operator can downgrade their request; target-side
+operator can relax their constraint); resolution propagates via webhook (per
+INTER-AGENT-BROKER.md Q5) to both sides; the next dispatch attempt either succeeds or
+the negotiation cycles. If neither operator resolves within a cluster-manifest-tunable
+TTL (default 24h), the escalation auto-aborts and the calling workflow transitions to
+`failed-no-operator-resolution`. Closes the dead-end where escalation could route to
+an operator without authority over the constraint.
+
 ### 7.7 — Frame visibility in awareness (PINNED)
 
 **The LLM SEES its current Frame stack in L1 context.** Mutual-visibility of stance
@@ -439,11 +471,37 @@ Suppressed (per conflict resolution): none
 Source-of-truth: see BROKER-FRAMES.md §7.2 inheritance order
 ```
 
+**Frame conflict L1 surface (M-6 closure).** When the conflict-precedence matrix
+(§7.1) suppresses a Frame, the L1 segment surfaces the suppression **before** the
+agent acts, not post-hoc in trace:
+
+```markdown
+## ⚠️ Frame Conflicts Resolved
+
+| Suppressed Frame | Suppressed Value | Conflict With | Precedence Winner | Reason |
+|---|---|---|---|---|
+| hat | rubber-duck | stakes: production | stakes | "Stakes overrides Hat per cluster precedence matrix (§7.1)" |
+```
+
+When this subsection is non-empty, the active-frame-stack table's "Suppressed" row
+points at it. The agent reads the suppression entry, can dispatch the Surfaced
+governance pipeline `challenge-frame-conflict-resolution` (tunability:
+operator-confirmed) to propose an override if it disagrees with the resolution. The
+challenge writes to the Proposal Ledger (BB #21) with `type: frame-conflict-challenge`
+and the operator confirms or rejects the proposed override. Without this L1 surface,
+the mutual-visibility invariant pinned in §7.1 ("the agent sees both Frames AND the
+suppression annotation") would be defeated at the awareness layer — the trace would
+show suppression but the agent's reasoning happened under the suppressed Frame
+without knowing it.
+
 Surface lives in a dedicated `.claude/brain/broker/segments/active-frame-stack.md`
 segment, composed by the Materializer Composer (#22a) into `current-projection.md`.
-Budget: ~200 tokens per agent at session-start; updates per tick if Frame stack
-changes (rare). Operator can disable per cluster manifest for context-tight
-deployments (single-Frame deployments don't need the table).
+Budget: ~200 tokens per agent at session-start (+ ~80 tokens per active conflict
+row); updates per tick if Frame stack changes (rare). Operator can disable per
+cluster manifest for context-tight deployments (single-Frame deployments don't need
+the table) — but the "⚠️ Frame Conflicts Resolved" subsection cannot be selectively
+disabled when present (suppression visibility is load-bearing for the mutual-visibility
+invariant).
 
 ---
 

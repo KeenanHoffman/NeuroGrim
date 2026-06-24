@@ -2156,14 +2156,17 @@ the methodology lineage: `.claude/skills/archived/lsp.md` ("LSP-Powered Symbol S
 
 ---
 
-### B-55: BROKER-FRAMEWORK — 35-building-block broker pattern substrate — EPIC (2026-06-24)
+### B-55: BROKER-FRAMEWORK — 38-building-block broker pattern substrate — EPIC (2026-06-24, updated Phase 8)
 
-**Problem.** Five phases of logical scaffolding (2026-06-21..24) produced a spec-stable
+**Problem.** Eight phases of logical scaffolding (2026-06-21..24) produced a spec-stable
 broker pattern framework — a structured-store + deterministic-dispatcher substrate that
 consuming agent harnesses (e.g., the cereGrim dual-lobe project) build on. The
-framework decomposes into **35 building blocks** (Layer A pattern primitives, Layer B
+framework decomposes into **38 building blocks** (Layer A pattern primitives, Layer B
 pipeline primitives, Layer C substrate composition) plus one sub-numbered BB (#22a
-Materializer Composer). Spec lives at [`../docs/BROKER-CONTRACT.md`](../docs/BROKER-CONTRACT.md)
+Materializer Composer). Phase 8 (2026-06-24) added #36 Agent-Behavior Observability
+(closes VISION #21/#22 alignment), #37 Pipeline Deprecation Manager (inverse of #33),
+#38 Sensor Quarantine Manager (closes Awareness Service misbehaving-sensor recovery
+gap). Phase 8 also resolved 11 load-bearing + 14 medium audit findings. Spec lives at [`../docs/BROKER-CONTRACT.md`](../docs/BROKER-CONTRACT.md)
 + [`../docs/BROKER-INTERNALS.md`](../docs/BROKER-INTERNALS.md) + the BROKER-AWARENESS /
 WRAPPING / MANIFEST-SCHEMA / FRAMES / PUBLIC-VS-PROPRIETARY / CLUSTER-MANIFEST-SCHEMA
 companions. The dedicated per-BB implementation backlog (acceptance criteria + layer
@@ -2220,6 +2223,93 @@ IP boundary policy: [`../docs/PUBLIC-VS-PROPRIETARY.md`](../docs/PUBLIC-VS-PROPR
 Visual reference: [`../docs/diagrams/DIAGRAM-V4-SPEC.md`](../docs/diagrams/DIAGRAM-V4-SPEC.md).
 v3 diagram: [`../docs/diagrams/broker-pattern.drawio.svg`](../docs/diagrams/broker-pattern.drawio.svg)
 (v4 update pending operator authoring).
+
+---
+
+### B-56: BROKER-FRAMEWORK-CLUSTER-FEDERATION-BOOTSTRAP — open-design deferral from Phase 7 audit — CANDIDATE (2026-06-24)
+
+**Problem.** Phase 7 audit surfaced LB-7: cross-cluster manifest discovery for BB #31
+Cluster Federation Topology is a chicken-and-egg open-design problem. A
+`ClusterManifestRegistry` IS a broker; at bootstrap, cluster-A hasn't discovered
+cluster-B's registry-broker, but registry-broker needs ACL grant from cluster-B that
+cluster-A hasn't discovered. The Phase 7.5 verification confirmed this is genuine
+design work (~2+ hours), not a spec amendment. Two candidate resolutions: (a) static
+peer-discovery file per deployment (kills federation dynamism); (b) zero-trust
+bootstrap handshake protocol with implicit federation ACL (preserves dynamism but
+needs careful design). Deferred from Phase 8 to a dedicated cluster-federation-bootstrap
+planning session — blocks S0-C implementation discovery, not S0-T.
+
+**Plan when:**
+1. S0-T framework foundation lands (the 38 BBs ship as spec-stable substrate).
+2. S1-T canonical brokers land (Topology Broker concrete + ACL discipline empirically
+   validated within one cluster) — gives the design something concrete to reason
+   against.
+3. Operator scopes the cluster-federation use case (cereGrim-cluster-1 + cereGrim-
+   cluster-2 with what kind of trust relationship?) — informs which of (a)/(b) fits.
+
+**Dependencies.** S1-T concrete brokers (especially Topology Broker concrete impl).
+S\*-C cluster-work branch ready. A2A protocol bumps for inter-cluster manifest
+exchange (if zero-trust handshake chosen).
+
+**What B-56 would deliver:** a pinned bootstrap protocol design for BB #31 +
+inter-cluster ACL transitive-composition semantics + the `ClusterManifestRegistry`
+broker manifest schema (if registry-service approach chosen) OR the per-deployment
+peer-discovery file format (if static approach chosen). Closes the "how does cluster-A
+ever learn cluster-B exists" gap that BB #31 currently assumes is solved.
+
+**Adversarial note.** Two failure modes to design against: (1) a registry-broker
+becoming a single point of failure for the federation (the static approach has the
+opposite problem — operator drift across deployments); (2) malicious cluster claiming
+ACL grants it shouldn't have during the zero-trust handshake (needs cryptographic
+attestation or operator-confirmed grant escalation). The design choice between (a)
+and (b) is itself the load-bearing decision.
+
+**Cross-references.** Phase 7 audit plan:
+`C:\Users\koff0\.claude\plans\for-your-new-session-modular-pretzel.md` LB-7 + B-deferral
+section. Spec context: [`../docs/CLUSTER-MANIFEST-SCHEMA.md`](../docs/CLUSTER-MANIFEST-SCHEMA.md)
+open follow-ons. Related BB: BB #31 Cluster Federation Topology in
+[`../docs/BROKER-INTERNALS.md`](../docs/BROKER-INTERNALS.md).
+
+---
+
+### B-57: BROKER-FRAMEWORK-SPEC-HYGIENE — Phase 7 polish sweep follow-ups — CANDIDATE (2026-06-24)
+
+**Problem.** Phase 7 audit identified additional spec-hygiene follow-ups beyond the
+9 polish items landed in Phase 8 wave W12.5. Specifically: (a) **B5 performance model**
+— per-tick / per-dispatch cost validation for Materializer Composer latency,
+Frame-rotation per-dispatch cost, Skill Filter per-tick storage growth, Diagnostics
+aggregate emission rate. Needs empirical S1-T data, not paper analysis. (b) **B6
+cross-BB schema co-evolution** — multiple BBs declare cold-store schemas; when BB-A
+schema evolves, what happens to BB-B that indexes into BB-A's payloads? Substrate
+contract gap, not a new BB. (c) **B7 Tier 3 plain-function versioning** — bootstrap
+layer is not bound by BB #34 WPVC; framework upgrades could silently break old
+workflow checkpoints. Needs a version-signal protocol for Tier 3 changes. (d) **B4
+LSP-Brains spec §13 federation/A2A cross-check** — BB #31 + cereGrim IAB are
+federation protocols; spec §13 may have A2A semantics that conflict.
+
+**Plan when:**
+1. Phase 8 ships (the 38-BB framework lands; this is the baseline these audits work
+   against).
+2. S0-T implementation begins (empirical data starts arriving for performance items).
+3. LSP-Brains spec is being touched for another reason (bundle the cross-check with
+   the work).
+
+**Dependencies.** Phase 8 ship. S0-T implementation begin. LSP-Brains spec session.
+
+**What B-57 would deliver:** a per-topic resolution per Phase 7 audit blind spots:
+performance model document with measured S0-T data; cross-BB schema co-evolution
+substrate contract pinned in BROKER-INTERNALS §4; Tier 3 versioning protocol pinned
+or explicitly deferred with rationale; spec-§13-vs-BB-#31/IAB conflict analysis with
+either a pinned resolution or a flagged conflict for spec amendment.
+
+**Adversarial note.** B5 and B7 specifically may surface gaps that change framework
+implementation choices — better to land them during S0-T validation than after
+implementation has crystallized around assumptions that turn out wrong.
+
+**Cross-references.** Phase 7 audit plan:
+`C:\Users\koff0\.claude\plans\for-your-new-session-modular-pretzel.md` Ultra-pass
+blind-spots B4/B5/B6/B7. Spec: [`../docs/BROKER-INTERNALS.md`](../docs/BROKER-INTERNALS.md).
+LSP-Brains: `D:\Brains\LSP-Brains\spec\`.
 
 ---
 

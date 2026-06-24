@@ -201,3 +201,13 @@ Once the operator updates `broker-pattern.drawio.svg` to v4, this spec doc remai
 as the running rationale. Future diagram versions (v5, v6) get their own spec docs
 (`DIAGRAM-V5-SPEC.md`, etc.) describing the deltas from the prior version. v4 spec
 preserves the deltas from v3 forever.
+
+## Status (P-4)
+
+**Diagram update PENDING (as of 2026-06-24, Phase 8).** The textual spec in this
+document reflects the v4 state; the actual `broker-pattern.drawio.svg` file may still
+carry v3 labels (notably "Federation Broker" instead of "Topology Broker"). Prose
+wins when diagram and prose disagree. Operator authoring task: update the .drawio.svg
+file to match this spec; mark the status here as **DIAGRAM UPDATED YYYY-MM-DD** when
+done. Until updated, treat the v3 .drawio.svg as legacy reference + this doc as
+source of truth for current visual semantics.

@@ -42,6 +42,9 @@ re-spelling them.
 | **Overlay** | (tier-1) The broker's read-only, consumer-facing projection of its working state. Atomic-swap, no-torn-read. Per-broker curation policy. The contract surface. |
 | **OverlayView** | (tier-2) A derived/filtered projection layered on top of one or more Overlays. The Topology Broker's per-consumer ACL-filtered topology is an OverlayView (each consumer-broker sees a different filtered view of the broker registry). |
 | **OverlayMesh** | (tier-3) A cluster-aggregated projection across multiple peer-agents' Overlays. The IAB's cluster-Sense projection (when wired) is an OverlayMesh. Consistency model is explicit per the IAB stub (snapshot-on-read or arbiter-mediated). |
+| **Tier 1 / Surfaced** | (P-5) A pipeline's visibility classification. Synonymous: "Tier 1" (logical layer, used in BROKER-INTERNALS.md §1.2 diagram), "Surfaced" (semantic name, used in prose), and `visibility: surfaced` (YAML manifest field value). LLM sees + picks; operator audits; default governance composed. |
+| **Tier 2 / Internal** | (P-5) A pipeline's visibility classification. Synonymous: "Tier 2" (logical layer), "Internal" (semantic name), and `visibility: internal` (YAML manifest field value). Broker plumbing; not in LLM offering; still traced + governed. |
+| **Tier 3 / plain function** | (P-5) The bootstrap-only execution layer — Rust functions called from inside a pipeline step's Leaf body. Never enters the catalog, never gets a trace. Reserved for the executor (Pipeline Runner, Catalog Loader, ColdStore opener); not used for general broker logic. |
 
 **See also (Frame-related terms):** the Frame primitive is documented in
 [`BROKER-FRAMES.md`](BROKER-FRAMES.md) (currently a stub). When it matures, this
@@ -331,10 +334,16 @@ mutations routed through the Topology Broker, the routing would check against th
 about to mutate, creating an infinite regress (or worse: a stale-ACL check followed by an
 ACL change that should have failed it).
 
-**Invariant:** ACL-mutation pipelines are **Tier 3 plain functions** (not Tier 2
-sub-pipelines that route through the Topology Broker), marked **Untunable**. The Topology Broker
-manifest declares this as its single self-bypass. Documented as part of building block
-#17 in [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3.
+**Invariant (M-12 clarification):** ACL-mutation pipelines are **Tier 2 Internal pipelines
+marked Untunable** (NOT Tier 3 plain functions, which are bootstrap-only). They live in
+the catalog (so they are traced + auditable + appear in `governance_pipelines()` sidecar)
+but the framework dispatches them via a **direct self-bypass routing path** — the
+Topology Broker's mutation handler executes them without consulting its own ACL
+enforcement (no infinite regress). Documented as part of building block #17 in
+[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §3. Cross-broker composition of these
+pipelines via `sub_pipeline:` is rejected at catalog load per BB #27 §(f) (governance
+pipelines compose only as Tier 2 across brokers, never as Tier 3 plain-function calls
+— preserves audit accountability across composition).
 
 ### The Workspace Broker / Workspace Manager distinction — the subtle boundary
 
