@@ -194,19 +194,38 @@ default_policy = "allow_backward_compatible_only"
 
 ---
 
-## Cognition-channel speaker pinning (R-S-8 closure, Phase 9)
+## Cognition-channel speaker authorization (R-S-8 closure, Phase 9; generalized post-vision-audit)
 
-For consuming projects using the peer-dialogue cognition channel (per
-[`../../cereGrim/docs/COGNITION-LOOP.md`](../../cereGrim/docs/COGNITION-LOOP.md) Q2),
-declare canonical speaker identities. Framework rejects cognition-channel messages
-from speakers not listed here.
+For consuming projects using the reserved `_neurogrim/cognition` bus topic (per
+[`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) BB #4 + the cereGrim peer-dialogue use
+case at [`../../cereGrim/docs/COGNITION-LOOP.md`](../../cereGrim/docs/COGNITION-LOOP.md)
+Q2), declare the set of speakers authorized to write to the channel. Framework
+rejects messages from speakers not listed here. **This substrate is general** —
+NeuroGrim's contract is "operator declares N authorized speaker IDs; framework
+authenticates against the list." Consuming-project-specific role semantics (e.g.,
+cereGrim's `primary` + `meta` lobe roles) are layered on top in the consuming
+project's own composition docs, not in this manifest schema.
 
 ```toml
-[cluster.cognition_cycle.speakers]
-primary_lobe_id = "ceregrim-primary"   # required when cognition channel is in use
-meta_lobe_id = "ceregrim-meta"         # required when cognition channel is in use
-per_speaker_messages_per_iteration_max = 1   # default; bound per-cycle injection
+[cluster.cognition_cycle]
+authorized_speakers = ["<speaker_id>", "<speaker_id>", ...]   # operator-declared set; framework authenticates
+per_speaker_messages_per_iteration_max = 1                    # default; bound per-cycle injection
 ```
+
+**Example (cereGrim's dual-lobe usage)** — cereGrim declares two speakers, names them
+per its dual-lobe pattern, and binds Primary/Meta roles in its own composition doc:
+
+```toml
+[cluster.cognition_cycle]
+authorized_speakers = ["ceregrim-primary", "ceregrim-meta"]
+per_speaker_messages_per_iteration_max = 1
+```
+
+Then cereGrim's [`COGNITION-LOOP.md`](../../cereGrim/docs/COGNITION-LOOP.md)
+declares that `ceregrim-primary` is the Primary Lobe ID and `ceregrim-meta` is the
+Meta Lobe ID — the speaker-role binding is consuming-project-specific. A future
+consumer with three lobes (Reviewer, Synthesizer, Critic) declares three speakers
+without changing this schema. NeuroGrim substrate stays general.
 
 Rejected messages emit to BB #28 Diagnostics with `audit_class: governance` and
 `failure_reason: unknown_speaker_id` (or `cognition_speaker_rate_exceeded` for
@@ -307,13 +326,13 @@ table at startup):
 | `cluster.trust_budget.unit_conversion` | OperatorOnly (Untunable to Autonomous tuners) | Per §4 unit-conversion rule |
 | `cluster.frame_conflict_precedence.order` | OperatorOnly + Stakes-floor | Operator may reorder BUT Stakes-with-governance-implications can never be suppressed (R-S-17 rule, Phase 9) |
 | `cluster.lifecycle.shutdown_timeout_per_pipeline_ms` | OperatorOnly | Default 5000ms |
-| `cluster.cognition_cycle.speakers.primary_lobe_id` | OperatorOnly | R-S-8 speaker pinning |
-| `cluster.cognition_cycle.speakers.meta_lobe_id` | OperatorOnly | R-S-8 speaker pinning |
+| `cluster.cognition_cycle.authorized_speakers` | OperatorOnly | R-S-8 speaker authorization; operator-declared N-speaker set; consuming projects layer their own role semantics atop |
 | `cluster.cognition_cycle.max_iterations_default` | OperatorOnly (bounded 1-7) | Per COGNITION-LOOP Q3 |
 | `cluster.bootstrap.gossip_rounds` | OperatorOnly (bounded ≤10) | Bootstrap-DoS guard per R-S-14 |
 | Awareness Service rate-limit enforcer config | **Untunable** | Per BROKER-CONTRACT §"Sensory Queue contract enforcer" — code change required |
 | Topology Broker self-bypass logic | **Untunable** | Per BROKER-INTERNALS.md §"Topology Broker self-bypass invariant" — code change required |
-| Materializer Composer governance-first override | **Untunable** | Per BB #22a; reachability invariant outranks operator preference |
+| Materializer Composer governance-first override | **Untunable** | Per BB #22a; framework places `governance-pipelines` segment first regardless of operator-declared `materializer_composition_order`. Reachability invariant is structurally guaranteed; cannot be disabled by manifest (R-O-3 closure; vision-audit follow-up). Operator's declared order still controls relative ordering of non-governance segments. Override is auditable: BB #32 Telemetry projects "governance-segment-position: pinned-by-framework" so operators see when override is active. |
+| `materializer_composition_order` (non-governance segments) | OperatorOnly | Operator declares order of non-governance segments; framework reorders only to place governance first. Within that constraint, operator's order is preserved. |
 | Pipeline Runner internals | **Untunable** | Tier 3 bootstrap; code change required |
 
 **Adding new fields to the manifest** requires:

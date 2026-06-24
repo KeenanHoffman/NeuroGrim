@@ -266,28 +266,50 @@ Q2 + Q4):
 All three negotiation patterns coexist. The Frame stack flows bidirectionally through
 the inter-agent boundary, not just inward.
 
-**Broker-prescription authorization (R-S-1 closure, Phase 9).** Default-deny posture:
-brokers cannot prescribe Frames unless the cluster manifest explicitly authorizes
-them. Cluster manifest declares per-broker:
+**Broker-prescription authorization (R-S-1 closure, Phase 9; ceremony reduced
+post-vision-audit).** Default-deny posture for safety, but the framework supports
+cluster-level blanket defaults to reduce per-broker ceremony for deployments with
+many brokers (especially dynamic peer-discovery scenarios where per-broker
+declarations would scale quadratically with peer count).
+
+**Cluster-level default + per-broker override:**
 
 ```toml
+[cluster.frame_prescription]
+default_allowed_prescribed_frame_types = ["hat", "confidence", "audience"]
+# Cluster-wide default; applies to every registered broker unless overridden below.
+# Operator's deliberate choice; safer to leave empty (cluster default-deny) if not sure.
+
 [cluster.brokers.topology-broker]
-allowed_prescribed_frame_types = ["hat", "audience", "confidence"]
+allowed_prescribed_frame_types = ["hat", "audience", "confidence", "scope"]
+# Override: this broker also gets Scope prescription authority.
 
 [cluster.brokers.work-broker]
-allowed_prescribed_frame_types = []   # explicitly empty = cannot prescribe
+allowed_prescribed_frame_types = []
+# Override: this broker explicitly cannot prescribe ANY Frames (overrides cluster default).
 ```
 
-Brokers attempting to prescribe Frame types not in their authorized list are rejected
-with `failure_reason: prescribed_frame_not_authorized` + the rejected prescription
-is logged to BB #28 Diagnostics as `audit_class: governance` for operator review.
+If a broker doesn't declare its own list, it inherits the cluster default. If the
+cluster default is empty (or unset), default-deny applies per-broker. This
+preserves safety (operator must explicitly grant prescription authority somewhere
+in the manifest chain) while reducing ceremony at scale.
+
+Brokers attempting to prescribe Frame types not in their effective authorized list
+(per-broker override OR cluster default) are rejected with
+`failure_reason: prescribed_frame_not_authorized` + the rejected prescription is
+logged to BB #28 Diagnostics as `audit_class: governance` for operator review.
 
 This closes the supply-chain attack vector where a compromised broker (or an
-operator typo in cluster manifest) silently shifts governance composition via
-unauthorized Frame prescription. Cluster manifest is the authority on which
-brokers can teach Frames; the framework enforces it. Tunability:
+operator typo) silently shifts governance composition via unauthorized Frame
+prescription. Cluster manifest is the authority on which brokers can teach
+Frames; the framework enforces it. Tunability:
 **OperatorOnly** per the cluster-manifest field-level annotations
 (see [`CLUSTER-MANIFEST-SCHEMA.md`](CLUSTER-MANIFEST-SCHEMA.md)).
+
+**Honest trade-off:** the default-deny posture costs some Frame-teacher utility
+(brokers must wait for operator authorization to prescribe). This is a deliberate
+safety/expressivity exchange — the audit explicitly weighed both sides and chose
+safety as the floor with operator-tunable opt-in for legitimate prescriptions.
 
 ---
 

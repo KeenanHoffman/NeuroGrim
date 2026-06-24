@@ -142,6 +142,22 @@ unless deploying multi-machine. These are Tier 5 topics for federation operators
 without escalating to framework authors. You understand both the WHAT (the 38 BBs)
 and the HOW (which combinations apply when).
 
+**B-59 dashboard dependency (post-vision-audit clarification).** Several Tier 4 tasks
+become significantly safer with the operator-UX dashboard (B-59) deployed: per-broker
+config-entropy visibility, contradictory-tuning alerts, drift detection. Until B-59
+lands, operators use these manual workarounds:
+- Coherence-drift visibility: read `harness-coherence` domain score directly from
+  `neurogrim score --domain harness-coherence` output; compare to S2-launch baseline
+  manually.
+- Contradictory-tuning detection: cross-reference `tuner-audit-ledger.jsonl` (per
+  R-S-2 closure) across brokers; look for opposite-direction changes to related
+  weights.
+- Drift alerts: schedule a weekly cron to run `neurogrim cluster diagnose` and
+  inspect output manually.
+
+These workarounds are sufficient for safe operation but require operator discipline.
+When B-59 lands, the tasks above become point-and-click instead of manual.
+
 ---
 
 ## Tier 5 — Federation operations (multi-machine deployments)
