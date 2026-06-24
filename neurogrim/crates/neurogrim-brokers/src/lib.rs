@@ -34,6 +34,7 @@
 //! - [`registry`] — BB #14: Broker Registry (loads brokers from cluster manifest)
 
 pub mod broker;
+pub mod cold_store;
 pub mod overlay;
 pub mod pipeline;
 pub mod catalog;
@@ -47,6 +48,7 @@ pub mod work_broker;
 // Re-exports for downstream consumers
 pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
 pub use catalog::{evaluate_precondition, load_catalog, validate_catalog, CatalogError};
+pub use cold_store::{ColdStore, ColdStoreError, JsonlColdStore};
 pub use governance::{GovernanceComposer, GovernanceRefusal, SharedGovernance};
 pub use materializer::{
     awareness::AwarenessMaterializer, hot_store::HotStoreMaterializer, MaterializerComposer,

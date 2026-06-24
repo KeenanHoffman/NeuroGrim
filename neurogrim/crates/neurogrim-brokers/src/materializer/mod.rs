@@ -36,21 +36,52 @@ pub enum MaterializerError {
 
     #[error("composition budget exceeded; output truncated to governance-only")]
     BudgetExceeded { actual: usize, budget: usize },
+
+    #[error("governance segment missing — strict mode required it (V0-RETROSPECTIVE §C4 closure)")]
+    GovernanceSegmentMissing,
 }
 
 pub struct MaterializerComposer {
     output_path: PathBuf,
     segments_dir: PathBuf,
     context_budget_chars: usize,
+    /// V0-RETROSPECTIVE §C4 closure (gap #12): when true, compose fails if
+    /// the governance-pipelines segment file is missing. Production deployments
+    /// MUST enable this; first-boot / dev sets false. The spec amendment in
+    /// BB #22a documents the field; this is the field's runtime home.
+    enforce_governance_segment_present: bool,
 }
 
 impl MaterializerComposer {
+    /// Construct with strict mode disabled (V0 default — onboarding-friendly).
     pub fn new(output_path: PathBuf, segments_dir: PathBuf, context_budget_chars: usize) -> Self {
         Self {
             output_path,
             segments_dir,
             context_budget_chars,
+            enforce_governance_segment_present: false,
         }
+    }
+
+    /// Production-mode constructor: strict-mode enabled per
+    /// V0-RETROSPECTIVE §C4. Missing governance-pipelines segment fails
+    /// compose with `MaterializerError::GovernanceSegmentMissing`.
+    pub fn new_strict(
+        output_path: PathBuf,
+        segments_dir: PathBuf,
+        context_budget_chars: usize,
+    ) -> Self {
+        Self {
+            output_path,
+            segments_dir,
+            context_budget_chars,
+            enforce_governance_segment_present: true,
+        }
+    }
+
+    /// Toggle strict mode at runtime (for cluster-manifest-driven enforcement).
+    pub fn set_strict(&mut self, strict: bool) {
+        self.enforce_governance_segment_present = strict;
     }
 
     /// Compose all segments into `current-projection.md` per the governance-
@@ -68,8 +99,12 @@ impl MaterializerComposer {
         body.push_str("# Broker framework governance (always-reachable)\n\n");
         match self.read_segment("governance-pipelines") {
             Ok(content) => body.push_str(&content),
+            Err(_) if self.enforce_governance_segment_present => {
+                // V0-RETROSPECTIVE §C4: strict mode fails loudly
+                return Err(MaterializerError::GovernanceSegmentMissing);
+            }
             Err(_) => body.push_str(
-                "_No governance pipelines segment present (broker harness may be in early setup)._\n",
+                "_No governance pipelines segment present (broker harness may be in early setup; production should enable strict mode)._\n",
             ),
         }
         body.push_str("\n---\n\n");
@@ -280,6 +315,35 @@ mod tests {
         let result = std::fs::read_to_string(&output).unwrap();
         // Falls back with a marker rather than failing
         assert!(result.contains("No governance pipelines segment"));
+        assert!(result.contains("ALPHA"));
+    }
+
+    #[test]
+    fn composer_strict_mode_rejects_missing_governance_segment() {
+        let tmp = TempDir::new().unwrap();
+        let (output, segments) = setup_segments(&tmp, &[("overlay-a", "ALPHA\n")]);
+        let composer =
+            MaterializerComposer::new_strict(output.clone(), segments, 100_000);
+        let err = composer.compose(&["overlay-a".to_string()]).unwrap_err();
+        assert!(matches!(err, MaterializerError::GovernanceSegmentMissing));
+        // Output file should NOT be written when strict mode rejects
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn composer_strict_mode_succeeds_when_governance_present() {
+        let tmp = TempDir::new().unwrap();
+        let (output, segments) = setup_segments(
+            &tmp,
+            &[
+                ("governance-pipelines", "GOV\n"),
+                ("overlay-a", "ALPHA\n"),
+            ],
+        );
+        let composer = MaterializerComposer::new_strict(output.clone(), segments, 100_000);
+        composer.compose(&["overlay-a".to_string()]).unwrap();
+        let result = std::fs::read_to_string(&output).unwrap();
+        assert!(result.contains("GOV"));
         assert!(result.contains("ALPHA"));
     }
 }

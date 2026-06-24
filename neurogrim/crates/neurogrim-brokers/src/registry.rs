@@ -161,6 +161,7 @@ pub struct BrokerRegistry {
     cluster_manifest_dir: PathBuf,
     per_broker_manifests: HashMap<String, BrokerManifest>,
     brokers: HashMap<String, Arc<dyn Broker>>,
+    broker_catalogs: HashMap<String, Vec<crate::Pipeline>>,
 }
 
 impl BrokerRegistry {
@@ -213,6 +214,7 @@ impl BrokerRegistry {
             cluster_manifest_dir,
             per_broker_manifests: per_broker,
             brokers: HashMap::new(),
+            broker_catalogs: HashMap::new(),
         })
     }
 
@@ -269,6 +271,44 @@ impl BrokerRegistry {
 
     pub fn iter_brokers(&self) -> impl Iterator<Item = (&str, Arc<dyn Broker>)> {
         self.brokers.iter().map(|(k, v)| (k.as_str(), v.clone()))
+    }
+
+    /// Aggregate every registered broker's catalog into a single Vec.
+    /// V0-RETROSPECTIVE.md §C5 closure (gap #13). The PipelineRunner accepts
+    /// a catalog parameter per-dispatch; this method produces the
+    /// cluster-wide catalog the runner consumes.
+    ///
+    /// Brokers expose their catalog via a side-channel `BrokerWithCatalog`
+    /// trait OR via downcasting; since the type-erased `Broker` trait can't
+    /// return its catalog generically, brokers that need their catalog
+    /// surfaced should expose it via concrete-type access AND register the
+    /// catalog separately. For MVP simplicity, this method returns the
+    /// catalogs registered via `register_with_catalog()`.
+    pub fn full_catalog(&self) -> Vec<crate::Pipeline> {
+        let mut out = Vec::new();
+        for catalog in self.broker_catalogs.values() {
+            out.extend(catalog.iter().cloned());
+        }
+        out
+    }
+
+    /// Register a concrete broker with its catalog. Preferred over `register()`
+    /// for brokers whose catalog should be available via `full_catalog()`.
+    pub fn register_with_catalog(
+        &mut self,
+        broker: Arc<dyn Broker>,
+        catalog: Vec<crate::Pipeline>,
+    ) -> Result<(), RegistryError> {
+        let id = broker.id().to_string();
+        self.register(broker)?;
+        self.broker_catalogs.insert(id, catalog);
+        Ok(())
+    }
+
+    /// Catalog for a specific broker (None if not registered or registered
+    /// via `register()` without catalog).
+    pub fn catalog_for(&self, broker_id: &str) -> Option<&Vec<crate::Pipeline>> {
+        self.broker_catalogs.get(broker_id)
     }
 }
 
@@ -399,5 +439,36 @@ catalog_path = "work-broker-catalog.yaml"
         reg.register(ok).unwrap();
         reg.validate().unwrap();
         assert!(reg.broker("work-broker").is_some());
+    }
+
+    #[test]
+    fn registry_full_catalog_aggregates_per_broker_catalogs() {
+        use crate::pipeline::{AuditClass, EffectClass, Tunability, Visibility};
+        let (_tmp, cluster_path) = write_cluster_fixture();
+        let mut reg = BrokerRegistry::load_manifests(&cluster_path).unwrap();
+        let broker = Arc::new(MiniBroker {
+            id: "work-broker".to_string(),
+            roles: RoleSet::single(Role::InnateAbility),
+        });
+        let catalog = vec![Pipeline {
+            id: "work-broker/p1".to_string(),
+            visibility: Visibility::Surfaced,
+            tunability: Tunability::OperatorOnly,
+            audit_class: AuditClass::Capability,
+            effect_class: EffectClass::ReadOnly,
+            params: serde_json::json!({}),
+            preconditions: vec![],
+            steps: vec![],
+            description: String::new(),
+            when_to_use: String::new(),
+        }];
+        reg.register_with_catalog(broker, catalog.clone()).unwrap();
+        let full = reg.full_catalog();
+        assert_eq!(full.len(), 1);
+        assert_eq!(full[0].id, "work-broker/p1");
+        // Pipeline doesn't impl PartialEq (Value field doesn't); check by id
+        let retrieved = reg.catalog_for("work-broker").unwrap();
+        assert_eq!(retrieved.len(), 1);
+        assert_eq!(retrieved[0].id, "work-broker/p1");
     }
 }

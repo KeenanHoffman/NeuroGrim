@@ -106,6 +106,14 @@ pub struct DispatchOutcome {
     pub duration_ms: u64,
 }
 
+/// Callback type for on_dispatch_complete hook (V0-RETROSPECTIVE §C6 / §D3
+/// closure). Receives the broker_id + the dispatch outcome; typically used
+/// by the operator's main binary to re-trigger materialization. Synchronous
+/// (called inline after trace recording) so the hook can synchronously
+/// re-materialize before returning to the caller (the agent).
+pub type DispatchCallback =
+    Arc<dyn Fn(&str, &DispatchOutcome) + Send + Sync>;
+
 /// Pipeline Runner. Holds shared infrastructure (trace sink, governance
 /// composer, prior-snapshot cache for delta computation); brokers + catalogs
 /// are passed per dispatch.
@@ -117,6 +125,10 @@ pub struct PipelineRunner {
     prior_snapshots: tokio::sync::Mutex<
         std::collections::HashMap<String, (String, serde_json::Value)>,
     >,
+    /// Callbacks invoked after each successful dispatch (V0-RETROSPECTIVE
+    /// §C6 / §D3). Decouples Runner from Materializer: operator's main
+    /// binary registers a callback that re-runs the Materializer Composer.
+    on_dispatch_complete: std::sync::RwLock<Vec<DispatchCallback>>,
 }
 
 impl PipelineRunner {
@@ -125,12 +137,23 @@ impl PipelineRunner {
             trace_sink,
             governance,
             prior_snapshots: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+            on_dispatch_complete: std::sync::RwLock::new(Vec::new()),
         }
     }
 
     /// Access the governance composer (for operator-side admin commands).
     pub fn governance(&self) -> Arc<GovernanceComposer> {
         self.governance.clone()
+    }
+
+    /// Register a callback to fire after each successful dispatch.
+    /// Operator's main binary uses this to wire Materializer Composer
+    /// auto-trigger. Multiple callbacks supported.
+    pub fn on_dispatch_complete(&self, callback: DispatchCallback) {
+        self.on_dispatch_complete
+            .write()
+            .expect("on_dispatch_complete write lock poisoned")
+            .push(callback);
     }
 
     /// Dispatch a pipeline against a broker.
@@ -214,11 +237,25 @@ impl PipelineRunner {
         };
         self.trace_sink.append(&record)?;
 
-        Ok(DispatchOutcome {
+        let outcome = DispatchOutcome {
             trace_id,
             output,
             duration_ms,
-        })
+        };
+
+        // V0-RETROSPECTIVE §C6 / §D3 closure: fire on_dispatch_complete
+        // callbacks (typically Materializer auto-trigger from operator's
+        // main binary). Synchronous; callbacks should be fast (≪50ms).
+        let callbacks = self
+            .on_dispatch_complete
+            .read()
+            .expect("on_dispatch_complete read lock poisoned");
+        for cb in callbacks.iter() {
+            cb(broker.id(), &outcome);
+        }
+        drop(callbacks);
+
+        Ok(outcome)
     }
 
     /// Execute a sequence of steps; return the LAST step's output (MVP).
@@ -611,6 +648,37 @@ mod tests {
         }
         let (used, _) = runner.governance().trust_budget_state();
         assert_eq!(used, 0); // Internal pipelines don't consume budget
+    }
+
+    #[tokio::test]
+    async fn on_dispatch_complete_callback_fires_after_success() {
+        let (_, runner) = make_runner().await;
+        let pipeline = make_pipeline(
+            "t/echo",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        let broker = Arc::new(TestBroker::new("t", vec![pipeline.clone()], serde_json::json!({})));
+
+        let fired = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let fired_clone = fired.clone();
+        runner.on_dispatch_complete(Arc::new(move |broker_id, outcome| {
+            fired_clone
+                .lock()
+                .unwrap()
+                .push(format!("{}:{}", broker_id, outcome.trace_id));
+        }));
+
+        runner
+            .dispatch(broker, &[pipeline], "t/echo".to_string(), ParamMap::new())
+            .await
+            .unwrap();
+
+        let fired_records = fired.lock().unwrap();
+        assert_eq!(fired_records.len(), 1);
+        assert!(fired_records[0].starts_with("t:"));
     }
 
     #[tokio::test]
