@@ -108,6 +108,39 @@ Skills corresponding to Rust Brain sensor domains:
 | Process for retiring outdated skills | `skill-deprecation/SKILL.md` |
 | Bypass MCP: invoke the Brain via Bash subcommands | `cli-mode/SKILL.md` |
 
+## Broker Framework (2026-06-23+)
+
+NeuroGrim hosts a broker-pattern framework — a structured-store + deterministic-dispatcher
+substrate that consuming agent harnesses (e.g., the cereGrim dual-lobe project) build
+on. The framework's named specification lives in:
+
+- [`docs/BROKER-CONTRACT.md`](docs/BROKER-CONTRACT.md) — the named-primitive contract:
+  6-piece LLM-level pattern, 3-piece terminal-level pattern, role-set composition
+  (Sense / InnateAbility / Embodiment), canonical brokers, Workspace Manager,
+  Topology Broker, Sensory-Queue enforcer.
+- [`docs/BROKER-INTERNALS.md`](docs/BROKER-INTERNALS.md) — framework framing + 23
+  building blocks across three layers + Pipeline primitive + Workflow Engine (cold-store
+  atomicity) + four-tier tunability with reachability invariant.
+- [`docs/diagrams/broker-pattern.drawio.svg`](docs/diagrams/broker-pattern.drawio.svg) —
+  the visual reference (v3).
+
+The framework is the substrate consuming projects implement against. NeuroGrim publishes
+the *what a broker is and how to build one* substrate; consuming projects (cereGrim,
+others) hold their own *why we adopted this primitive* articulation in their own docs
+(under their own access controls).
+
+### IP-boundary callout
+
+The broker pattern as substrate infrastructure (trait, Pipeline primitive, role-set
+scaffolding, canonical brokers) is **NeuroGrim public**. Specific consuming-project
+articulations of the cost/reliability thesis behind adoption are **proprietary to those
+consuming projects** and do not appear here. See
+[`docs/PUBLIC-VS-PROPRIETARY.md`](docs/PUBLIC-VS-PROPRIETARY.md) for the enumerated
+claim list + boundary policy. A grep over this repo for thesis-grade phrases (`"cost
+thesis"`, `"load-bearing lever"`, `"punches up"`, `"the whole point"`, `"every
+deterministic decision absorbed"`) should return zero matches outside that policy doc;
+finding matches elsewhere means leakage to be rephrased.
+
 ## Key Files
 
 | File | Purpose |
