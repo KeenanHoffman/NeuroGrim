@@ -144,6 +144,7 @@ fn refusal(reason: &str, details: serde_json::Value) -> String {
     .unwrap_or_default()
 }
 
+#[rmcp::tool_handler]
 impl ServerHandler for BrokerMcpServer {
     fn get_info(&self) -> rmcp::model::ServerInfo {
         rmcp::model::ServerInfo {

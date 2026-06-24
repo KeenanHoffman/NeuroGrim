@@ -60,7 +60,12 @@ pub struct TracingOpts {
 pub fn setup_tracing(opts: TracingOpts) {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info"));
-    let fmt_layer = tracing_subscriber::fmt::layer();
+    // CLI logs go to stderr (matches the module-doc-comment contract
+    // and the clap convention). stdout is reserved for command output
+    // and — critically — for MCP-on-stdio servers (`broker-serve`,
+    // `serve`) whose JSON-RPC framing is corrupted by stray stdout
+    // bytes from a tracing fmt layer.
+    let fmt_layer = tracing_subscriber::fmt::layer().with_writer(std::io::stderr);
 
     // Conditional diag layer: `Option<L>` implements `Layer<S>`
     // when `L: Layer<S>` (tracing-subscriber std impl), so this
