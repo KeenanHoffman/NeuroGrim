@@ -194,6 +194,26 @@ default_policy = "allow_backward_compatible_only"
 
 ---
 
+## Cognition-channel speaker pinning (R-S-8 closure, Phase 9)
+
+For consuming projects using the peer-dialogue cognition channel (per
+[`../../cereGrim/docs/COGNITION-LOOP.md`](../../cereGrim/docs/COGNITION-LOOP.md) Q2),
+declare canonical speaker identities. Framework rejects cognition-channel messages
+from speakers not listed here.
+
+```toml
+[cluster.cognition_cycle.speakers]
+primary_lobe_id = "ceregrim-primary"   # required when cognition channel is in use
+meta_lobe_id = "ceregrim-meta"         # required when cognition channel is in use
+per_speaker_messages_per_iteration_max = 1   # default; bound per-cycle injection
+```
+
+Rejected messages emit to BB #28 Diagnostics with `audit_class: governance` and
+`failure_reason: unknown_speaker_id` (or `cognition_speaker_rate_exceeded` for
+quota violations).
+
+---
+
 ## CognitionCycle parameters (cereGrim-specific extension)
 
 Per [`../../cereGrim/docs/COGNITION-LOOP.md`](../../cereGrim/docs/COGNITION-LOOP.md)
@@ -256,6 +276,51 @@ required). When in doubt: cluster manifest declares cluster-wide defaults; broke
 manifest declares per-broker overrides where the per-broker column is non-empty above;
 pipeline-declaration in the YAML catalog declares per-pipeline values where the
 per-pipeline column is non-empty.
+
+---
+
+## Field-level tunability annotations (R-S-18 closure, Phase 9)
+
+Every manifest field carries a **`tunability` classification** validated at load time.
+Spec declares `Untunable` parameters; framework enforces by refusing to load a manifest
+that attempts to set them. Closes the gap where "Untunable" was convention-not-code —
+operator could edit the manifest to change governance-bearing parameters that the spec
+declared immutable, and the framework wouldn't catch it.
+
+Classifications (per [`BROKER-INTERNALS.md`](BROKER-INTERNALS.md) §4 tunability tiers):
+
+| Annotation | Manifest semantics | Loader enforcement |
+|---|---|---|
+| **Untunable** | Field MUST NOT appear in manifest; framework-internal value only (code-change required) | Loader rejects manifest with `failure_reason: untunable_field_set: <path>` if field is present |
+| **OperatorOnly** | Operator may set in manifest; default applies if omitted; runtime cannot mutate | Loader accepts; runtime tuning attempts on this field are rejected |
+| **OperatorConfirmed** | LLM can propose changes via Proposal Ledger; operator must approve | Loader accepts manifest value as the operator-confirmed state |
+| **Autonomous** | Tuner may adjust within declared bounds; bounds themselves are OperatorOnly | Loader accepts; runtime tuning within bounds is permitted |
+
+**Tunability table for documented fields** (canonical; loader validates against this
+table at startup):
+
+| Field | Tunability | Notes |
+|---|---|---|
+| `cluster.id` | OperatorOnly | Cluster identity; rare changes |
+| `cluster.bootstrap.mode` | OperatorOnly | Federation topology choice |
+| `cluster.trust_budget.global_unit` | Untunable-once-set | First-set wins; subsequent attempts refused (unit mismatch breaks composition) |
+| `cluster.trust_budget.unit_conversion` | OperatorOnly (Untunable to Autonomous tuners) | Per §4 unit-conversion rule |
+| `cluster.frame_conflict_precedence.order` | OperatorOnly + Stakes-floor | Operator may reorder BUT Stakes-with-governance-implications can never be suppressed (R-S-17 rule, Phase 9) |
+| `cluster.lifecycle.shutdown_timeout_per_pipeline_ms` | OperatorOnly | Default 5000ms |
+| `cluster.cognition_cycle.speakers.primary_lobe_id` | OperatorOnly | R-S-8 speaker pinning |
+| `cluster.cognition_cycle.speakers.meta_lobe_id` | OperatorOnly | R-S-8 speaker pinning |
+| `cluster.cognition_cycle.max_iterations_default` | OperatorOnly (bounded 1-7) | Per COGNITION-LOOP Q3 |
+| `cluster.bootstrap.gossip_rounds` | OperatorOnly (bounded ≤10) | Bootstrap-DoS guard per R-S-14 |
+| Awareness Service rate-limit enforcer config | **Untunable** | Per BROKER-CONTRACT §"Sensory Queue contract enforcer" — code change required |
+| Topology Broker self-bypass logic | **Untunable** | Per BROKER-INTERNALS.md §"Topology Broker self-bypass invariant" — code change required |
+| Materializer Composer governance-first override | **Untunable** | Per BB #22a; reachability invariant outranks operator preference |
+| Pipeline Runner internals | **Untunable** | Tier 3 bootstrap; code change required |
+
+**Adding new fields to the manifest** requires:
+1. Declaring the tunability classification in this table.
+2. Updating the loader's validation schema to enforce the classification.
+3. If `Untunable`, the field must NOT appear in operator-facing manifest examples —
+   it lives in the framework binary only.
 
 ---
 

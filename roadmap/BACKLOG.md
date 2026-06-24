@@ -2272,6 +2272,128 @@ open follow-ons. Related BB: BB #31 Cluster Federation Topology in
 
 ---
 
+### B-59: BROKER-OPERATOR-UX — coherence-drift dashboards + tuning audit trail + multi-operator coordination — CANDIDATE (2026-06-24)
+
+**Problem.** Phase 9 risk triage closed R-X-6 (operator burden compounds over months)
+with spec-level requirements landed in BROKER-INTERNALS.md §6.5; the implementation
+work is B-59. The framework's 38 BBs × manifest fields × tuning cells × multiple
+operators compound into burden over 6-12 months: drift accumulation, stale tuning
+decisions, capability bloat, coherence regression. Without operator-UX tooling, most
+deployments will become unmaintainable. The §6.5 requirements section enumerates 6
+operator-UX surfaces the framework needs (coherence-drift dashboard, tuning-decision
+audit trail with rationale, drift-warning alerting, quarterly re-evaluation forcing,
+capability hygiene digest, multi-operator coordination lock).
+
+**Plan when:**
+1. S2+ deployments exist (need real operator workflows to design against).
+2. BB #28 Diagnostics + BB #32 Operator Telemetry are landed (the data layer those
+   surfaces project from).
+3. Operator + UX-designer pair available; this is presentation-layer work, not
+   substrate-spec.
+
+**Dependencies.** BB #28 (Diagnostics Collector). BB #32 (Operator Telemetry
+Summarizer). BB #36 (Agent-Behavior Observability). cluster manifest schema fields
+for thresholds + cadences (some already declared; some new).
+
+**Reuse-vs-build.** REUSE — BB #32 Telemetry Summarizer's Markdown surface is the
+projection target; auto-loaded into CLAUDE.md per the standard mechanism. BUILD —
+the data aggregation logic that computes config-entropy, coherence-delta,
+tuning-contradiction-detection; the rationale-required field enforcement at tuning
+dispatch; the per-broker tuning-lock primitive (new manifest field + governance
+pipeline).
+
+**What B-59 would deliver:**
+1. Coherence-drift dashboard (Markdown surface auto-loaded via Materializer
+   Composer); operator-tunable refresh cadence (default daily).
+2. Tuning-decision audit trail extension (BB #21 Proposal Ledger gains
+   `tuning-decision` entry type; rationale field required).
+3. Drift-warning alerting with operator-tunable thresholds (cluster manifest gains
+   `coherence_drift_warning_threshold` + `config_entropy_warning_threshold`).
+4. Quarterly re-evaluation forcing (cluster manifest gains
+   `mandatory_tuning_review_cadence`; framework emits review-required events at
+   cadence).
+5. Capability hygiene digest (weekly auto-generated summary).
+6. Multi-operator tuning lock (per-broker primitive; new governance pipeline
+   `acquire-tuning-lock` + `release-tuning-lock`).
+7. Integration tests for each surface; validation that operator can actually
+   read the dashboards and make informed decisions.
+
+**Adversarial note.** Operator-UX tooling tries to solve a social problem
+(operator drift) with technical means. The hard part is ensuring operators
+actually USE the surfaces, not just that the surfaces exist. The quarterly
+re-evaluation forcing is the most behavior-shaping piece; the dashboards are
+informational. If operators ignore the dashboards (because they're "too busy"),
+the framework still drifts. Design the forcing functions carefully.
+
+**Cross-references.** Spec requirements:
+[`../docs/BROKER-INTERNALS.md`](../docs/BROKER-INTERNALS.md) §6.5 Operator UX
+requirements. Risk source:
+[`../../cereGrim/docs/RISK-REGISTER.md`](../../cereGrim/docs/RISK-REGISTER.md)
+R-X-6 + R-X-11 + R-T-2. Related BBs: BB #28, BB #32, BB #36.
+
+---
+
+### B-58: BROKER-BOOTSTRAP-SUPPLY-CHAIN-SIGNING — Tier 3 cryptographic hardening — CANDIDATE (2026-06-24)
+
+**Problem.** Phase 9 risk triage closed R-S-15 (Tier 3 bootstrap as supply-chain attack
+surface) with two mitigations: (a) **immediate spec-level Tier 3 minimization rule**
+landed in BROKER-INTERNALS.md §1.4 (Phase 9), requiring written justification for every
+Tier 3 addition + operator review of Tier 3 surface size in PRs; (b) **deferred
+cryptographic hardening** filed here as B-58. The minimization rule shrinks the attack
+surface; the signing rule closes it. Tier 3 plain functions run before any governance
+pipeline can stop them (kill-switch not armed, trust budget not enforced, trace sink
+not initialized) — they execute with effective root privilege across every cereGrim
+deployment. A compromised NeuroGrim binary or build pipeline plants a backdoor that
+runs at startup, before any framework safeguard.
+
+**Plan when:**
+1. S0-T framework foundation lands (substrate exists to harden).
+2. Ecosystem signing infrastructure exists (cargo signed-releases, code signing CI
+   integration, key management process). Without this prerequisite, hardening is just
+   ceremony.
+3. Operator commits to a signed-release process for NeuroGrim binaries (one-time
+   organizational decision, not technical).
+
+**Dependencies.** B-58 depends on:
+- Codesigning infrastructure (cargo cargo-sign or equivalent; key escrow; signing
+  ceremony documentation).
+- Cargo registry support for signature verification (or an alternative distribution
+  channel with signature checking).
+- Operator's organizational decision to invest in supply-chain hardening (cost of
+  signing infrastructure vs cost of supply-chain compromise risk).
+
+**What B-58 would deliver:**
+1. **Tier 3 function signature verification.** Each Tier 3 Rust function (Pipeline
+   Runner, Catalog Loader, Hot Store initializer, Cold Store opener) is compiled with
+   a signature/hash; framework verifies signatures at load time. Unmatched signatures
+   = framework startup failure (loud, not silent).
+2. **Deterministic bootstrap verification.** Framework runs a deterministic-bootstrap
+   verification step that validates bootstrap output (loaded brokers, Overlay state,
+   initial pipeline catalog) against a pre-computed expected snapshot. Mismatch =
+   startup fails. Operator pre-computes snapshot once; any bootstrap deviation is
+   caught.
+3. **Signed-release process for NeuroGrim binaries.** Documented signing ceremony:
+   release builds are signed by the NeuroGrim release authority; cereGrim deployments
+   verify signatures before loading. Key rotation policy + revocation policy
+   documented.
+4. **Minimization audit.** Periodic operator-driven review of the Tier 3 surface;
+   any Tier 3 function that could now be Tier 2 (because framework support has
+   evolved) is migrated. Audit cadence: every major version release.
+
+**Adversarial note.** Two failure modes to design against: (1) signature verification
+itself becomes a Tier 3 function — the verifier must verify itself or it's the same
+attack surface one level deeper; (2) operator's signature key gets compromised — key
+rotation and revocation policies must exist before signing is meaningful; without
+them, signing is theater.
+
+**Cross-references.** Phase 8.1 risk register: [`../../cereGrim/docs/RISK-REGISTER.md`](../../cereGrim/docs/RISK-REGISTER.md)
+R-S-15. Spec rule landed: [`../docs/BROKER-INTERNALS.md`](../docs/BROKER-INTERNALS.md)
+§1.4 Tier 3 minimization discipline. Audit framing inherited from
+PUBLIC-VS-PROPRIETARY.md (the supply-chain surface IS the public-private boundary —
+NeuroGrim is the supply chain for every cereGrim deployment).
+
+---
+
 ### B-57: BROKER-FRAMEWORK-SPEC-HYGIENE — Phase 7 polish sweep follow-ups — CANDIDATE (2026-06-24)
 
 **Problem.** Phase 7 audit identified additional spec-hygiene follow-ups beyond the

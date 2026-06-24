@@ -1,5 +1,13 @@
 # NeuroGrim — Broker Contract
 
+> **Status: DRAFT until 6 months post-launch (R-X-14 closure, Phase 9).** Spec is
+> comprehensive at the named-primitive level (38 BBs, Phase 8) but no reference
+> implementation has run yet. First implementation (S0-T) will discover spec gaps;
+> patches accrue to [`BROKER-SPEC-GAPS.md`](BROKER-SPEC-GAPS.md) and propagate back
+> into this doc + companions. Stability is measured against working code, not against
+> design documents. Treat consumers (cereGrim, others) as adopting a draft contract;
+> expect ≥2 patch cycles before the spec is battle-stable.
+
 This document is the **named specification** for what a "broker" is in NeuroGrim: the shape
 of each capsule, the obligations the pieces hold toward one another, and the placement
 boundary the pattern carves between LLM-class hardware and host-class hardware. It is the

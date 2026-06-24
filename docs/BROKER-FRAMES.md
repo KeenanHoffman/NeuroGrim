@@ -266,6 +266,29 @@ Q2 + Q4):
 All three negotiation patterns coexist. The Frame stack flows bidirectionally through
 the inter-agent boundary, not just inward.
 
+**Broker-prescription authorization (R-S-1 closure, Phase 9).** Default-deny posture:
+brokers cannot prescribe Frames unless the cluster manifest explicitly authorizes
+them. Cluster manifest declares per-broker:
+
+```toml
+[cluster.brokers.topology-broker]
+allowed_prescribed_frame_types = ["hat", "audience", "confidence"]
+
+[cluster.brokers.work-broker]
+allowed_prescribed_frame_types = []   # explicitly empty = cannot prescribe
+```
+
+Brokers attempting to prescribe Frame types not in their authorized list are rejected
+with `failure_reason: prescribed_frame_not_authorized` + the rejected prescription
+is logged to BB #28 Diagnostics as `audit_class: governance` for operator review.
+
+This closes the supply-chain attack vector where a compromised broker (or an
+operator typo in cluster manifest) silently shifts governance composition via
+unauthorized Frame prescription. Cluster manifest is the authority on which
+brokers can teach Frames; the framework enforces it. Tunability:
+**OperatorOnly** per the cluster-manifest field-level annotations
+(see [`CLUSTER-MANIFEST-SCHEMA.md`](CLUSTER-MANIFEST-SCHEMA.md)).
+
 ---
 
 ## §6 — Tunability per Frame type
@@ -309,6 +332,21 @@ Frame A's operational implications apply and Frame B is annotated `suppressed-by
 in the active Frame stack. The agent sees both Frames AND the suppression annotation,
 preserving mutual visibility — operator and LLM can both reason about *why* the
 unexpected behavior held.
+
+**Stakes-with-governance hard floor (R-S-17 closure, Phase 9).** The precedence matrix
+is operator-overridable for non-governance-bearing Frame types — operator may reorder
+Hat vs Mode vs Tempo vs Audience vs Scope as their deployment demands. **But Stakes
+values that carry governance implications (`production`, `irreversible`, `rehearsal`)
+can NEVER be suppressed by any other Frame type, regardless of operator-declared
+precedence matrix.** Operator-declared matrices that would suppress
+governance-bearing Stakes are rejected at manifest load with
+`failure_reason: precedence_matrix_violates_stakes_floor`. Closes the
+governance-bypass attack where re-ordering precedence would let `hat: malicious-actor`
+suppress `stakes: production` enforcement. Operator may still adjust the relative
+ordering of `exploratory` Stakes (which carries no governance backstops) against other
+Frames; only governance-bearing Stakes values are floor-protected. The schema-hard
+list of governance-bearing Stakes values is in this doc §2; extending the list is a
+spec amendment, not an operator config change.
 
 **Conflict-detection mechanism:** each Frame type's value enum carries an
 optional `incompatible_with` field per value (e.g., `rubber-duck` declares
