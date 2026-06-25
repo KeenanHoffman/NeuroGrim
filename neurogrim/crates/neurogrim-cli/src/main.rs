@@ -221,6 +221,38 @@ enum Commands {
         yes: bool,
     },
 
+    /// Emit a Pipeline literal + leaf-op match-arm stub for a broker verb.
+    /// Phase C9 prerequisite per IDE-full-lift plan §C9 — without it, the
+    /// IDE's IdeAction consolidation (40+ variants → 40+ pipelines) becomes
+    /// hand-authoring purgatory.
+    #[command(name = "broker-scaffold")]
+    BrokerScaffold {
+        /// Broker id (e.g., `browser-kill-switch`)
+        #[arg(long)]
+        broker_id: String,
+        /// Pipeline name within the broker (e.g., `arm-kill-switch`)
+        #[arg(long)]
+        pipeline_name: String,
+        /// Visibility: surfaced | internal | audit-only
+        #[arg(long, default_value = "surfaced")]
+        visibility: String,
+        /// Audit class: capability | governance | meta-observation
+        #[arg(long, default_value = "capability")]
+        audit_class: String,
+        /// Leaf-op name (snake_case)
+        #[arg(long)]
+        leaf_op: String,
+        /// Description shown to agent
+        #[arg(long, default_value = "")]
+        description: String,
+        /// When-to-use hint shown to agent
+        #[arg(long, default_value = "")]
+        when_to_use: String,
+        /// Params schema as JSON (default: empty object)
+        #[arg(long, default_value = "{}")]
+        params_schema: String,
+    },
+
     /// Start the Brain as an MCP server
     #[command(visible_alias = "summon")]
     Serve {
@@ -589,6 +621,25 @@ async fn main() -> Result<()> {
         Commands::BrokerInit { project_root, yes } => {
             commands::broker_init::run(&project_root, yes).await
         }
+        Commands::BrokerScaffold {
+            broker_id,
+            pipeline_name,
+            visibility,
+            audit_class,
+            leaf_op,
+            description,
+            when_to_use,
+            params_schema,
+        } => commands::broker_scaffold::run(commands::broker_scaffold::ScaffoldArgs {
+            broker_id,
+            pipeline_name,
+            visibility,
+            audit_class,
+            leaf_op,
+            description,
+            when_to_use,
+            params_schema_json: params_schema,
+        }),
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
         Commands::Backlog { cmd } => match cmd {
