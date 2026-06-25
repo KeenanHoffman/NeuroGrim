@@ -34,6 +34,7 @@
 //! - [`registry`] — BB #14: Broker Registry (loads brokers from cluster manifest)
 
 pub mod broker;
+pub mod capability;
 pub mod cold_store;
 pub mod host;
 pub mod overlay;
@@ -41,6 +42,7 @@ pub mod pipeline;
 pub mod catalog;
 pub mod rate_limit;
 pub mod runner;
+pub mod system_facts;
 pub mod trace;
 pub mod governance;
 pub mod materializer;
@@ -52,8 +54,12 @@ pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
 pub use catalog::{evaluate_precondition, load_catalog, validate_catalog, CatalogError};
 pub use cold_store::{ColdStore, ColdStoreError, JsonlColdStore};
 pub use governance::{GovernanceComposer, GovernanceRefusal, PreDispatchSubgate, SharedGovernance};
+pub use capability::{AllowAll, CapabilityDecision, CapabilityRegistry, CapabilitySubgate};
 pub use host::{BrokerHost, BrokerHostConfig, HostError};
 pub use rate_limit::{RateLimitSubgate, ScopeKeyFn};
+pub use system_facts::{
+    HealthyDefault, PressureTier, SystemFacts, SystemFactsProvider, SystemPressureSubgate,
+};
 pub use materializer::{
     awareness::AwarenessMaterializer, hot_store::HotStoreMaterializer, MaterializerComposer,
     MaterializerError,
