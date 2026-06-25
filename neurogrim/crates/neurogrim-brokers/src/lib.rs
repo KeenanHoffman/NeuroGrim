@@ -49,7 +49,9 @@ pub mod trace;
 pub mod governance;
 pub mod materializer;
 pub mod registry;
+pub mod skill_filter;
 pub mod work_broker;
+pub mod workflow;
 
 // Re-exports for downstream consumers
 pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
@@ -60,6 +62,8 @@ pub use capability::{AllowAll, CapabilityDecision, CapabilityRegistry, Capabilit
 pub use frame::Frame;
 pub use host::{BrokerHost, BrokerHostConfig, HostError};
 pub use local_awareness_broker::{LocalAwarenessBroker, LocalAwarenessOverlay};
+pub use skill_filter::{CandidateSegment, NoOpRanker, RankerContext, SegmentRanker, SharedRanker};
+pub use workflow::{SuspendedDispatch, WakeCondition, WorkflowEngine};
 pub use rate_limit::{RateLimitSubgate, ScopeKeyFn};
 pub use system_facts::{
     HealthyDefault, PressureTier, SystemFacts, SystemFactsProvider, SystemPressureSubgate,

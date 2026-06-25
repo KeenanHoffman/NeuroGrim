@@ -73,13 +73,13 @@ subsystem onto the substrate). Substrate-side adapters needed at C1.
 
 ---
 
-## Phase D — Substrate completion (D1 SUBSTRATE COMPLETE; D2+D3 DEFERRED)
+## Phase D — Substrate completion (COMPLETE — all 3 primitives shipped)
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | D1 | BB #27 cross-broker `sub_pipeline:` composition | ✅ Shipped | `validate_catalog_with_policy(CrossBrokerPolicy::Allow)` + `PipelineRunner::set_registry()`; runner routes cross-broker sub_pipeline through registry lookup |
-| D2 | BB #11 Workflow Engine MVP (multi-tick suspended pipelines) | ⏳ Pending | ~3 days; needs Step::Suspending + cold-store-backed resume |
-| D3 | BB #20 Skill Filter / topic-filtered materialization | ⏳ Pending | ~4-5 days; per plan "may slip to S2-T; A10 holds the line" |
+| D2 | BB #11 Workflow Engine MVP (suspended-dispatch primitive) | ✅ Shipped | `src/workflow.rs`: `WorkflowEngine` + `SuspendedDispatch` + `WakeCondition::{Tick, AfterDuration}`; brokers explicitly suspend + resume on tick. Runner-level integration (declarative `Step::Suspend`) deferred to S1-T |
+| D3 | BB #20 Skill Filter primitive | ✅ Shipped | `src/skill_filter.rs`: `SegmentRanker` trait + `NoOpRanker` default + `RankerContext` (hat/posture/task); operators register a ranker to enable top-K segment selection. Composer integration deferred to S2-T |
 
 **D1 design decisions made (U18 closure):**
 - Outer dispatch's governance covers whole sub-pipeline graph; callee
