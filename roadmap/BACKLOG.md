@@ -2383,7 +2383,17 @@ P8 section.
 
 ---
 
-### B-61: BROWSER-BROKER-SUBSTRATE — v10/v11/v12 browser-band primitives (capability_checker, dom_diff, kill-switch, replay ledger) — CANDIDATE (2026-06-24)
+### B-61: BROWSER-BROKER-SUBSTRATE — v10/v11/v12 browser-band primitives (capability_checker, dom_diff, kill-switch, replay ledger) — PARTIALLY ABSORBED (2026-06-25)
+
+**Update 2026-06-25:** the NeuroGrim IDE full-lift plan (see plan file
+`for-your-new-session-modular-pretzel.md`) absorbs ~4/5 of B-61's deliverables IDE-side
+(capability_checker → C5 capability+batch-approval brokers; kill-switch → C2
+browser-kill-switch-broker; replay ledger → unified TraceSink via C1 adapter;
+dom_diff → IDE-only `browser/overlay.rs` per C8 not lifted to substrate). The
+substrate-side complement is split into three new entries: B-62 (InProcessBrokerHost),
+B-63 (SubprocessSafeLeaf), B-64 (bypasses_kill_switch Pipeline flag). B-61 remains a
+CANDIDATE for cereGrim's own browser-broker deployment (a different consumer with
+different substrate needs than the IDE), but the IDE work is no longer waiting on B-61.
 
 **Problem.** Phase 9 + cereGrim BROKER-COMPOSITION.md reference a "v10/v11/v12
 browser-band substrate" — specifically capability_checker, dom_diff, kill-switch,
@@ -2433,6 +2443,117 @@ NeuroGrim `BROKER-INTERNALS.md` Effector references. Discovery audit:
 [`../../cereGrim/docs/DISCOVERY-RESULTS.md`](../../cereGrim/docs/DISCOVERY-RESULTS.md)
 P13 section. Future cereGrim deployment use case where this is needed lives in
 cereGrim's own roadmap (not yet declared).
+
+---
+
+### B-62: BROKER-IN-PROCESS-HOST — substrate hosts brokers without MCP-stdio transport — IDENTIFIED (2026-06-25)
+
+**Problem.** The V0 broker substrate ships a single hosting path: `neurogrim
+broker-serve` exposes brokers via MCP-over-stdio to Claude Code. The NeuroGrim IDE
+needs to host the same brokers IN-PROCESS (no stdio subprocess; substrate compiled
+into the IDE binary; Tauri IPC dispatches into the host directly). Extracting an
+`InProcessBrokerHost` trait + companion struct from `broker_serve.rs` lets BOTH the
+MCP-stdio binary AND the IDE consume the same dispatch + materialization + tick code
+paths without duplicating logic.
+
+**Plan when:** Phase A of the IDE full-lift plan (substrate prerequisite for any
+Phase B/C IDE work).
+
+**Dependencies.** None substrate-side; depends on `commands/broker_serve.rs` shape
+not having drifted further (snapshot 2026-06-24).
+
+**What B-62 delivers:**
+1. New module `neurogrim-brokers/src/host.rs` exporting `BrokerHost` (trait or
+   struct) that owns: BrokerRegistry, PipelineRunner, GovernanceComposer, TraceSink,
+   MaterializerContext.
+2. Lifecycle hooks: `boot(cluster_manifest_path)` (load + initial materialization),
+   `dispatch(broker_id, pipeline_id, params)` (the wire-protocol method), `tick()`
+   (manual re-materialization trigger), `shutdown()` (graceful flush).
+3. Refactored `commands/broker_serve.rs` becomes a thin MCP-stdio adapter that
+   constructs a `BrokerHost` + forwards `dispatch_pipeline` MCP calls into
+   `host.dispatch()`.
+4. New Phase B work-item (A6b in plan): IDE-side wiring of BrokerHost into Tauri's
+   `tauri::Builder` lifecycle (NOT delivered by B-62; only the substrate-side
+   trait + struct).
+
+**Reuse-vs-build.** REUSE — all V0 substrate primitives. BUILD — the host module
+itself (~150-250 LOC) + refactor of broker_serve.rs (~50 LOC delta). Estimated
+effort: ~1-1.5 days substrate side. IDE-side wiring (A6b) is ~1.5 days more.
+
+**Cross-references.** Plan §A6 (split into A6a substrate + A6b IDE). Surfaced
+in ultra-pass U3.
+
+---
+
+### B-63: BROKER-SUBPROCESS-SAFE-LEAF — substrate utility for OS-safe child-process spawning — IDENTIFIED (2026-06-25)
+
+**Problem.** The NeuroGrim IDE's `process_broker/` enforces Windows hidden-console
+flag (`CREATE_NO_WINDOW`) on every child-process spawn — without it, Windows pops a
+visible console window for every git/cargo/lsp probe the IDE makes (thousands per
+session; UX disaster). If the IDE lift makes other brokers spawn subprocesses (the
+plan keeps process_broker as a library, but Phase C+ brokers may need their own
+spawns), each broker reimplements the Windows safety. Lifting a `SubprocessSafeLeaf`
+helper into the substrate gives every broker a one-line spawn primitive that's
+correct across OS targets.
+
+**Plan when:** Phase C of the IDE full-lift plan (or any time a NeuroGrim broker
+needs to spawn subprocesses). Not a Phase A blocker — process_broker stays a library
+per operator decision.
+
+**Dependencies.** None substrate-side. Needs the OS-specific spawn flags codified;
+Windows uses `CREATE_NO_WINDOW`, POSIX is a no-op.
+
+**What B-63 delivers:**
+1. New helper in `neurogrim-brokers/src/lib.rs` (or own module): `spawn_safe(cmd:
+   &mut tokio::process::Command) -> Result<Child>` that applies OS-appropriate
+   flags before spawning.
+2. Documentation pattern for brokers that spawn subprocesses: always use
+   `spawn_safe`, never `Command::spawn()` directly. Optional clippy lint to enforce.
+3. Test fixture verifying the Windows hidden-console flag is applied (Windows-only
+   `#[cfg(target_os = "windows")]` test).
+
+**Reuse-vs-build.** REUSE — `tokio::process::Command` Windows extension methods.
+BUILD — ~30-50 LOC + a test. Estimated effort: ~0.5 day.
+
+**Cross-references.** Plan §C1 (lifted from `process_broker/`'s implementation).
+Surfaced as part of the IDE lift's substrate-growth ledger.
+
+---
+
+### B-64: BROKER-PIPELINE-BYPASSES-KILL-SWITCH-FLAG — escape hatch for kill-switch arming/disengage pipelines — IDENTIFIED (2026-06-25)
+
+**Problem.** When the kill-switch is armed, every Surfaced pipeline dispatch refuses
+with `KillSwitchArmed` — including the `disengage-kill-switch` pipeline that's the
+operator's only path out of the armed state. Without an explicit escape hatch, arming
+the kill-switch creates a permanent dead-end (operator can never disengage). The fix
+is a `bypasses_kill_switch: bool` field on `Pipeline` (Serde default false) that the
+substrate's `check-kill-switch` governance pipeline reads — when true, the dispatch
+proceeds even while armed.
+
+**Plan when:** Phase A1.5 of the IDE full-lift plan. Blocking dependency for the
+A1 governance fixes (C7 from V0-RETROSPECTIVE) — without B-64, the C7 fix creates
+the dead-end.
+
+**Dependencies.** A1 (C7+C8 governance fixes) shares the same substrate code paths;
+B-64 lands alongside or just before A1.
+
+**What B-64 delivers:**
+1. New field `bypasses_kill_switch: bool` on `neurogrim-brokers::Pipeline` with
+   `#[serde(default)]` for backward-compat with existing cluster manifests.
+2. `arm-kill-switch` + `disengage-kill-switch` framework-provided governance
+   pipelines set the field to `true`; substrate's `check-kill-switch` honors it.
+3. Catalog-loader validation: only governance-class pipelines may set
+   `bypasses_kill_switch = true` (operator-authored Surfaced pipelines cannot;
+   prevents agents from defining bypass routes).
+4. Spec amendment in `BROKER-INTERNALS.md` BB #19 documenting the escape hatch
+   pattern.
+
+**Reuse-vs-build.** REUSE — `Pipeline` Serde shape; existing GovernanceComposer
+hooks. BUILD — field + validation + spec entry. Estimated effort: ~1 day (was 0.5
+originally; ultra-pass U2 added 0.5 for spec amendment + backward-compat work).
+
+**Cross-references.** Plan §A1.5. Surfaced in ultra-pass U2. Closes the kill-switch
+bootstrap paradox that V0-RETRO §C7 fix would otherwise create.
 
 ---
 

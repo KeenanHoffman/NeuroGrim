@@ -22,7 +22,7 @@
 //!    a pipeline owned by a different broker (`<other_broker_id>/<...>`).
 //!    Error: `"cross-broker composition requires BB #27, not yet in MVP"`.
 
-use crate::pipeline::{ParamMap, Pipeline, Step};
+use crate::pipeline::{AuditClass, ParamMap, Pipeline, Step};
 use std::path::Path;
 use thiserror::Error;
 
@@ -48,6 +48,9 @@ pub enum CatalogError {
 
     #[error("duplicate pipeline id in catalog: {0}")]
     DuplicatePipelineId(String),
+
+    #[error("pipeline `{pipeline_id}` sets bypasses_kill_switch=true but audit_class != Governance — only framework-provided governance pipelines may bypass the kill-switch (B-64 policy)")]
+    KillSwitchBypassRequiresGovernance { pipeline_id: String },
 }
 
 /// Load a per-broker pipeline catalog from a YAML file.
@@ -91,6 +94,19 @@ pub fn validate_catalog(pipelines: &[Pipeline], broker_id: &str) -> Result<(), C
 
         // Cross-broker sub_pipeline rejection (ultra-pass U12)
         validate_steps_intra_broker(&pipeline.steps, &pipeline.id, broker_id)?;
+
+        // A1.5 / B-64 policy: bypasses_kill_switch is reserved for
+        // framework-provided governance pipelines (arm/disengage). Operator-
+        // authored pipelines that try to set it without audit_class=Governance
+        // are rejected at catalog load to prevent agents from declaring
+        // bypass routes.
+        if pipeline.bypasses_kill_switch
+            && !matches!(pipeline.audit_class, AuditClass::Governance)
+        {
+            return Err(CatalogError::KillSwitchBypassRequiresGovernance {
+                pipeline_id: pipeline.id.clone(),
+            });
+        }
     }
 
     Ok(())
@@ -234,6 +250,7 @@ mod tests {
             steps,
             description: String::new(),
             when_to_use: String::new(),
+            bypasses_kill_switch: false,
         }
     }
 
@@ -294,6 +311,28 @@ mod tests {
             fixture_pipeline("work-broker/child", vec![]),
         ];
         validate_catalog(&pipelines, "work-broker").unwrap();
+    }
+
+    #[test]
+    fn validate_catalog_rejects_bypasses_kill_switch_on_non_governance() {
+        // A1.5 / B-64 policy: only framework-provided governance pipelines
+        // may set bypasses_kill_switch. Operator-authored pipelines that try
+        // it are rejected at load to prevent agents declaring bypass routes.
+        let mut p = fixture_pipeline("work-broker/sneaky", vec![]);
+        p.bypasses_kill_switch = true; // audit_class is Capability (default in fixture)
+        let err = validate_catalog(&[p], "work-broker").unwrap_err();
+        assert!(matches!(
+            err,
+            CatalogError::KillSwitchBypassRequiresGovernance { .. }
+        ));
+    }
+
+    #[test]
+    fn validate_catalog_allows_bypasses_kill_switch_on_governance() {
+        let mut p = fixture_pipeline("work-broker/disengage", vec![]);
+        p.bypasses_kill_switch = true;
+        p.audit_class = AuditClass::Governance;
+        validate_catalog(&[p], "work-broker").unwrap();
     }
 
     #[test]

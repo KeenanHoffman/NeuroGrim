@@ -157,6 +157,22 @@ impl PipelineRunner {
     }
 
     /// Dispatch a pipeline against a broker.
+    ///
+    /// **A1/C8 fix:** trace records are written for BOTH success and refusal
+    /// branches — audit-completeness invariant per BB #19. V0 only wrote on
+    /// success, silently dropping every refused dispatch from the audit
+    /// ledger. The flow is now:
+    ///
+    /// 1. `dispatch_inner` runs the pipeline logic; on Err, returns the
+    ///    `DispatchError` plus whatever partial state was learned (pipeline
+    ///    metadata if catalog lookup succeeded).
+    /// 2. The wrapper always computes the snapshot delta + writes a
+    ///    TraceRecord with either `{"status":"success","output":...}` or
+    ///    `{"status":"refused","failure_reason":"..."}`.
+    /// 3. `on_dispatch_complete` callbacks fire on success only (refusals
+    ///    don't typically change overlay state, so re-materialization isn't
+    ///    needed; if a future broker needs refusal-driven re-materialization,
+    ///    move this into the unconditional branch).
     pub async fn dispatch(
         &self,
         broker: Arc<dyn Broker>,
@@ -167,6 +183,102 @@ impl PipelineRunner {
         let start = std::time::Instant::now();
         let trace_id = Uuid::new_v4().to_string();
 
+        // Run the dispatch flow; track which pipeline was selected (None if
+        // catalog lookup failed) so the trace can attribute audit_class.
+        let mut selected_pipeline: Option<Pipeline> = None;
+        let inner_result = self
+            .dispatch_inner(
+                broker.clone(),
+                catalog,
+                pipeline_id.clone(),
+                params.clone(),
+                &trace_id,
+                &mut selected_pipeline,
+            )
+            .await;
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        // Audit-completeness invariant (A1/C8): always compute snapshot delta
+        // + write trace, regardless of outcome. PipelineNotFound + governance
+        // refusals default to audit_class="governance" since no specific
+        // capability pipeline was selected; other errors use the selected
+        // pipeline's class.
+        let post_snapshot = broker.read_overlay().await;
+        let (delta, delta_from) = self
+            .compute_snapshot_delta(broker.id(), &post_snapshot, &trace_id)
+            .await;
+
+        let audit_class = selected_pipeline
+            .as_ref()
+            .map(|p| format!("{:?}", p.audit_class).to_lowercase())
+            .unwrap_or_else(|| "governance".to_string());
+
+        let outcome_json = match &inner_result {
+            Ok(output) => serde_json::json!({
+                "status": "success",
+                "output": output.clone(),
+            }),
+            Err(e) => serde_json::json!({
+                "status": "refused",
+                "failure_reason": format!("{}", e),
+            }),
+        };
+
+        let record = TraceRecord {
+            schema_version: "1".to_string(),
+            ts: Utc::now().to_rfc3339(),
+            trace_id: trace_id.clone(),
+            pipeline_id: pipeline_id.clone(),
+            broker_id: broker.id().to_string(),
+            params: serde_json::Value::Object(params),
+            snapshot_delta_from: delta_from,
+            snapshot_delta: delta,
+            outcome: outcome_json,
+            audit_class,
+            duration_ms,
+        };
+        // Best-effort trace write: don't let a failed trace write mask the
+        // actual dispatch outcome. Log but proceed.
+        if let Err(e) = self.trace_sink.append(&record) {
+            eprintln!("[brokers] WARN: trace write failed: {}", e);
+        }
+
+        match inner_result {
+            Ok(output) => {
+                let outcome = DispatchOutcome {
+                    trace_id,
+                    output,
+                    duration_ms,
+                };
+                // Fire on_dispatch_complete callbacks (success only).
+                let callbacks = self
+                    .on_dispatch_complete
+                    .read()
+                    .expect("on_dispatch_complete read lock poisoned");
+                for cb in callbacks.iter() {
+                    cb(broker.id(), &outcome);
+                }
+                drop(callbacks);
+                Ok(outcome)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Inner dispatch flow — runs the pipeline logic, returns Result<output,
+    /// DispatchError>. Populates `selected_pipeline` as soon as the catalog
+    /// lookup succeeds so the wrapper can attribute audit_class correctly
+    /// even when later stages fail.
+    async fn dispatch_inner(
+        &self,
+        broker: Arc<dyn Broker>,
+        catalog: &[Pipeline],
+        pipeline_id: PipelineId,
+        params: ParamMap,
+        _trace_id: &str,
+        selected_pipeline: &mut Option<Pipeline>,
+    ) -> Result<serde_json::Value, DispatchError> {
         // 1. Catalog lookup
         let pipeline = catalog
             .iter()
@@ -176,11 +288,15 @@ impl PipelineRunner {
                 pipeline_id: pipeline_id.clone(),
             })?
             .clone();
+        *selected_pipeline = Some(pipeline.clone());
 
         // 2. Governance pre-dispatch checks (BB #19; Surfaced only — Internal
-        //    pipelines skip governance per BROKER-INTERNALS.md §2.4)
+        //    and AuditOnly skip governance per BROKER-INTERNALS.md §2.4).
+        //    A1.5 / B-64: the pipeline-aware check honors
+        //    `bypasses_kill_switch` so arm/disengage stay reachable while
+        //    armed.
         if matches!(pipeline.visibility, Visibility::Surfaced) {
-            self.governance.pre_dispatch_checks()?;
+            self.governance.pre_dispatch_checks_for(&pipeline)?;
         }
 
         // 3. Param validation (Wave 5+ elevates to JSON Schema; MVP minimal)
@@ -203,7 +319,7 @@ impl PipelineRunner {
             self.governance.record_dispatch();
         }
 
-        // 5. Step execution
+        // 7. Step execution
         let leaf_ctx = LeafContext {
             broker_id: broker.id().to_string(),
             pipeline_id: pipeline_id.clone(),
@@ -214,48 +330,7 @@ impl PipelineRunner {
             .execute_steps(broker.clone(), catalog, &pipeline.steps, &leaf_ctx)
             .await?;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
-
-        // 6. Compute snapshot delta + record trace
-        let post_snapshot = broker.read_overlay().await;
-        let (delta, delta_from) = self
-            .compute_snapshot_delta(broker.id(), &post_snapshot, &trace_id)
-            .await;
-
-        let record = TraceRecord {
-            schema_version: "1".to_string(),
-            ts: Utc::now().to_rfc3339(),
-            trace_id: trace_id.clone(),
-            pipeline_id: pipeline_id.clone(),
-            broker_id: broker.id().to_string(),
-            params: serde_json::Value::Object(params),
-            snapshot_delta_from: delta_from,
-            snapshot_delta: delta,
-            outcome: serde_json::json!({"status": "success", "output": output.clone()}),
-            audit_class: format!("{:?}", pipeline.audit_class).to_lowercase(),
-            duration_ms,
-        };
-        self.trace_sink.append(&record)?;
-
-        let outcome = DispatchOutcome {
-            trace_id,
-            output,
-            duration_ms,
-        };
-
-        // V0-RETROSPECTIVE §C6 / §D3 closure: fire on_dispatch_complete
-        // callbacks (typically Materializer auto-trigger from operator's
-        // main binary). Synchronous; callbacks should be fast (≪50ms).
-        let callbacks = self
-            .on_dispatch_complete
-            .read()
-            .expect("on_dispatch_complete read lock poisoned");
-        for cb in callbacks.iter() {
-            cb(broker.id(), &outcome);
-        }
-        drop(callbacks);
-
-        Ok(outcome)
+        Ok(output)
     }
 
     /// Execute a sequence of steps; return the LAST step's output (MVP).
@@ -465,6 +540,7 @@ mod tests {
             steps,
             description: String::new(),
             when_to_use: String::new(),
+            bypasses_kill_switch: false,
         }
     }
 
@@ -707,5 +783,104 @@ mod tests {
         // Trace file should contain 2 records
         let lines = std::fs::read_to_string(sink.file_path()).unwrap();
         assert_eq!(lines.lines().count(), 2);
+    }
+
+    /// A1/C8 regression: refused dispatches MUST appear in trace.jsonl.
+    /// V0 silently dropped every refusal from the audit ledger.
+    #[tokio::test]
+    async fn refused_dispatches_record_to_trace_jsonl() {
+        let (sink, runner) = make_runner_with_budget(1).await;
+        let pipeline = make_pipeline(
+            "t/echo",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        let broker = Arc::new(TestBroker::new(
+            "t",
+            vec![pipeline.clone()],
+            serde_json::json!({}),
+        ));
+
+        // 1st dispatch: success (budget = 1 → consumes 1)
+        runner
+            .dispatch(broker.clone(), &[pipeline.clone()], "t/echo".to_string(), ParamMap::new())
+            .await
+            .unwrap();
+        // 2nd dispatch: governance refusal (budget exhausted)
+        let err = runner
+            .dispatch(broker.clone(), &[pipeline.clone()], "t/echo".to_string(), ParamMap::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DispatchError::GovernanceRefused(_)));
+        // 3rd dispatch: leaf-op refusal (unknown leaf)
+        let bad_pipeline = make_pipeline(
+            "t/bad",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "definitely-not-a-leaf".to_string(),
+            }],
+        );
+        // Use a fresh runner so the failed leaf doesn't get gated by exhausted budget
+        let (sink2, runner2) = make_runner().await;
+        let broker2 = Arc::new(TestBroker::new(
+            "t",
+            vec![bad_pipeline.clone()],
+            serde_json::json!({}),
+        ));
+        let err = runner2
+            .dispatch(broker2, &[bad_pipeline], "t/bad".to_string(), ParamMap::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DispatchError::LeafOpFailed { .. }));
+
+        // Both sinks should now have ONE record per dispatch attempt.
+        let lines1 = std::fs::read_to_string(sink.file_path()).unwrap();
+        assert_eq!(
+            lines1.lines().count(),
+            2,
+            "trace must record both success + governance-refusal"
+        );
+        // The 2nd line should be the refusal
+        let refusal: serde_json::Value =
+            serde_json::from_str(lines1.lines().nth(1).unwrap()).unwrap();
+        assert_eq!(refusal["outcome"]["status"], "refused");
+        assert!(refusal["outcome"]["failure_reason"]
+            .as_str()
+            .unwrap()
+            .contains("trust budget"));
+        assert_eq!(refusal["audit_class"], "capability"); // attributed to t/echo pipeline
+
+        let lines2 = std::fs::read_to_string(sink2.file_path()).unwrap();
+        assert_eq!(lines2.lines().count(), 1, "leaf-op refusal must trace");
+        let leaf_refusal: serde_json::Value =
+            serde_json::from_str(lines2.lines().next().unwrap()).unwrap();
+        assert_eq!(leaf_refusal["outcome"]["status"], "refused");
+        assert!(leaf_refusal["outcome"]["failure_reason"]
+            .as_str()
+            .unwrap()
+            .contains("leaf-op"));
+    }
+
+    /// A1/C8 regression: PipelineNotFound MUST also trace (caller asked for
+    /// something that doesn't exist; operator wants this in the audit log so
+    /// agent-asking-for-nonexistent-pipelines is forensically visible).
+    #[tokio::test]
+    async fn pipeline_not_found_records_to_trace_jsonl() {
+        let (sink, runner) = make_runner().await;
+        let broker = Arc::new(TestBroker::new("t", vec![], serde_json::json!({})));
+        let err = runner
+            .dispatch(broker, &[], "t/nonexistent".to_string(), ParamMap::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DispatchError::PipelineNotFound { .. }));
+        let lines = std::fs::read_to_string(sink.file_path()).unwrap();
+        assert_eq!(lines.lines().count(), 1);
+        let trace: serde_json::Value = serde_json::from_str(lines.lines().next().unwrap()).unwrap();
+        assert_eq!(trace["outcome"]["status"], "refused");
+        // No pipeline matched, so audit_class defaults to governance.
+        assert_eq!(trace["audit_class"], "governance");
+        assert_eq!(trace["pipeline_id"], "t/nonexistent");
     }
 }

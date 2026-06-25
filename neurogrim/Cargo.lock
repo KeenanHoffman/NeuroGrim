@@ -1805,6 +1805,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "neurogrim-core",
+ "neurogrim-sensory",
  "proptest",
  "serde",
  "serde_json",

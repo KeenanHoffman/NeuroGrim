@@ -461,6 +461,7 @@ catalog_path = "work-broker-catalog.yaml"
             steps: vec![],
             description: String::new(),
             when_to_use: String::new(),
+            bypasses_kill_switch: false,
         }];
         reg.register_with_catalog(broker, catalog.clone()).unwrap();
         let full = reg.full_catalog();

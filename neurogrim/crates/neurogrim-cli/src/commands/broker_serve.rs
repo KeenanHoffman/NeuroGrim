@@ -17,10 +17,7 @@
 //! infrastructure needed for the V0 stdio model.
 
 use anyhow::{Context, Result};
-use neurogrim_brokers::{
-    AwarenessMaterializer, BacklogState, Broker, BrokerRegistry, GovernanceComposer,
-    HotStoreMaterializer, MaterializerComposer, PipelineRunner, TraceSink, WorkBroker,
-};
+use neurogrim_brokers::{BrokerHost, BrokerHostConfig};
 use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
 use rmcp::{schemars, tool, tool_router, ServerHandler, ServiceExt};
 use serde::{Deserialize, Serialize};
@@ -44,48 +41,11 @@ pub struct DispatchParams {
     pub params: serde_json::Value,
 }
 
-/// Shared runtime context for materialization re-triggering.
-#[derive(Clone)]
-struct MaterializerContext {
-    bootstrapped: Vec<(String, Arc<dyn Broker>)>,
-    segments_dir: PathBuf,
-    output_path: PathBuf,
-    composition_order: Vec<String>,
-    context_budget: usize,
-}
-
-impl MaterializerContext {
-    async fn materialize_all(&self) -> Result<()> {
-        for (broker_id, broker) in &self.bootstrapped {
-            let hot = HotStoreMaterializer::new(broker_id.clone(), self.segments_dir.clone());
-            hot.materialize(broker.clone())
-                .await
-                .map_err(|e| anyhow::anyhow!("hot-store materializer: {}", e))?;
-            let aware = AwarenessMaterializer::new(broker_id.clone(), self.segments_dir.clone());
-            aware
-                .materialize(broker.clone())
-                .await
-                .map_err(|e| anyhow::anyhow!("awareness materializer: {}", e))?;
-        }
-        synthesize_governance_segment(&self.segments_dir, &self.bootstrapped)?;
-        let composer = MaterializerComposer::new(
-            self.output_path.clone(),
-            self.segments_dir.clone(),
-            self.context_budget,
-        );
-        composer
-            .compose(&self.composition_order)
-            .map_err(|e| anyhow::anyhow!("compose: {}", e))?;
-        Ok(())
-    }
-}
-
-/// The broker MCP server state. Holds the runtime infrastructure +
-/// per-broker handles needed for dispatch + re-materialization.
+/// The broker MCP server state. Wraps an in-process BrokerHost (B-62);
+/// the MCP tool is a thin transport over `host.dispatch()`.
 #[derive(Clone)]
 pub struct BrokerMcpServer {
-    registry: Arc<BrokerRegistry>,
-    runner: Arc<PipelineRunner>,
+    host: Arc<BrokerHost>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -95,18 +55,6 @@ impl BrokerMcpServer {
         description = "Dispatch a broker pipeline. The agent's discovery surface is `current-projection.md` (auto-loaded via CLAUDE.md), which lists each broker's Surfaced pipelines + their description + when_to_use + currently-legal status + parameter schema. This tool is the WIRE PROTOCOL for the dispatch action; the agent picks which pipeline to dispatch by reading current-projection.md, NOT by enumerating MCP tools. Returns the structured dispatch outcome or a refusal with failure_reason."
     )]
     async fn dispatch_pipeline(&self, Parameters(p): Parameters<DispatchParams>) -> String {
-        let broker = match self.registry.broker(&p.broker_id) {
-            Some(b) => b,
-            None => {
-                return refusal("broker_not_found", serde_json::json!({"broker_id": p.broker_id}));
-            }
-        };
-
-        let catalog = self.registry.full_catalog();
-        if catalog.is_empty() {
-            return refusal("catalog_empty", serde_json::Value::Null);
-        }
-
         let params_map: neurogrim_brokers::ParamMap = match &p.params {
             serde_json::Value::Object(map) => map.clone(),
             serde_json::Value::Null => Default::default(),
@@ -119,8 +67,8 @@ impl BrokerMcpServer {
         };
 
         match self
-            .runner
-            .dispatch(broker.clone(), &catalog, p.pipeline_id.clone(), params_map)
+            .host
+            .dispatch(&p.broker_id, p.pipeline_id.clone(), params_map)
             .await
         {
             Ok(outcome) => serde_json::to_string_pretty(&serde_json::json!({
@@ -176,81 +124,42 @@ pub async fn run(cluster_manifest_path: &str) -> Result<()> {
     let cluster_path = Path::new(cluster_manifest_path);
     eprintln!("✦ Loading cluster manifest: {}", cluster_path.display());
 
-    let mut registry = BrokerRegistry::load_manifests(cluster_path)
-        .with_context(|| format!("loading cluster manifest at {}", cluster_path.display()))?;
-
-    // Construct concrete brokers. MVP: every broker declared in the cluster
-    // manifest is constructed as a WorkBroker. Future versions will dispatch
-    // by broker_type field in per-broker manifests.
-    let governance = Arc::new(GovernanceComposer::new(10_000));
-
-    let mut bootstrapped: Vec<(String, Arc<dyn Broker>)> = Vec::new();
-    for broker_id in registry.cluster().brokers.keys().cloned().collect::<Vec<_>>() {
-        let work_broker = Arc::new(WorkBroker::new(
-            broker_id.clone(),
-            BacklogState::default(),
-            governance.clone(),
-        ));
-        let catalog = work_broker.catalog();
-        let dyn_broker: Arc<dyn Broker> = work_broker;
-        registry
-            .register_with_catalog(dyn_broker.clone(), catalog)
-            .with_context(|| format!("registering broker `{}`", broker_id))?;
-        bootstrapped.push((broker_id, dyn_broker));
-    }
-    registry.validate().context("validating broker registry")?;
-    eprintln!("✦ Registered {} broker(s)", bootstrapped.len());
-
-    // Wire paths
-    let cluster_dir = registry.cluster_manifest_dir().to_path_buf();
-    let segments_dir = resolve_path(&cluster_dir, &registry.cluster().materializer.segments_dir);
-    let output_path = resolve_path(&cluster_dir, &registry.cluster().materializer.output_path);
-    let trace_path = segments_dir
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("trace.jsonl");
-
-    std::fs::create_dir_all(&segments_dir)
-        .with_context(|| format!("creating segments dir at {}", segments_dir.display()))?;
-    if let Some(parent) = output_path.parent() {
-        std::fs::create_dir_all(parent)?;
+    // A2 wiring: derive project_root from the cluster manifest location.
+    // Standard layout is `<project_root>/.claude/brain/broker/cluster.toml`
+    // → project_root is 3 parents up. WorkBroker uses this to call
+    // next_ready() against the live backlog instead of empty in-memory state.
+    let project_root = derive_project_root(cluster_path);
+    if let Some(ref root) = project_root {
+        eprintln!("✦ Project root detected: {}", root.display());
+    } else {
+        eprintln!(
+            "⚠ Project root not detected from cluster manifest location; \
+             WorkBroker will use empty in-memory BacklogState (legacy mode)"
+        );
     }
 
-    let trace_sink = Arc::new(TraceSink::new(trace_path));
-    let runner = Arc::new(PipelineRunner::new(trace_sink, governance.clone()));
+    // A6a (B-62): boot the in-process BrokerHost. All orchestration logic
+    // (registry, WorkBroker construction, materializer wiring, on-dispatch
+    // callback registration, initial projection) lives in the host module
+    // so the IDE can consume the same code path via Tauri IPC.
+    let host = BrokerHost::boot(
+        cluster_path,
+        BrokerHostConfig {
+            project_root,
+            trust_budget_ceiling: 10_000,
+        },
+    )
+    .await
+    .with_context(|| format!("booting BrokerHost from {}", cluster_path.display()))?;
 
-    let ctx = MaterializerContext {
-        bootstrapped: bootstrapped.clone(),
-        segments_dir: segments_dir.clone(),
-        output_path: output_path.clone(),
-        composition_order: registry.cluster().materializer.composition_order.clone(),
-        context_budget: registry.cluster().materializer.context_budget_chars,
-    };
-
-    // Initial materialization
-    ctx.materialize_all().await.context("initial materialization")?;
-    eprintln!("✦ Initial projection written to: {}", output_path.display());
-
-    // Wire on_dispatch_complete: spawn a tokio task to re-materialize.
-    // Fire-and-forget; next agent turn might see slightly-stale state if
-    // re-materialization hasn't completed yet (typically <50ms; acceptable
-    // for MVP).
-    {
-        let ctx_for_callback = ctx.clone();
-        runner.on_dispatch_complete(Arc::new(move |_broker_id, _outcome| {
-            let ctx = ctx_for_callback.clone();
-            tokio::spawn(async move {
-                if let Err(e) = ctx.materialize_all().await {
-                    eprintln!("⚠ re-materialization failed: {}", e);
-                }
-            });
-        }));
-    }
+    eprintln!(
+        "✦ Registered {} broker(s); initial projection written",
+        host.bootstrapped().len()
+    );
 
     // Boot MCP server on stdio
     let server = BrokerMcpServer {
-        registry: Arc::new(registry),
-        runner,
+        host: Arc::new(host),
         tool_router: BrokerMcpServer::tool_router(),
     };
     eprintln!("✦ Summoning broker MCP server on stdio…");
@@ -259,40 +168,18 @@ pub async fn run(cluster_manifest_path: &str) -> Result<()> {
     Ok(())
 }
 
-fn resolve_path(cluster_dir: &Path, path: &str) -> PathBuf {
-    let p = Path::new(path);
-    if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        cluster_dir.join(p)
-    }
-}
-
-fn synthesize_governance_segment(
-    segments_dir: &Path,
-    bootstrapped: &[(String, Arc<dyn Broker>)],
-) -> Result<()> {
-    let mut body = String::from("## Governance pipelines (always-reachable)\n\n");
-    body.push_str(
-        "The following governance pipelines are framework-provided + composed \
-         automatically into every Surfaced pipeline dispatch (per BB #19 + R-O-3 \
-         reachability invariant):\n\n",
-    );
-    body.push_str("- `<broker_id>/check-trust-budget` — refuses if budget exhausted\n");
-    body.push_str("- `<broker_id>/check-kill-switch` — refuses if armed\n");
-    body.push_str("- `<broker_id>/record-dispatch` — writes audit anchor at start\n");
-    body.push_str("- `<broker_id>/record-outcome` — writes audit at end\n");
-    body.push_str(
-        "- `<broker_id>/arm-kill-switch` — **Surfaced**, OperatorOnly: emergency halt\n\n",
-    );
-    body.push_str(&format!(
-        "Active brokers in this cluster: {}\n",
-        bootstrapped
-            .iter()
-            .map(|(id, _)| format!("`{}`", id))
-            .collect::<Vec<_>>()
-            .join(", ")
-    ));
-    std::fs::write(segments_dir.join("governance-pipelines.md"), body)?;
-    Ok(())
+/// A2 helper: derive the project root from the cluster manifest's location.
+/// Standard layout is `<project_root>/.claude/brain/broker/cluster.toml` —
+/// the project root is the third parent of the manifest file. Returns None
+/// if the manifest isn't nested deep enough (which means the broker harness
+/// is running standalone without a project, and the WorkBroker falls back
+/// to in-memory legacy mode).
+fn derive_project_root(cluster_manifest_path: &Path) -> Option<PathBuf> {
+    let absolute = std::fs::canonicalize(cluster_manifest_path).ok()?;
+    absolute
+        .parent()? // broker/
+        .parent()? // brain/
+        .parent()? // .claude/
+        .parent()
+        .map(|p| p.to_path_buf())
 }

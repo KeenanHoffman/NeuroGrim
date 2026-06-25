@@ -145,6 +145,25 @@ impl GovernanceComposer {
 
     /// `check-trust-budget` + `check-kill-switch` composed pre-dispatch.
     /// Returns the first refusal found, or Ok if both pass.
+    ///
+    /// **A1/C7 fix:** the kill-switch check is gated by the dispatching
+    /// pipeline's `bypasses_kill_switch` field. Framework-provided
+    /// `arm-kill-switch` and `disengage-kill-switch` carry that flag so they
+    /// can dispatch even while armed (otherwise arming creates a permanent
+    /// dead-end — operator can never disengage). Per V0-RETRO §C7 + ultra-
+    /// pass U2 (B-64).
+    pub fn pre_dispatch_checks_for(&self, pipeline: &Pipeline) -> Result<(), GovernanceRefusal> {
+        self.trust_budget.check()?;
+        if !pipeline.bypasses_kill_switch {
+            self.kill_switch.check()?;
+        }
+        Ok(())
+    }
+
+    /// Legacy entry point — pre-dispatch checks WITHOUT knowing which
+    /// pipeline. Kept for backward-compat (tests that pre-flight governance
+    /// independently of a specific Pipeline). Always honors the kill-switch
+    /// (equivalent to `bypasses_kill_switch = false`).
     pub fn pre_dispatch_checks(&self) -> Result<(), GovernanceRefusal> {
         self.trust_budget.check()?;
         self.kill_switch.check()?;
@@ -190,6 +209,16 @@ impl GovernanceComposer {
     /// dispatch (the GovernanceComposer methods above handle them); they
     /// appear in the catalog ONLY for operator visibility + the agent's
     /// awareness routing.
+    ///
+    /// **A1/C7 fix:** `arm-kill-switch` + `disengage-kill-switch` now carry
+    /// a real `Step::Leaf` (was empty in V0; the Surfaced pipelines returned
+    /// vacuous 0-step success without ever flipping the armed flag, which
+    /// was the C7 root cause). Brokers including these in their catalogs
+    /// MUST implement the `arm_kill_switch` and `disengage_kill_switch`
+    /// leaf-ops (call `GovernanceComposer::arm_kill_switch()` /
+    /// `disengage_kill_switch()` on the shared `Arc<GovernanceComposer>`).
+    /// Both pipelines carry `bypasses_kill_switch = true` (per B-64) so the
+    /// disengage path stays reachable while armed.
     pub fn canonical_governance_pipelines(broker_id: &str) -> Vec<Pipeline> {
         vec![
             framework_pipeline(
@@ -216,11 +245,8 @@ impl GovernanceComposer {
                 "Writes the audit outcome at dispatch end.",
                 "Composed automatically by the Runner.",
             ),
-            // arm-kill-switch is Surfaced (operator-controllable via the agent
-            // if the operator opts in via cluster manifest). MVP brokers
-            // declare it in their catalogs as a Surfaced pipeline; the
-            // dispatch path of `arm-kill-switch` calls
-            // GovernanceComposer::arm_kill_switch() via a framework leaf-op.
+            // arm-kill-switch is Surfaced (operator-controllable). The
+            // canonical pipeline now carries a real Leaf step (A1/C7 fix).
             Pipeline {
                 id: format!("{}/arm-kill-switch", broker_id),
                 visibility: Visibility::Surfaced,
@@ -229,9 +255,29 @@ impl GovernanceComposer {
                 effect_class: EffectClass::WorldEffect,
                 params: serde_json::json!({}),
                 preconditions: vec![],
-                steps: vec![],
+                steps: vec![crate::pipeline::Step::Leaf {
+                    leaf_op: "arm_kill_switch".to_string(),
+                }],
                 description: "Arm the (global) kill switch; halts all subsequent dispatches.".to_string(),
                 when_to_use: "Operator-controlled emergency halt. The LLM must NOT arm this without operator approval.".to_string(),
+                bypasses_kill_switch: true,
+            },
+            // disengage-kill-switch is Surfaced + OperatorOnly + bypasses
+            // (otherwise the operator could never disengage after arming).
+            Pipeline {
+                id: format!("{}/disengage-kill-switch", broker_id),
+                visibility: Visibility::Surfaced,
+                tunability: Tunability::OperatorOnly,
+                audit_class: AuditClass::Governance,
+                effect_class: EffectClass::WorldEffect,
+                params: serde_json::json!({}),
+                preconditions: vec![],
+                steps: vec![crate::pipeline::Step::Leaf {
+                    leaf_op: "disengage_kill_switch".to_string(),
+                }],
+                description: "Disengage the (global) kill switch; allows subsequent dispatches to resume.".to_string(),
+                when_to_use: "Operator-controlled. Only invoke after confirming the cause that prompted arming has been resolved.".to_string(),
+                bypasses_kill_switch: true,
             },
         ]
     }
@@ -254,6 +300,7 @@ fn framework_pipeline(
         steps: vec![],
         description: description.to_string(),
         when_to_use: when_to_use.to_string(),
+        bypasses_kill_switch: false,
     }
 }
 
@@ -303,15 +350,17 @@ mod tests {
     }
 
     #[test]
-    fn canonical_governance_pipelines_includes_4_internal_plus_arm() {
+    fn canonical_governance_pipelines_includes_4_internal_plus_arm_plus_disengage() {
         let pipelines = GovernanceComposer::canonical_governance_pipelines("test-broker");
-        assert_eq!(pipelines.len(), 5);
+        // A1 fix: was 5 (arm only); now 6 (arm + disengage).
+        assert_eq!(pipelines.len(), 6);
         let surfaced: Vec<_> = pipelines
             .iter()
             .filter(|p| matches!(p.visibility, Visibility::Surfaced))
             .collect();
-        assert_eq!(surfaced.len(), 1);
-        assert!(surfaced[0].id.ends_with("/arm-kill-switch"));
+        assert_eq!(surfaced.len(), 2);
+        assert!(surfaced.iter().any(|p| p.id.ends_with("/arm-kill-switch")));
+        assert!(surfaced.iter().any(|p| p.id.ends_with("/disengage-kill-switch")));
         // The 4 default-composed governance pipelines are Internal
         let internal: Vec<_> = pipelines
             .iter()
@@ -320,12 +369,83 @@ mod tests {
         assert_eq!(internal.len(), 4);
         // All must carry audit_class: Governance
         assert!(pipelines.iter().all(|p| matches!(p.audit_class, AuditClass::Governance)));
-        // All must carry Untunable tier (for the 4 Internal) OR OperatorOnly (for arm)
+        // All must carry Untunable tier (for the 4 Internal) OR OperatorOnly (for arm/disengage)
         for p in &pipelines {
             match p.visibility {
                 Visibility::Internal => assert!(matches!(p.tunability, Tunability::Untunable)),
                 Visibility::Surfaced => assert!(matches!(p.tunability, Tunability::OperatorOnly)),
+                Visibility::AuditOnly => panic!("canonical governance pipelines should never use AuditOnly"),
             }
         }
+        // A1.5 / B-64: arm + disengage must carry bypasses_kill_switch = true.
+        for p in &surfaced {
+            assert!(p.bypasses_kill_switch, "{} must bypass kill-switch", p.id);
+        }
+        for p in &internal {
+            assert!(!p.bypasses_kill_switch, "{} must NOT bypass kill-switch", p.id);
+        }
+    }
+
+    #[test]
+    fn arm_kill_switch_canonical_pipeline_has_real_leaf_step() {
+        // A1/C7 fix: V0 had `steps: vec![]` — arm-kill-switch would
+        // "succeed" without ever flipping the armed flag. Regression test:
+        // the canonical arm-kill-switch pipeline must dispatch a leaf-op
+        // named `arm_kill_switch`.
+        let pipelines = GovernanceComposer::canonical_governance_pipelines("t");
+        let arm = pipelines
+            .iter()
+            .find(|p| p.id == "t/arm-kill-switch")
+            .expect("arm-kill-switch must exist");
+        assert_eq!(arm.steps.len(), 1);
+        match &arm.steps[0] {
+            crate::pipeline::Step::Leaf { leaf_op } => {
+                assert_eq!(leaf_op, "arm_kill_switch");
+            }
+            other => panic!("arm-kill-switch step must be Leaf, got {:?}", other),
+        }
+        let disengage = pipelines
+            .iter()
+            .find(|p| p.id == "t/disengage-kill-switch")
+            .expect("disengage-kill-switch must exist");
+        assert_eq!(disengage.steps.len(), 1);
+        match &disengage.steps[0] {
+            crate::pipeline::Step::Leaf { leaf_op } => {
+                assert_eq!(leaf_op, "disengage_kill_switch");
+            }
+            other => panic!("disengage-kill-switch step must be Leaf, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn pre_dispatch_checks_for_honors_bypasses_kill_switch() {
+        // A1.5 / B-64: when armed, dispatches refuse — EXCEPT pipelines
+        // carrying bypasses_kill_switch = true (the arm/disengage escape
+        // hatch). Without this the operator's only path out of armed state
+        // is permanently blocked.
+        let g = GovernanceComposer::new(100);
+        g.arm_kill_switch();
+        let pipelines = GovernanceComposer::canonical_governance_pipelines("t");
+        let arm = pipelines.iter().find(|p| p.id == "t/arm-kill-switch").unwrap();
+        let disengage = pipelines.iter().find(|p| p.id == "t/disengage-kill-switch").unwrap();
+        // Both must pass pre_dispatch_checks_for even while armed
+        assert!(g.pre_dispatch_checks_for(arm).is_ok());
+        assert!(g.pre_dispatch_checks_for(disengage).is_ok());
+        // A non-bypass pipeline must be refused
+        let non_bypass = Pipeline {
+            id: "t/something-else".to_string(),
+            visibility: Visibility::Surfaced,
+            tunability: Tunability::OperatorOnly,
+            audit_class: AuditClass::Capability,
+            effect_class: EffectClass::ReadOnly,
+            params: serde_json::json!({}),
+            preconditions: vec![],
+            steps: vec![],
+            description: String::new(),
+            when_to_use: String::new(),
+            bypasses_kill_switch: false,
+        };
+        let err = g.pre_dispatch_checks_for(&non_bypass).unwrap_err();
+        assert!(matches!(err, GovernanceRefusal::KillSwitchArmed { .. }));
     }
 }

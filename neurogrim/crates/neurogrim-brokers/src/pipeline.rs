@@ -31,10 +31,18 @@ pub type ParamMap = serde_json::Map<String, serde_json::Value>;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Visibility {
-    /// Tier 1 — LLM-facing; appears in `legal_pipelines()` ranking.
+    /// Tier 1 — LLM-facing; appears in `legal_pipelines()` ranking + in
+    /// `current-projection.md` awareness routing.
     Surfaced,
     /// Tier 2 — broker plumbing; traced + governed but not surfaced.
     Internal,
+    /// Tier 3 (A14) — agent-invokable via the broker host's dispatch ceremony
+    /// for audit-completeness, but NOT enumerated in `current-projection.md`
+    /// awareness routing. Used for pipelines that are IDE-facing infrastructure
+    /// (e.g., browser overlay primitives the IDE host calls directly) where the
+    /// agent shouldn't see them as choices but the operator wants every
+    /// invocation in trace.jsonl. Per V0-RETRO ultra-pass U6.
+    AuditOnly,
 }
 
 /// Pipeline tunability tier (per BROKER-INTERNALS.md §4).
@@ -108,6 +116,18 @@ pub struct Pipeline {
     /// When-to-use hint shown to agent (~512 chars per BROKER-AWARENESS.md §1).
     #[serde(default)]
     pub when_to_use: String,
+
+    /// A1.5 / B-64 / V0-RETRO ultra-pass U2 — escape hatch for the
+    /// kill-switch bootstrap paradox. When `true`, the framework's
+    /// `check-kill-switch` governance pre-dispatch step is SKIPPED for this
+    /// pipeline, allowing it to dispatch even while armed. Only framework-
+    /// provided governance pipelines (`arm-kill-switch`, `disengage-kill-
+    /// switch`) should set this; the catalog loader rejects user-authored
+    /// pipelines with `bypasses_kill_switch = true` AND
+    /// `audit_class != AuditClass::Governance` to prevent agents defining
+    /// bypass routes.
+    #[serde(default)]
+    pub bypasses_kill_switch: bool,
     // Wave 4 adds: governance: GovernancePolicy (BB #19)
 }
 
@@ -157,10 +177,46 @@ mod tests {
             }],
             description: "Dispatch a work unit from the active backlog.".to_string(),
             when_to_use: "When the operator is ready to start the next work item.".to_string(),
+            bypasses_kill_switch: false,
         };
         let yaml = serde_yaml::to_string(&p).unwrap();
         let parsed: Pipeline = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(parsed.id, p.id);
         assert_eq!(parsed.visibility, Visibility::Surfaced);
+        assert!(!parsed.bypasses_kill_switch);
+    }
+
+    #[test]
+    fn pipeline_bypasses_kill_switch_defaults_to_false_via_serde() {
+        // A1.5 / B-64: existing manifest YAML without the new field must
+        // deserialize cleanly with the field defaulting to false.
+        let yaml = r#"
+id: t/legacy
+visibility: surfaced
+tunability: operator-only
+audit_class: capability
+effect_class: read-only
+steps: []
+"#;
+        let p: Pipeline = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(p.id, "t/legacy");
+        assert!(!p.bypasses_kill_switch);
+    }
+
+    #[test]
+    fn pipeline_audit_only_visibility_round_trips() {
+        // A14 / U6: the new AuditOnly visibility class.
+        let yaml = r#"
+id: t/internal-but-audited
+visibility: audit-only
+tunability: untunable
+audit_class: capability
+effect_class: hot-store-update
+steps: []
+"#;
+        let p: Pipeline = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(p.visibility, Visibility::AuditOnly);
+        let back = serde_yaml::to_string(&p).unwrap();
+        assert!(back.contains("visibility: audit-only"));
     }
 }

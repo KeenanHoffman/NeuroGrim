@@ -35,6 +35,7 @@
 
 pub mod broker;
 pub mod cold_store;
+pub mod host;
 pub mod overlay;
 pub mod pipeline;
 pub mod catalog;
@@ -50,6 +51,7 @@ pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
 pub use catalog::{evaluate_precondition, load_catalog, validate_catalog, CatalogError};
 pub use cold_store::{ColdStore, ColdStoreError, JsonlColdStore};
 pub use governance::{GovernanceComposer, GovernanceRefusal, SharedGovernance};
+pub use host::{BrokerHost, BrokerHostConfig, HostError};
 pub use materializer::{
     awareness::AwarenessMaterializer, hot_store::HotStoreMaterializer, MaterializerComposer,
     MaterializerError,

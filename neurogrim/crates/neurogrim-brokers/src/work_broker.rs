@@ -4,8 +4,8 @@
 //! broker. MVP design (per Phase 1 Explore findings + the plan's operator
 //! default of "Sense + dispatch only"):
 //!
-//! - **Cold-store schema:** in-memory `BacklogState` for MVP (would persist
-//!   to JSON file in production). Holds the list of work units + their status.
+//! - **Cold-store schema:** in-memory `BacklogState` (legacy) OR
+//!   live-from-disk via `neurogrim_sensory::backlog::next_ready()` (A2 wiring).
 //! - **Working state:** loaded BacklogState mirrored from cold store.
 //! - **Overlay shape:** `ActiveWorkOverlay` — the curated top-N ready
 //!   work units the agent sees.
@@ -13,22 +13,27 @@
 //!   - `work-broker/dispatch-work-unit` — claim a work unit by id
 //!   - `work-broker/arm-kill-switch` — operator emergency halt (per BB #19
 //!     canonical governance)
+//!   - `work-broker/disengage-kill-switch` — operator-only resume (per A1)
 //! - **Internal pipelines:**
 //!   - `work-broker/work-broker-tick` — refresh overlay (called on each tick)
 //!
-//! Wave 5.5 (follow-on) would integrate with
-//! `neurogrim_sensory::backlog::next_ready()` for real backlog parsing;
-//! MVP uses operator-provided work units via cluster manifest extension.
+//! **A2 (live sensor wiring):** if constructed via `new_with_project_root`,
+//! the broker projects its overlay from
+//! `neurogrim_sensory::backlog::parse_backlog()` + `next_ready()` instead of
+//! the in-memory BacklogState. Closes V0 Gap #11 (the V0 demo had empty
+//! in-memory BacklogState; this version reads the live backlog). Cold-store
+//! mode stays available for tests + ephemeral fixtures.
 
 use crate::broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
 use crate::governance::GovernanceComposer;
 use crate::overlay::{Overlay, WorkingState};
 use crate::pipeline::{
-    AuditClass, EffectClass, ParamMap, Pipeline, Step, Tunability, Visibility,
+    AuditClass, EffectClass, Pipeline, Step, Tunability, Visibility,
 };
 use crate::runner::{LeafContext, LeafError};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// A single work unit (MVP shape).
@@ -67,10 +72,17 @@ pub struct WorkBroker {
     working_state: WorkingState<BacklogState>,
     overlay: Arc<Overlay<ActiveWorkOverlay>>,
     governance: Arc<GovernanceComposer>,
+    /// A2 wiring: when `Some(project_root)`, the broker projects its overlay
+    /// from `neurogrim_sensory::backlog::parse_backlog(project_root)` +
+    /// `next_ready()` instead of the in-memory BacklogState. When `None`,
+    /// the broker stays in the original in-memory mode (used by existing
+    /// tests + ephemeral fixtures).
+    project_root: Option<PathBuf>,
 }
 
 impl WorkBroker {
-    /// Create a new Work Broker with the given initial backlog state.
+    /// Create a new Work Broker with the given initial backlog state
+    /// (in-memory; legacy + test mode).
     pub fn new(
         id: impl Into<String>,
         initial: BacklogState,
@@ -82,6 +94,31 @@ impl WorkBroker {
             working_state: WorkingState::new(initial),
             overlay: Arc::new(Overlay::new(initial_overlay)),
             governance,
+            project_root: None,
+        }
+    }
+
+    /// A2 wiring: create a Work Broker backed by the live backlog sensor at
+    /// `project_root`. The initial overlay is projected from
+    /// `parse_backlog()` + `next_ready()` immediately; subsequent ticks
+    /// (or refresh_overlay leaf-op invocations) re-read from disk.
+    ///
+    /// Closes V0 Gap #11 — the V0 demo had an empty in-memory BacklogState
+    /// and could never claim a work unit; this version reads the live
+    /// backlog from a real BACKLOG.md / ROADMAP.md tree.
+    pub fn new_with_project_root(
+        id: impl Into<String>,
+        project_root: PathBuf,
+        governance: Arc<GovernanceComposer>,
+    ) -> Self {
+        let initial_state = project_state_from_sensor(&project_root);
+        let initial_overlay = curate_overlay(&initial_state);
+        Self {
+            id: id.into(),
+            working_state: WorkingState::new(initial_state),
+            overlay: Arc::new(Overlay::new(initial_overlay)),
+            governance,
+            project_root: Some(project_root),
         }
     }
 
@@ -122,6 +159,7 @@ impl WorkBroker {
                 description: "Claim the named work unit from the active backlog.".to_string(),
                 when_to_use:
                     "When the operator is ready to advance the next backlog item. Pick from the active_work list.".to_string(),
+                bypasses_kill_switch: false,
             },
             // Internal: work-broker-tick (called on each tick to refresh)
             Pipeline {
@@ -137,6 +175,7 @@ impl WorkBroker {
                 }],
                 description: "Re-project Active Work overlay from working state.".to_string(),
                 when_to_use: "Framework-internal; runs on each tick.".to_string(),
+                bypasses_kill_switch: false,
             },
         ];
         // Append canonical governance pipelines (the agent sees these via
@@ -161,6 +200,57 @@ fn curate_overlay(state: &BacklogState) -> ActiveWorkOverlay {
             .filter(|w| matches!(w.status, WorkUnitStatus::Claimed))
             .map(|w| w.id.clone())
             .collect(),
+    }
+}
+
+/// A2 wiring helper: call `parse_backlog` + `next_ready` against the given
+/// `project_root` and project the result into a `BacklogState`. The
+/// next_ready output's top-ranked item (if tier == "implement") becomes the
+/// sole `Ready` work-unit in the resulting state; if next_ready returns
+/// `tier == "groom"` / `"capture"` / `"idle"`, no work-unit is surfaced and
+/// the overlay's `active_work` will be empty (correct behavior — the agent
+/// should NOT claim a work-unit when the sensor declares no implementable
+/// work is ready).
+///
+/// This is intentionally narrow: it surfaces ONLY the single next-ready
+/// item, not the entire backlog. The broker's discipline is "do the next
+/// thing the sensor says is ready," not "browse the backlog." Future waves
+/// may extend to top-K via cluster-manifest tuning.
+fn project_state_from_sensor(project_root: &std::path::Path) -> BacklogState {
+    let report = neurogrim_sensory::backlog::parse_backlog(project_root);
+    let next = neurogrim_sensory::backlog::next_ready(&report);
+    let tier = next
+        .get("tier")
+        .and_then(|v| v.as_str())
+        .unwrap_or("idle");
+    if tier != "implement" {
+        // No implementable item ready (groom / capture / idle). Empty
+        // backlog state → empty overlay; agent sees no claimable work.
+        return BacklogState::default();
+    }
+    let item = match next.get("item") {
+        Some(v) => v,
+        None => return BacklogState::default(),
+    };
+    let id = item
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let title = item
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    if id.is_empty() {
+        return BacklogState::default();
+    }
+    BacklogState {
+        work_units: vec![WorkUnit {
+            id,
+            title,
+            status: WorkUnitStatus::Ready,
+        }],
     }
 }
 
@@ -196,10 +286,21 @@ impl Broker for WorkBroker {
     }
 
     async fn tick(&self, _event: WorldEvent) -> Result<(), BrokerError> {
-        // Re-project overlay from working state.
-        let state = self.working_state.lock().await;
-        let new_overlay = curate_overlay(&state);
-        self.overlay.swap(new_overlay);
+        // A2: when project_root is set, re-read the live backlog before
+        // re-projecting. This is how the broker stays in sync with the
+        // sensor between dispatches (operator edits BACKLOG.md → next tick
+        // surfaces the new next-ready item to the agent).
+        if let Some(root) = &self.project_root {
+            let fresh = project_state_from_sensor(root);
+            let mut state = self.working_state.lock().await;
+            *state = fresh;
+            let new_overlay = curate_overlay(&state);
+            self.overlay.swap(new_overlay);
+        } else {
+            let state = self.working_state.lock().await;
+            let new_overlay = curate_overlay(&state);
+            self.overlay.swap(new_overlay);
+        }
         Ok(())
     }
 
@@ -242,15 +343,33 @@ impl Broker for WorkBroker {
                 }))
             }
             "refresh_overlay" => {
-                let state = self.working_state.lock().await;
-                let new_overlay = curate_overlay(&state);
-                self.overlay.swap(new_overlay);
+                // A2 wiring: if project_root is set, re-read the sensor first.
+                if let Some(root) = &self.project_root {
+                    let fresh = project_state_from_sensor(root);
+                    let mut state = self.working_state.lock().await;
+                    *state = fresh;
+                    let new_overlay = curate_overlay(&state);
+                    self.overlay.swap(new_overlay);
+                } else {
+                    let state = self.working_state.lock().await;
+                    let new_overlay = curate_overlay(&state);
+                    self.overlay.swap(new_overlay);
+                }
                 Ok(serde_json::json!({"refreshed": true}))
             }
             "arm_kill_switch" => {
-                // Surfaced arm-kill-switch pipeline calls this leaf-op.
+                // Surfaced arm-kill-switch pipeline calls this leaf-op
+                // (A1/C7 fix: V0 had empty steps so this never fired).
                 self.governance.arm_kill_switch();
                 Ok(serde_json::json!({"armed": true}))
+            }
+            "disengage_kill_switch" => {
+                // Surfaced disengage-kill-switch pipeline calls this leaf-op
+                // (A1 fix: companion to arm; both bypass kill-switch per
+                // B-64 escape hatch so the disengage path stays reachable
+                // after arming).
+                self.governance.disarm_kill_switch();
+                Ok(serde_json::json!({"armed": false}))
             }
             other => Err(LeafError::NotFound(other.to_string())),
         }
@@ -260,6 +379,7 @@ impl Broker for WorkBroker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pipeline::ParamMap;
     use crate::runner::PipelineRunner;
     use crate::trace::TraceSink;
     use tempfile::TempDir;
@@ -378,6 +498,62 @@ mod tests {
         assert_eq!(trace.pipeline_id, "work-broker/dispatch-work-unit");
         assert_eq!(trace.broker_id, "work-broker");
         assert_eq!(trace.audit_class, "capability");
+    }
+
+    /// A2 regression: WorkBroker constructed with a project_root reads its
+    /// initial overlay from the live backlog sensor, not from an empty
+    /// in-memory BacklogState. Closes V0 Gap #11.
+    #[tokio::test]
+    async fn work_broker_with_project_root_reads_live_backlog() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path().to_path_buf();
+        // Plant a minimal BACKLOG.md with one ready item.
+        std::fs::write(
+            project_root.join("BACKLOG.md"),
+            "# Backlog\n\n### B-999: Sensor wire-up smoke test — Ready\n\n**Stage:** Ready\n**MoSCoW:** Must\n",
+        )
+        .unwrap();
+
+        let (_, governance) = make_runner_governance();
+        let broker = WorkBroker::new_with_project_root(
+            "work-broker",
+            project_root.clone(),
+            governance,
+        );
+        let overlay = broker.read_overlay().await;
+        let active = overlay["active_work"].as_array().unwrap();
+        // Should have read B-999 as the next-ready item.
+        assert!(
+            active.iter().any(|w| w["id"] == "B-999"),
+            "expected B-999 in active_work, got: {:?}",
+            active
+        );
+    }
+
+    /// A2 regression: when next_ready reports tier != "implement" (e.g.,
+    /// nothing ready), the overlay's active_work is empty. Agent must NOT
+    /// see a claimable work unit in that case.
+    #[tokio::test]
+    async fn work_broker_with_project_root_empty_when_nothing_ready() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path().to_path_buf();
+        // Empty backlog file — sensor returns tier=idle.
+        std::fs::write(project_root.join("BACKLOG.md"), "# Backlog\n\n(nothing here)\n")
+            .unwrap();
+
+        let (_, governance) = make_runner_governance();
+        let broker = WorkBroker::new_with_project_root(
+            "work-broker",
+            project_root,
+            governance,
+        );
+        let overlay = broker.read_overlay().await;
+        let active = overlay["active_work"].as_array().unwrap();
+        assert!(
+            active.is_empty(),
+            "expected empty active_work when nothing ready, got: {:?}",
+            active
+        );
     }
 
     #[tokio::test]

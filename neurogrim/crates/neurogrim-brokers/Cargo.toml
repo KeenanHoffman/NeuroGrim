@@ -57,6 +57,14 @@ toml = { workspace = true }
 # - sensor for broker leaf-ops that wrap existing sensors
 neurogrim-core = { workspace = true }
 
+# Reuse: NeuroGrim sensory primitives. WorkBroker A2 wiring calls
+# `backlog::parse_backlog()` + `backlog::next_ready()` instead of a static
+# in-memory BacklogState (closes V0 Gap #11). The brokers→sensory dep is
+# natural: brokers wrap existing sensors per BROKER-CONTRACT.md role-set
+# composition. `sensor-backlog` feature must be enabled — the workspace
+# default is `default-features = false` so each consumer opts in.
+neurogrim-sensory = { workspace = true, features = ["sensor-backlog"] }
+
 [dev-dependencies]
 # Property testing for Overlay<T> atomic-swap concurrency tests
 proptest = { workspace = true }

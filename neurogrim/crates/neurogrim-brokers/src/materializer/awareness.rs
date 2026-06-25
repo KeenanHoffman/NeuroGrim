@@ -135,6 +135,7 @@ mod tests {
             description: "Claim the next ready work unit.".to_string(),
             when_to_use: "When you're ready to start the next backlog item."
                 .to_string(),
+            bypasses_kill_switch: false,
         }
     }
 
