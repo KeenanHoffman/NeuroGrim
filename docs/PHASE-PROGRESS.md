@@ -68,8 +68,10 @@ subsystem onto the substrate). Substrate-side adapters needed at C1.
 | C6 strangler-shim | permission-tokens trace emitter | ✅ Shipped | IDE commit `d0a50e4`: `emit_permission_token_audit` helper writes audit_class=capability records to unified trace.jsonl. |
 | C7 strangler-shim | agent-self-awareness trace emitter | ✅ Shipped | IDE commit `d0a50e4`: `emit_self_awareness_audit` helper writes audit_class=meta-observation records. |
 | C8 strangler-shim | browser-overlay trace emitter | ✅ Shipped | IDE commit `d0a50e4`: `emit_overlay_audit` helper for DOM-annotation actions. WebView2 plumbing stays IDE-only per plan §C8. |
-| C9 | IdeAction 40+ variant consolidation | 🔵 Multi-session anchor | Per plan §C9 + ultra-pass U10: 8-12 days realistic. `neurogrim broker-scaffold` CLI shipped + IDE-LIFT-TEMPLATES.md provides the per-variant shape; classification step (which broker hosts each variant + visibility + leaf-op signature) is the work. |
-| C10 | Dead-code removal sweep | 🔵 Definitionally a follow-up | Happens AFTER C2-C9 final-state migrations retire legacy paths. |
+| C9.0 classification | ✅ Shipped | NeuroGrim/docs/IDE-LIFT-C9-CLASSIFICATION.md — 64 variants → 20 brokers, mechanical/bespoke split. |
+| C9 broker shapes (19 brokers, 64 variants) | ✅ Shipped | IDE commits `7e8e58f` (sense), `fc00002` (window+dom-read+overlay), `985f2af` (nav, screenshot, dom-write, eval+intercept, layout, c9e consolidated). Each broker has full Pipeline literal + V0 stub leaf-ops; per-leaf-op wire-up to actual IDE state is multi-session per-broker follow-up. |
+| C9 per-leaf-op wire-up | 🔵 ~3000-6000 LOC bespoke authoring | Each broker's stub `Ok(stub)` replaced with real IDE-state call (Tauri APIs, browser pane registry, claude session manager, grid layout system) per C9.0 classification's leaf-op-signature column. Estimated ~50-100 LOC × 64 leaf-ops. Multi-session per-broker work. |
+| C10 | Dead-code removal sweep | 🔵 Definitionally a follow-up | Happens AFTER C9 wire-up retires the legacy IdeAction dispatcher path. |
 | C3 | `browser-quotas-broker` (uses A7 RateLimitSubgate) | 🔵 IDE-repo work | |
 | C4 | `browser-admission-broker` (uses A8 SystemPressureSubgate) | 🔵 IDE-repo work | |
 | C5 | Capability + batch-approval brokers (uses A9 CapabilitySubgate) | 🔵 IDE-repo work | |
