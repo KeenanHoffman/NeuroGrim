@@ -67,16 +67,36 @@ pub fn load_catalog(path: &Path) -> Result<Vec<Pipeline>, CatalogError> {
     Ok(pipelines)
 }
 
+/// D1 / BB #27 — cross-broker policy at catalog load. `Reject` keeps V0
+/// behavior (intra-broker only); `Allow` enables BB #27 cross-broker
+/// composition. The runner's `set_registry()` must also be called for
+/// dispatch-time resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CrossBrokerPolicy {
+    Reject,
+    Allow,
+}
+
 /// Validate a pipeline catalog against the broker's id. Rejects:
 /// - Pipelines whose id doesn't start with `<broker_id>/`
-/// - Cross-broker `sub_pipeline:` references (per BB #27 deferral)
+/// - Cross-broker `sub_pipeline:` references (only when policy == Reject)
 /// - Duplicate pipeline IDs within the catalog
 pub fn validate_catalog(pipelines: &[Pipeline], broker_id: &str) -> Result<(), CatalogError> {
+    validate_catalog_with_policy(pipelines, broker_id, CrossBrokerPolicy::Reject)
+}
+
+/// D1: validate with explicit cross-broker policy. Allow mode skips the
+/// CrossBrokerComposition reject (BB #27 path); host must also wire the
+/// runner's registry for dispatch-time lookup.
+pub fn validate_catalog_with_policy(
+    pipelines: &[Pipeline],
+    broker_id: &str,
+    policy: CrossBrokerPolicy,
+) -> Result<(), CatalogError> {
     let prefix = format!("{}/", broker_id);
     let mut seen_ids = std::collections::HashSet::new();
 
     for pipeline in pipelines {
-        // ID format check
         if !pipeline.id.starts_with(&prefix) {
             return Err(CatalogError::PipelineInvalid {
                 pipeline_id: pipeline.id.clone(),
@@ -87,19 +107,14 @@ pub fn validate_catalog(pipelines: &[Pipeline], broker_id: &str) -> Result<(), C
             });
         }
 
-        // Duplicate detection
         if !seen_ids.insert(pipeline.id.clone()) {
             return Err(CatalogError::DuplicatePipelineId(pipeline.id.clone()));
         }
 
-        // Cross-broker sub_pipeline rejection (ultra-pass U12)
-        validate_steps_intra_broker(&pipeline.steps, &pipeline.id, broker_id)?;
+        if policy == CrossBrokerPolicy::Reject {
+            validate_steps_intra_broker(&pipeline.steps, &pipeline.id, broker_id)?;
+        }
 
-        // A1.5 / B-64 policy: bypasses_kill_switch is reserved for
-        // framework-provided governance pipelines (arm/disengage). Operator-
-        // authored pipelines that try to set it without audit_class=Governance
-        // are rejected at catalog load to prevent agents from declaring
-        // bypass routes.
         if pipeline.bypasses_kill_switch
             && !matches!(pipeline.audit_class, AuditClass::Governance)
         {

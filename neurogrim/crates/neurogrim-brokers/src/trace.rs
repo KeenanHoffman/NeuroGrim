@@ -66,6 +66,26 @@ impl TraceSink {
         &self.file_path
     }
 
+    /// C1 — append an externally-authored TraceRecord to the unified
+    /// JSONL ledger. Used by non-broker components (process_broker spawn
+    /// sites, IDE-internal lifecycle events, etc.) so the operator sees
+    /// ONE audit log per harness rather than a patchwork of per-subsystem
+    /// JSONLs. Per plan §C1 + Adversarial-hat critique #4 mitigation.
+    ///
+    /// The caller is responsible for choosing audit_class — convention is
+    /// `"infrastructure"` for subprocess/lifecycle events, `"capability"`
+    /// for IDE-internal capability dispatches, etc. `pipeline_id` should
+    /// be a synthetic well-known id (e.g., `process-broker/spawn`) so the
+    /// audit trail remains queryable by id.
+    ///
+    /// Equivalent to `append()`; the separate name signals intent at the
+    /// call site (and future versions may enforce that external callers
+    /// can't emit `audit_class: governance` to prevent confusion with
+    /// substrate-emitted governance events).
+    pub fn append_external(&self, record: &TraceRecord) -> Result<(), TraceError> {
+        self.append(record)
+    }
+
     /// Append a single record (JSONL: one JSON object per line).
     pub fn append(&self, record: &TraceRecord) -> Result<(), TraceError> {
         let serialized = serde_json::to_string(record)?;

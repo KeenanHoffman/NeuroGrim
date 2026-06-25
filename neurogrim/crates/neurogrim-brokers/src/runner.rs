@@ -139,6 +139,11 @@ pub struct PipelineRunner {
     /// Read-only at the runner level; future `propose_tune()` API will
     /// respect each pipeline's `tunability` field.
     frame: std::sync::RwLock<Frame>,
+    /// D1 / BB #27: optional registry for cross-broker sub_pipeline lookup.
+    /// When set, sub_pipeline steps referencing `<other_broker_id>/<...>`
+    /// look up the callee broker + its catalog from the registry instead
+    /// of erroring out. When None (legacy), cross-broker still rejects.
+    registry: std::sync::RwLock<Option<Arc<crate::registry::BrokerRegistry>>>,
 }
 
 impl PipelineRunner {
@@ -149,7 +154,15 @@ impl PipelineRunner {
             prior_snapshots: tokio::sync::Mutex::new(std::collections::HashMap::new()),
             on_dispatch_complete: std::sync::RwLock::new(Vec::new()),
             frame: std::sync::RwLock::new(Frame::new()),
+            registry: std::sync::RwLock::new(None),
         }
+    }
+
+    /// D1 / BB #27: install a registry so cross-broker sub_pipeline lookups
+    /// work. Host should call this after constructing the runner +
+    /// populating the registry.
+    pub fn set_registry(&self, registry: Arc<crate::registry::BrokerRegistry>) {
+        *self.registry.write().expect("registry lock poisoned") = Some(registry);
     }
 
     /// A13: replace the runner's Frame. Operator-driven (host setup time);
@@ -402,21 +415,74 @@ impl PipelineRunner {
                     sub_pipeline,
                     params,
                 } => {
-                    // Intra-broker sub_pipeline dispatch (cross-broker was rejected
-                    // at catalog load per BB #27 deferral)
-                    let outcome = self
-                        .dispatch(
-                            broker.clone(),
-                            catalog,
-                            sub_pipeline.clone(),
-                            params.clone(),
-                        )
-                        .await
-                        .map_err(|e| DispatchError::SubPipelineFailed {
-                            pipeline_id: sub_pipeline.clone(),
-                            source: Box::new(e),
-                        })?;
-                    Ok(outcome.output)
+                    // D1 / BB #27: prefix mismatch → cross-broker dispatch
+                    // (look up callee from registry if installed).
+                    let callee_broker_id = sub_pipeline
+                        .split_once('/')
+                        .map(|(b, _)| b.to_string())
+                        .unwrap_or_default();
+                    let same_broker = callee_broker_id == ctx.broker_id;
+                    if same_broker {
+                        let outcome = self
+                            .dispatch(
+                                broker.clone(),
+                                catalog,
+                                sub_pipeline.clone(),
+                                params.clone(),
+                            )
+                            .await
+                            .map_err(|e| DispatchError::SubPipelineFailed {
+                                pipeline_id: sub_pipeline.clone(),
+                                source: Box::new(e),
+                            })?;
+                        Ok(outcome.output)
+                    } else {
+                        // Cross-broker: must have a registry installed.
+                        // Extract callee broker + catalog from the lock-held
+                        // scope, then drop the guard BEFORE awaiting the
+                        // sub-dispatch (RwLockReadGuard is !Send).
+                        let (callee, callee_catalog) = {
+                            let registry_guard = self.registry.read()
+                                .expect("registry lock poisoned");
+                            let registry = registry_guard.as_ref().ok_or_else(|| {
+                                DispatchError::SubPipelineFailed {
+                                    pipeline_id: sub_pipeline.clone(),
+                                    source: Box::new(DispatchError::Other(anyhow::anyhow!(
+                                        "cross-broker sub_pipeline `{}` requires a registry; \
+                                         host must call runner.set_registry() before dispatch",
+                                        sub_pipeline
+                                    ))),
+                                }
+                            })?;
+                            let callee = registry.broker(&callee_broker_id).ok_or_else(|| {
+                                DispatchError::SubPipelineFailed {
+                                    pipeline_id: sub_pipeline.clone(),
+                                    source: Box::new(DispatchError::Other(anyhow::anyhow!(
+                                        "cross-broker callee `{}` not registered",
+                                        callee_broker_id
+                                    ))),
+                                }
+                            })?;
+                            let callee_catalog = registry
+                                .catalog_for(&callee_broker_id)
+                                .cloned()
+                                .unwrap_or_default();
+                            (callee, callee_catalog)
+                        };
+                        let outcome = self
+                            .dispatch(
+                                callee,
+                                &callee_catalog,
+                                sub_pipeline.clone(),
+                                params.clone(),
+                            )
+                            .await
+                            .map_err(|e| DispatchError::SubPipelineFailed {
+                                pipeline_id: sub_pipeline.clone(),
+                                source: Box::new(e),
+                            })?;
+                        Ok(outcome.output)
+                    }
                 }
                 Step::Guard { predicate, inner } => {
                     // A13: frame.X placeholder substitution before DSL eval.

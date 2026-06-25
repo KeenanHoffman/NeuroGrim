@@ -38,6 +38,7 @@ pub mod capability;
 pub mod cold_store;
 pub mod frame;
 pub mod host;
+pub mod local_awareness_broker;
 pub mod overlay;
 pub mod pipeline;
 pub mod catalog;
@@ -52,12 +53,13 @@ pub mod work_broker;
 
 // Re-exports for downstream consumers
 pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
-pub use catalog::{evaluate_precondition, load_catalog, validate_catalog, CatalogError};
+pub use catalog::{evaluate_precondition, load_catalog, validate_catalog, validate_catalog_with_policy, CatalogError, CrossBrokerPolicy};
 pub use cold_store::{ColdStore, ColdStoreError, JsonlColdStore};
 pub use governance::{GovernanceComposer, GovernanceRefusal, PreDispatchSubgate, SharedGovernance};
 pub use capability::{AllowAll, CapabilityDecision, CapabilityRegistry, CapabilitySubgate};
 pub use frame::Frame;
 pub use host::{BrokerHost, BrokerHostConfig, HostError};
+pub use local_awareness_broker::{LocalAwarenessBroker, LocalAwarenessOverlay};
 pub use rate_limit::{RateLimitSubgate, ScopeKeyFn};
 pub use system_facts::{
     HealthyDefault, PressureTier, SystemFacts, SystemFactsProvider, SystemPressureSubgate,
