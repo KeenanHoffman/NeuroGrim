@@ -61,7 +61,15 @@ subsystem onto the substrate). Substrate-side adapters needed at C1.
 |---|---|---|---|
 | C1 (substrate) | `TraceSink::append_external` for unified audit | ✅ Shipped | Allows non-broker components to write to the same JSONL |
 | C1 (IDE) | process_broker/session_broker library wiring | 🔵 IDE-repo work | Call TraceSink::append_external on spawn |
-| C2 (strangler-shim) | `browser-kill-switch` substrate bridge | ✅ Shipped | IDE commit `98b64ca`: `is_engaged_with_broker()` consults BOTH legacy LocalAwareness fact AND substrate's GovernanceComposer::is_kill_switch_armed(). Either path arms the switch. Full C2 final-state (retire legacy fact path, route engage/disengage commands through substrate) is a follow-up that touches dispatcher call sites. |
+| C2 strangler-shim | `browser-kill-switch` substrate bridge | ✅ Shipped | IDE commit `98b64ca`: `is_engaged_with_broker()` consults BOTH legacy LocalAwareness fact AND substrate's GovernanceComposer::is_kill_switch_armed(). |
+| C3 strangler-shim | browser-quotas substrate subgates | ✅ Shipped | IDE commit `d0a50e4`: three RateLimitSubgate registrations (navigation 30/min, screenshot 6/min, eval 12/min) mirroring quotas.rs constants. |
+| C4 strangler-shim | browser-admission substrate subgate | ✅ Shipped | IDE commit `d0a50e4`: SystemPressureSubgate("browser-admission") min_tier=Watch + HealthyDefault provider. Operator swaps in sysinfo-backed provider when throttling needed. |
+| C5 strangler-shim | capability matcher substrate subgate | ✅ Shipped | IDE commit `d0a50e4`: CapabilitySubgate("ide-capability") with AllowAll registry. Real enforcement matrix is the final-state follow-up. |
+| C6 strangler-shim | permission-tokens trace emitter | ✅ Shipped | IDE commit `d0a50e4`: `emit_permission_token_audit` helper writes audit_class=capability records to unified trace.jsonl. |
+| C7 strangler-shim | agent-self-awareness trace emitter | ✅ Shipped | IDE commit `d0a50e4`: `emit_self_awareness_audit` helper writes audit_class=meta-observation records. |
+| C8 strangler-shim | browser-overlay trace emitter | ✅ Shipped | IDE commit `d0a50e4`: `emit_overlay_audit` helper for DOM-annotation actions. WebView2 plumbing stays IDE-only per plan §C8. |
+| C9 | IdeAction 40+ variant consolidation | 🔵 Multi-session anchor | Per plan §C9 + ultra-pass U10: 8-12 days realistic. `neurogrim broker-scaffold` CLI shipped + IDE-LIFT-TEMPLATES.md provides the per-variant shape; classification step (which broker hosts each variant + visibility + leaf-op signature) is the work. |
+| C10 | Dead-code removal sweep | 🔵 Definitionally a follow-up | Happens AFTER C2-C9 final-state migrations retire legacy paths. |
 | C3 | `browser-quotas-broker` (uses A7 RateLimitSubgate) | 🔵 IDE-repo work | |
 | C4 | `browser-admission-broker` (uses A8 SystemPressureSubgate) | 🔵 IDE-repo work | |
 | C5 | Capability + batch-approval brokers (uses A9 CapabilitySubgate) | 🔵 IDE-repo work | |
