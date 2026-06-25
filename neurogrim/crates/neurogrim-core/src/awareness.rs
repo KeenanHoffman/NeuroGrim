@@ -132,6 +132,23 @@ impl LocalAwareness {
         }
     }
 
+    /// Remove a fact by key. Returns `true` if a fact was removed,
+    /// `false` if no fact with that key existed.
+    ///
+    /// Needed for tri-state inherit semantics on consumers (e.g., a
+    /// permission matrix where a missing fact means "inherit from
+    /// default"): expressing "back to inherit" requires a real delete
+    /// primitive, not an "inherit" sentinel value.
+    pub fn remove_fact(&mut self, key: &str) -> bool {
+        if let Some(idx) = self.facts.iter().position(|f| f.key == key) {
+            self.facts.remove(idx);
+            self.updated_at = Some(Utc::now());
+            true
+        } else {
+            false
+        }
+    }
+
     /// Append a free-form note.
     pub fn add_note(&mut self, content: &str, category: AwarenessCategory) {
         self.notes.push(AwarenessNote {
@@ -228,6 +245,35 @@ mod tests {
         assert_eq!(a.facts.len(), 1, "should not duplicate");
         assert_eq!(a.facts[0].value, "/new/path");
         assert_eq!(a.facts[0].note.as_deref(), Some("updated"));
+    }
+
+    #[test]
+    fn remove_fact_returns_true_and_drops_the_fact() {
+        let mut a = LocalAwareness::empty();
+        a.upsert_fact(
+            "cargo_path",
+            "/usr/bin/cargo",
+            AwarenessCategory::ToolPaths,
+            None,
+        );
+        a.upsert_fact("other", "x", AwarenessCategory::General, None);
+        let before = a.updated_at;
+        // sleep one tick to make updated_at observably newer
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        assert!(a.remove_fact("cargo_path"));
+        assert_eq!(a.facts.len(), 1);
+        assert_eq!(a.facts[0].key, "other");
+        assert!(a.updated_at > before);
+    }
+
+    #[test]
+    fn remove_fact_returns_false_when_missing() {
+        let mut a = LocalAwareness::empty();
+        a.upsert_fact("other", "x", AwarenessCategory::General, None);
+        let before = a.updated_at;
+        assert!(!a.remove_fact("not_there"));
+        assert_eq!(a.facts.len(), 1, "no fact removed");
+        assert_eq!(a.updated_at, before, "updated_at not touched on no-op");
     }
 
     #[test]
