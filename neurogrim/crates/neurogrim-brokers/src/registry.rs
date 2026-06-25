@@ -175,6 +175,12 @@ pub struct BrokerConfig {
     pub roles: Vec<String>,
     pub cold_store_path: String,
     pub catalog_path: String,
+    /// C10 / IDE-LIFT — broker_type used by `BrokerHost::boot` to look up
+    /// the factory for this broker. Default empty string = "work-broker"
+    /// fallback (matches the Wave 5.5 V0 behavior; existing manifests
+    /// continue to load unchanged).
+    #[serde(default)]
+    pub broker_type: String,
 }
 
 impl BrokerConfig {
@@ -302,6 +308,13 @@ impl BrokerRegistry {
 
     pub fn cluster_manifest_dir(&self) -> &Path {
         &self.cluster_manifest_dir
+    }
+
+    /// C10 / IDE-LIFT — accessor for a per-broker manifest by id. Used by
+    /// `BrokerHost::boot` to read the `broker_type` field for factory
+    /// dispatch.
+    pub fn per_broker_manifest(&self, id: &str) -> Option<&BrokerManifest> {
+        self.per_broker_manifests.get(id)
     }
 
     pub fn broker(&self, id: &str) -> Option<Arc<dyn Broker>> {

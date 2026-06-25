@@ -41,7 +41,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 /// Configuration for `BrokerHost::boot`.
-#[derive(Debug, Clone)]
+#[derive(Clone, Default)]
 pub struct BrokerHostConfig {
     /// When `Some`, WorkBrokers are constructed via `new_with_project_root`
     /// (live backlog sensor mode, A2 closure). When `None`, in-memory legacy
@@ -50,14 +50,54 @@ pub struct BrokerHostConfig {
     /// Trust-budget ceiling for the GovernanceComposer (BB #19 MVP scope).
     /// Default 10_000 dispatches.
     pub trust_budget_ceiling: u64,
+    /// C10 / IDE-LIFT — per-broker factory functions keyed by `broker_type`
+    /// (set in the per-broker manifest). When boot() encounters a manifest
+    /// with `broker_type = "X"`, it looks up the factory at this map and
+    /// calls it to construct the broker. When unset (the V0/MVP default),
+    /// boot() falls back to WorkBroker construction (existing behavior;
+    /// keeps the Wave 5.5 demo working unchanged).
+    pub broker_factories: BrokerFactoryRegistry,
 }
 
-impl Default for BrokerHostConfig {
-    fn default() -> Self {
-        Self {
-            project_root: None,
-            trust_budget_ceiling: 10_000,
-        }
+/// Factory function: takes broker_id + governance + project_root + the
+/// per-broker manifest's `[broker]` config table for any extra fields,
+/// returns the constructed broker as `Arc<dyn Broker>` + its catalog.
+/// Operators register one factory per broker_type they want to host.
+pub type BrokerFactoryFn = std::sync::Arc<
+    dyn Fn(
+            &str,                            // broker_id
+            std::sync::Arc<GovernanceComposer>,
+            Option<&PathBuf>,                // project_root (for sensor-backed brokers)
+        ) -> Result<(std::sync::Arc<dyn Broker>, Vec<crate::Pipeline>), HostError>
+        + Send
+        + Sync,
+>;
+
+#[derive(Clone, Default)]
+pub struct BrokerFactoryRegistry {
+    factories: std::collections::HashMap<String, BrokerFactoryFn>,
+}
+
+impl BrokerFactoryRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn register(&mut self, broker_type: impl Into<String>, factory: BrokerFactoryFn) {
+        self.factories.insert(broker_type.into(), factory);
+    }
+    pub fn get(&self, broker_type: &str) -> Option<&BrokerFactoryFn> {
+        self.factories.get(broker_type)
+    }
+    pub fn is_empty(&self) -> bool {
+        self.factories.is_empty()
+    }
+}
+
+impl std::fmt::Debug for BrokerFactoryRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BrokerFactoryRegistry")
+            .field("types", &self.factories.keys().collect::<Vec<_>>())
+            .finish()
     }
 }
 
@@ -139,26 +179,50 @@ impl BrokerHost {
 
         let governance = Arc::new(GovernanceComposer::new(config.trust_budget_ceiling));
 
-        // Construct concrete brokers. MVP: every broker declared in the
-        // cluster manifest is constructed as a WorkBroker. Future versions
-        // dispatch by broker_type field in per-broker manifests.
+        // C10 / IDE-LIFT — construct concrete brokers. For each cluster-
+        // declared broker, look up the per-broker manifest's broker_type
+        // field; if a factory is registered in config.broker_factories
+        // for that type, use it. Otherwise fall back to WorkBroker
+        // construction (Wave 5.5 V0 default; preserves existing manifests).
         let mut bootstrapped: Vec<(String, Arc<dyn Broker>)> = Vec::new();
         let broker_ids: Vec<String> = registry.cluster().brokers.keys().cloned().collect();
         for broker_id in broker_ids {
-            let work_broker = Arc::new(match config.project_root.clone() {
-                Some(root) => WorkBroker::new_with_project_root(
-                    broker_id.clone(),
-                    root,
-                    governance.clone(),
-                ),
-                None => WorkBroker::new(
-                    broker_id.clone(),
-                    BacklogState::default(),
-                    governance.clone(),
-                ),
-            });
-            let catalog = work_broker.catalog();
-            let dyn_broker: Arc<dyn Broker> = work_broker;
+            let broker_type = registry
+                .per_broker_manifest(&broker_id)
+                .map(|m| m.broker.broker_type.as_str())
+                .unwrap_or("");
+
+            let (dyn_broker, catalog): (Arc<dyn Broker>, Vec<crate::Pipeline>) =
+                if !broker_type.is_empty() {
+                    // Factory path — operator registered a constructor for
+                    // this broker_type. C10: IDE registers its 19 types
+                    // before calling boot().
+                    let factory = config.broker_factories.get(broker_type).ok_or_else(|| {
+                        HostError::Other(anyhow::anyhow!(
+                            "broker_type `{}` (declared for broker `{}`) has no registered factory; \
+                             host config's BrokerFactoryRegistry must include it before boot()",
+                            broker_type, broker_id
+                        ))
+                    })?;
+                    factory(&broker_id, governance.clone(), config.project_root.as_ref())?
+                } else {
+                    // Default WorkBroker path (V0 / Wave 5.5 fallback).
+                    let work_broker = Arc::new(match config.project_root.clone() {
+                        Some(root) => WorkBroker::new_with_project_root(
+                            broker_id.clone(),
+                            root,
+                            governance.clone(),
+                        ),
+                        None => WorkBroker::new(
+                            broker_id.clone(),
+                            BacklogState::default(),
+                            governance.clone(),
+                        ),
+                    });
+                    let catalog = work_broker.catalog();
+                    (work_broker as Arc<dyn Broker>, catalog)
+                };
+
             registry.register_with_catalog(dyn_broker.clone(), catalog)?;
             bootstrapped.push((broker_id, dyn_broker));
         }
@@ -344,6 +408,7 @@ catalog_path = "work-broker-catalog.yaml"
             BrokerHostConfig {
                 project_root: None,
                 trust_budget_ceiling: 100,
+                broker_factories: Default::default(),
             },
         )
         .await

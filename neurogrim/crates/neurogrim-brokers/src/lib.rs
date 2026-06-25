@@ -60,7 +60,7 @@ pub use cold_store::{ColdStore, ColdStoreError, JsonlColdStore};
 pub use governance::{GovernanceComposer, GovernanceRefusal, PreDispatchSubgate, SharedGovernance};
 pub use capability::{AllowAll, CapabilityDecision, CapabilityRegistry, CapabilitySubgate};
 pub use frame::Frame;
-pub use host::{BrokerHost, BrokerHostConfig, HostError};
+pub use host::{BrokerFactoryFn, BrokerFactoryRegistry, BrokerHost, BrokerHostConfig, HostError};
 pub use local_awareness_broker::{LocalAwarenessBroker, LocalAwarenessOverlay};
 pub use skill_filter::{CandidateSegment, NoOpRanker, RankerContext, SegmentRanker, SharedRanker};
 pub use workflow::{SuspendedDispatch, WakeCondition, WorkflowEngine};
