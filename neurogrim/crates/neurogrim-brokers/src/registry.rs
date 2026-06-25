@@ -337,12 +337,30 @@ impl BrokerRegistry {
 
     /// Register a concrete broker with its catalog. Preferred over `register()`
     /// for brokers whose catalog should be available via `full_catalog()`.
+    /// F2 (Phase A adversarial review): now validates the Rust-literal
+    /// catalog against the bypasses_kill_switch policy + cross-broker
+    /// composition policy + id-prefix rules. Without this, broker authors
+    /// constructing Pipelines in Rust code (vs YAML) bypassed catalog
+    /// validation entirely — a well-meaning operator could ship a
+    /// non-governance pipeline with bypasses_kill_switch=true and the
+    /// runtime would silently accept it.
     pub fn register_with_catalog(
         &mut self,
         broker: Arc<dyn Broker>,
         catalog: Vec<crate::Pipeline>,
     ) -> Result<(), RegistryError> {
         let id = broker.id().to_string();
+        // Validate before registering: catch policy violations at host-boot
+        // time rather than at first dispatch.
+        crate::catalog::validate_catalog_with_policy(
+            &catalog,
+            &id,
+            crate::catalog::CrossBrokerPolicy::Allow, // V0: registry registration is permissive on cross-broker; D1 runtime path handles it
+        )
+        .map_err(|e| RegistryError::BrokerManifestInvalid {
+            broker_id: id.clone(),
+            reason: format!("catalog policy violation: {}", e),
+        })?;
         self.register(broker)?;
         self.broker_catalogs.insert(id, catalog);
         Ok(())
@@ -444,6 +462,99 @@ catalog_path = "work-broker-catalog.yaml"
         let reg = BrokerRegistry::load_manifests(&cluster_path).unwrap();
         let err = reg.validate().unwrap_err();
         assert!(matches!(err, RegistryError::BrokerNotRegistered(_)));
+    }
+
+    /// F2 (Phase A adversarial review): catalog policy violations are
+    /// caught at registration time. A Rust-literal pipeline with
+    /// bypasses_kill_switch=true and audit_class != Governance (forbidden
+    /// per B-64 policy) must be rejected by register_with_catalog —
+    /// previously this only fired for YAML-loaded catalogs.
+    #[test]
+    fn f2_register_with_catalog_rejects_bypass_on_non_governance() {
+        use crate::pipeline::{AuditClass, EffectClass, Tunability, Visibility};
+
+        struct TinyBroker;
+        #[async_trait]
+        impl Broker for TinyBroker {
+            fn id(&self) -> &str {
+                "tiny"
+            }
+            fn role_set(&self) -> RoleSet {
+                RoleSet::single(Role::Sense)
+            }
+            async fn read_overlay(&self) -> serde_json::Value {
+                serde_json::Value::Null
+            }
+            async fn legal_pipelines(&self) -> Vec<Pipeline> {
+                vec![]
+            }
+            async fn governance_pipelines(&self) -> Vec<Pipeline> {
+                vec![]
+            }
+            async fn tick(&self, _: WorldEvent) -> Result<(), BrokerError> {
+                Ok(())
+            }
+            async fn execute_leaf(
+                &self,
+                name: &str,
+                _: LeafContext,
+            ) -> Result<serde_json::Value, LeafError> {
+                Err(LeafError::NotFound(name.to_string()))
+            }
+        }
+
+        let tmp = TempDir::new().unwrap();
+        let manifest_path = tmp.path().join("cluster.toml");
+        std::fs::write(
+            &manifest_path,
+            r#"[cluster]
+id = "x"
+name = "x"
+brokers_dir = "./"
+[cluster.brokers.tiny]
+manifest_path = "tiny.toml"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.path().join("tiny.toml"),
+            r#"[broker]
+id = "tiny"
+name = "Tiny"
+roles = ["sense"]
+cold_store_path = "tiny-cold/"
+catalog_path = "tiny.yaml"
+"#,
+        )
+        .unwrap();
+        let mut reg = BrokerRegistry::load_manifests(&manifest_path).unwrap();
+        let bad_pipeline = Pipeline {
+            id: "tiny/sneaky".to_string(),
+            visibility: Visibility::Surfaced,
+            tunability: Tunability::OperatorOnly,
+            audit_class: AuditClass::Capability,
+            effect_class: EffectClass::WorldEffect,
+            params: serde_json::json!({}),
+            preconditions: vec![],
+            steps: vec![],
+            description: String::new(),
+            when_to_use: String::new(),
+            bypasses_kill_switch: true,
+        };
+        let err = reg
+            .register_with_catalog(Arc::new(TinyBroker), vec![bad_pipeline])
+            .unwrap_err();
+        match err {
+            RegistryError::BrokerManifestInvalid { reason, .. } => {
+                assert!(
+                    reason.contains("KillSwitchBypassRequiresGovernance")
+                        || reason.contains("bypasses_kill_switch"),
+                    "unexpected reason: {}",
+                    reason
+                );
+            }
+            other => panic!("expected BrokerManifestInvalid, got {:?}", other),
+        }
     }
 
     #[test]
