@@ -40,6 +40,12 @@ pub enum GovernanceRefusal {
 
     #[error("kill switch armed (scope: {scope})")]
     KillSwitchArmed { scope: String },
+
+    /// A4 — refusal produced by a registered pre-dispatch subgate
+    /// (rate-limit, capability, admission, …). `name` identifies the subgate
+    /// for trace attribution; `reason` is the subgate-specific message.
+    #[error("subgate `{name}` refused dispatch: {reason}")]
+    Subgate { name: String, reason: String },
 }
 
 /// MVP simplified trust budget per ultra-pass U7.
@@ -125,12 +131,35 @@ impl KillSwitchMvp {
     }
 }
 
-/// Governance Composer — holds trust budget + kill switch state; provides
-/// pre-dispatch + post-dispatch checks that the Runner calls automatically
-/// for Surfaced pipelines.
+/// A4 — pluggable pre-dispatch governance subgate. Implementations carry
+/// their own state (e.g., a sliding-window rate limiter, a capability
+/// matcher) and return a refusal when the dispatch should be blocked.
+///
+/// Registration order = check order; subgates run AFTER the framework's
+/// `check-trust-budget` + `check-kill-switch` and BEFORE `record-dispatch`,
+/// per the spec's canonical composition order. This slot is the
+/// "post-kill-switch / pre-record-dispatch" insertion point for the
+/// IDE-driven subgates A7 (rate-limit), A8 (system-pressure), A9
+/// (capability) — and any operator-added subgates beyond those.
+pub trait PreDispatchSubgate: Send + Sync {
+    /// Name used in trace attribution + error messages.
+    fn name(&self) -> &str;
+    /// Decide whether to permit the dispatch. Return `Err(GovernanceRefusal
+    /// ::Subgate { name, reason })` to block; pass `self.name().to_string()`
+    /// as `name` so the refusal correctly identifies which subgate fired.
+    fn check(&self, pipeline: &Pipeline) -> Result<(), GovernanceRefusal>;
+}
+
+/// Governance Composer — holds trust budget + kill switch state + a
+/// registry of pluggable pre-dispatch subgates (A4); provides pre-dispatch
+/// + post-dispatch checks that the Runner calls automatically for Surfaced
+/// pipelines.
 pub struct GovernanceComposer {
     trust_budget: TrustBudgetMvp,
     kill_switch: KillSwitchMvp,
+    /// A4 — pluggable pre-dispatch subgates. RwLock<Vec<...>> so registration
+    /// is lockless on the hot dispatch path (read lock per dispatch).
+    pre_dispatch_subgates: std::sync::RwLock<Vec<Arc<dyn PreDispatchSubgate>>>,
 }
 
 impl GovernanceComposer {
@@ -140,7 +169,31 @@ impl GovernanceComposer {
         Self {
             trust_budget: TrustBudgetMvp::new(trust_budget_ceiling),
             kill_switch: KillSwitchMvp::new(),
+            pre_dispatch_subgates: std::sync::RwLock::new(Vec::new()),
         }
+    }
+
+    /// A4 — register a pre-dispatch subgate. Subgates fire in registration
+    /// order after the framework's trust-budget + kill-switch checks; the
+    /// first subgate that returns `Err` short-circuits the dispatch with
+    /// `GovernanceRefusal::Subgate { name, reason }`.
+    ///
+    /// Operator's main binary calls this during host construction to wire
+    /// A7 (rate-limit), A8 (system-pressure), A9 (capability), etc.
+    pub fn register_pre_dispatch_subgate(&self, subgate: Arc<dyn PreDispatchSubgate>) {
+        self.pre_dispatch_subgates
+            .write()
+            .expect("pre_dispatch_subgates lock poisoned")
+            .push(subgate);
+    }
+
+    /// Number of currently-registered pre-dispatch subgates. Used by tests
+    /// + diagnostics.
+    pub fn pre_dispatch_subgate_count(&self) -> usize {
+        self.pre_dispatch_subgates
+            .read()
+            .expect("pre_dispatch_subgates lock poisoned")
+            .len()
     }
 
     /// `check-trust-budget` + `check-kill-switch` composed pre-dispatch.
@@ -156,6 +209,15 @@ impl GovernanceComposer {
         self.trust_budget.check()?;
         if !pipeline.bypasses_kill_switch {
             self.kill_switch.check()?;
+        }
+        // A4 — run extended subgates in registration order. Slot:
+        // post-kill-switch / pre-record-dispatch per spec composition order.
+        let subgates = self
+            .pre_dispatch_subgates
+            .read()
+            .expect("pre_dispatch_subgates lock poisoned");
+        for subgate in subgates.iter() {
+            subgate.check(pipeline)?;
         }
         Ok(())
     }
@@ -415,6 +477,119 @@ mod tests {
             }
             other => panic!("disengage-kill-switch step must be Leaf, got {:?}", other),
         }
+    }
+
+    /// A4 — pre-dispatch subgates registered in order; first refusal
+    /// short-circuits the dispatch with `GovernanceRefusal::Subgate`.
+    #[test]
+    fn pre_dispatch_subgates_fire_in_registration_order() {
+        struct AlwaysAllow;
+        impl PreDispatchSubgate for AlwaysAllow {
+            fn name(&self) -> &str {
+                "always-allow"
+            }
+            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+                Ok(())
+            }
+        }
+        struct AlwaysRefuse {
+            counter: std::sync::atomic::AtomicU64,
+        }
+        impl PreDispatchSubgate for AlwaysRefuse {
+            fn name(&self) -> &str {
+                "always-refuse"
+            }
+            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+                self.counter
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                Err(GovernanceRefusal::Subgate {
+                    name: self.name().to_string(),
+                    reason: "test refusal".to_string(),
+                })
+            }
+        }
+
+        let g = GovernanceComposer::new(100);
+        assert_eq!(g.pre_dispatch_subgate_count(), 0);
+        let refuser = Arc::new(AlwaysRefuse {
+            counter: std::sync::atomic::AtomicU64::new(0),
+        });
+        g.register_pre_dispatch_subgate(Arc::new(AlwaysAllow));
+        g.register_pre_dispatch_subgate(refuser.clone());
+        // Second subgate registered after first; verify count.
+        assert_eq!(g.pre_dispatch_subgate_count(), 2);
+
+        let p = Pipeline {
+            id: "t/x".to_string(),
+            visibility: Visibility::Surfaced,
+            tunability: Tunability::OperatorOnly,
+            audit_class: AuditClass::Capability,
+            effect_class: EffectClass::ReadOnly,
+            params: serde_json::json!({}),
+            preconditions: vec![],
+            steps: vec![],
+            description: String::new(),
+            when_to_use: String::new(),
+            bypasses_kill_switch: false,
+        };
+        let err = g.pre_dispatch_checks_for(&p).unwrap_err();
+        match err {
+            GovernanceRefusal::Subgate { name, reason } => {
+                assert_eq!(name, "always-refuse");
+                assert_eq!(reason, "test refusal");
+            }
+            other => panic!("expected Subgate refusal, got {:?}", other),
+        }
+        assert_eq!(
+            refuser.counter.load(std::sync::atomic::Ordering::Acquire),
+            1,
+            "AlwaysRefuse must have run exactly once"
+        );
+    }
+
+    /// A4 — subgates run AFTER framework checks (trust-budget + kill-switch).
+    /// If a framework check fails first, subgates don't fire.
+    #[test]
+    fn pre_dispatch_subgates_skipped_when_framework_check_fails_first() {
+        struct CountingSubgate {
+            count: std::sync::atomic::AtomicU64,
+        }
+        impl PreDispatchSubgate for CountingSubgate {
+            fn name(&self) -> &str {
+                "counter"
+            }
+            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+                self.count
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                Ok(())
+            }
+        }
+        let g = GovernanceComposer::new(0); // budget = 0 → trust-budget refuses immediately
+        let counter = Arc::new(CountingSubgate {
+            count: std::sync::atomic::AtomicU64::new(0),
+        });
+        g.register_pre_dispatch_subgate(counter.clone());
+        let p = Pipeline {
+            id: "t/x".to_string(),
+            visibility: Visibility::Surfaced,
+            tunability: Tunability::OperatorOnly,
+            audit_class: AuditClass::Capability,
+            effect_class: EffectClass::ReadOnly,
+            params: serde_json::json!({}),
+            preconditions: vec![],
+            steps: vec![],
+            description: String::new(),
+            when_to_use: String::new(),
+            bypasses_kill_switch: false,
+        };
+        // Trust-budget should refuse before subgate runs
+        let err = g.pre_dispatch_checks_for(&p).unwrap_err();
+        assert!(matches!(err, GovernanceRefusal::TrustBudgetExhausted { .. }));
+        assert_eq!(
+            counter.count.load(std::sync::atomic::Ordering::Acquire),
+            0,
+            "subgate should NOT have run when framework check failed first"
+        );
     }
 
     #[test]
