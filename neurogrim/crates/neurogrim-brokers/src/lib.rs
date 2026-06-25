@@ -36,6 +36,7 @@
 pub mod broker;
 pub mod capability;
 pub mod cold_store;
+pub mod frame;
 pub mod host;
 pub mod overlay;
 pub mod pipeline;
@@ -55,6 +56,7 @@ pub use catalog::{evaluate_precondition, load_catalog, validate_catalog, Catalog
 pub use cold_store::{ColdStore, ColdStoreError, JsonlColdStore};
 pub use governance::{GovernanceComposer, GovernanceRefusal, PreDispatchSubgate, SharedGovernance};
 pub use capability::{AllowAll, CapabilityDecision, CapabilityRegistry, CapabilitySubgate};
+pub use frame::Frame;
 pub use host::{BrokerHost, BrokerHostConfig, HostError};
 pub use rate_limit::{RateLimitSubgate, ScopeKeyFn};
 pub use system_facts::{

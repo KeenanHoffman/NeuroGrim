@@ -71,6 +71,17 @@ pub struct ClusterConfig {
     pub brokers: HashMap<String, ClusterBrokerEntry>,
     #[serde(default)]
     pub materializer: MaterializerConfig,
+    /// A12 / A13 — operator-declared Frame defaults loaded from
+    /// `[cluster.frame]` TOML section. Pipelines + leaf-ops read these via
+    /// the Runner's `frame_snapshot()`. Backward-compat with V0 manifests:
+    /// missing section = empty frame.
+    #[serde(default)]
+    pub frame: FrameConfig,
+    /// A12 — tunability defaults for the runner. Currently a placeholder
+    /// struct; S1-T extends with per-pipeline tunability overrides loadable
+    /// from this section. Backward-compat: missing section = defaults.
+    #[serde(default)]
+    pub tunability: TunabilityConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +128,38 @@ impl Default for MaterializerConfig {
             context_budget_chars: default_context_budget(),
         }
     }
+}
+
+/// A12 / A13 — operator-declared Frame defaults section of cluster manifest.
+/// TOML shape: `[cluster.frame.values]` is a free-form key/value table.
+/// Empty by default (V0 backward-compat). Loaded into the runner's Frame
+/// at boot via `BrokerHost::boot`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FrameConfig {
+    #[serde(default)]
+    pub values: HashMap<String, serde_json::Value>,
+}
+
+impl FrameConfig {
+    pub fn to_frame(&self) -> crate::frame::Frame {
+        crate::frame::Frame {
+            values: self.values.clone(),
+        }
+    }
+}
+
+/// A12 — tunability defaults section of cluster manifest. Placeholder for
+/// S1-T per-pipeline tunability override loader; V0 ships as empty struct
+/// so the section can appear in manifests without parse errors.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TunabilityConfig {
+    /// Reserved for S1-T: per-pipeline tunability overrides authored by
+    /// operators in the cluster manifest (e.g., `quota_overrides`,
+    /// `capability_enforcement_flags`). V0 honors none of these; the field
+    /// exists to reserve the schema slot so V0 manifests don't need
+    /// migration when S1-T lands.
+    #[serde(default)]
+    pub reserved: HashMap<String, serde_json::Value>,
 }
 
 /// Per-broker manifest (TOML).

@@ -21,6 +21,7 @@
 
 use crate::broker::Broker;
 use crate::catalog;
+use crate::frame::Frame;
 use crate::governance::{GovernanceComposer, GovernanceRefusal};
 use crate::pipeline::{ParamMap, Pipeline, PipelineId, Step, Visibility};
 use crate::trace::{SnapshotDelta, TraceRecord, TraceSink};
@@ -94,6 +95,11 @@ pub struct LeafContext {
     pub params: ParamMap,
     /// Snapshot of the broker's Overlay at dispatch time.
     pub overlay_snapshot: serde_json::Value,
+    /// A13 / BB #35: operator-declared Frame (stakes, posture, budgets,
+    /// thresholds, ...). Leaf-ops + precondition DSL read frame values.
+    /// Sub-pipelines inherit the parent frame (V0; per-sub-pipeline override
+    /// lands in S1-T).
+    pub frame: Frame,
 }
 
 /// Dispatch outcome returned from Runner to the consumer.
@@ -115,8 +121,8 @@ pub type DispatchCallback =
     Arc<dyn Fn(&str, &DispatchOutcome) + Send + Sync>;
 
 /// Pipeline Runner. Holds shared infrastructure (trace sink, governance
-/// composer, prior-snapshot cache for delta computation); brokers + catalogs
-/// are passed per dispatch.
+/// composer, prior-snapshot cache for delta computation, A13 frame);
+/// brokers + catalogs are passed per dispatch.
 pub struct PipelineRunner {
     trace_sink: Arc<TraceSink>,
     governance: Arc<GovernanceComposer>,
@@ -129,6 +135,10 @@ pub struct PipelineRunner {
     /// §C6 / §D3). Decouples Runner from Materializer: operator's main
     /// binary registers a callback that re-runs the Materializer Composer.
     on_dispatch_complete: std::sync::RwLock<Vec<DispatchCallback>>,
+    /// A13 / BB #35: operator-declared Frame loaded from cluster manifest.
+    /// Read-only at the runner level; future `propose_tune()` API will
+    /// respect each pipeline's `tunability` field.
+    frame: std::sync::RwLock<Frame>,
 }
 
 impl PipelineRunner {
@@ -138,7 +148,21 @@ impl PipelineRunner {
             governance,
             prior_snapshots: tokio::sync::Mutex::new(std::collections::HashMap::new()),
             on_dispatch_complete: std::sync::RwLock::new(Vec::new()),
+            frame: std::sync::RwLock::new(Frame::new()),
         }
+    }
+
+    /// A13: replace the runner's Frame. Operator-driven (host setup time);
+    /// runtime tuning lands in S1-T via a `propose_tune()` API that
+    /// respects per-pipeline tunability.
+    pub fn set_frame(&self, frame: Frame) {
+        *self.frame.write().expect("frame lock poisoned") = frame;
+    }
+
+    /// A13: read a snapshot of the current Frame. Cheap clone per dispatch
+    /// (Frame is a small HashMap).
+    pub fn frame_snapshot(&self) -> Frame {
+        self.frame.read().expect("frame lock poisoned").clone()
     }
 
     /// Access the governance composer (for operator-side admin commands).
@@ -304,10 +328,15 @@ impl PipelineRunner {
 
         // 4. Read broker Overlay snapshot for precondition + leaf-op ctx
         let overlay_snapshot = broker.read_overlay().await;
+        let frame = self.frame_snapshot();
 
-        // 5. Precondition evaluation
+        // 5. Precondition evaluation. A13: {frame.X} placeholders in
+        //    predicate strings are substituted from the Frame before the
+        //    catalog's DSL evaluates against overlay + params.
         for predicate in &pipeline.preconditions {
-            let holds = catalog::evaluate_precondition(predicate, &overlay_snapshot, &params)?;
+            let resolved = frame.substitute_placeholders(predicate);
+            let holds =
+                catalog::evaluate_precondition(&resolved, &overlay_snapshot, &params)?;
             if !holds {
                 return Err(DispatchError::PreconditionUnmet(predicate.clone()));
             }
@@ -325,6 +354,7 @@ impl PipelineRunner {
             pipeline_id: pipeline_id.clone(),
             params: params.clone(),
             overlay_snapshot: overlay_snapshot.clone(),
+            frame,
         };
         let output = self
             .execute_steps(broker.clone(), catalog, &pipeline.steps, &leaf_ctx)
@@ -389,8 +419,10 @@ impl PipelineRunner {
                     Ok(outcome.output)
                 }
                 Step::Guard { predicate, inner } => {
+                    // A13: frame.X placeholder substitution before DSL eval.
+                    let resolved = ctx.frame.substitute_placeholders(predicate);
                     let holds = catalog::evaluate_precondition(
-                        predicate,
+                        &resolved,
                         &ctx.overlay_snapshot,
                         &ctx.params,
                     )?;
@@ -405,8 +437,10 @@ impl PipelineRunner {
                     if_true,
                     if_false,
                 } => {
+                    // A13: frame.X placeholder substitution before DSL eval.
+                    let resolved = ctx.frame.substitute_placeholders(predicate);
                     let holds = catalog::evaluate_precondition(
-                        predicate,
+                        &resolved,
                         &ctx.overlay_snapshot,
                         &ctx.params,
                     )?;
@@ -439,19 +473,98 @@ impl PipelineRunner {
     }
 }
 
-/// Minimal params validation: check that all declared param schema fields
-/// are present (Wave 4 elevates to full JSON Schema).
+/// A11 — Param validation against the pipeline's JSON Schema fragment.
+///
+/// V0 only checked that every declared `properties` field name appeared in
+/// `params` (treating ALL properties as required). That's wrong: JSON
+/// Schema has an explicit `required` array; properties not listed there are
+/// optional. V0 also performed no type/enum checking — malformed params
+/// reached leaf-ops with less helpful error sites.
+///
+/// A11 implements a lightweight JSON Schema validator covering the subset
+/// actually used by broker pipelines:
+/// - `required: ["field", ...]` — listed fields must be present
+/// - `properties.<field>.type: "string" | "number" | "integer" | "boolean" | "array" | "object" | "null"`
+/// - `properties.<field>.enum: [...]` — value must be one of the listed
+///
+/// Full Draft 2020-12 (regex format, $ref, oneOf/anyOf/allOf, etc.) lands
+/// when an actual pipeline needs it; the broker contract intentionally
+/// keeps pipeline param schemas simple per BROKER-INTERNALS.md §1.3.
 fn validate_params_minimal(pipeline: &Pipeline, params: &ParamMap) -> Result<(), DispatchError> {
-    if let Some(props) = pipeline.params.get("properties") {
-        if let Some(props_obj) = props.as_object() {
-            for (field, _schema) in props_obj {
-                if !params.contains_key(field) {
+    let schema = &pipeline.params;
+    // Required array (JSON Schema convention). If absent, no fields are
+    // required — every declared property is optional.
+    let required: Vec<&str> = schema
+        .get("required")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+    for field in &required {
+        if !params.contains_key(*field) {
+            return Err(DispatchError::ParamValidation {
+                field: field.to_string(),
+                reason: "required parameter missing".to_string(),
+            });
+        }
+    }
+    // Per-property type + enum validation.
+    if let Some(props) = schema.get("properties").and_then(|v| v.as_object()) {
+        for (field_name, field_schema) in props {
+            if let Some(value) = params.get(field_name) {
+                if let Err(reason) = validate_value_against_schema(value, field_schema) {
                     return Err(DispatchError::ParamValidation {
-                        field: field.clone(),
-                        reason: "required parameter missing".to_string(),
+                        field: field_name.clone(),
+                        reason,
                     });
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+fn validate_value_against_schema(
+    value: &serde_json::Value,
+    schema: &serde_json::Value,
+) -> Result<(), String> {
+    // Type check
+    if let Some(expected_type) = schema.get("type").and_then(|v| v.as_str()) {
+        let actual_type = match value {
+            serde_json::Value::String(_) => "string",
+            serde_json::Value::Number(n) => {
+                if n.is_i64() || n.is_u64() {
+                    if expected_type == "integer" {
+                        "integer"
+                    } else {
+                        "number"
+                    }
+                } else {
+                    "number"
+                }
+            }
+            serde_json::Value::Bool(_) => "boolean",
+            serde_json::Value::Array(_) => "array",
+            serde_json::Value::Object(_) => "object",
+            serde_json::Value::Null => "null",
+        };
+        // Accept "integer" as a valid "number" too.
+        let type_matches = actual_type == expected_type
+            || (expected_type == "number"
+                && (actual_type == "number" || actual_type == "integer"));
+        if !type_matches {
+            return Err(format!(
+                "expected type `{}`, got `{}`",
+                expected_type, actual_type
+            ));
+        }
+    }
+    // Enum check
+    if let Some(enum_vals) = schema.get("enum").and_then(|v| v.as_array()) {
+        if !enum_vals.iter().any(|v| v == value) {
+            return Err(format!(
+                "value not in declared enum: {}",
+                serde_json::to_string(enum_vals).unwrap_or_default()
+            ));
         }
     }
     Ok(())
@@ -861,6 +974,191 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("leaf-op"));
+    }
+
+    /// A11: JSON Schema validation — required fields enforced.
+    #[tokio::test]
+    async fn a11_required_field_rejects_missing_param() {
+        let (_, runner) = make_runner().await;
+        let mut pipeline = make_pipeline(
+            "t/needs-x",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        pipeline.params = serde_json::json!({
+            "type": "object",
+            "properties": { "x": { "type": "string" } },
+            "required": ["x"]
+        });
+        let broker = Arc::new(TestBroker::new("t", vec![pipeline.clone()], serde_json::json!({})));
+        // Missing required → ParamValidation error
+        let err = runner
+            .dispatch(broker, &[pipeline], "t/needs-x".to_string(), ParamMap::new())
+            .await
+            .unwrap_err();
+        match err {
+            DispatchError::ParamValidation { field, .. } => assert_eq!(field, "x"),
+            other => panic!("expected ParamValidation, got {:?}", other),
+        }
+    }
+
+    /// A11: declared optional fields don't require presence (V0 erroneously
+    /// required every declared property).
+    #[tokio::test]
+    async fn a11_optional_field_passes_when_absent() {
+        let (_, runner) = make_runner().await;
+        let mut pipeline = make_pipeline(
+            "t/opt",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        pipeline.params = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "x": { "type": "string" },
+                "y": { "type": "string" }
+            },
+            "required": ["x"]
+        });
+        let broker = Arc::new(TestBroker::new("t", vec![pipeline.clone()], serde_json::json!({})));
+        // Only x supplied — should succeed (y is optional)
+        let mut params = ParamMap::new();
+        params.insert("x".to_string(), serde_json::Value::String("hi".into()));
+        runner
+            .dispatch(broker, &[pipeline], "t/opt".to_string(), params)
+            .await
+            .unwrap();
+    }
+
+    /// A11: type mismatch rejected.
+    #[tokio::test]
+    async fn a11_type_mismatch_rejected() {
+        let (_, runner) = make_runner().await;
+        let mut pipeline = make_pipeline(
+            "t/typed",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        pipeline.params = serde_json::json!({
+            "type": "object",
+            "properties": { "n": { "type": "integer" } },
+            "required": ["n"]
+        });
+        let broker = Arc::new(TestBroker::new("t", vec![pipeline.clone()], serde_json::json!({})));
+        let mut params = ParamMap::new();
+        params.insert("n".to_string(), serde_json::Value::String("not-a-number".into()));
+        let err = runner
+            .dispatch(broker, &[pipeline], "t/typed".to_string(), params)
+            .await
+            .unwrap_err();
+        match err {
+            DispatchError::ParamValidation { field, reason } => {
+                assert_eq!(field, "n");
+                assert!(reason.contains("expected type"));
+            }
+            other => panic!("expected ParamValidation, got {:?}", other),
+        }
+    }
+
+    /// A11: enum constraint rejected when value outside the declared set.
+    #[tokio::test]
+    async fn a11_enum_constraint_rejected() {
+        let (_, runner) = make_runner().await;
+        let mut pipeline = make_pipeline(
+            "t/enum",
+            vec![],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        pipeline.params = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "tier": { "type": "string", "enum": ["low", "medium", "high"] }
+            },
+            "required": ["tier"]
+        });
+        let broker = Arc::new(TestBroker::new("t", vec![pipeline.clone()], serde_json::json!({})));
+        let mut params = ParamMap::new();
+        params.insert("tier".to_string(), serde_json::Value::String("nope".into()));
+        let err = runner
+            .dispatch(broker.clone(), &[pipeline.clone()], "t/enum".to_string(), params.clone())
+            .await
+            .unwrap_err();
+        match err {
+            DispatchError::ParamValidation { field, .. } => assert_eq!(field, "tier"),
+            other => panic!("expected ParamValidation, got {:?}", other),
+        }
+        // Accept a valid value.
+        params.insert("tier".to_string(), serde_json::Value::String("medium".into()));
+        runner
+            .dispatch(broker, &[pipeline], "t/enum".to_string(), params)
+            .await
+            .unwrap();
+    }
+
+    /// A13 / BB #35: precondition DSL substitutes {frame.X} placeholders
+    /// from the runner's Frame before evaluating. Operators can author a
+    /// precondition like `frame_required_field` that resolves to whatever
+    /// the operator-declared frame says — runtime-tunable without rewriting
+    /// the catalog.
+    #[tokio::test]
+    async fn a13_precondition_substitutes_frame_placeholders() {
+        let (_, runner) = make_runner().await;
+        // Pipeline precondition refers to {frame.required_overlay_field}.
+        // With the frame set, that resolves to a real field name and the
+        // precondition checks against overlay.
+        let pipeline = make_pipeline(
+            "t/needs-frame",
+            vec!["{frame.required_overlay_field}"],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        // Set frame: required_overlay_field = "active_work" (the overlay
+        // field the test broker has).
+        runner.set_frame(Frame::from_pairs(vec![(
+            "required_overlay_field",
+            serde_json::json!("active_work"),
+        )]));
+        let broker = Arc::new(TestBroker::new(
+            "t",
+            vec![pipeline.clone()],
+            serde_json::json!({"active_work": [{"id": "X"}]}),
+        ));
+        runner
+            .dispatch(broker, &[pipeline], "t/needs-frame".to_string(), ParamMap::new())
+            .await
+            .unwrap();
+    }
+
+    /// A13: when the frame placeholder isn't set, the precondition string is
+    /// preserved literally — the DSL tries to evaluate `{frame.missing}` and
+    /// fails because no overlay field has that name, so dispatch refuses
+    /// with PreconditionUnmet.
+    #[tokio::test]
+    async fn a13_unset_frame_placeholder_preserved_then_precondition_fails() {
+        let (_, runner) = make_runner().await;
+        let pipeline = make_pipeline(
+            "t/needs-frame",
+            vec!["{frame.missing}"],
+            vec![Step::Leaf {
+                leaf_op: "echo".to_string(),
+            }],
+        );
+        // Frame is empty (default).
+        let broker = Arc::new(TestBroker::new("t", vec![pipeline.clone()], serde_json::json!({})));
+        let err = runner
+            .dispatch(broker, &[pipeline], "t/needs-frame".to_string(), ParamMap::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DispatchError::PreconditionUnmet(_)));
     }
 
     /// A1/C8 regression: PipelineNotFound MUST also trace (caller asked for

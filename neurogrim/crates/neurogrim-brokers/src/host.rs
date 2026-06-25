@@ -175,6 +175,9 @@ impl BrokerHost {
 
         let trace_sink = Arc::new(TraceSink::new(trace_path));
         let runner = Arc::new(PipelineRunner::new(trace_sink, governance.clone()));
+        // A12 / A13: load operator-declared Frame defaults from cluster manifest.
+        let frame = registry.cluster().frame.to_frame();
+        runner.set_frame(frame);
 
         let ctx = MaterializerContext {
             bootstrapped: bootstrapped.clone(),
