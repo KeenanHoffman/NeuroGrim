@@ -35,20 +35,20 @@ All 16 Phase A items shipped + exit gate verified.
 
 ---
 
-## Phase B — Proof-of-concept IDE broker (SUBSTRATE-SIDE COMPLETE; IDE-SIDE DEFERRED)
-
-LocalAwareness chosen as PoC. Substrate-side broker + tests shipped.
-IDE-side Tauri integration deferred to IDE-repo session.
+## Phase B — Proof-of-concept IDE broker (COMPLETE 5/5)
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | B1 | `LocalAwarenessBroker` (Sense role) | ✅ Shipped | `src/local_awareness_broker.rs`; 5 tests |
 | B2 | Two-write coherence + fault-injection test | ✅ Shipped | `b2_failed_disk_write_leaves_overlay_unchanged` |
+| B3 | IDE-side BrokerHost wiring | ✅ Shipped | IDE commit `3aacc2d`: src-tauri/Cargo.toml path-override, src/brokers/mod.rs (init_broker_host + dispatch_pipeline_via_host + list_brokers_via_host), setup() integration, invoke_handler! registration |
 | B4 | R-O-4 isolation 10-broker bench re-verify | ✅ Verified | Wave 5.5b's `jsonl_concurrent_writes_across_brokers_dont_interfere` |
-| **B3** | **IDE round-trip via Tauri IPC** | 🔵 IDE-repo work | Needs `InProcessBrokerHost` wired into Tauri main.rs |
-| **B5** | **Adversarial review of Phase A surfaces** | 🔵 IDE-repo work | Pair with B3 since lift exercises both |
+| B5 | Adversarial review of Phase A surfaces | ✅ Shipped | `docs/PHASE-A-ADVERSARIAL-REVIEW.md` (10 findings) + F1/F2/F9 inline fixes |
 
-**IDE repo:** `D:\local-pc-operational-management\children\neurogrim-ide\src-tauri\`
+**IDE repo:** `D:\local-pc-operational-management\children\neurogrim-ide\src-tauri\` —
+the IDE Cargo workspace now uses `[patch.crates-io]` overrides plus a
+direct path-dep on `neurogrim-brokers`. IDE builds clean against this setup
+(`cargo check` on neurogrim-ide-lib: 0 errors; 38 pre-existing warnings).
 
 ---
 
@@ -61,7 +61,7 @@ subsystem onto the substrate). Substrate-side adapters needed at C1.
 |---|---|---|---|
 | C1 (substrate) | `TraceSink::append_external` for unified audit | ✅ Shipped | Allows non-broker components to write to the same JSONL |
 | C1 (IDE) | process_broker/session_broker library wiring | 🔵 IDE-repo work | Call TraceSink::append_external on spawn |
-| C2 | `browser-kill-switch-broker` | 🔵 IDE-repo work | |
+| C2 (strangler-shim) | `browser-kill-switch` substrate bridge | ✅ Shipped | IDE commit `98b64ca`: `is_engaged_with_broker()` consults BOTH legacy LocalAwareness fact AND substrate's GovernanceComposer::is_kill_switch_armed(). Either path arms the switch. Full C2 final-state (retire legacy fact path, route engage/disengage commands through substrate) is a follow-up that touches dispatcher call sites. |
 | C3 | `browser-quotas-broker` (uses A7 RateLimitSubgate) | 🔵 IDE-repo work | |
 | C4 | `browser-admission-broker` (uses A8 SystemPressureSubgate) | 🔵 IDE-repo work | |
 | C5 | Capability + batch-approval brokers (uses A9 CapabilitySubgate) | 🔵 IDE-repo work | |
