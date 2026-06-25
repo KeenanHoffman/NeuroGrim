@@ -116,6 +116,13 @@ pub struct BrokerHost {
     pub registry: Arc<BrokerRegistry>,
     pub runner: Arc<PipelineRunner>,
     pub governance: Arc<GovernanceComposer>,
+    /// C1 (Phase C substrate adapter) — exposed so non-broker components
+    /// (IDE-side modules like process_broker spawn sites, agent self-
+    /// awareness sensors, browser overlay) can write to the same unified
+    /// JSONL via `trace_sink.append_external(record)`. Read-only handle;
+    /// the runner owns the same Arc and uses it for broker-dispatched
+    /// records.
+    pub trace_sink: Arc<TraceSink>,
     bootstrapped: Vec<(String, Arc<dyn Broker>)>,
     ctx: MaterializerContext,
 }
@@ -174,7 +181,7 @@ impl BrokerHost {
         }
 
         let trace_sink = Arc::new(TraceSink::new(trace_path));
-        let runner = Arc::new(PipelineRunner::new(trace_sink, governance.clone()));
+        let runner = Arc::new(PipelineRunner::new(trace_sink.clone(), governance.clone()));
         // A12 / A13: load operator-declared Frame defaults from cluster manifest.
         let frame = registry.cluster().frame.to_frame();
         runner.set_frame(frame);
@@ -208,6 +215,7 @@ impl BrokerHost {
             registry: Arc::new(registry),
             runner,
             governance,
+            trace_sink,
             bootstrapped,
             ctx,
         })
