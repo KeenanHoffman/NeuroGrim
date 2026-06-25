@@ -26,8 +26,12 @@
 //! configuration. Multiple rate limits = register multiple subgates (each
 //! gets its own slot per A4).
 //!
-//! Time source: `tokio::time::Instant` for testability (test code can use
-//! `tokio::time::pause()` + `advance()` to simulate window expiry).
+//! Time source: `std::time::Instant`. Tests use `std::thread::sleep` to
+//! simulate window expiry. Migration to `tokio::time::Instant` (+ test-time
+//! pause/advance) would require making `check()` async; deferred since the
+//! V0 rate-limit check is intentionally a fast sync call on the dispatch
+//! hot path. **F9 closure** (Phase A adversarial review) — earlier doc
+//! claimed tokio::time; this aligns the doc with the implementation.
 
 use crate::governance::{GovernanceRefusal, PreDispatchSubgate};
 use crate::pipeline::Pipeline;

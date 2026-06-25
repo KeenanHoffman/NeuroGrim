@@ -157,9 +157,42 @@ pub trait PreDispatchSubgate: Send + Sync {
 pub struct GovernanceComposer {
     trust_budget: TrustBudgetMvp,
     kill_switch: KillSwitchMvp,
-    /// A4 — pluggable pre-dispatch subgates. RwLock<Vec<...>> so registration
-    /// is lockless on the hot dispatch path (read lock per dispatch).
-    pre_dispatch_subgates: std::sync::RwLock<Vec<Arc<dyn PreDispatchSubgate>>>,
+    /// A4 — pluggable pre-dispatch subgates. **F1 fix:** name-keyed map so
+    /// re-registration (e.g., from a Tauri `setup()` re-run during dev-mode
+    /// HMR) REPLACES the prior copy rather than appending a duplicate. The
+    /// outer `Vec` preserves registration order for deterministic check
+    /// ordering; the inner `HashMap` is used at registration time to detect
+    /// the duplicate-name case.
+    pre_dispatch_subgates: std::sync::RwLock<SubgateRegistry>,
+}
+
+/// F1 — name-keyed subgate storage that detects duplicate registrations.
+#[derive(Default)]
+struct SubgateRegistry {
+    /// Maintain insertion order (Vec) for deterministic check ordering.
+    /// Each entry: (name, Arc<dyn ...>).
+    entries: Vec<(String, Arc<dyn PreDispatchSubgate>)>,
+}
+
+impl SubgateRegistry {
+    fn insert_or_replace(&mut self, subgate: Arc<dyn PreDispatchSubgate>) -> bool {
+        let name = subgate.name().to_string();
+        if let Some(pos) = self.entries.iter().position(|(n, _)| n == &name) {
+            self.entries[pos] = (name, subgate);
+            true // replaced
+        } else {
+            self.entries.push((name, subgate));
+            false // inserted fresh
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &Arc<dyn PreDispatchSubgate>> {
+        self.entries.iter().map(|(_, s)| s)
+    }
+
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
 }
 
 impl GovernanceComposer {
@@ -169,22 +202,36 @@ impl GovernanceComposer {
         Self {
             trust_budget: TrustBudgetMvp::new(trust_budget_ceiling),
             kill_switch: KillSwitchMvp::new(),
-            pre_dispatch_subgates: std::sync::RwLock::new(Vec::new()),
+            pre_dispatch_subgates: std::sync::RwLock::new(SubgateRegistry::default()),
         }
     }
 
-    /// A4 — register a pre-dispatch subgate. Subgates fire in registration
-    /// order after the framework's trust-budget + kill-switch checks; the
-    /// first subgate that returns `Err` short-circuits the dispatch with
-    /// `GovernanceRefusal::Subgate { name, reason }`.
+    /// A4 + F1 — register a pre-dispatch subgate. Subgates fire in
+    /// registration order after the framework's trust-budget + kill-switch
+    /// checks; the first subgate that returns `Err` short-circuits the
+    /// dispatch with `GovernanceRefusal::Subgate { name, reason }`.
+    ///
+    /// **F1 idempotency:** if a subgate with the same `name()` is already
+    /// registered, this call REPLACES it (with a `tracing::warn`) instead
+    /// of appending a duplicate. Closes the dev-mode HMR / setup-re-run
+    /// double-counting bug from the Phase A adversarial review.
     ///
     /// Operator's main binary calls this during host construction to wire
     /// A7 (rate-limit), A8 (system-pressure), A9 (capability), etc.
     pub fn register_pre_dispatch_subgate(&self, subgate: Arc<dyn PreDispatchSubgate>) {
-        self.pre_dispatch_subgates
+        let name = subgate.name().to_string();
+        let replaced = self
+            .pre_dispatch_subgates
             .write()
             .expect("pre_dispatch_subgates lock poisoned")
-            .push(subgate);
+            .insert_or_replace(subgate);
+        if replaced {
+            tracing::warn!(
+                subgate_name = %name,
+                "pre_dispatch_subgate `{}` re-registered; prior copy replaced (F1 idempotency)",
+                name
+            );
+        }
     }
 
     /// Number of currently-registered pre-dispatch subgates. Used by tests
@@ -212,6 +259,7 @@ impl GovernanceComposer {
         }
         // A4 — run extended subgates in registration order. Slot:
         // post-kill-switch / pre-record-dispatch per spec composition order.
+        // F1: name-keyed registry; iter() preserves insertion order.
         let subgates = self
             .pre_dispatch_subgates
             .read()
@@ -590,6 +638,89 @@ mod tests {
             0,
             "subgate should NOT have run when framework check failed first"
         );
+    }
+
+    /// F1 — re-registering a subgate with the same name REPLACES the prior
+    /// copy. Without this, dev-mode HMR / Tauri setup() re-runs would
+    /// silently double-count rate-limit hits + capability checks.
+    #[test]
+    fn pre_dispatch_subgate_registration_is_idempotent_by_name() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        struct CountingSubgate {
+            name: &'static str,
+            count: AtomicU64,
+        }
+        impl PreDispatchSubgate for CountingSubgate {
+            fn name(&self) -> &str {
+                self.name
+            }
+            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+                self.count.fetch_add(1, Ordering::AcqRel);
+                Ok(())
+            }
+        }
+
+        let g = GovernanceComposer::new(100);
+        let first = Arc::new(CountingSubgate {
+            name: "rate-limit",
+            count: AtomicU64::new(0),
+        });
+        let second = Arc::new(CountingSubgate {
+            name: "rate-limit", // SAME name as first
+            count: AtomicU64::new(0),
+        });
+        g.register_pre_dispatch_subgate(first.clone());
+        g.register_pre_dispatch_subgate(second.clone());
+        // Only ONE subgate is registered (second replaced first).
+        assert_eq!(
+            g.pre_dispatch_subgate_count(),
+            1,
+            "second registration with same name should REPLACE not append"
+        );
+
+        let p = Pipeline {
+            id: "t/x".to_string(),
+            visibility: Visibility::Surfaced,
+            tunability: Tunability::OperatorOnly,
+            audit_class: AuditClass::Capability,
+            effect_class: EffectClass::ReadOnly,
+            params: serde_json::json!({}),
+            preconditions: vec![],
+            steps: vec![],
+            description: String::new(),
+            when_to_use: String::new(),
+            bypasses_kill_switch: false,
+        };
+        g.pre_dispatch_checks_for(&p).unwrap();
+        // First subgate was REPLACED — its counter never incremented.
+        assert_eq!(first.count.load(Ordering::Acquire), 0);
+        // Second subgate ran exactly once (NOT twice — no duplicate).
+        assert_eq!(second.count.load(Ordering::Acquire), 1);
+    }
+
+    /// F1 — different subgate names should both register.
+    #[test]
+    fn pre_dispatch_subgate_distinct_names_both_register() {
+        struct NoOpSubgate {
+            name: &'static str,
+        }
+        impl PreDispatchSubgate for NoOpSubgate {
+            fn name(&self) -> &str {
+                self.name
+            }
+            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+                Ok(())
+            }
+        }
+        let g = GovernanceComposer::new(100);
+        g.register_pre_dispatch_subgate(Arc::new(NoOpSubgate {
+            name: "rate-limit",
+        }));
+        g.register_pre_dispatch_subgate(Arc::new(NoOpSubgate {
+            name: "capability",
+        }));
+        assert_eq!(g.pre_dispatch_subgate_count(), 2);
     }
 
     #[test]
