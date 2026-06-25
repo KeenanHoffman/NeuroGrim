@@ -145,6 +145,23 @@ pub trait Broker: Send + Sync {
         name: &str,
         ctx: crate::runner::LeafContext,
     ) -> Result<serde_json::Value, crate::runner::LeafError>;
+
+    /// Optional opt-in to the broker extension system. Brokers that accept
+    /// declarative operator extensions (Tier 1 TOML configs at
+    /// `.claude/brain/broker/extensions/<broker_id>/*.toml`) override this
+    /// to return `Some(self)` — Rust's type erasure means we need the
+    /// explicit hook so the host can dispatch into the broker's
+    /// `Extensible::apply_extension` at boot time.
+    ///
+    /// Default implementation returns `None` — broker silently ignores any
+    /// operator-authored extension configs targeting it. The host logs a
+    /// `tracing::warn!` in that case so operators see when configs miss.
+    ///
+    /// See [`crate::extension::Extensible`] for the trait brokers implement
+    /// to participate.
+    fn as_extensible(&self) -> Option<&dyn crate::extension::Extensible> {
+        None
+    }
 }
 
 #[cfg(test)]

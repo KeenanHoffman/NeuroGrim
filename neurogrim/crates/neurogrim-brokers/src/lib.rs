@@ -36,6 +36,7 @@
 pub mod broker;
 pub mod capability;
 pub mod cold_store;
+pub mod extension;
 pub mod frame;
 pub mod host;
 pub mod local_awareness_broker;
@@ -59,6 +60,9 @@ pub use catalog::{evaluate_precondition, load_catalog, validate_catalog, validat
 pub use cold_store::{ColdStore, ColdStoreError, JsonlColdStore};
 pub use governance::{GovernanceComposer, GovernanceRefusal, PreDispatchSubgate, SharedGovernance};
 pub use capability::{AllowAll, CapabilityDecision, CapabilityRegistry, CapabilitySubgate};
+pub use extension::{
+    apply_all_extensions, ExtensionConfig, ExtensionError, ExtensionRegistry, Extensible,
+};
 pub use frame::Frame;
 pub use host::{BrokerFactoryFn, BrokerFactoryRegistry, BrokerHost, BrokerHostConfig, HostError};
 pub use local_awareness_broker::{LocalAwarenessBroker, LocalAwarenessOverlay};

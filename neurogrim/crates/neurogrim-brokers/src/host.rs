@@ -32,6 +32,7 @@ use crate::materializer::awareness::AwarenessMaterializer;
 use crate::materializer::hot_store::HotStoreMaterializer;
 use crate::materializer::MaterializerComposer;
 use crate::pipeline::ParamMap;
+use crate::extension::{apply_all_extensions, ExtensionRegistry};
 use crate::registry::BrokerRegistry;
 use crate::runner::{DispatchError, DispatchOutcome, PipelineRunner};
 use crate::trace::TraceSink;
@@ -107,6 +108,8 @@ pub enum HostError {
     Registry(#[from] crate::registry::RegistryError),
     #[error("materializer error: {0}")]
     Materializer(#[from] crate::materializer::MaterializerError),
+    #[error("extension error: {0}")]
+    Extension(#[from] crate::extension::ExtensionError),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("other: {0}")]
@@ -227,6 +230,26 @@ impl BrokerHost {
             bootstrapped.push((broker_id, dyn_broker));
         }
         registry.validate()?;
+
+        // A.0.1 — Operator extension discovery + apply.
+        // Extensions live in `<cluster_manifest_dir>/extensions/<broker_id>/*.toml`.
+        // Brokers OPT IN via `Broker::as_extensible()`; non-extensible brokers
+        // whose configs are present trigger a tracing::warn but don't fail boot.
+        // Schema-version mismatches DO fail boot — operators get a clear error
+        // pointing at the offending file.
+        let cluster_dir_for_ext = registry.cluster_manifest_dir().to_path_buf();
+        let extensions_dir = cluster_dir_for_ext.join("extensions");
+        let extension_registry = ExtensionRegistry::discover_from_disk(&extensions_dir)?;
+        if !extension_registry.is_empty() {
+            tracing::info!(
+                extensions_dir = %extensions_dir.display(),
+                broker_count = extension_registry.broker_ids().count(),
+                config_count = extension_registry.total_count(),
+                "applying operator extensions"
+            );
+            let applied = apply_all_extensions(&bootstrapped, &extension_registry).await?;
+            tracing::info!(applied_count = applied, "operator extensions applied");
+        }
 
         // Wire materializer paths
         let cluster_dir = registry.cluster_manifest_dir().to_path_buf();
