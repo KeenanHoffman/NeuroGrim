@@ -96,6 +96,43 @@ subsystem onto the substrate). Substrate-side adapters needed at C1.
 
 ---
 
+## IDE-side dep prerequisite (BLOCKING all Phase B3+B5+C work)
+
+The IDE at `D:\local-pc-operational-management\children\neurogrim-ide\src-tauri\Cargo.toml`
+currently uses `neurogrim-core = "^5.0.0"` from crates.io. To consume the
+broker substrate built in this session (Phases A/B/C/D substrate-side), the
+IDE needs `neurogrim-brokers` as a dep — and `neurogrim-brokers` is NOT
+published to crates.io yet.
+
+**Operator decision required** (pick one before Phase C IDE work starts):
+
+**Option 1 — Publish to crates.io** (clean, slower)
+- Bump `neurogrim-brokers` Cargo.toml metadata (description, license, readme).
+- Verify all transitive deps are publishable (no path deps).
+- `cargo publish -p neurogrim-brokers` (after `cargo publish -p neurogrim-sensory`
+  if that's also unpublished — sensory is required by A2 wiring).
+- IDE adds `neurogrim-brokers = "5.x"` to its Cargo.toml.
+- Pros: matches the IDE's existing `neurogrim-core = "^5.0.0"` posture.
+- Cons: every Phase A/D substrate iteration needs a new published version
+  before the IDE sees it; slow feedback loop during Phase C migration.
+
+**Option 2 — Path-based dep** (fast, coupled)
+- IDE adds:
+  ```toml
+  neurogrim-brokers = { path = "../../../../../Brains/NeuroGrim/neurogrim/crates/neurogrim-brokers" }
+  neurogrim-sensory = { path = "../../../../../Brains/NeuroGrim/neurogrim/crates/neurogrim-sensory" }
+  ```
+- During Phase C: edit substrate code, rebuild IDE immediately, iterate fast.
+- After Phase C ships: switch path deps back to crates.io pins for release.
+- Pros: tight feedback loop; no publish ceremony during the migration.
+- Cons: couples the two workspaces; CI must build both side-by-side.
+
+Recommended: **Option 2 for Phase B3+C migration; switch to Option 1 before
+shipping the IDE release.** This matches the strangler-fig migration
+discipline — keep iterations fast during the lift, formalize once stable.
+
+---
+
 ## Honest realistic next-session plan
 
 **Most-impactful next sessions, in order:**
