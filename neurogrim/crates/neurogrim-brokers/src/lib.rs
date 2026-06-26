@@ -39,7 +39,6 @@ pub mod cold_store;
 pub mod extension;
 pub mod frame;
 pub mod host;
-pub mod local_awareness_broker;
 pub mod overlay;
 pub mod pipeline;
 pub mod catalog;
@@ -54,6 +53,7 @@ pub mod skill_filter;
 pub mod work_broker;
 pub mod workflow;
 pub mod workspace;
+pub mod workspace_broker_v1;
 
 // Re-exports for downstream consumers
 pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
@@ -66,7 +66,6 @@ pub use extension::{
 };
 pub use frame::Frame;
 pub use host::{BrokerFactoryFn, BrokerFactoryRegistry, BrokerHost, BrokerHostConfig, HostError};
-pub use local_awareness_broker::{LocalAwarenessBroker, LocalAwarenessOverlay};
 pub use skill_filter::{CandidateSegment, NoOpRanker, RankerContext, SegmentRanker, SharedRanker};
 pub use workflow::{SuspendedDispatch, WakeCondition, WorkflowEngine};
 pub use rate_limit::{RateLimitSubgate, ScopeKeyFn};
@@ -88,6 +87,11 @@ pub use runner::{DispatchError, DispatchOutcome, LeafContext, LeafError, Pipelin
 pub use trace::{SnapshotDelta, TraceError, TraceRecord, TraceSink};
 pub use work_broker::{ActiveWorkOverlay, BacklogState, WorkBroker, WorkUnit, WorkUnitStatus};
 pub use workspace::WorkspaceBroker;
+pub use workspace_broker_v1::{
+    BuildInvariant, CapabilitySnapshot, ChildProject, ExtensionPipeline, PathConventions,
+    TerminalProfile, TerminalRecommendation, TrackedProcess, WorkspaceBrokerV1, WorkspaceOverlay,
+    EXTENSION_SCHEMA_VERSION,
+};
 
 // Re-export major errors for ergonomic consumer error handling
 pub use anyhow::{Error, Result};
