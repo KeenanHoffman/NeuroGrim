@@ -53,6 +53,7 @@ pub mod sensory;
 pub mod sensory_extension_patterns;
 pub mod sensory_queue;
 pub mod skill_filter;
+pub mod topology;
 pub mod work_broker;
 pub mod workflow;
 pub mod workspace;
@@ -79,7 +80,7 @@ pub use materializer::{
     awareness::AwarenessMaterializer, cmdb_writer::CmdbMaterializer,
     hot_store::HotStoreMaterializer, MaterializerComposer, MaterializerError,
 };
-pub use overlay::{Overlay, OverlayReadGuard, WorkingState};
+pub use overlay::{Overlay, OverlayReadGuard, OverlayView, WorkingState};
 pub use pipeline::{
     AuditClass, EffectClass, ParamMap, Pipeline, PipelineId, Step, Tunability, Visibility,
 };
@@ -88,6 +89,9 @@ pub use registry::{
 };
 pub use runner::{DispatchError, DispatchOutcome, LeafContext, LeafError, PipelineRunner};
 pub use trace::{SnapshotDelta, TraceError, TraceRecord, TraceSink};
+pub use topology::{
+    BrokerInfo, TopologyBroker, TopologyBrokerV1, TopologyError, TopologyOverlay,
+};
 pub use work_broker::{ActiveWorkOverlay, BacklogState, WorkBroker, WorkUnit, WorkUnitStatus};
 pub use sensory::{
     wrap_all_sensors_into_brokers, SensorBackedBroker, SensorOverlay, SensoryBroker,

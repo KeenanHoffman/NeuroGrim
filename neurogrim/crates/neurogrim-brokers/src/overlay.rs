@@ -77,6 +77,65 @@ impl<W> WorkingState<W> {
     }
 }
 
+/// Tier-2 derived/filtered projection over a base [`Overlay<T>`].
+///
+/// Per BROKER-CONTRACT.md Glossary, an `OverlayView` is the per-consumer
+/// projection a multi-tenant broker hands out: each consumer sees a
+/// different filtered view of the same base Overlay, computed by applying
+/// the consumer-specific filter closure to the current snapshot.
+///
+/// The base Overlay is unmodified — multiple `OverlayView`s can share the
+/// same base concurrently, each with its own filter. Filters run at
+/// `load()` time (no caching); the snapshot semantics inherit from the
+/// base (no torn reads).
+///
+/// ## Use cases
+///
+/// - **Multi-tenant broker per-consumer ACL** — a Topology Broker hands
+///   each caller a different OverlayView whose filter retains only the
+///   broker entries the caller is permitted to discover.
+/// - **Per-clearance-level projection** — a sensitive-data broker exposes
+///   an OverlayView per clearance tier whose filter elides or summarizes
+///   high-sensitivity fields.
+/// - **Per-role observability filters** — a Meta-vs-Primary lobe-specific
+///   view of a Sense broker's overlay (Meta sees the full sense data;
+///   Primary sees a token-budgeted summary).
+///
+/// The base `Overlay<T>` stays the single source of truth; the View is a
+/// cheap derived projection. There is no inverse — Views are read-only.
+pub struct OverlayView<T, U> {
+    base: Arc<Overlay<T>>,
+    filter: Box<dyn Fn(&T) -> U + Send + Sync>,
+}
+
+impl<T, U> OverlayView<T, U>
+where
+    T: Send + Sync + 'static,
+    U: Send + Sync + 'static,
+{
+    /// Construct a new View over `base` that applies `filter` on each
+    /// `load()`. The filter must be deterministic per-snapshot (same `&T`
+    /// → same `U`) so callers can reason about View stability across
+    /// reads; the substrate does not enforce this beyond the type signature.
+    pub fn new(
+        base: Arc<Overlay<T>>,
+        filter: impl Fn(&T) -> U + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            base,
+            filter: Box::new(filter),
+        }
+    }
+
+    /// Load the current Overlay snapshot + apply the filter. Returns the
+    /// projected value `U` by-value (Views are read-only; callers receive
+    /// owned data, not a reference into the base).
+    pub fn load(&self) -> U {
+        let snap = self.base.load();
+        (self.filter)(&snap)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,6 +200,50 @@ mod tests {
                 h.join().unwrap().unwrap();
             }
         }
+    }
+
+    #[test]
+    fn overlay_view_applies_filter_to_snapshot() {
+        let base = Arc::new(Overlay::new(vec![1u32, 2, 3, 4, 5]));
+        let view: OverlayView<Vec<u32>, Vec<u32>> = OverlayView::new(
+            base.clone(),
+            |snap| snap.iter().filter(|&&x| x % 2 == 0).copied().collect(),
+        );
+        assert_eq!(view.load(), vec![2, 4]);
+        // Mutating base reflects in subsequent loads
+        base.swap(vec![10, 11, 12, 13]);
+        assert_eq!(view.load(), vec![10, 12]);
+    }
+
+    #[test]
+    fn overlay_view_multiple_views_share_base() {
+        let base = Arc::new(Overlay::new((vec!["a", "b", "c"], 42u32)));
+        let names_view: OverlayView<(Vec<&'static str>, u32), Vec<&'static str>> =
+            OverlayView::new(base.clone(), |snap| snap.0.clone());
+        let count_view: OverlayView<(Vec<&'static str>, u32), u32> =
+            OverlayView::new(base.clone(), |snap| snap.1);
+        assert_eq!(names_view.load(), vec!["a", "b", "c"]);
+        assert_eq!(count_view.load(), 42);
+    }
+
+    #[test]
+    fn overlay_view_filter_runs_each_load() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let base = Arc::new(Overlay::new(0u32));
+        let calls = Arc::new(AtomicU32::new(0));
+        let calls_for_filter = calls.clone();
+        let view: OverlayView<u32, u32> = OverlayView::new(base, move |&n| {
+            calls_for_filter.fetch_add(1, Ordering::SeqCst);
+            n * 2
+        });
+        let _ = view.load();
+        let _ = view.load();
+        let _ = view.load();
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            3,
+            "filter must run on every load (no caching)"
+        );
     }
 
     #[tokio::test]

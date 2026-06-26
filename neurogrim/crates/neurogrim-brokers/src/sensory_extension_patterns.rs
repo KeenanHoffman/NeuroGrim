@@ -9,6 +9,8 @@
 //!   glob (inverse: fewer = higher; direct: more = higher; ceiling cap).
 //! - **`cmdb_derived`** — composite score from sibling CMDBs (min/max/
 //!   mean/median combinator).
+//! - **`topic_queue_delta`** — score derived from message arrival rate on
+//!   a [`neurogrim_core::queue`] bus topic within a rolling window.
 //!
 //! Each pattern is implemented as a [`neurogrim_core::sensor::Sensor`]
 //! that the substrate wraps in a [`crate::sensory::SensorBackedBroker`]
@@ -49,7 +51,7 @@ pub enum PatternError {
     MissingSensorSection,
     #[error("missing required [sensor.config] section")]
     MissingConfigSection,
-    #[error("unknown sensor pattern `{0}`; expected file_presence_score | glob_count | cmdb_derived")]
+    #[error("unknown sensor pattern `{0}`; expected file_presence_score | glob_count | cmdb_derived | topic_queue_delta")]
     UnknownPattern(String),
     #[error("pattern config parse error: {0}")]
     ConfigParse(String),
@@ -345,6 +347,92 @@ impl Sensor for CmdbDerivedSensor {
 }
 
 // ============================================================================
+// Pattern 4: topic_queue_delta
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+struct TopicQueueDeltaConfig {
+    /// Topic-queue JSONL path, relative to project root. Typical value:
+    /// `.claude/brain/queues/<scope>/<name>.jsonl`.
+    topic_path: String,
+    /// Window size in seconds. Messages whose `produced_at` falls within
+    /// `[now - window_secs, now]` are counted.
+    window_secs: u64,
+    /// Scoring direction:
+    /// - `count_inverse` — fewer messages = higher score (idle is good;
+    ///   default for "health-while-quiet" topics like error logs).
+    /// - `count_direct` — more messages = higher score (activity is good;
+    ///   e.g., heartbeat liveness topics).
+    #[serde(default = "default_topic_scoring")]
+    scoring: String,
+    /// Matches above this count are clamped — prevents score blow-out.
+    #[serde(default = "default_topic_ceiling")]
+    ceiling: u32,
+}
+
+fn default_topic_scoring() -> String {
+    "count_inverse".to_string()
+}
+
+fn default_topic_ceiling() -> u32 {
+    50
+}
+
+pub struct TopicQueueDeltaSensor {
+    domain: String,
+    config: TopicQueueDeltaConfig,
+}
+
+#[async_trait]
+impl Sensor for TopicQueueDeltaSensor {
+    async fn analyze(&self, project_root: &str) -> Result<Value> {
+        let root = Path::new(project_root);
+        let topic_path = root.join(&self.config.topic_path);
+        let reader = match neurogrim_core::queue::JsonlQueueReader::open(&topic_path) {
+            Ok(r) => r,
+            Err(e) => {
+                // Missing file is a valid empty-queue state (returned as
+                // an empty reader by JsonlQueueReader::open). A real I/O
+                // failure degrades the score to 0 with a finding.
+                return Ok(degraded_envelope(
+                    &self.domain,
+                    0,
+                    &format!("topic_queue_delta open failed: {}", e),
+                ));
+            }
+        };
+        let cutoff = chrono::Utc::now()
+            - chrono::Duration::seconds(self.config.window_secs as i64);
+        let count = reader
+            .iter_from(0)
+            .filter(|m| m.produced_at >= cutoff)
+            .count() as u32;
+
+        let ceiling = self.config.ceiling.max(1);
+        let normalized =
+            (count.min(ceiling) as f64 / ceiling as f64 * 100.0).round() as u32;
+        let score = match self.config.scoring.as_str() {
+            "count_direct" => normalized,
+            _ /* count_inverse */ => 100u32.saturating_sub(normalized),
+        }
+        .min(100) as u8;
+
+        let findings = vec![json!({
+            "severity": "info",
+            "title": format!(
+                "Topic `{}` had {} message(s) in last {}s",
+                self.config.topic_path, count, self.config.window_secs
+            ),
+            "message_count": count,
+            "window_secs": self.config.window_secs,
+            "ceiling": ceiling,
+        })];
+
+        Ok(envelope_v1(&self.domain, score, findings))
+    }
+}
+
+// ============================================================================
 // Common helpers
 // ============================================================================
 
@@ -419,6 +507,12 @@ impl SensorFactory for DeclarativeSensorFactory {
                     .expect("cmdb_derived config invalid; should have been caught at discover time");
                 Box::new(CmdbDerivedSensor { domain, config })
             }
+            "topic_queue_delta" => {
+                let config: TopicQueueDeltaConfig = config_value
+                    .try_into()
+                    .expect("topic_queue_delta config invalid; should have been caught at discover time");
+                Box::new(TopicQueueDeltaSensor { domain, config })
+            }
             _ => unreachable!("pattern was validated at discover time"),
         }
     }
@@ -460,7 +554,7 @@ pub fn discover_sensory_extensions(
         let meta = envelope.sensor;
         // Validate pattern is known
         match meta.pattern.as_str() {
-            "file_presence_score" | "glob_count" | "cmdb_derived" => {}
+            "file_presence_score" | "glob_count" | "cmdb_derived" | "topic_queue_delta" => {}
             other => return Err(PatternError::UnknownPattern(other.to_string())),
         }
         // Eager parse of the config — fails loudly NOW rather than at first dispatch
@@ -477,6 +571,11 @@ pub fn discover_sensory_extensions(
             }
             "cmdb_derived" => {
                 let _: CmdbDerivedConfig = meta.config.clone().try_into().map_err(|e: toml::de::Error| {
+                    PatternError::ConfigParse(format!("{}: {}", path.display(), e))
+                })?;
+            }
+            "topic_queue_delta" => {
+                let _: TopicQueueDeltaConfig = meta.config.clone().try_into().map_err(|e: toml::de::Error| {
                     PatternError::ConfigParse(format!("{}: {}", path.display(), e))
                 })?;
             }
@@ -763,6 +862,138 @@ scoring = "linear"
         let tmp = TempDir::new().unwrap();
         let registry = discover_sensory_extensions(tmp.path()).unwrap();
         assert!(registry.is_empty());
+    }
+
+    #[tokio::test]
+    async fn topic_queue_delta_empty_topic_scores_high_under_inverse() {
+        let tmp = TempDir::new().unwrap();
+        // No file at topic_path — JsonlQueueReader::open treats missing as empty.
+        let sensor = TopicQueueDeltaSensor {
+            domain: "topic-quiet".to_string(),
+            config: TopicQueueDeltaConfig {
+                topic_path: ".claude/brain/queues/scope/never-published.jsonl".to_string(),
+                window_secs: 3600,
+                scoring: "count_inverse".to_string(),
+                ceiling: 10,
+            },
+        };
+        let envelope = sensor.analyze(tmp.path().to_str().unwrap()).await.unwrap();
+        assert_eq!(
+            envelope["score"], 100,
+            "inverse + zero messages must yield max score"
+        );
+    }
+
+    #[tokio::test]
+    async fn topic_queue_delta_active_topic_scores_low_under_inverse() {
+        use neurogrim_core::queue::{append, QueueMessage};
+        let tmp = TempDir::new().unwrap();
+        let topic_rel = ".claude/brain/queues/scope/busy.jsonl";
+        let topic_path = tmp.path().join(topic_rel);
+        std::fs::create_dir_all(topic_path.parent().unwrap()).unwrap();
+        for _ in 0..10 {
+            let msg = QueueMessage::new("scope/busy", json!({}));
+            append(&topic_path, &msg).unwrap();
+        }
+        let sensor = TopicQueueDeltaSensor {
+            domain: "topic-busy".to_string(),
+            config: TopicQueueDeltaConfig {
+                topic_path: topic_rel.to_string(),
+                window_secs: 3600,
+                scoring: "count_inverse".to_string(),
+                ceiling: 10,
+            },
+        };
+        let envelope = sensor.analyze(tmp.path().to_str().unwrap()).await.unwrap();
+        assert_eq!(
+            envelope["score"], 0,
+            "inverse + 10 messages at ceiling=10 must yield 0"
+        );
+    }
+
+    #[tokio::test]
+    async fn topic_queue_delta_active_topic_scores_high_under_direct() {
+        use neurogrim_core::queue::{append, QueueMessage};
+        let tmp = TempDir::new().unwrap();
+        let topic_rel = ".claude/brain/queues/scope/heartbeat.jsonl";
+        let topic_path = tmp.path().join(topic_rel);
+        std::fs::create_dir_all(topic_path.parent().unwrap()).unwrap();
+        for _ in 0..5 {
+            let msg = QueueMessage::new("scope/heartbeat", json!({}));
+            append(&topic_path, &msg).unwrap();
+        }
+        let sensor = TopicQueueDeltaSensor {
+            domain: "topic-live".to_string(),
+            config: TopicQueueDeltaConfig {
+                topic_path: topic_rel.to_string(),
+                window_secs: 3600,
+                scoring: "count_direct".to_string(),
+                ceiling: 5,
+            },
+        };
+        let envelope = sensor.analyze(tmp.path().to_str().unwrap()).await.unwrap();
+        assert_eq!(envelope["score"], 100);
+    }
+
+    #[test]
+    fn discover_parses_topic_queue_delta_extension() {
+        let tmp = TempDir::new().unwrap();
+        write_ext(
+            &tmp,
+            "live-heartbeat",
+            r#"
+[extension]
+schema_version = "1"
+
+[sensor]
+broker_id = "sensor-heartbeat"
+pattern = "topic_queue_delta"
+domain = "heartbeat"
+
+[sensor.config]
+topic_path = ".claude/brain/queues/agents/heartbeat.jsonl"
+window_secs = 60
+scoring = "count_direct"
+ceiling = 10
+"#,
+        );
+        let registry = discover_sensory_extensions(tmp.path()).unwrap();
+        assert!(registry.contains_key("sensor-heartbeat"));
+    }
+
+    #[test]
+    fn discover_rejects_malformed_topic_queue_delta_config_eagerly() {
+        let tmp = TempDir::new().unwrap();
+        write_ext(
+            &tmp,
+            "broken-tq",
+            r#"
+[extension]
+schema_version = "1"
+
+[sensor]
+broker_id = "sensor-broken-tq"
+pattern = "topic_queue_delta"
+
+[sensor.config]
+# missing required topic_path + window_secs
+scoring = "count_direct"
+"#,
+        );
+        let err = match discover_sensory_extensions(tmp.path()) {
+            Ok(_) => panic!("expected discover to fail"),
+            Err(e) => e,
+        };
+        match err {
+            PatternError::ConfigParse(msg) => {
+                assert!(
+                    msg.contains("topic_path") || msg.contains("missing"),
+                    "expected config-parse error mentioning topic_path; got: {}",
+                    msg
+                );
+            }
+            other => panic!("expected ConfigParse, got {:?}", other),
+        }
     }
 
     #[test]
