@@ -72,3 +72,8 @@ tempfile = "3"
 
 # Tokio test macros (for async tests)
 tokio = { workspace = true, features = ["macros", "rt"] }
+
+# A.2.2 pilot — enable sensor-secret-refs for the byte-identity test that
+# compares legacy `analyze_secret_refs` output vs SensorBackedBroker
+# output. Dev-only; runtime brokers crate stays minimal.
+neurogrim-sensory = { workspace = true, features = ["sensor-secret-refs"] }

@@ -49,6 +49,9 @@ pub mod trace;
 pub mod governance;
 pub mod materializer;
 pub mod registry;
+pub mod sensory;
+pub mod sensory_extension_patterns;
+pub mod sensory_queue;
 pub mod skill_filter;
 pub mod work_broker;
 pub mod workflow;
@@ -86,6 +89,14 @@ pub use registry::{
 pub use runner::{DispatchError, DispatchOutcome, LeafContext, LeafError, PipelineRunner};
 pub use trace::{SnapshotDelta, TraceError, TraceRecord, TraceSink};
 pub use work_broker::{ActiveWorkOverlay, BacklogState, WorkBroker, WorkUnit, WorkUnitStatus};
+pub use sensory::{
+    wrap_all_sensors_into_brokers, SensorBackedBroker, SensorOverlay, SensoryBroker,
+    SENSOR_BROKER_EXTENSION_SCHEMA_VERSION,
+};
+pub use sensory_extension_patterns::{discover_sensory_extensions, PatternError};
+pub use sensory_queue::{
+    EnforceResult, RateLimitConfig, RefusalReason, SensoryQueueEnforcerV1,
+};
 pub use workspace::WorkspaceBroker;
 pub use workspace_broker_v1::{
     BuildInvariant, CapabilitySnapshot, ChildProject, ExtensionPipeline, PathConventions,

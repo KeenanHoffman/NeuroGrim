@@ -189,6 +189,7 @@ pub struct WorkspaceBrokerV1 {
 
     // Static configuration captured at construction.
     initial_terminal_profile: TerminalProfile,
+    #[allow(dead_code)]
     initial_path_conventions: PathConventions,
     default_build_invariants: Vec<BuildInvariant>,
     capability_snapshot: CapabilitySnapshot,
