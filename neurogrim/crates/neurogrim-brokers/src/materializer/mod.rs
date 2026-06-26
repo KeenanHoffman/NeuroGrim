@@ -23,6 +23,7 @@
 //! (deferred) would replace the tracing call with a proper event.
 
 pub mod awareness;
+pub mod cmdb_writer;
 pub mod hot_store;
 
 use std::collections::HashSet;

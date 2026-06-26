@@ -162,6 +162,26 @@ pub trait Broker: Send + Sync {
     fn as_extensible(&self) -> Option<&dyn crate::extension::Extensible> {
         None
     }
+
+    /// A.0.3 — Broker-declared CMDB output path, relative to project root.
+    ///
+    /// Brokers that export a CMDB (canonically, [Sense] brokers wrapping
+    /// sensors per A.2) override this to return the path their CMDB should
+    /// be written to. The substrate's [`crate::materializer::cmdb_writer::CmdbMaterializer`]
+    /// reads this on each materialization pass and writes the broker's
+    /// [`read_overlay`] output as JSON to that path (atomic temp+rename).
+    ///
+    /// Default: `None` — broker does NOT export a CMDB (workspace,
+    /// embodiment, agent-action brokers). The CmdbMaterializer skips
+    /// these brokers entirely.
+    ///
+    /// **Path resolution precedence** (per docs/BROKER-SCAFFOLDING-PRE-EXECUTION-GATES.md
+    /// Gate 2): registry override → this method's return → None. The host
+    /// consults registry override BEFORE calling this method, so brokers
+    /// don't need to know about overrides.
+    fn cmdb_path(&self) -> Option<std::path::PathBuf> {
+        None
+    }
 }
 
 #[cfg(test)]

@@ -147,6 +147,7 @@ pub async fn run(cluster_manifest_path: &str) -> Result<()> {
         BrokerHostConfig {
             project_root,
             trust_budget_ceiling: 10_000,
+            broker_factories: Default::default(),
         },
     )
     .await

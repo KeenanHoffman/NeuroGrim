@@ -53,6 +53,7 @@ pub mod registry;
 pub mod skill_filter;
 pub mod work_broker;
 pub mod workflow;
+pub mod workspace;
 
 // Re-exports for downstream consumers
 pub use broker::{Broker, BrokerError, Role, RoleSet, WorldEvent};
@@ -73,8 +74,8 @@ pub use system_facts::{
     HealthyDefault, PressureTier, SystemFacts, SystemFactsProvider, SystemPressureSubgate,
 };
 pub use materializer::{
-    awareness::AwarenessMaterializer, hot_store::HotStoreMaterializer, MaterializerComposer,
-    MaterializerError,
+    awareness::AwarenessMaterializer, cmdb_writer::CmdbMaterializer,
+    hot_store::HotStoreMaterializer, MaterializerComposer, MaterializerError,
 };
 pub use overlay::{Overlay, OverlayReadGuard, WorkingState};
 pub use pipeline::{
@@ -86,6 +87,7 @@ pub use registry::{
 pub use runner::{DispatchError, DispatchOutcome, LeafContext, LeafError, PipelineRunner};
 pub use trace::{SnapshotDelta, TraceError, TraceRecord, TraceSink};
 pub use work_broker::{ActiveWorkOverlay, BacklogState, WorkBroker, WorkUnit, WorkUnitStatus};
+pub use workspace::WorkspaceBroker;
 
 // Re-export major errors for ergonomic consumer error handling
 pub use anyhow::{Error, Result};

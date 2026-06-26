@@ -5,6 +5,7 @@
 pub mod broker_serve;
 pub mod broker_init;
 pub mod broker_scaffold;
+pub mod broker_extension_scaffold;
 pub mod a2a_discover;
 pub mod a2a_invoke;
 pub mod a2a_serve;

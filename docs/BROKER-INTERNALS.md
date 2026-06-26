@@ -9,6 +9,12 @@
 > Until 6 months of production use across ≥1 consumer deployment, this document is a
 > draft contract; consumers adopt at their own risk and contribute gap discoveries.
 
+> **Operator how-to:** Authoring extensions (Tier 1 declarative TOML) or full Rust
+> brokers (Tier 2)? See [`BROKER-AUTHORING.md`](BROKER-AUTHORING.md) — the
+> operator-facing guide. Design rationale for the substrate-side primitives
+> (`Extensible`, `WorkspaceBroker`, `SensoryBroker`, `CmdbMaterializer`) lives in
+> [`BROKER-SCAFFOLDING-PRE-EXECUTION-GATES.md`](BROKER-SCAFFOLDING-PRE-EXECUTION-GATES.md).
+
 The companion to [`BROKER-CONTRACT.md`](BROKER-CONTRACT.md). The contract pins the **shape**
 of a broker — the capsule, the hot/cold tiers, the queue as placement boundary, the
 canonical brokers (see CONTRACT [`#canonical-broker-list`](BROKER-CONTRACT.md#canonical-broker-list)),

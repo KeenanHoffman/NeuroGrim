@@ -253,6 +253,34 @@ enum Commands {
         params_schema: String,
     },
 
+    /// Emit a Tier 1 broker extension TOML template (A.0.4).
+    ///
+    /// Generates ready-to-edit extension config templates for the broker
+    /// extension system (A.0.1). Operators paste the output to
+    /// `.claude/brain/broker/extensions/<broker-id>/<name>.toml`; the
+    /// substrate discovers + applies on next host boot.
+    #[command(name = "broker-extension-scaffold")]
+    BrokerExtensionScaffold {
+        /// Target broker (e.g., `workspace`, `sensory`)
+        #[arg(long)]
+        broker: String,
+        /// Extension kind: fact | terminal-rec | pipeline | sensor
+        #[arg(long)]
+        kind: String,
+        /// Name used for the config file + (where applicable) the
+        /// extension's name/broker_id field.
+        #[arg(long)]
+        name: String,
+        /// For `--kind sensor`: Tier 1 pattern selector
+        /// (file-presence | glob-count | cmdb-derived). Default: file-presence.
+        #[arg(long)]
+        pattern: Option<String>,
+        /// Optional output path. If a directory, writes `<dir>/<name>.toml`.
+        /// If a .toml path, writes there directly. Default: print to stdout.
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+
     /// Start the Brain as an MCP server
     #[command(visible_alias = "summon")]
     Serve {
@@ -640,6 +668,21 @@ async fn main() -> Result<()> {
             when_to_use,
             params_schema_json: params_schema,
         }),
+        Commands::BrokerExtensionScaffold {
+            broker,
+            kind,
+            name,
+            pattern,
+            out,
+        } => commands::broker_extension_scaffold::run(
+            commands::broker_extension_scaffold::ExtensionScaffoldArgs {
+                broker,
+                kind,
+                name,
+                pattern,
+                out,
+            },
+        ),
         Commands::Serve { registry } => commands::serve::run(&registry).await,
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
         Commands::Backlog { cmd } => match cmd {

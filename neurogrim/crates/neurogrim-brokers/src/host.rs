@@ -29,6 +29,7 @@
 use crate::broker::Broker;
 use crate::governance::GovernanceComposer;
 use crate::materializer::awareness::AwarenessMaterializer;
+use crate::materializer::cmdb_writer::CmdbMaterializer;
 use crate::materializer::hot_store::HotStoreMaterializer;
 use crate::materializer::MaterializerComposer;
 use crate::pipeline::ParamMap;
@@ -126,6 +127,10 @@ struct MaterializerContext {
     output_path: PathBuf,
     composition_order: Vec<String>,
     context_budget: usize,
+    /// A.0.3 — Project root used to resolve broker-declared relative CMDB
+    /// paths. None = no CMDBs materialized (substrate consumers without a
+    /// project_root concept, e.g., test fixtures with the default cluster).
+    project_root: Option<PathBuf>,
 }
 
 impl MaterializerContext {
@@ -137,6 +142,16 @@ impl MaterializerContext {
             let aware = AwarenessMaterializer::new(broker_id.clone(), self.segments_dir.clone());
             aware.materialize(broker.clone()).await
                 .map_err(|e| HostError::Other(anyhow::anyhow!("awareness materializer: {}", e)))?;
+            // A.0.3 — CmdbMaterializer (only fires for brokers that
+            // override `Broker::cmdb_path()`; no-op for others).
+            // Path resolution: broker default with project_root prepended
+            // when relative. Future revision adds registry override
+            // consultation per Gate 2's 3-step chain.
+            if let Some(root) = &self.project_root {
+                let cmdb = CmdbMaterializer::from_broker_default(broker.as_ref(), root);
+                cmdb.materialize(broker.clone()).await
+                    .map_err(|e| HostError::Other(anyhow::anyhow!("cmdb materializer: {}", e)))?;
+            }
         }
         synthesize_governance_segment(&self.segments_dir, &self.bootstrapped)
             .map_err(|e| HostError::Other(anyhow::anyhow!("governance segment: {}", e)))?;
@@ -279,6 +294,7 @@ impl BrokerHost {
             output_path,
             composition_order: registry.cluster().materializer.composition_order.clone(),
             context_budget: registry.cluster().materializer.context_budget_chars,
+            project_root: config.project_root.clone(),
         };
 
         // Initial materialization (synchronous; host isn't usable until the
