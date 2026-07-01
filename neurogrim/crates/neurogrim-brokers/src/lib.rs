@@ -36,6 +36,7 @@
 pub mod broker;
 pub mod capability;
 pub mod cold_store;
+pub mod doc_broker;
 pub mod extension;
 pub mod frame;
 pub mod host;
@@ -93,6 +94,9 @@ pub use topology::{
     BrokerInfo, TopologyBroker, TopologyBrokerV1, TopologyError, TopologyOverlay,
 };
 pub use work_broker::{ActiveWorkOverlay, BacklogState, WorkBroker, WorkUnit, WorkUnitStatus};
+pub use doc_broker::{
+    doc_broker_factory, ActiveDocsOverlay, DocBroker, DocUnit, DocUnitStatus, DocsState,
+};
 pub use sensory::{
     wrap_all_sensors_into_brokers, SensorBackedBroker, SensorOverlay, SensoryBroker,
     SENSOR_BROKER_EXTENSION_SCHEMA_VERSION,

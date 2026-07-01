@@ -63,7 +63,7 @@ neurogrim-core = { workspace = true }
 # natural: brokers wrap existing sensors per BROKER-CONTRACT.md role-set
 # composition. `sensor-backlog` feature must be enabled — the workspace
 # default is `default-features = false` so each consumer opts in.
-neurogrim-sensory = { workspace = true, features = ["sensor-backlog"] }
+neurogrim-sensory = { workspace = true, features = ["sensor-backlog", "sensor-documentation-graph"] }
 
 [dev-dependencies]
 # Property testing for Overlay<T> atomic-swap concurrency tests
