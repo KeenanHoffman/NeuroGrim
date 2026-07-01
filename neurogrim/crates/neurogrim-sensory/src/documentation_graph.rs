@@ -356,6 +356,12 @@ const SKIPPED_DIR_NAMES: &[&str] = &[
     // noise for the documentation graph. Dir-name skip; `archive`/`audit`/
     // `.claude/skills/archived` are path-prefix excludes (`default_doc_excludes`).
     "vendor",
+    // Doc-broker Phase 2 (2026-06-30): CLI `init-templates/` dirs ship
+    // adopter-project scaffolding payloads (e.g. README-snippet.md linking to
+    // a sibling CLAUDE.md that renders from CLAUDE.md.tmpl) — those links are
+    // valid in the RENDERED project, false-broken only in-tree. Skip the
+    // payload dirs so they aren't scored as ecosystem docs.
+    "init-templates",
 ];
 
 /// The common documentation noise excluded from the doc-broker walk by
