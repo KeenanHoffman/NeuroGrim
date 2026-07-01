@@ -116,7 +116,7 @@ integrity ledger, mock-bad-agent). The weight flip from 0.0 to > 0.0
   flip (0.40/0.35/0.25/0.0 → 0.38/0.33/0.24/0.05 via proportional
   rebalance).
 
-### B-02: Cross-provider judges (Claude + GPT as mixed consensus)
+### B-02: Cross-provider judges (Claude + GPT as mixed consensus) — DEFERRED
 
 **Why it's here.** Multi-judge consensus (S8-ABV-EXT-2) reduces
 single-judge variance but every judge is still Claude — same
@@ -133,7 +133,7 @@ infrastructure.
 pass showing the cross-provider scores stay within agreement
 thresholds for the shared gold-sample set.
 
-### B-03: Per-project rubric overrides
+### B-03: Per-project rubric overrides — DEFERRED
 
 **Why it's here.** Today one ecosystem-wide rubric library at
 `.claude/agent-behavior-scenarios/` governs every Brain. A CEO
@@ -149,7 +149,7 @@ when present.
 
 **Dependencies:** none blocking; design work.
 
-### B-04: Subprocess-mode Claude Code (vs API-only agent-under-test)
+### B-04: Subprocess-mode Claude Code (vs API-only agent-under-test) — DEFERRED
 
 **Why it's here.** Today the agent-under-test is always a single
 `/v1/messages` call. Real Claude Code sessions have tool calls that
@@ -166,7 +166,7 @@ adapt to the first-turn's findings? API-only can't test those.
 subprocess harness that's reliable across platforms (Windows path
 translation was a recurring issue in e2e-sim).
 
-### B-05: Actual tool execution (vs schema-only capture)
+### B-05: Actual tool execution (vs schema-only capture) — DEFERRED
 
 **Why it's here.** EXT-3 captures `tool_use` blocks the agent
 emits but does NOT execute them. A more rigorous evaluation would
@@ -933,7 +933,7 @@ pure authoring work.
   but a future extension could; meanwhile, the convention is
   "update the skill first, then mirror to the guide".
 
-### B-08: Red-mode cross-scenario mode-applicability matrix
+### B-08: Red-mode cross-scenario mode-applicability matrix — DEFERRED
 
 **Why it's here.** S10-DP-4 Haiku #1 red-mode audit surfaced a
 structural mismatch: red-mode iterates every (scenario × mode)
@@ -1015,7 +1015,7 @@ Surfaced during the S10-DP-4 audit remediation cycle. Represents the
 next-step methodology work after Option A (ceiling-matching)
 stabilizes initial calibration.
 
-### B-07: Rubric weight restructure for behavioral scenarios
+### B-07: Rubric weight restructure for behavioral scenarios — DEFERRED
 
 **Why it's here.** Audit #2 surfaced a structural issue in two
 scenarios (`hat-discipline` and `lsp-code-execution`): their rubric
