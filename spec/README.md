@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # LSP Brains Specification
 
 The LSP Brains specification has moved to its own repository:

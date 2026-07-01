@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # neurogrim-webhook-sync
 
 Signed-push → `git fetch && git reset` sidecar for NeuroGrim agent

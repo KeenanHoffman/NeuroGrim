@@ -1,3 +1,11 @@
+---
+doc-version: 5.0.0
+date: 2026-06-30
+status: current
+anchored-to: neurogrim
+front-door: true
+---
+
 # NeuroGrim — Agent Guide
 
 > *a book of spells for AI agents*
@@ -12,7 +20,7 @@ provides what to be cognizant of. NeuroGrim is the engine that runs that overlay
 
 **LSP Brains Specification:** https://github.com/KeenanHoffman/LSP-Brains
 
-## Getting Oriented (v3.2)
+## Getting Oriented (v5.0)
 
 Agent or operator entering this project for the first time? Run these
 four commands in order:
@@ -26,11 +34,11 @@ neurogrim explain cli            # what can I invoke?
 
 Each takes ~5–30 seconds to digest. Together they answer "what's here,
 is it sound, what does it mean, what can I do with it." The bundled
-`explain` topics (`neurogrim explain` lists all 13) cover domain
-authoring, sensors, hats, scoring, federation, culture, autonomy,
-the v4.0 publish-gates pipeline, the v4.1 agent coordination bus
-(queues), the v4.2 encrypted-secrets stack, and the v4.3 command-
-post UI in depth. See `docs/AGENT-PRIMER.md` for the index.
+`explain` topics (run `neurogrim explain` to list the live set) cover
+domain authoring, sensors, hats, scoring, federation, culture, autonomy,
+the publish-gates pipeline, the agent coordination bus (queues), the
+encrypted-secrets stack, and the command-post UI in depth. See
+`docs/AGENT-PRIMER.md` for the index.
 
 To add a new domain, run `neurogrim domain new <name>`. To add a
 project-specific skill, `neurogrim skill new <name>`. To register a
@@ -153,8 +161,8 @@ finding matches elsewhere means leakage to be rephrased.
 | `neurogrim/crates/neurogrim-cli/` | CLI binary entry point |
 | `D:\Brains\archive\Moth-er-Br-AI-n\starter-kit\` | Archived legacy PowerShell starter (read-only) |
 | `domains/laas/brain-registry.json` | Full LaaS registry (16 domains, real-world reference) |
-| `roadmap/VISION.md` | 16 guiding principles (v2.1+: #16 "right protocol for the role") |
-| `roadmap/ROADMAP.md` | Stage progression (Stages 1–4 done; S5 in progress; S6 "Dual Brain via A2A") |
+| `roadmap/VISION.md` | Guiding principles (currently 22; see the file header for the running list) |
+| `roadmap/ROADMAP.md` | Stage progression (see the file for live stage status; the v5.0 modularity line has shipped) |
 
 ## Command Reference
 

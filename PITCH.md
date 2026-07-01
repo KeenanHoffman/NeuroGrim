@@ -1,3 +1,11 @@
+---
+doc-version: 1.1
+date: 2026-04-27
+status: current
+anchored-to: none
+front-door: true
+---
+
 # NeuroGrim — Elevator Pitch
 
 **Version:** 1.1 — 2026-04-27

@@ -1,3 +1,11 @@
+---
+doc-version: 5.0.0
+date: 2026-06-30
+status: current
+anchored-to: neurogrim
+front-door: true
+---
+
 # Agent primer — index to bundled methodology docs
 
 This document is a **thin index** to the methodology primer that ships

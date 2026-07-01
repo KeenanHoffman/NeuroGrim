@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # `neurogrim-sdk`
 
 Stable contract surface for [NeuroGrim](https://github.com/KeenanHoffman/NeuroGrim)

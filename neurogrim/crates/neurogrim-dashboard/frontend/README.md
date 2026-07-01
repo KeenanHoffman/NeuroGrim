@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # NeuroGrim dashboard frontend
 
 React + TypeScript + Vite + Tailwind + shadcn/ui. Embedded into the

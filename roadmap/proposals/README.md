@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # LSP-Brains spec proposals
 
 This directory holds proposals for additions or refinements to the LSP-Brains

@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # layer-3/ — Agent-Assisted Review fixtures
 
 Each subdirectory is one fixture exercising the

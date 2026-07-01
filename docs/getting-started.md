@@ -1,3 +1,11 @@
+---
+doc-version: 5.0.0
+date: 2026-06-30
+status: current
+anchored-to: neurogrim
+front-door: true
+---
+
 # Getting Started with NeuroGrim + LSP Brains
 
 **Goal:** in ~20 minutes, go from cloning the repo to seeing your

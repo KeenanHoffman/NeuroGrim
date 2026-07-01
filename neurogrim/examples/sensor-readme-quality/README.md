@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # `sensor-readme-quality` — Third-Party `Sensor` Example
 
 V5-MOD-2 (2026-05-02) lifted the `cast` dispatch from a hand-coded

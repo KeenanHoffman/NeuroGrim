@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # DSP Discovery — exploring "Data Server Protocol" for agents
 
 > **Status: discovery / pre-prototype, started 2026-04-30.**

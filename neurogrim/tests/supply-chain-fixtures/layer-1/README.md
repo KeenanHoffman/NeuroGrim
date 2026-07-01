@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # layer-1/ — Mechanical SCA fixtures
 
 Each subdirectory is one fixture exercising the

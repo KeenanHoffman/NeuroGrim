@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Calibration ledger test fixtures (E-B2-2 C8)
 
 Three pre-canned `<domain>-calibration-ledger.jsonl` states used by

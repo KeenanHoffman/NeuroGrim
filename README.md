@@ -1,3 +1,11 @@
+---
+doc-version: 5.0.0
+date: 2026-06-30
+status: current
+anchored-to: neurogrim
+front-door: true
+---
+
 # NeuroGrim
 
 > *a book of spells for AI agents*
@@ -15,10 +23,11 @@ trajectory intelligence, and gated governance. Sensory tools are small spells ca
 against the project; the Brain keeps a grimoire of their readings and tells you what
 has changed.
 
-**Current version:** `3.4.0` — adds the dashboard: a self-contained
-HTTP + React UI (`neurogrim ui`) that gives humans a visual surface
-for the Brain alongside the existing CLI and MCP server. Five pages,
-SSE-driven live updates, hat-lens picker, dark/light theme.
+**Current version:** `5.0.0` — "Everything is Lego": an
+interface-and-implementation pattern at four high-leverage seams
+(`ScoringSource`, `Sensor`, `QueueBackend`, `TestRunner`), a thin SDK
+so you can build modules outside the core repo, and a diagnostics +
+test-speed foundation that keeps the dev loop fast as adoption scales.
 See [CHANGELOG.md](CHANGELOG.md) for what shipped + what's open.
 
 > **First time here?** Read **[PITCH.md](PITCH.md)** first — elevator pitch with
@@ -39,7 +48,7 @@ below.
 | Directory | Contents |
 |-----------|----------|
 | `neurogrim/` | Rust Brain engine (workspace: core, sensory, mcp, a2a, ecosystem, dashboard, cli crates) |
-| `spec/` | Redirect stub — the spec moved to [LSP-Brains](https://github.com/KeenanHoffman/LSP-Brains) as of v2 (currently v3.0 there) |
+| `spec/` | Redirect stub — the spec moved to [LSP-Brains](https://github.com/KeenanHoffman/LSP-Brains) as of v2 (currently v3.2 there) |
 | `sdk-python/` | Python SDK for writing custom sensory tools (`lsp-brains` package) |
 | `docs/` | Domain catalog, architecture guides |
 | `whitepaper/` | LSP Brains methodology whitepaper (Markdown; prior HTML build archived 2026-04-17) |

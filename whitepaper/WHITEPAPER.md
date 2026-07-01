@@ -1,3 +1,11 @@
+---
+doc-version: 2.1
+date: 2026-04-23
+status: current
+anchored-to: none
+front-door: true
+---
+
 # LSP Brains: A Nervous System for AI Agents
 
 ## NeuroGrim — Reference Implementation Whitepaper

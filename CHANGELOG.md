@@ -1,3 +1,11 @@
+---
+doc-version: 5.0.0
+date: 2026-05-04
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Changelog
 
 All notable changes to NeuroGrim + the LSP Brains specification live

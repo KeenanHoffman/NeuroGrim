@@ -1,3 +1,11 @@
+---
+doc-version: 5.0.0
+date: 2026-06-30
+status: current
+anchored-to: neurogrim
+front-door: true
+---
+
 # North Star: LSP Brains
 
 **Last updated:** 2026-06-14 (principle #16: right protocol for the role; principle #17: culture as substrate; principle #18: sensors need sensors; principle #19: agents are sensed [header was stale since #19 landed 2026-04 — V5-DOC-2 incidentally corrected]; principle #20: pluggability by use, not aspiration; principle #21: agents must perceive their own blind spots [added 2026-06-14]; principle #22: agents must perceive and steward their own work [added 2026-06-17])

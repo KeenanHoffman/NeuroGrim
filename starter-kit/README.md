@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Starter Kit — Archived
 
 The PowerShell starter kit has been moved to:

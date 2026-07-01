@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # `scoring-source-prom` — Third-Party `ScoringSource` Example
 
 V5-MOD-1 (2026-05-02) lifted the scoring-source dispatch from a

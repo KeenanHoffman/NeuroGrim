@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # `sensor-constant-score` — V5-SDK-1 reference example
 
 The smallest-possible third-party `Sensor` implementation,

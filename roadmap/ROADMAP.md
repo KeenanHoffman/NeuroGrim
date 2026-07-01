@@ -1,3 +1,11 @@
+---
+doc-version: 5.0.0
+date: 2026-06-30
+status: current
+anchored-to: neurogrim
+front-door: true
+---
+
 # Roadmap: LSP Brains + NeuroGrim
 
 **North star:** `VISION.md`

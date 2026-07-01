@@ -1,3 +1,10 @@
+---
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # `queue-backend-memory` — Third-Party `QueueBackend` Example
 
 V5-MOD-3 (2026-05-02) lifted the queue backend dispatch from a
