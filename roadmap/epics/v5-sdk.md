@@ -65,7 +65,7 @@ front-door: false
 - [x] Workspace `Cargo.toml` lists `neurogrim-sdk` as workspace member (Phase 1, `ed014d0`)
 - [⚠️] Initial version `0.1.0` published; CHANGELOG documents the contract — version IS at `0.1.0` in-tree, but `publish = false` per plan-critic 🔴 fix (mechanically blocks accidental crates.io push during 0.x soak period); CHANGELOG out of scope for 0.1.0. crates.io publication deferred to V5-SDK-2 or v5.5 follow-up.
 
-#### V5-MOD-1 hand-off note (added 2026-05-02 at V5-MOD-1 close-out)
+#### Hand-off note for V5-MOD-1 (added 2026-05-02 at V5-MOD-1 close-out)
 
 V5-MOD-1 ships **two distinct types** in the `ScoringSource` namespace; only one is SDK-stable. V5-SDK-1 implementers must keep them straight:
 
@@ -80,7 +80,7 @@ V5-SDK-2's conformance fixture for `ScoringSource` should re-export `neurogrim_c
 
 **Naming history note:** the `ScoringSource` struct (now `ScoringSourceConfig`) and the `ScoringSource` trait briefly collided in the V5-MOD-1 plan. Resolved by renaming the struct + accepting a semver-major bump on `neurogrim-core` (4.x → 5.0.0). LSP-Brains spec `METHODOLOGY-EVOLUTION.md` lines 1118 + 1135 carry the rename note. SDK extraction inherits the post-rename naming — consumers of the SDK will only ever see `ScoringSource` as the trait.
 
-#### V5-MOD-2 hand-off note (added 2026-05-02 at V5-MOD-2 close-out)
+#### Hand-off note for V5-MOD-2 (added 2026-05-02 at V5-MOD-2 close-out)
 
 V5-MOD-2 ships the second of three Theme B trait surfaces. SDK extraction should re-export the following:
 
@@ -98,7 +98,7 @@ V5-SDK-2's conformance fixture for `Sensor` should re-export `neurogrim_core::se
 
 **No two-method dance like `ScoringSource::load_inherent`:** sensors are slow IO at seconds-per-call (git, cargo audit, network); ~50ns × 21 boxing overhead is rounding error. SDK consumers see a single `analyze` method; no `BuiltinSensor` enum dispatcher needed (V5-MOD-1's perf-critical scoring path required one — sensors don't).
 
-#### V5-MOD-3 hand-off note (added 2026-05-02 at V5-MOD-3 close-out)
+#### Hand-off note for V5-MOD-3 (added 2026-05-02 at V5-MOD-3 close-out)
 
 V5-MOD-3 ships the third (and final) Theme B trait surface. SDK extraction should re-export the following:
 

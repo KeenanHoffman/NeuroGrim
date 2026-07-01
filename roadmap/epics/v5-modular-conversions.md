@@ -62,7 +62,8 @@ front-door: false
 
 **Naming decision: Option A (rename) + accept semver-major bump.** The pre-existing `pub struct ScoringSource` in `registry.rs` collided with the new trait. Operator-pinned 2026-05-02: rename the struct to `ScoringSourceConfig`, keep the trait as `ScoringSource`, accept the semver-major break for `neurogrim-core` (4.x → 5.0.0 — matches the v5 epic boundary). Workspace `Cargo.toml` bumped + 7 path-pinned internal deps updated atomically in Phase 0.
 
-**Registration mechanism: hand-rolled `HashMap<&'static str, Box<dyn ScoringSourceFactory>>`.** Per plan-critic Subagent 2 finding: the workspace has no existing static-registration substrate (`inventory` / `linkme` / `ctor` — none present), and the `dependency-discipline` skill enforces a 4-point pre-flight on new crates. The hand-rolled registry is ~40 lines with zero supply-chain review burden, and registration is *explicit* (visible in startup code) rather than magical at link time. `inventory`-based v2 reserved for v5.5 BACKLOG B-37/B-40 if "register without an explicit init call" demand emerges.
+**Registration mechanism: hand-rolled `HashMap<&'static str, Box<dyn ScoringSourceFactory>>`.** Per plan-critic Subagent 2 finding: the workspace has no existing static-registration substrate (`inventory` / `linkme` / `ctor` — none present), and the `dependency-discipline` skill enforces a 4-point pre-flight on new crates. The hand-rolled registry is ~40 lines with zero supply-chain review burden, and registration is *explicit* (visible in startup code) rather than magical at link time.
+`inventory`-based v2 reserved for v5.5 BACKLOG B-37/B-40 if "register without an explicit init call" demand emerges.
 
 **Done when:**
 - [x] `ScoringSource` trait defined in `neurogrim-core/src/scoring_source.rs` *(Phase 1, commit `41b2310`)*
