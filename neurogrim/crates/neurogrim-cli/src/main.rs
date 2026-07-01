@@ -28,6 +28,12 @@ enum BacklogCmd {
         #[arg(long, default_value = ".")]
         project_root: String,
     },
+    /// The full prioritized grooming queue (cycle → dangling → untriaged → lint)
+    Groom {
+        /// Project root path
+        #[arg(long, default_value = ".")]
+        project_root: String,
+    },
 }
 
 /// doc-broker subcommands (gated behind `sensor-documentation-graph`,
@@ -734,6 +740,7 @@ async fn main() -> Result<()> {
         Commands::Sensory { name, project_root } => run_sensory(&name, &project_root).await,
         Commands::Backlog { cmd } => match cmd {
             BacklogCmd::NextReady { project_root } => run_backlog_next_ready(&project_root),
+            BacklogCmd::Groom { project_root } => run_backlog_groom(&project_root),
         },
         #[cfg(feature = "sensor-documentation-graph")]
         Commands::Docs { cmd } => match cmd {
@@ -890,6 +897,17 @@ fn run_backlog_next_ready(project_root: &str) -> Result<()> {
     let report = neurogrim_sensory::backlog::parse_backlog(std::path::Path::new(project_root));
     let dispatch = neurogrim_sensory::backlog::next_ready(&report);
     println!("{}", serde_json::to_string_pretty(&dispatch)?);
+    Ok(())
+}
+
+/// IDE-BACKLOG-PM — `neurogrim backlog groom`: the full prioritized grooming
+/// queue (cycle → dangling → untriaged → lint) the PM dashboard's Grooming
+/// view + the broker drain against. Same ranking authority `next-ready`'s
+/// groom tier draws its top entry from. Mirrors `run_backlog_next_ready`.
+fn run_backlog_groom(project_root: &str) -> Result<()> {
+    let report = neurogrim_sensory::backlog::parse_backlog(std::path::Path::new(project_root));
+    let queue = neurogrim_sensory::backlog::groom_queue(&report);
+    println!("{}", serde_json::to_string_pretty(&queue)?);
     Ok(())
 }
 

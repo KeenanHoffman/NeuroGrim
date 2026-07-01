@@ -96,6 +96,15 @@ pub struct BacklogItem {
     /// Deferred and the condition becomes the wake.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plan_when: Option<String>,
+
+    /// INTERNAL-ONLY composite-key scope: the nearest ancestor `##`
+    /// (top-level / epic) heading the item lives under, or `""` when the item
+    /// is above any `##`. Not serialized — humans read the bare `id`; this is
+    /// used purely for scope-first dep resolution + graph identity so that the
+    /// same bare id appearing in different files/sections becomes DISTINCT
+    /// nodes (kills the phantom cycle + merge-inflated dangling).
+    #[serde(skip)]
+    pub section: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -118,6 +127,11 @@ pub struct BacklogReport {
 fn looks_like_id(token: &str) -> bool {
     let t = token.trim_matches(|c| c == ':' || c == '.' || c == ',' || c == '*' || c == '`');
     if t.len() < 2 || t.len() > 40 {
+        return false;
+    }
+    // Reject range notation (`S10-DP-1..3`) — the ONE safe parser tightening.
+    // No real id contains `..`; ranges are enumerations, not dependencies.
+    if t.contains("..") {
         return false;
     }
     let mut chars = t.chars();
@@ -153,13 +167,44 @@ fn leading_id(text: &str) -> Option<(String, String)> {
     }
 }
 
-/// All id-looking tokens in `text` (used for dep extraction from a
-/// status/deps cell or heading tail like `· dep B0 + D2; gates B6`).
+/// All id-looking tokens in `text` (direction-agnostic — used where the caller
+/// already knows every id is a reference, e.g. `ABSORBED into <EPIC>`).
 fn extract_ids(text: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for raw in text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_')) {
         if looks_like_id(raw) && !out.iter().any(|e| e == raw) {
             out.push(raw.to_string());
+        }
+    }
+    out
+}
+
+/// Whether a clause names a REVERSE-direction relationship — `X gates Y` /
+/// `X blocks Y` mean X is a PREREQUISITE of Y (the true edge is `Y → X`), so
+/// ids in such a clause are NOT forward deps of the current item. Word-matched
+/// (so `delegates`/`blocked`/`blocker` don't false-trigger).
+fn clause_is_reverse(clause: &str) -> bool {
+    clause.split(|c: char| !c.is_ascii_alphabetic()).any(|w| {
+        let l = w.to_ascii_lowercase();
+        l == "gates" || l == "gate" || l == "blocks"
+    })
+}
+
+/// FORWARD dep ids in `text` (a status/deps cell, heading tail, or prose line
+/// like `dep B0 + D2; gates B6`). Splits into clauses on `;`/newlines and drops
+/// any clause that expresses a reverse relationship (`gates`/`blocks`) — those
+/// ids belong to the OTHER item. Everything else (`dep`/`depends`/`requires`/
+/// `after`/`blocked by`) is a forward dep of this item.
+fn extract_dep_ids(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for clause in text.split(|c: char| c == ';' || c == '\n') {
+        if clause_is_reverse(clause) {
+            continue;
+        }
+        for d in extract_ids(clause) {
+            if !out.iter().any(|e| e == &d) {
+                out.push(d);
+            }
         }
     }
     out
@@ -310,16 +355,62 @@ fn infer_item_fields(it: &mut BacklogItem) {
     }
 }
 
-/// Detect dependency cycles over the known-item dep graph (B-LIVE-3) via
-/// colored DFS. Each cycle is the ordered member ids; deduped by member set.
-fn find_cycles(items: &[BacklogItem]) -> Vec<Vec<String>> {
+/// Resolve each item's bare dep tokens against the COMPOSITE-key node set,
+/// scope-first, returning `(adjacency, dangling)` over composite nodes.
+///
+/// A dep token `T` on an item at `(file, section)` resolves to:
+/// 1. the node at `(file, section, T)` (same file + same `##` section), else
+/// 2. a node at `(file, T)` (same file, any section — first by order), else
+/// 3. the GLOBALLY-UNIQUE node with id `T`, else
+/// 4. it is dangling.
+///
+/// This is the core fix: the same bare id appearing in multiple files/sections
+/// stays DISTINCT (no bare-string merge), so a dep never fabricates a
+/// cross-file edge onto an arbitrary same-named node.
+fn resolve_graph(items: &[BacklogItem]) -> (Vec<Vec<usize>>, Vec<(String, String)>) {
     use std::collections::HashMap;
-    let index: HashMap<&str, usize> =
-        items.iter().enumerate().map(|(i, it)| (it.id.as_str(), i)).collect();
-    let adj: Vec<Vec<usize>> = items
-        .iter()
-        .map(|it| it.deps.iter().filter_map(|d| index.get(d.as_str()).copied()).collect())
-        .collect();
+    let mut by_fsi: HashMap<(&str, &str, &str), usize> = HashMap::new();
+    let mut by_fi: HashMap<(&str, &str), Vec<usize>> = HashMap::new();
+    let mut by_i: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (idx, it) in items.iter().enumerate() {
+        by_fsi
+            .entry((it.source_file.as_str(), it.section.as_str(), it.id.as_str()))
+            .or_insert(idx);
+        by_fi.entry((it.source_file.as_str(), it.id.as_str())).or_default().push(idx);
+        by_i.entry(it.id.as_str()).or_default().push(idx);
+    }
+    let mut adjacency: Vec<Vec<usize>> = vec![Vec::new(); items.len()];
+    let mut dangling: Vec<(String, String)> = Vec::new();
+    for (idx, it) in items.iter().enumerate() {
+        for d in &it.deps {
+            let resolved = by_fsi
+                .get(&(it.source_file.as_str(), it.section.as_str(), d.as_str()))
+                .copied()
+                .or_else(|| {
+                    by_fi.get(&(it.source_file.as_str(), d.as_str())).and_then(|v| v.first().copied())
+                })
+                .or_else(|| match by_i.get(d.as_str()) {
+                    Some(v) if v.len() == 1 => Some(v[0]),
+                    _ => None,
+                });
+            match resolved {
+                Some(j) if j != idx => {
+                    if !adjacency[idx].contains(&j) {
+                        adjacency[idx].push(j);
+                    }
+                }
+                Some(_) => {} // self-reference — ignore
+                None => dangling.push((it.id.clone(), d.clone())),
+            }
+        }
+    }
+    (adjacency, dangling)
+}
+
+/// Detect dependency cycles over the COMPOSITE-key dep graph (B-LIVE-3) via
+/// colored DFS on the prebuilt `adj` (from `resolve_graph`). Each cycle is the
+/// ordered member ids; deduped by member set.
+fn find_cycles(items: &[BacklogItem], adj: &[Vec<usize>]) -> Vec<Vec<String>> {
     let n = items.len();
     let mut color = vec![0u8; n]; // 0 white, 1 gray (on stack), 2 black
     let mut stack: Vec<usize> = Vec::new();
@@ -350,7 +441,7 @@ fn find_cycles(items: &[BacklogItem]) -> Vec<Vec<String>> {
 
     for i in 0..n {
         if color[i] == 0 {
-            dfs(i, &adj, &mut color, &mut stack, items, &mut cycles);
+            dfs(i, adj, &mut color, &mut stack, items, &mut cycles);
         }
     }
 
@@ -367,23 +458,81 @@ fn find_cycles(items: &[BacklogItem]) -> Vec<Vec<String>> {
 }
 
 fn is_backlog_file(rel: &str) -> bool {
-    let base = Path::new(rel)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    base == "backlog.md" || base == "roadmap.md" || base == "execution.md"
+    let lower = rel.to_ascii_lowercase();
+    let base = Path::new(&lower).file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if base == "backlog.md" || base == "roadmap.md" || base == "execution.md" {
+        return true;
+    }
+    // Any `*-backlog.md` (e.g. `broker-framework-backlog.md`).
+    if base.ends_with("-backlog.md") {
+        return true;
+    }
+    // Any markdown under a `roadmap/epics/` path (the epic docs the sensor was
+    // previously blind to — ~118 real work items).
+    if base.ends_with(".md") && lower.contains("roadmap/epics/") {
+        return true;
+    }
+    false
+}
+
+/// Locate the FORWARD-dependency column of a table by header text. Deps are
+/// read ONLY from a `Depends on` / `Deps` / `Blocked by` / `Requires`-headed
+/// column — never from `Stage` / `Effort` / `Layer` columns (so the broker
+/// master table's `S0-T`-class Stage cells don't become phantom deps), and
+/// never from a reverse `gates` / `blocks` column (those express the inverse
+/// edge). `None` = no forward-dep column.
+fn find_deps_col(header: &[String]) -> Option<usize> {
+    header.iter().position(|h| {
+        let l = h.to_ascii_lowercase();
+        l.contains("dep") || l.contains("blocked") || l.contains("requir") || l.contains("after")
+    })
+}
+
+/// Upsert a parsed item into `items`, deduping FIRST-WINS on the composite
+/// `(section, id)` key within the current file. On a duplicate the later
+/// occurrence is NOT pushed (counted once); its deps are merged into the first
+/// occurrence (union). Returns the index of the surviving node (so a heading's
+/// body lines attach to it).
+fn upsert_item(
+    items: &mut Vec<BacklogItem>,
+    seen: &mut std::collections::HashMap<(String, String), usize>,
+    new_item: BacklogItem,
+) -> usize {
+    let key = (new_item.section.clone(), new_item.id.clone());
+    if let Some(&existing) = seen.get(&key) {
+        for d in &new_item.deps {
+            if d != &items[existing].id && !items[existing].deps.contains(d) {
+                items[existing].deps.push(d.clone());
+            }
+        }
+        existing
+    } else {
+        items.push(new_item);
+        let idx = items.len() - 1;
+        seen.insert(key, idx);
+        idx
+    }
 }
 
 /// Parse one markdown file into items. Line-based with a fenced-code
 /// guard (so `### B0` inside a ``` fence isn't an item).
 fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
+    use std::collections::HashMap;
     let mut items: Vec<BacklogItem> = Vec::new();
     let mut in_fence = false;
     // Index of the heading item whose body we're currently inside, so
     // `**Dependencies:**`/`dep`/`gates` body lines attach to it (NeuroGrim
     // `BACKLOG.md` declares deps in prose under the heading).
     let mut cur: Option<usize> = None;
+    // The nearest ancestor `##` (top-level / epic) heading — the composite-key
+    // scope. Reset on `#` (H1), set on `##`, untouched by `###`/`####`.
+    let mut current_section = String::new();
+    // Per-`(section, id)` dedup map (FIRST-WINS) within this file.
+    let mut seen: HashMap<(String, String), usize> = HashMap::new();
+    // Header + dep-column of the table block we're currently inside; cleared
+    // whenever we leave the table (any non-`|` line).
+    let mut table_header: Option<Vec<String>> = None;
+    let mut deps_col: Option<usize> = None;
     for (i, raw_line) in text.lines().enumerate() {
         let line = raw_line.trim_end();
         let trimmed = line.trim_start();
@@ -394,25 +543,38 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
         if in_fence {
             continue;
         }
+        // Any non-table line ends the current table block (markdown tables are
+        // contiguous), so header + dep-column scope stays per-table.
+        if !trimmed.starts_with('|') {
+            table_header = None;
+            deps_col = None;
+        }
 
         // Heading items: ## / ### / #### with a leading id.
         if trimmed.starts_with('#') {
             cur = None;
             let hashes = trimmed.chars().take_while(|c| *c == '#').count();
+            let head = trimmed[hashes..].trim();
+            // Track the `##` section scope for composite keys.
+            if hashes == 1 {
+                current_section = String::new();
+            } else if hashes == 2 {
+                current_section = head.to_string();
+            }
             if (2..=4).contains(&hashes) {
-                let head = trimmed[hashes..].trim();
                 if let Some((id, rest)) = leading_id(head) {
                     let (title, status) = split_title_status(&rest);
-                    let mut deps = extract_ids(&status);
+                    let mut deps = extract_dep_ids(&status);
                     // Also scan the heading tail (execution batch headings
-                    // carry `· dep D1` after the title).
-                    for d in extract_ids(&rest) {
+                    // carry `· dep D1` after the title). Direction-aware so a
+                    // `gates`/`blocks` tail is not read as a forward dep.
+                    for d in extract_dep_ids(&rest) {
                         if d != id && !deps.contains(&d) {
                             deps.push(d);
                         }
                     }
                     deps.retain(|d| d != &id);
-                    items.push(BacklogItem {
+                    let item = BacklogItem {
                         id,
                         title: title.trim_matches('`').trim().to_string(),
                         status,
@@ -420,9 +582,10 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                         source_file: rel.to_string(),
                         line: i + 1,
                         format: "heading",
+                        section: current_section.clone(),
                         ..Default::default()
-                    });
-                    cur = Some(items.len() - 1);
+                    };
+                    cur = Some(upsert_item(&mut items, &mut seen, item));
                 }
             }
             continue;
@@ -442,6 +605,13 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
             if cells[0].chars().all(|c| c == '-' || c == ':' || c.is_whitespace()) {
                 continue;
             }
+            // First row of this table block = header. Record it + locate the
+            // dep column. (Header cells like `ID` aren't ids, so this row won't
+            // also parse as an item.)
+            if table_header.is_none() {
+                deps_col = find_deps_col(&cells);
+                table_header = Some(cells.clone());
+            }
             if let Some((id, _rest)) = leading_id(&cells[0]) {
                 let title = cells.get(1).cloned().unwrap_or_default();
                 // Status: the col-2+ cell carrying a recognized status word
@@ -454,16 +624,24 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                     .find(|c| status_to_stage(c).is_some())
                     .cloned()
                     .unwrap_or_else(|| cells.last().cloned().unwrap_or_default());
-                // Deps: scan every col-2+ cell (status / deps / notes).
+                // Deps: ONLY the `Depends on`/`Deps`-headed column (never the
+                // Stage/Effort/Layer columns). No dep column → no table deps
+                // (deps come from `**Dependencies:**` body lines on headings).
                 let mut deps: Vec<String> = Vec::new();
-                for c in cells.iter().skip(2) {
-                    for d in extract_ids(c) {
-                        if d != id && !deps.contains(&d) {
-                            deps.push(d);
+                if let Some(dc) = deps_col {
+                    if let Some(cell) = cells.get(dc) {
+                        // Direction-aware: `gates`/`blocks` ids in the cell are
+                        // REVERSE (they belong to the other item), not forward
+                        // deps — otherwise `D2 … gates B2` + `B2 … dep D2`
+                        // fabricates a D2↔B2 cycle.
+                        for d in extract_dep_ids(cell) {
+                            if d != id && !deps.contains(&d) {
+                                deps.push(d);
+                            }
                         }
                     }
                 }
-                items.push(BacklogItem {
+                let item = BacklogItem {
                     id,
                     title: title.trim_matches('`').trim().to_string(),
                     status,
@@ -471,8 +649,10 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                     source_file: rel.to_string(),
                     line: i + 1,
                     format: "table",
+                    section: current_section.clone(),
                     ..Default::default()
-                });
+                };
+                upsert_item(&mut items, &mut seen, item);
             }
             continue;
         }
@@ -503,13 +683,16 @@ fn parse_file(text: &str, rel: &str) -> Vec<BacklogItem> {
                     }
                 }
             }
-            // Declared deps (`**Dependencies:**` / `dep` / `gates` / `blocked`).
+            // Declared FORWARD deps (`**Dependencies:**` / `dep` / `blocked
+            // by`). `gates`/`blocks` are REVERSE and deliberately NOT triggers;
+            // even when a line also carries a forward dep, `extract_dep_ids`
+            // drops the reverse clause's ids.
             let low = line.to_lowercase();
             if low.contains("depend") || low.contains(" dep ") || low.contains("· dep")
-                || low.contains("gates ") || low.contains("blocked")
+                || low.contains("blocked")
             {
                 let own = items[idx].id.clone();
-                for d in extract_ids(line) {
+                for d in extract_dep_ids(line) {
                     if d != own && !items[idx].deps.contains(&d) {
                         items[idx].deps.push(d);
                     }
@@ -572,17 +755,10 @@ pub fn parse_backlog(root: &Path) -> BacklogReport {
         }
     }
 
-    let known: BTreeSet<&str> = items.iter().map(|i| i.id.as_str()).collect();
-    let mut dangling: Vec<(String, String)> = Vec::new();
-    for it in &items {
-        for d in &it.deps {
-            if !known.contains(d.as_str()) {
-                dangling.push((it.id.clone(), d.clone()));
-            }
-        }
-    }
-
-    let cycles = find_cycles(&items);
+    // Composite-key graph: resolve every dep token scope-first over the
+    // (file, section, id) node set, so duplicate bare ids don't merge.
+    let (adjacency, dangling) = resolve_graph(&items);
+    let cycles = find_cycles(&items, &adjacency);
     // Untriaged: ended at the default `Proposed` stage because the status
     // gave no recognizable signal (an explicit stage or a CANDIDATE status
     // is NOT untriaged).
@@ -599,6 +775,158 @@ pub fn parse_backlog(root: &Path) -> BacklogReport {
         cycles,
         untriaged,
     }
+}
+
+/// One enrichment-lint hint (PM-A5): a Ready+ pipeline item missing a required
+/// field, or an epic with no declared value. `stage` is empty for the
+/// `undeclared_epic_value` rule (it's epic-level, not item-lifecycle).
+struct LintHint {
+    item: String,
+    rule: String,
+    stage: String,
+}
+
+/// The lint gradient (required = f(type, stage)) + undeclared epic value —
+/// the single computation shared by `analyze_backlog` (rendered into the CMDB
+/// `lint` extra) and `groom_queue` (rendered into GroomItems). Advisory.
+fn compute_lint(report: &BacklogReport) -> Vec<LintHint> {
+    let mut lint: Vec<LintHint> = Vec::new();
+    let ready_or_beyond =
+        |s: &str| matches!(s, "Ready" | "In-progress" | "Agent-done" | "Human-verified-done");
+    let item_by_id: BTreeMap<&str, &BacklogItem> =
+        report.items.iter().map(|i| (i.id.as_str(), i)).collect();
+    let mut epic_members: BTreeMap<&str, Vec<&BacklogItem>> = BTreeMap::new();
+    for it in &report.items {
+        if !it.epic.is_empty() {
+            epic_members.entry(it.epic.as_str()).or_default().push(it);
+        }
+    }
+    for it in &report.items {
+        let pipeline_type = matches!(it.item_type.as_str(), "story" | "bug" | "discovery");
+        if pipeline_type && ready_or_beyond(&it.stage) {
+            if it.moscow.is_empty() {
+                lint.push(LintHint { item: it.id.clone(), rule: "missing_moscow".into(), stage: it.stage.clone() });
+            }
+            if it.epic.is_empty() {
+                lint.push(LintHint { item: it.id.clone(), rule: "missing_epic".into(), stage: it.stage.clone() });
+            }
+        }
+        if pipeline_type
+            && matches!(it.stage.as_str(), "Agent-done" | "Human-verified-done")
+            && it.evidence_run_id.is_empty()
+        {
+            lint.push(LintHint { item: it.id.clone(), rule: "missing_evidence".into(), stage: it.stage.clone() });
+        }
+    }
+    for epic_id in epic_members.keys() {
+        let has_value = item_by_id.get(epic_id).map(|e| !e.value.is_empty()).unwrap_or(false);
+        if !has_value {
+            lint.push(LintHint { item: epic_id.to_string(), rule: "undeclared_epic_value".into(), stage: String::new() });
+        }
+    }
+    lint
+}
+
+/// A single groomable defect — one entry in the prioritized grooming queue the
+/// PM dashboard renders + the broker drains. `groom_id` is deterministic and
+/// reuses the exact `next_ready` groom formats so the queue and the broker's
+/// single-groom dispatch share one identity space.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct GroomItem {
+    pub groom_id: String,
+    /// `cycle` | `dangling` | `untriaged` | `missing_moscow` | `missing_epic`
+    /// | `missing_evidence` | `undeclared_epic_value`.
+    pub kind: String,
+    pub target_id: String,
+    pub source_file: String,
+    pub line: usize,
+    pub action: String,
+    pub severity: u8,
+    pub points: i32,
+}
+
+/// The FULL prioritized grooming queue — the single ranking authority the
+/// PM dashboard's Grooming view consumes and `next_ready`'s groom tier draws
+/// its top entry from. Aggregates the existing `defects` (cycles / dangling /
+/// untriaged) + `lint` surfaces. Order: cycle → dangling → untriaged → lint
+/// (severity desc). Deterministic.
+pub fn groom_queue(report: &BacklogReport) -> Vec<GroomItem> {
+    use std::collections::HashMap;
+    // id -> (source_file, line) of its FIRST occurrence (for one-click-to-item).
+    let mut loc: HashMap<&str, (String, usize)> = HashMap::new();
+    for it in &report.items {
+        loc.entry(it.id.as_str()).or_insert((it.source_file.clone(), it.line));
+    }
+    let at = |id: &str| loc.get(id).cloned().unwrap_or_default();
+
+    let mut q: Vec<GroomItem> = Vec::new();
+    // Tier 1 — cycles (severity 4): deadlock a whole subgraph.
+    for cycle in &report.cycles {
+        let mut m = cycle.clone();
+        m.sort();
+        let target = m.first().cloned().unwrap_or_default();
+        let (source_file, line) = at(&target);
+        q.push(GroomItem {
+            groom_id: format!("GROOM-cycle-{}", m.join("-")),
+            kind: "cycle".into(),
+            target_id: target,
+            source_file,
+            line,
+            action: "Break the dependency cycle — one member must drop its blocking ref.".into(),
+            severity: 4,
+            points: 10,
+        });
+    }
+    // Tier 2 — dangling deps (severity 3).
+    for (item, dep) in &report.dangling_deps {
+        let (source_file, line) = at(item);
+        q.push(GroomItem {
+            groom_id: format!("GROOM-dangling-{item}-{dep}"),
+            kind: "dangling".into(),
+            target_id: item.clone(),
+            source_file,
+            line,
+            action: format!("Fix the phantom dependency `{dep}` on `{item}` — resolve or remove the ref."),
+            severity: 3,
+            points: 5,
+        });
+    }
+    // Tier 3 — untriaged (severity 2).
+    for uid in &report.untriaged {
+        let (source_file, line) = at(uid);
+        q.push(GroomItem {
+            groom_id: format!("GROOM-triage-{uid}"),
+            kind: "untriaged".into(),
+            target_id: uid.clone(),
+            source_file,
+            line,
+            action: format!("Triage `{uid}`: assign a type + stage so the broker can rank it."),
+            severity: 2,
+            points: 2,
+        });
+    }
+    // Tier 4 — enrichment lint (severity 1, advisory: 0 pts).
+    for h in compute_lint(report) {
+        let (source_file, line) = at(&h.item);
+        let action = match h.rule.as_str() {
+            "missing_moscow" => format!("Add a `**MoSCoW:**` field to `{}` (Ready+ items need a MoSCoW).", h.item),
+            "missing_epic" => format!("Add an `**Epic:**` ref to `{}` (Ready+ items need an epic).", h.item),
+            "missing_evidence" => format!("Add an `**Evidence:**` run-id to `{}` (done items need evidence).", h.item),
+            "undeclared_epic_value" => format!("Declare a `**Value:**` on epic `{}` (the MoSCoW anchor).", h.item),
+            _ => format!("Enrich `{}`.", h.item),
+        };
+        q.push(GroomItem {
+            groom_id: format!("GROOM-lint-{}-{}", h.rule, h.item),
+            kind: h.rule,
+            target_id: h.item,
+            source_file,
+            line,
+            action,
+            severity: 1,
+            points: 0,
+        });
+    }
+    q
 }
 
 /// Sensor entry point (the `documentation-graph` shape). Returns a
@@ -740,33 +1068,17 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
 
     // PM-A5: the lint gradient (required = f(type, stage), discovery-05 §C) +
     // undeclared epic value. Advisory (enrichment guidance), not a health hit.
-    let mut lint: Vec<Value> = Vec::new();
-    let ready_or_beyond = |s: &str| {
-        matches!(s, "Ready" | "In-progress" | "Agent-done" | "Human-verified-done")
-    };
-    for it in &report.items {
-        let pipeline_type = matches!(it.item_type.as_str(), "story" | "bug" | "discovery");
-        if pipeline_type && ready_or_beyond(&it.stage) {
-            if it.moscow.is_empty() {
-                lint.push(serde_json::json!({"item": it.id, "rule": "missing_moscow", "stage": it.stage}));
+    // Computed once by `compute_lint` (shared with `groom_queue` — one source).
+    let lint: Vec<Value> = compute_lint(&report)
+        .into_iter()
+        .map(|h| {
+            if h.rule == "undeclared_epic_value" {
+                serde_json::json!({"item": h.item, "rule": h.rule})
+            } else {
+                serde_json::json!({"item": h.item, "rule": h.rule, "stage": h.stage})
             }
-            if it.epic.is_empty() {
-                lint.push(serde_json::json!({"item": it.id, "rule": "missing_epic", "stage": it.stage}));
-            }
-        }
-        if pipeline_type
-            && matches!(it.stage.as_str(), "Agent-done" | "Human-verified-done")
-            && it.evidence_run_id.is_empty()
-        {
-            lint.push(serde_json::json!({"item": it.id, "rule": "missing_evidence", "stage": it.stage}));
-        }
-    }
-    for epic_id in epic_members.keys() {
-        let has_value = item_by_id.get(epic_id).map(|e| !e.value.is_empty()).unwrap_or(false);
-        if !has_value {
-            lint.push(serde_json::json!({"item": epic_id, "rule": "undeclared_epic_value"}));
-        }
-    }
+        })
+        .collect();
     let lint_count = lint.len();
     if lint_count > 0 {
         findings.push(Finding {
@@ -804,6 +1116,9 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
         // Derived epic/container rollup (D-EPIC) + the lint gradient (D-SCHEMA).
         ("epics", Value::Array(epics)),
         ("lint", Value::Array(lint)),
+        // The full prioritized grooming queue (cycle → dangling → untriaged →
+        // lint). Same ranking authority `next_ready`'s groom tier draws from.
+        ("groom_queue", serde_json::to_value(groom_queue(&report)).unwrap_or(Value::Array(vec![]))),
         // The live symbol model the IDE caches (the broker + pane read this).
         ("items", items_json),
     ];
@@ -996,26 +1311,54 @@ pub fn next_ready(report: &BacklogReport) -> Value {
         });
     }
 
-    // Tier 3 — groom the top board defect (deterministic groom-id).
-    if let Some((item, dep)) = report.dangling_deps.first() {
-        return serde_json::json!({ "tier": "groom", "ready": false,
-            "groom": { "groom_id": format!("GROOM-dangling-{item}-{dep}"), "kind": "dangling_dep", "item": item, "dep": dep,
-                       "action": format!("Fix the phantom dependency `{dep}` on `{item}` — resolve or remove the ref.") },
-            "explanation": format!("No implementable item — groom: fix dangling dep {dep} on {item}. The broker never invents filler.") });
-    }
-    if let Some(cycle) = report.cycles.first() {
-        let mut m = cycle.clone();
-        m.sort();
-        return serde_json::json!({ "tier": "groom", "ready": false,
-            "groom": { "groom_id": format!("GROOM-cycle-{}", m.join("-")), "kind": "cycle", "members": m,
-                       "action": "Break the dependency cycle — one member must drop its blocking ref." },
-            "explanation": "No implementable item — groom: break a dependency cycle." });
-    }
-    if let Some(uid) = report.untriaged.first() {
-        return serde_json::json!({ "tier": "groom", "ready": false,
-            "groom": { "groom_id": format!("GROOM-triage-{uid}"), "kind": "untriaged", "item": uid,
-                       "action": format!("Triage `{uid}`: assign a type + stage so the broker can rank it.") },
-            "explanation": format!("No implementable item — groom: triage {uid}.") });
+    // Tier 3 — groom the top board defect. ONE authority: the ranked
+    // `groom_queue`. The broker's groom tier dispatches only the STRUCTURAL
+    // defects (cycle → dangling → untriaged) before capture — advisory lint
+    // enrichment lives in the full queue (PM view) but never preempts capture.
+    // Because structural defects sort ahead of lint, this is `first()` whenever
+    // a defect exists. Mapped back into the historical per-kind envelope so
+    // existing consumers keep their field shape (`dangling_dep`/`members`/`item`).
+    let queue = groom_queue(report);
+    if let Some(g) = queue.iter().find(|g| matches!(g.kind.as_str(), "cycle" | "dangling" | "untriaged")) {
+        let groom = match g.kind.as_str() {
+            "cycle" => {
+                // Recover the ordered members from the matching report cycle.
+                let members: Vec<String> = report
+                    .cycles
+                    .iter()
+                    .find(|c| {
+                        let mut m = (*c).clone();
+                        m.sort();
+                        format!("GROOM-cycle-{}", m.join("-")) == g.groom_id
+                    })
+                    .map(|c| {
+                        let mut m = c.clone();
+                        m.sort();
+                        m
+                    })
+                    .unwrap_or_default();
+                serde_json::json!({ "groom_id": g.groom_id, "kind": "cycle", "members": members, "action": g.action })
+            }
+            "dangling" => {
+                // Recover the dep from the matching dangling pair.
+                let dep = report
+                    .dangling_deps
+                    .iter()
+                    .find(|(item, dep)| format!("GROOM-dangling-{item}-{dep}") == g.groom_id)
+                    .map(|(_, dep)| dep.clone())
+                    .unwrap_or_default();
+                serde_json::json!({ "groom_id": g.groom_id, "kind": "dangling_dep", "item": g.target_id, "dep": dep, "action": g.action })
+            }
+            "untriaged" => {
+                serde_json::json!({ "groom_id": g.groom_id, "kind": "untriaged", "item": g.target_id, "action": g.action })
+            }
+            _ => {
+                // Enrichment-lint groom (missing_moscow/epic/evidence, …).
+                serde_json::json!({ "groom_id": g.groom_id, "kind": g.kind, "item": g.target_id, "action": g.action })
+            }
+        };
+        return serde_json::json!({ "tier": "groom", "ready": false, "groom": groom,
+            "explanation": format!("No implementable item — groom: {} ({}). The broker never invents filler.", g.groom_id, g.kind) });
     }
 
     // Tier 4 — capture (board fully done; demand-driven refill).
@@ -1090,7 +1433,9 @@ not an item (no id).
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].id, "D1");
         assert_eq!(items[0].format, "table");
-        assert!(items[0].deps.contains(&"B0".to_string()));
+        // `gates B0` is a REVERSE relationship (D1 is a prerequisite of B0), so
+        // it is NOT a forward dep of D1. Only `dep`-direction words count.
+        assert!(items[0].deps.is_empty(), "gates is reverse: {:?}", items[0].deps);
         assert_eq!(items[1].id, "B0");
         assert!(items[1].deps.contains(&"D1".to_string()));
     }
@@ -1408,5 +1753,237 @@ not an item (no id).
         let o = rank_backlog(&report, &LiveState::default());
         assert!(o.candidates.is_empty());
         assert_eq!(o.defect_blocked, 1);
+    }
+
+    // ── Composite-key graph identity (Phase 1 core fix) ──────────────────────
+
+    #[test]
+    fn rejects_range_notation_token() {
+        // The ONE safe `extract_ids`/`looks_like_id` tightening: `..` ranges.
+        assert!(!looks_like_id("S10-DP-1..3"), "range notation is not an id");
+        assert!(looks_like_id("S10-DP-3"), "a real id still parses");
+        // A range token yields no dep; the real neighbour still does.
+        let deps = extract_ids("dep S10-DP-1..3 then S10-DP-3");
+        assert_eq!(deps, vec!["S10-DP-3".to_string()]);
+    }
+
+    #[test]
+    fn composite_key_splits_duplicate_ids_across_files() {
+        // Fixture (a): three files each defining `B0` with a distinct LOCAL dep.
+        // Composite keys keep them DISTINCT — no merge, no phantom cycle, and no
+        // cross-file dangling (each B0's dep resolves inside its own file).
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "a/BACKLOG.md", "## Epic\n### B0: a — READY\nbody · dep AH1\n### AH1: helper — READY\n");
+        write(dir.path(), "b/BACKLOG.md", "## Epic\n### B0: b — READY\nbody · dep BH1\n### BH1: helper — READY\n");
+        write(dir.path(), "c/BACKLOG.md", "## Epic\n### B0: c — READY\nbody · dep CH1\n### CH1: helper — READY\n");
+        let report = parse_backlog(dir.path());
+        assert_eq!(report.items.iter().filter(|i| i.id == "B0").count(), 3, "3 distinct B0 nodes");
+        assert!(report.cycles.is_empty(), "no phantom cycle: {:?}", report.cycles);
+        assert!(report.dangling_deps.is_empty(), "no cross-file dangling: {:?}", report.dangling_deps);
+    }
+
+    #[test]
+    fn composite_key_prevents_phantom_cross_file_cycle() {
+        // Each file is internally acyclic (B0 leaf; C1→B0 in a; B0→C1 in b), but
+        // a bare-id string index would collapse the duplicate `B0`/`C1` and
+        // fabricate a C1↔B0 cycle. Composite keys resolve scope-first → none.
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "a/BACKLOG.md", "## E\n### B0: a — READY\n### C1: a — READY\nbody · dep B0\n");
+        write(dir.path(), "b/BACKLOG.md", "## E\n### B0: b — READY\nbody · dep C1\n");
+        let report = parse_backlog(dir.path());
+        assert!(report.cycles.is_empty(), "no phantom cycle: {:?}", report.cycles);
+        assert!(report.dangling_deps.is_empty(), "deps resolve: {:?}", report.dangling_deps);
+    }
+
+    #[test]
+    fn composite_key_splits_by_section() {
+        // Fixture (b): two `##` epic sections in one file, each with a `B0` →
+        // two distinct nodes carrying their own section scope.
+        let md = "\
+## Epic One
+### B0: one — READY
+body · dep A1
+### A1: helper — READY
+## Epic Two
+### B0: two — READY
+body · dep A2
+### A2: helper — READY
+";
+        let items = parse_file(md, "roadmap/BACKLOG.md");
+        let b0s: Vec<&BacklogItem> = items.iter().filter(|i| i.id == "B0").collect();
+        assert_eq!(b0s.len(), 2, "two distinct B0 nodes (one per section)");
+        assert_eq!(b0s[0].section, "Epic One");
+        assert_eq!(b0s[1].section, "Epic Two");
+    }
+
+    #[test]
+    fn dedup_table_row_and_heading_in_same_section() {
+        // Fixture (c): the broker-framework case — a BRK-style id appears as a
+        // table row AND a `####` heading in the SAME `##` section → one node.
+        let md = "\
+## Epic
+| ID | Subject | Depends on |
+|---|---|---|
+| B0 | table form | (none) |
+
+### B0: heading form — READY
+body
+";
+        let items = parse_file(md, "roadmap/broker-framework-backlog.md");
+        assert_eq!(items.iter().filter(|i| i.id == "B0").count(), 1, "table + heading dedup to one node");
+        // First-wins: the table row survives.
+        assert_eq!(items.iter().find(|i| i.id == "B0").unwrap().format, "table");
+    }
+
+    // ── Coverage widening + dep-scan guards (atomic) ─────────────────────────
+
+    #[test]
+    fn broker_master_table_drops_stage_cells_and_dedups() {
+        // broker-framework-backlog.md-shaped: a Stage column (`S0-T`-class) that
+        // must NOT be scanned for deps, only the `Depends on` column, and a
+        // `####` heading that dedups against the table row (same section).
+        let md = "\
+## Master table
+| ID | BB | Layer | Stage | Effort | Depends on |
+|---|---|---|---|---|---|
+| BRK-01-TRAIT | #1 cap | A | S0-T | M | #4, #6 |
+| BRK-02-OVERLAY | #2 ov | A | S1-T | M | (none) |
+
+#### BRK-01-TRAIT (BB #1)
+**Description:** the trait every broker implements.
+**Acceptance:** compiles.
+";
+        let items = parse_file(md, "roadmap/broker-framework-backlog.md");
+        assert_eq!(items.iter().filter(|i| i.id == "BRK-01-TRAIT").count(), 1, "table + heading dedup");
+        assert_eq!(items.len(), 2, "BRK-01 (deduped) + BRK-02");
+        // No `S0-T`/`S1-T` Stage cell leaked in as a dependency.
+        assert!(
+            items.iter().all(|it| !it.deps.iter().any(|d| d.starts_with("S0-T") || d.starts_with("S1-T"))),
+            "Stage cells must not become deps: {:?}",
+            items.iter().map(|i| (&i.id, &i.deps)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn is_backlog_file_covers_backlog_suffix_and_epics_dir() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "roadmap/epics/S1-thing.md", "### E1: epic item — READY\n");
+        write(dir.path(), "sub/my-framework-backlog.md", "### M1: thing — READY\n");
+        write(dir.path(), "docs/notes.md", "### N1: not a backlog file — READY\n");
+        let report = parse_backlog(dir.path());
+        assert_eq!(report.files_scanned, 2, "epics-dir + *-backlog.md scanned; plain .md skipped");
+        assert!(report.items.iter().any(|i| i.id == "E1"), "epics-dir item parsed");
+        assert!(report.items.iter().any(|i| i.id == "M1"), "*-backlog.md item parsed");
+        assert!(!report.items.iter().any(|i| i.id == "N1"), "plain notes.md not scanned");
+    }
+
+    #[test]
+    fn range_token_not_dangling_but_real_id_parses() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md",
+            "### T1: thing — READY\nbody · dep S10-DP-1..3\n· dep S10-DP-3\n### S10-DP-3: real — READY\n");
+        let report = parse_backlog(dir.path());
+        let t1 = report.items.iter().find(|i| i.id == "T1").unwrap();
+        assert_eq!(t1.deps, vec!["S10-DP-3".to_string()], "range token dropped; real dep kept");
+        assert!(report.dangling_deps.is_empty(), "the real dep resolves: {:?}", report.dangling_deps);
+    }
+
+    #[test]
+    fn gates_is_reverse_direction_no_fabricated_cycle() {
+        // The IDE ROADMAP shape: `D2 … gates B2` means D2 is a PREREQUISITE of
+        // B2 (true edge B2→D2), while B2's row carries the real `dep D2`. The
+        // sensor must read `gates B2` as REVERSE (no D2→B2 edge) — otherwise
+        // D2→B2 + B2→D2 fabricates a phantom D2↔B2 cycle.
+        let md = "\
+| ID | Subject | Status / deps |
+|---|---|---|
+| D2 | broker | discovery; gates B2 |
+| B2 | broker impl | dep D2 |
+| D4 | pane | discovery; gates B4/B5 |
+| B4 | pane impl | dep D4 |
+| B5 | governance | dep B4 + D4 |
+";
+        let items = parse_file(md, "docs/plans/ROADMAP.md");
+        let by = |id: &str| items.iter().find(|i| i.id == id).unwrap();
+        // Reverse-direction rows carry NO forward dep.
+        assert!(by("D2").deps.is_empty(), "D2 gates B2 → no dep: {:?}", by("D2").deps);
+        assert!(by("D4").deps.is_empty(), "D4 gates B4/B5 → no dep: {:?}", by("D4").deps);
+        // Forward `dep` rows still resolve.
+        assert!(by("B2").deps.contains(&"D2".to_string()));
+        assert!(by("B4").deps.contains(&"D4".to_string()));
+
+        // End-to-end: no fabricated cycle over these rows.
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "docs/plans/ROADMAP.md", md);
+        let report = parse_backlog(dir.path());
+        assert!(report.cycles.is_empty(), "no fabricated cycle: {:?}", report.cycles);
+    }
+
+    // ── groom_queue unified with next_ready (one authority) ──────────────────
+
+    #[test]
+    fn groom_queue_ranks_cycle_then_dangling_then_untriaged() {
+        let dir = TempDir::new().unwrap();
+        // A1↔B1 cycle; C1→ZZ9 dangling; D1 untriaged (unrecognizable status).
+        write(dir.path(), "BACKLOG.md", "\
+### A1: a — READY
+· dep B1
+### B1: b — READY
+· dep A1
+### C1: c — READY
+· dep ZZ9
+### D1: d — foobar
+");
+        let report = parse_backlog(dir.path());
+        let q = groom_queue(&report);
+        assert_eq!(q[0].kind, "cycle");
+        assert_eq!(q[0].groom_id, "GROOM-cycle-A1-B1");
+        assert_eq!(q[0].points, 10);
+        assert_eq!(q[1].kind, "dangling");
+        assert_eq!(q[1].groom_id, "GROOM-dangling-C1-ZZ9");
+        assert!(q.iter().any(|g| g.kind == "untriaged" && g.groom_id == "GROOM-triage-D1"));
+        // Ordering invariant: severity is non-increasing down the queue.
+        assert!(q.windows(2).all(|w| w[0].severity >= w[1].severity), "queue not severity-ordered");
+    }
+
+    #[test]
+    fn groom_queue_emits_lint_grooms() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md", "### S1: ready story — READY\n");
+        let report = parse_backlog(dir.path());
+        let q = groom_queue(&report);
+        assert!(q.iter().any(|g| g.kind == "missing_moscow" && g.groom_id == "GROOM-lint-missing_moscow-S1"));
+        assert!(q.iter().any(|g| g.kind == "missing_epic" && g.groom_id == "GROOM-lint-missing_epic-S1"));
+    }
+
+    #[test]
+    fn next_ready_groom_matches_groom_queue_first() {
+        let dir = TempDir::new().unwrap();
+        // Cycle + dangling both present → cycle-first (was dangling-first before
+        // the groom_queue unification; the queue is now the sole authority).
+        write(dir.path(), "BACKLOG.md", "\
+### A1: a — READY
+· dep B1
+### B1: b — READY
+· dep A1
+### C1: c — READY
+· dep ZZ9
+");
+        let report = parse_backlog(dir.path());
+        let q = groom_queue(&report);
+        let d = next_ready(&report);
+        assert_eq!(d["tier"], "groom");
+        assert_eq!(d["groom"]["kind"], "cycle");
+        assert_eq!(d["groom"]["groom_id"], q[0].groom_id);
+        assert_eq!(d["groom"]["members"], serde_json::json!(["A1", "B1"]));
+    }
+
+    #[tokio::test]
+    async fn analyze_backlog_exposes_groom_queue_extra() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "BACKLOG.md", "### X1: thing — READY\n· dep NOPE9\n");
+        let cmdb = analyze_backlog(&dir.path().to_string_lossy()).await;
+        let gq = cmdb["groom_queue"].as_array().expect("groom_queue extra present");
+        assert!(gq.iter().any(|g| g["kind"] == "dangling" && g["groom_id"] == "GROOM-dangling-X1-NOPE9"));
     }
 }
