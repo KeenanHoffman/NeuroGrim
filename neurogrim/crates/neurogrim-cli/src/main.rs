@@ -30,6 +30,41 @@ enum BacklogCmd {
     },
 }
 
+/// doc-broker subcommands (gated behind `sensor-documentation-graph`,
+/// mirroring the `sca-review` slim-build precedent). Read-only reporting
+/// over the documentation graph — no broker dispatch.
+#[cfg(feature = "sensor-documentation-graph")]
+#[derive(Subcommand)]
+enum DocsCmd {
+    /// Deterministic next-doc dispatch (tiers: reconcile/refresh/…/idle).
+    Next {
+        /// Project root path
+        #[arg(long, default_value = ".")]
+        project_root: String,
+        /// Override only the ecosystem_version field of the anchor.
+        #[arg(long)]
+        anchor_version: Option<String>,
+        /// Layer-A-deferred: accepted for forward-compat but currently a
+        /// no-op (git-mtime freshness is not yet wired in).
+        #[arg(long, default_value_t = false)]
+        use_git_mtime: bool,
+    },
+    /// Generate (default) or validate (`--validate`) a SCAFFOLDING.md map.
+    Map {
+        /// Project root path
+        #[arg(long, default_value = ".")]
+        project_root: String,
+        /// Validate an existing map against the live doc graph instead of
+        /// generating a fresh one.
+        #[arg(long, default_value_t = false)]
+        validate: bool,
+        /// Path to the SCAFFOLDING.md map (defaults to
+        /// `<project_root>/docs/SCAFFOLDING.md`).
+        #[arg(long)]
+        scaffolding: Option<String>,
+    },
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Compute and display the unified health score
@@ -302,6 +337,18 @@ enum Commands {
     Backlog {
         #[command(subcommand)]
         cmd: BacklogCmd,
+    },
+
+    /// doc-broker — read-only reporting over the documentation graph
+    /// (`next` dispatch + SCAFFOLDING.md `map` generate/validate).
+    ///
+    /// Gated behind `sensor-documentation-graph`; in slim
+    /// `--no-default-features` builds without that feature, `docs`
+    /// disappears from the CLI surface entirely (sca-review precedent).
+    #[cfg(feature = "sensor-documentation-graph")]
+    Docs {
+        #[command(subcommand)]
+        cmd: DocsCmd,
     },
 
     /// Initialize a new brain-registry.json by scanning the project
@@ -688,6 +735,19 @@ async fn main() -> Result<()> {
         Commands::Backlog { cmd } => match cmd {
             BacklogCmd::NextReady { project_root } => run_backlog_next_ready(&project_root),
         },
+        #[cfg(feature = "sensor-documentation-graph")]
+        Commands::Docs { cmd } => match cmd {
+            DocsCmd::Next {
+                project_root,
+                anchor_version,
+                use_git_mtime,
+            } => run_docs_next(&project_root, anchor_version, use_git_mtime),
+            DocsCmd::Map {
+                project_root,
+                validate,
+                scaffolding,
+            } => run_docs_map(&project_root, validate, scaffolding),
+        },
         Commands::Init {
             project_root,
             output,
@@ -831,4 +891,156 @@ fn run_backlog_next_ready(project_root: &str) -> Result<()> {
     let dispatch = neurogrim_sensory::backlog::next_ready(&report);
     println!("{}", serde_json::to_string_pretty(&dispatch)?);
     Ok(())
+}
+
+/// doc-broker — `neurogrim docs next`: the deterministic tiered next-doc
+/// dispatch over the documentation graph (the [InnateAbility] side of the
+/// doc-broker substrate). Mirrors `run_backlog_next_ready`. `_use_git_mtime`
+/// is Layer-A-deferred (accepted for forward-compat, currently a no-op).
+#[cfg(feature = "sensor-documentation-graph")]
+fn run_docs_next(
+    project_root: &str,
+    anchor_version: Option<String>,
+    _use_git_mtime: bool,
+) -> Result<()> {
+    use neurogrim_sensory::documentation_graph as dg;
+    let anchor = match anchor_version {
+        Some(v) => {
+            let mut a = dg::default_anchor();
+            a.ecosystem_version = v;
+            a
+        }
+        None => dg::default_anchor(),
+    };
+    let report = dg::build_doc_report(
+        std::path::Path::new(project_root),
+        anchor,
+        &dg::default_doc_excludes(),
+    );
+    let dispatch = dg::next_doc(&report);
+    println!("{}", serde_json::to_string_pretty(&dispatch)?);
+    Ok(())
+}
+
+/// doc-broker — `neurogrim docs map`: read-only SCAFFOLDING.md reporting.
+///
+/// `--validate`: diff an existing map against the live doc graph and emit
+/// `{missing_from_map, dead_rows}`. Otherwise: GENERATE a SCAFFOLDING-shaped
+/// markdown table (one row per discovered doc). No broker dispatch.
+#[cfg(feature = "sensor-documentation-graph")]
+fn run_docs_map(project_root: &str, validate: bool, scaffolding: Option<String>) -> Result<()> {
+    use neurogrim_sensory::documentation_graph as dg;
+    let root = std::path::Path::new(project_root);
+    let report = dg::build_doc_report(root, dg::default_anchor(), &dg::default_doc_excludes());
+
+    if validate {
+        // Resolve the map file: explicit --scaffolding, else <root>/docs/SCAFFOLDING.md.
+        let map_path = match scaffolding {
+            Some(s) => std::path::PathBuf::from(s),
+            None => root.join("docs").join("SCAFFOLDING.md"),
+        };
+        let map_text = std::fs::read_to_string(&map_path).unwrap_or_default();
+        // Extract the path column (first cell) of every markdown table row
+        // that looks like a doc path. Skip header/separator rows.
+        let mut map_paths: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for line in map_text.lines() {
+            let t = line.trim();
+            if !t.starts_with('|') {
+                continue;
+            }
+            // Separator row: cells are only dashes/colons/spaces.
+            let cells: Vec<&str> = t.trim_matches('|').split('|').collect();
+            let first = match cells.first() {
+                Some(c) => c.trim(),
+                None => continue,
+            };
+            // Strip markdown-link / backtick decoration around the path.
+            let cleaned = normalize_map_path(first);
+            if cleaned.ends_with(".md") {
+                map_paths.insert(cleaned);
+            }
+        }
+
+        let doc_keys: std::collections::BTreeSet<String> =
+            report.docs.keys().map(|k| normalize_map_path(k)).collect();
+
+        // Paths present in the graph but absent from the map.
+        let missing_from_map: Vec<String> = doc_keys
+            .iter()
+            .filter(|k| !map_paths.contains(*k))
+            .cloned()
+            .collect();
+
+        // Rows in the map whose file is absent on disk (relative to root).
+        let dead_rows: Vec<String> = map_paths
+            .iter()
+            .filter(|p| {
+                let rel = p.replace('/', std::path::MAIN_SEPARATOR_STR);
+                !root.join(rel).exists()
+            })
+            .cloned()
+            .collect();
+
+        let out = serde_json::json!({
+            "missing_from_map": missing_from_map,
+            "dead_rows": dead_rows,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+
+    // GENERATE: SCAFFOLDING-shaped markdown table, one row per doc.
+    println!("| Path | Title | Status |");
+    println!("|------|-------|--------|");
+    for (path, dm) in &report.docs {
+        let rel = path.replace('/', std::path::MAIN_SEPARATOR_STR);
+        let text = std::fs::read_to_string(root.join(rel)).unwrap_or_default();
+        let heading = first_heading(&text);
+        let status = doc_status_label(&dm.front_matter.status);
+        println!("| {path} | {heading} | {status} |");
+    }
+    Ok(())
+}
+
+/// Normalize a map/graph path for set comparison: strip backticks, markdown
+/// link syntax `[text](target)`, and backslashes → forward slashes.
+#[cfg(feature = "sensor-documentation-graph")]
+fn normalize_map_path(raw: &str) -> String {
+    let mut s = raw.trim().trim_matches('`').trim().to_string();
+    // Markdown link: pull the target out of [text](target).
+    if let (Some(lo), Some(hi)) = (s.find("]("), s.rfind(')')) {
+        if hi > lo + 2 {
+            s = s[lo + 2..hi].to_string();
+        }
+    }
+    s.trim().trim_matches('`').replace('\\', "/").trim().to_string()
+}
+
+/// First `# ` (ATX h1) heading in a markdown file, or "" if none.
+#[cfg(feature = "sensor-documentation-graph")]
+fn first_heading(text: &str) -> String {
+    for line in text.lines() {
+        let t = line.trim_start();
+        if let Some(rest) = t.strip_prefix("# ") {
+            return rest.trim().to_string();
+        }
+    }
+    String::new()
+}
+
+/// Render a `DocStatus` front-matter value as its serde label, or "".
+#[cfg(feature = "sensor-documentation-graph")]
+fn doc_status_label(
+    status: &Option<neurogrim_sensory::documentation_graph::DocStatus>,
+) -> String {
+    use neurogrim_sensory::documentation_graph::DocStatus;
+    match status {
+        Some(DocStatus::Current) => "current",
+        Some(DocStatus::Draft) => "draft",
+        Some(DocStatus::Stale) => "stale",
+        Some(DocStatus::Superseded) => "superseded",
+        Some(DocStatus::Archived) => "archived",
+        None => "",
+    }
+    .to_string()
 }

@@ -223,11 +223,17 @@
           "path": ".claude/documentation-graph-cmdb.json"
         },
         "exported_variables": {
-          "documentation-graph:total_docs":      { "field": "total_docs",      "type": "number" },
-          "documentation-graph:total_edges":     { "field": "total_edges",     "type": "number" },
-          "documentation-graph:orphan_count":    { "field": "orphan_count",    "type": "number" },
-          "documentation-graph:broken_count":    { "field": "broken_count",    "type": "number" },
-          "documentation-graph:cycle_count":     { "field": "cycle_count",     "type": "number" }
+          "documentation-graph:total_docs":                  { "field": "total_docs",                  "type": "number" },
+          "documentation-graph:total_edges":                 { "field": "total_edges",                 "type": "number" },
+          "documentation-graph:orphan_count":                { "field": "orphan_count",                "type": "number" },
+          "documentation-graph:broken_count":                { "field": "broken_link_count",           "type": "number" },
+          "documentation-graph:cycle_count":                 { "field": "cycle_count",                 "type": "number" },
+          "documentation-graph:front_door_drift_count":      { "field": "front_door_drift_count",      "type": "number" },
+          "documentation-graph:version_drift_count":         { "field": "version_drift_count",         "type": "number" },
+          "documentation-graph:stale_count":                 { "field": "stale_count",                 "type": "number" },
+          "documentation-graph:references_to_deleted_count": { "field": "references_to_deleted_count", "type": "number" },
+          "documentation-graph:stale_diagram_count":         { "field": "stale_diagram_count",         "type": "number" },
+          "documentation-graph:unreachable_count":           { "field": "unreachable_count",           "type": "number" }
         }
       },
       "backlog-health": {
