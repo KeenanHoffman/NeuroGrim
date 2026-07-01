@@ -905,99 +905,42 @@ fn anchor_value(kind: &AnchorKind, a: &EcosystemAnchor) -> String {
     }
 }
 
-/// First ~3000 chars — version markers live near the top.
-fn head(text: &str) -> &str {
-    match text.char_indices().nth(3000) {
-        Some((i, _)) => &text[..i],
-        None => text,
-    }
+/// Parse a version into `(major, minor, patch)`, ignoring a leading `v`/`V`
+/// and any non-numeric suffix (e.g. `-rc.1`); missing components default to 0.
+/// `None` if there's no leading numeric component. This is the basis for
+/// semver-aware comparison so `5.0.0`, `5.0`, and `v5` all compare equal.
+fn parse_semver(v: &str) -> Option<(u32, u32, u32)> {
+    let s = v.trim().trim_start_matches(['v', 'V']);
+    let core: String = s
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    let mut it = core.split('.').filter(|p| !p.is_empty());
+    let major = it.next()?.parse::<u32>().ok()?;
+    let minor = it.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    let patch = it.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    Some((major, minor, patch))
 }
 
-/// Read a `[0-9.]+` version token starting at byte `start`, trimming a
-/// trailing dot. `None` if no digit is present.
-fn read_version_token(s: &str, start: usize) -> Option<String> {
-    let bytes = s.as_bytes();
-    let mut i = start;
-    let mut out = String::new();
-    while i < bytes.len() {
-        let c = bytes[i] as char;
-        if c.is_ascii_digit() || c == '.' {
-            out.push(c);
-            i += 1;
-        } else {
-            break;
-        }
-    }
-    let trimmed = out.trim_end_matches('.');
-    if trimmed.chars().any(|c| c.is_ascii_digit()) {
-        Some(trimmed.to_string())
-    } else {
-        None
-    }
-}
-
-/// First `v<x.y[.z]>` token at a word boundary (lowercased scan).
-fn first_v_version(s: &str) -> Option<String> {
-    let lower = s.to_lowercase();
-    let bytes = lower.as_bytes();
-    for i in 0..bytes.len() {
-        if bytes[i] == b'v' {
-            let boundary = i == 0 || !(bytes[i - 1] as char).is_ascii_alphanumeric();
-            if boundary && i + 1 < bytes.len() && (bytes[i + 1] as char).is_ascii_digit() {
-                if let Some(v) = read_version_token(&lower, i + 1) {
-                    return Some(v);
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Version following a keyword (e.g. `spec v3.2`, `neurogrim 5.0.0`):
-/// skip whitespace + an optional `v`, then read the version token.
-fn version_after_keyword(s: &str, keyword: &str) -> Option<String> {
-    let lower = s.to_lowercase();
-    let kw = keyword.to_lowercase();
-    let bytes = lower.as_bytes();
-    let mut from = 0;
-    while let Some(rel) = lower[from..].find(&kw) {
-        let mut j = from + rel + kw.len();
-        while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
-            j += 1;
-        }
-        if j < bytes.len() && bytes[j] == b'v' {
-            j += 1;
-        }
-        while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
-            j += 1;
-        }
-        if j < bytes.len() && (bytes[j] as char).is_ascii_digit() {
-            if let Some(v) = read_version_token(&lower, j) {
-                return Some(v);
-            }
-        }
-        from = from + rel + kw.len();
-    }
-    None
-}
-
-fn scan_stated_version(text: &str, kind: &AnchorKind) -> Option<String> {
-    let h = head(text);
-    match kind {
-        AnchorKind::Spec => version_after_keyword(h, "spec"),
-        AnchorKind::Neurogrim => version_after_keyword(h, "neurogrim"),
-        AnchorKind::Ecosystem => first_v_version(h),
+/// Semver-normalized equality: `5.0.0` == `5.0` == `v5`. Falls back to
+/// case-insensitive trimmed string equality when either side lacks a numeric
+/// core (so non-numeric version labels still compare sanely).
+fn version_eq_semver(a: &str, b: &str) -> bool {
+    match (parse_semver(a), parse_semver(b)) {
+        (Some(x), Some(y)) => x == y,
+        _ => a.trim().eq_ignore_ascii_case(b.trim()),
     }
 }
 
 /// `0` = major-version gap (top priority), `1` = minor/patch gap, `2` =
-/// equal. Smaller sorts higher in the ascending dispatcher key.
+/// equal. Semver-normalized. Smaller sorts higher in the ascending key.
 fn compute_anchor_distance(stated: &str, anchor: &str) -> u8 {
-    let major = |v: &str| v.split('.').next().and_then(|m| m.parse::<u32>().ok());
-    match (major(stated), major(anchor)) {
-        (Some(a), Some(b)) if a != b => 0,
-        _ if stated != anchor => 1,
-        _ => 2,
+    match (parse_semver(stated), parse_semver(anchor)) {
+        (Some(a), Some(b)) if a.0 != b.0 => 0,
+        (Some(a), Some(b)) if a == b => 2,
+        (Some(_), Some(_)) => 1,
+        _ if stated.trim().eq_ignore_ascii_case(anchor.trim()) => 2,
+        _ => 1,
     }
 }
 
@@ -1240,17 +1183,20 @@ pub fn build_doc_report(root: &Path, anchor: EcosystemAnchor, excludes: &[String
             signals.push(StalenessSignal::StatusStaleOrSuperseded);
         }
 
-        // Version-marker drift (unless `anchored-to: none`).
-        if let Some(kind) = governing(&fm) {
-            if let Some(stated) = scan_stated_version(&text, &kind) {
-                let av = anchor_value(&kind, &anchor);
-                if stated != av {
-                    signals.push(StalenessSignal::VersionMarkerDrift {
-                        stated: stated.clone(),
-                        anchor: av.clone(),
-                    });
-                    version_drift.push((path.clone(), stated, av));
-                }
+        // Version drift: declared-version-only + semver-aware. A doc drifts iff
+        // its front-matter `doc-version` mismatches its governing anchor axis
+        // (semver-normalized: `5.0.0` == `5.0`). `anchored-to: none` opts out; a
+        // doc that declares no version does NOT drift (it gets `NoFrontMatter`
+        // instead). Replaces the old body-token scan, which false-fired on
+        // incidental version-like tokens and the `5.0.0` vs `5.0` format gap.
+        if let (Some(kind), Some(stated)) = (governing(&fm), fm.doc_version.clone()) {
+            let av = anchor_value(&kind, &anchor);
+            if !version_eq_semver(&stated, &av) {
+                signals.push(StalenessSignal::VersionMarkerDrift {
+                    stated: stated.clone(),
+                    anchor: av.clone(),
+                });
+                version_drift.push((path.clone(), stated, av));
             }
         }
 
@@ -1683,15 +1629,20 @@ front-door: true
     #[test]
     fn version_drift_detected_and_sorts_top() {
         let dir = TempDir::new().unwrap();
-        // README is a front door; states v3.0 against a 5.0 ecosystem anchor.
-        write(dir.path(), "README.md", "# Project\n\nThis is v3.0 of the thing.\n");
+        // README is a front door DECLARING doc-version 3.0 against a 5.0
+        // ecosystem anchor (declared-version drift, major-version gap).
+        write(
+            dir.path(),
+            "README.md",
+            "---\ndoc-version: 3.0\nanchored-to: ecosystem\nfront-door: true\n---\n# Project\n",
+        );
         write(dir.path(), "guide.md", "no version here, just prose");
         let report = build_doc_report(dir.path(), default_anchor(), &[]);
         let readme = &report.docs["README.md"];
         let drift = readme.staleness.iter().any(|s| {
             matches!(s, StalenessSignal::VersionMarkerDrift { stated, anchor } if stated == "3.0" && anchor == "5.0")
         });
-        assert!(drift, "README v3.0 vs anchor 5.0 → drift; signals: {:?}", readme.staleness);
+        assert!(drift, "README doc-version 3.0 vs anchor 5.0 → drift; signals: {:?}", readme.staleness);
         assert!(report.version_drift.iter().any(|(p, s, a)| p == "README.md" && s == "3.0" && a == "5.0"));
 
         // next_doc dispatches it as the top tier (front-door reconcile, major gap).
@@ -1700,6 +1651,33 @@ front-door: true
         assert_eq!(d["doc"]["path"], "README.md");
         assert_eq!(d["rationale"]["anchor_distance"], 0, "major-version gap = closest distance");
         assert_eq!(d["ready"], true);
+    }
+
+    #[test]
+    fn semver_normalized_no_false_drift() {
+        // A front door declaring 5.0.0 must NOT drift against a 5.0 anchor
+        // (semver-normalized), and a doc that declares NO version must not
+        // drift regardless of incidental body tokens (declared-version-only).
+        let dir = TempDir::new().unwrap();
+        write(
+            dir.path(),
+            "README.md",
+            "---\ndoc-version: 5.0.0\nanchored-to: ecosystem\nfront-door: true\n---\n# Project v1 legacy note\n",
+        );
+        write(
+            dir.path(),
+            "notes.md",
+            "---\nanchored-to: ecosystem\n---\n# Notes\n\nmentions v2 and v3 incidentally\n",
+        );
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        assert!(
+            report.version_drift.is_empty(),
+            "5.0.0==5.0 and undeclared-version docs must not drift; got {:?}",
+            report.version_drift
+        );
+        assert!(version_eq_semver("5.0.0", "5.0"));
+        assert!(version_eq_semver("v5", "5.0.0"));
+        assert!(!version_eq_semver("3.2", "5.0"));
     }
 
     #[test]
@@ -1804,7 +1782,11 @@ front-door: true
     fn next_doc_tiers_fire_in_priority_order() {
         // A front-door drift (tier 0) outranks an orphan (tier 4).
         let dir = TempDir::new().unwrap();
-        write(dir.path(), "README.md", "# Root\n\nv3.0 here.\n[g](./guide.md)");
+        write(
+            dir.path(),
+            "README.md",
+            "---\ndoc-version: 3.0\nanchored-to: ecosystem\nfront-door: true\n---\n# Root\n\n[g](./guide.md)",
+        );
         write(dir.path(), "guide.md", "linked, current");
         write(dir.path(), "stray.md", "orphan, no inbound");
         let report = build_doc_report(dir.path(), default_anchor(), &[]);
@@ -1853,7 +1835,11 @@ front-door: true
     #[tokio::test]
     async fn analyze_documentation_graph_enriched_envelope() {
         let dir = TempDir::new().unwrap();
-        write(dir.path(), "README.md", "# Root\n\nv3.0 of the thing.\n");
+        write(
+            dir.path(),
+            "README.md",
+            "---\ndoc-version: 3.0\nanchored-to: ecosystem\nfront-door: true\n---\n# Root\n",
+        );
         let cmdb = analyze_documentation_graph(&dir.path().to_string_lossy()).await;
         assert_eq!(cmdb["meta"]["updated_by"], "check-documentation-graph");
         assert!(cmdb["score"].is_number());
