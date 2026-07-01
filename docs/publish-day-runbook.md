@@ -26,8 +26,7 @@ Before touching any `cargo publish` command:
    epics of the supply-chain security scaffolding (E-SC-0 through
    E-SC-10) complete. Phase 0 self-audit green against NeuroGrim's
    own deps AND Layers 1-3 shipped AND calibrated AND dogfooded
-   across all four Brains. See
-   [`../audit/ROLLBACK-PLAYBOOK.md`](../audit/ROLLBACK-PLAYBOOK.md)
+   across all four Brains. See `audit/ROLLBACK-PLAYBOOK.md`
    for per-epic verification. **This is the new master gate**;
    nothing below proceeds until this closes.
 2. **Every gate in [`../BEFORE-PUBLIC-RELEASE.md`](../BEFORE-PUBLIC-RELEASE.md)

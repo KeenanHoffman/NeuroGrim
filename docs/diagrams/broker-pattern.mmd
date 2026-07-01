@@ -1,0 +1,129 @@
+%% NeuroGrim — Broker Pattern (v4)
+%% Source of truth: DIAGRAM-V4-SPEC.md (rendered 2026-06-30).
+%% Supersedes the v3 broker-pattern.drawio.svg (now under archived/).
+%% Current vocabulary: Topology Broker (v2 rename), Overlay / OverlayView / OverlayMesh
+%% tiers, governance-vs-legal channel split, authority hierarchy, peer-dialogue,
+%% Frame stack. Building blocks annotated by BB number (#22a..#35).
+flowchart TB
+
+  subgraph CLUSTER["CLUSTER BOUNDARY"]
+
+    CFT["Cluster Federation Topology (#31)<br/>inter-cluster ACL + version cascade<br/>to peer clusters"]:::mesh
+
+    subgraph KILL["KILL-SWITCH AUTHORITY — Untunable governance (outermost cap)"]
+      subgraph BAUTH["BROKER AUTHORITY — cold / hot store decisions"]
+
+        subgraph META["PEER-DIALOGUE META CONSIDERATION (innermost; advisory only)"]
+          PRIMARY["Primary Lobe<br/>consumes broker projections"]:::lobe
+          METAL["Meta Lobe<br/>consideration partner"]:::lobe
+          PRIMARY <-->|"_neurogrim/cognition channel<br/>cycle_id · iteration · speaker · payload_type · incorporates/rejects<br/>neither overrides; consensus by convergence or recursion-guard"| METAL
+        end
+
+        subgraph BROKERS["CANONICAL BROKERS — role-set badges · lifecycle-tracked (#29) · ⛔ on_cancel (#25)"]
+          CTX["Context Broker<br/>[Sense]"]:::broker
+          WSB["Workspace Broker<br/>[Sense]"]:::broker
+          SENS["Sensory Broker<br/>[Sense]"]:::broker
+          TOPO["Topology Broker<br/>[Sense] — v2 rename"]:::broker
+          WORK["Work Broker<br/>[InnateAbility]"]:::broker
+        end
+
+        subgraph WSM["WORKSPACE MANAGER — [Embodiment]"]
+          EFF["Effectors"]:::broker
+          IDE["IDE [Emb]"]:::broker
+          BROWSER["Browser [Sense, Emb]"]:::broker
+          CUSTOM["Custom Sensor<br/>[Embodiment-afferent]"]:::broker
+          EFF --> IDE
+          EFF --> BROWSER
+          EFF --> CUSTOM
+        end
+      end
+    end
+  end
+
+  %% --- Overlay tier vocabulary (tier-1 / tier-2 / tier-3) ---
+  OV1[("Overlay — tier-1<br/>per broker · atomic-swap · no torn read · ≤4KB")]:::overlay
+  OV2[("OverlayView — tier-2<br/>Topology Broker per-consumer<br/>ACL-filtered topology")]:::overlay
+  OV3[("OverlayMesh — tier-3<br/>cluster-aggregated cluster-Sense projection")]:::overlay
+  WSTATE["Working State (broker-private)"]:::broker
+  BROKERS --> WSTATE
+  BROKERS --> OV1
+  OV1 --> OV2
+  OV2 --> OV3
+  TOPO -->|derives ACL-filtered view| OV2
+  OV3 --> CFT
+
+  %% --- Governance vs legal channel split (both read by the LLM) ---
+  LEGAL["legal_pipelines(state)<br/>capability ranking · top-K choice menu"]:::legal
+  GOV["governance_pipelines()<br/>sidecar · always-reachable safety surface"]:::gov
+  BROKERS --> LEGAL
+  BROKERS --> GOV
+  LEGAL --> PRIMARY
+  GOV --> PRIMARY
+
+  %% --- Cross-broker composition (#27) ---
+  XB["Cross-broker composition (#27)<br/>via Topology Broker ACL · cycle-detection at startup"]:::broker
+  BROKERS --- XB
+  XB --- TOPO
+
+  %% --- Authority hierarchy: outer layer wins on collision ---
+  AUTH["Authority precedence:<br/>Kill-switch &gt; Broker authority &gt; Meta-lobe consideration<br/>(outer layer wins)"]:::kill
+  KILL --- AUTH
+
+  %% --- Frame stack (#35) ---
+  subgraph FRAME["FRAME STACK (#35) — per-agent; surfaced in L1 awareness"]
+    FR["hat · stakes · tempo · mode · confidence · audience · scope"]:::frame
+    FRINH["inheritance: dispatch → pipeline → role → broker → cluster (innermost wins)<br/>conflict precedence: Stakes &gt; Hat &gt; Mode &gt; Confidence &gt; ..."]:::frame
+  end
+  FRAME -.->|shapes dispatch| BROKERS
+
+  %% --- Awareness layer ---
+  subgraph AWARE["AWARENESS LAYER"]
+    HOT["Hot-Store Materializer (#22)"]:::overlay
+    AWM["Awareness Materializer (#24)"]:::overlay
+    ONB["Onboarding Projection (#30)<br/>once-per-agent"]:::overlay
+    MC["Materializer Composer (#22a)"]:::overlay
+    PROJ["current-projection.md<br/>.claude/brain/broker/ · auto-loaded"]:::overlay
+    HOT --> MC
+    AWM --> MC
+    ONB --> MC
+    MC -->|concatenates per operator-declared order| PROJ
+  end
+  OV1 --> HOT
+  PROJ --> PRIMARY
+
+  %% --- Observability layer ---
+  subgraph OBS["OBSERVABILITY LAYER"]
+    DIAG["Diagnostics Collector (#28)"]:::obs
+    DTOP["_neurogrim/diagnostics/* topics"]:::obs
+    OTS["Operator Telemetry Summarizer (#32)"]:::obs
+    OCM["operator CLAUDE.md (auto-load)"]:::obs
+    TRACE["Trace Sink (#12) + Replay (#13)"]:::obs
+    DIAG --> DTOP
+    DTOP --> OTS
+    OTS --> OCM
+    DIAG --> TRACE
+  end
+  BROKERS --> DIAG
+  DIAG --> SENS
+
+  %% --- Lifecycle + startup ---
+  subgraph LIFE["LIFECYCLE + STARTUP"]
+    SMR["Schema Migration Runner (#26)<br/>startup · Tier-3 bootstrap → cold stores"]:::cold
+    BLC["Broker Lifecycle (#29)<br/>starting → running → draining → stopped"]:::broker
+    PPM["Pipeline Proposal Mechanism (#33)<br/>extends Proposal Ledger (#21)"]:::broker
+    WPV["Workflow-Pipeline Versioning Contract (#34)<br/>compatible_contracts: [N, N-1]"]:::broker
+  end
+  SMR --> BROKERS
+  BLC --> BROKERS
+
+  %% --- Color coding (mirrors DIAGRAM-V4-SPEC.md) ---
+  classDef broker fill:#f9a8d4,stroke:#9d174d,color:#3f0d24;
+  classDef overlay fill:#a5f3fc,stroke:#0e7490,color:#083344;
+  classDef cold fill:#166534,stroke:#052e16,color:#ecfdf5;
+  classDef lobe fill:#e9d5ff,stroke:#6b21a8,color:#2e1065;
+  classDef gov fill:#fed7aa,stroke:#c2410c,color:#431407;
+  classDef legal fill:#fde68a,stroke:#b45309,color:#451a03;
+  classDef obs fill:#e5e7eb,stroke:#6b7280,color:#111827;
+  classDef kill fill:#fecaca,stroke:#b91c1c,color:#450a0a;
+  classDef mesh fill:#c7d2fe,stroke:#4338ca,color:#1e1b4b;
+  classDef frame fill:#bfdbfe,stroke:#1d4ed8,color:#172554;

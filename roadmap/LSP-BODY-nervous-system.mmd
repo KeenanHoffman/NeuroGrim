@@ -1,0 +1,213 @@
+%% Source: roadmap/LSP-BODY.md — "The Full Body" nervous-system architecture diagram.
+%% Version-controllable sibling for the ```mermaid fence embedded inline in LSP-BODY.md.
+flowchart TD
+
+  %% ═══════════════════════════════════════════
+  %% 1 · PROJECT CODEBASE
+  %% ═══════════════════════════════════════════
+  subgraph PROJ["📁  Project Codebase"]
+    SRC["Source Code\n.ts · .rs · .py · .tf · .sh"]
+    TESTS_SRC["Test Files\nunit · integration · e2e"]
+    INFRA["IaC / Config\nTerraform · Helm · k8s"]
+    CICD["CI/CD Pipelines\nGitHub Actions · workflows"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 2 · SENSORY LAYER  (peripheral nervous system)
+  %% ═══════════════════════════════════════════
+  subgraph SENSORY["👁️  Sensory Layer — Peripheral Nervous System"]
+    S1["check-test-health\npass rate · failures · coverage"]
+    S2["check-code-quality\nlint errors · complexity · duplication"]
+    S3["check-deploy-readiness\nCI state · version tags · drift"]
+    S4["check-git-health\nbranch health · stale PRs · commit rate"]
+    S5["custom sensory tool\nneurogrim sensory run &lt;tool&gt;"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 3 · WORLD MODEL  (truth layer / muscle memory)
+  %% ═══════════════════════════════════════════
+  subgraph CMDB["🗃️  World Model — CMDBs  (Muscle Memory / Truth Layer)"]
+    CM1["test-health-cmdb.json\nscore · updated_at · exported variables"]
+    CM2["code-quality-cmdb.json\nscore · lint_errors · coverage"]
+    CM3["deploy-readiness-cmdb.json\nscore · has_ci · version_tag"]
+    CM4["git-health-cmdb.json\nscore · stale_branches · commit_velocity"]
+    CM5["subagent-health-cmdb.json\nenvelope_completeness_rate\nhat_compliance_rate · avg_confidence"]
+    CM6["security-standards-cmdb.json\nscore · has_security_md · sast_configured"]
+    CM7["coherence-cmdb.json\nscore · correlations_fired · highest_severity"]
+    CM8["human-comms-cmdb.json\nscore · verbosity · lead_with · per_hat"]
+    CM9["secret-refs-cmdb.json\nscore · secrets_documented · undocumented_env_vars"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 4 · BRAIN REGISTRY  (DNA / blueprint)
+  %% ═══════════════════════════════════════════
+  subgraph REG["🧬  Brain Registry — DNA / Blueprint  (brain-registry.json)"]
+    R1["Domain Weights\ntest-health: 0.40  ·  code-quality: 0.35  ·  deploy-readiness: 0.25\ngit-health: 0.0  ·  rust-health: 0.0  ·  subagent-health: 0.0\nsecurity-standards: 0.0  ·  coherence: 0.0\nhuman-comms: 0.0  ·  secret-refs: 0.0\n(advisory = visible, weight-zero)"]
+    R2["Hat Definitions\nengineer  ·  reviewer\n(domain emphasis multipliers)"]
+    R3["Persona Definitions\nexecutive · manager · developer\nspecialist · product-manager"]
+    R4["Correlations &amp; Incident Patterns\ncross-domain trigger rules\ntemporal + threshold conditions"]
+    R5["Confidence Thresholds\nfresh: 1d  ·  stale: 3d  ·  very-stale: 7d\n(controls staleness decay)"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 5 · BRAIN CORE  (central nervous system)
+  %% ═══════════════════════════════════════════
+  subgraph BRAIN["🧠  Brain Core — Central Nervous System  (neurogrim-core)"]
+    BC1["Scoring Engine\neffective = floor(raw × confidence / 100)\nunified = Σ(effective_i × weight_i)"]
+    BC2["Confidence Engine\ntime-decay by CMDB freshness\nfloor: if confidence &lt; 30 → cap at 30"]
+    BC3["Trajectory Engine\nvelocity · acceleration\nimproving / stable / declining / volatile"]
+    BC4["Correlation Engine\ncross-domain variable linkage\nexports: gates:deploy_blocking_count etc."]
+    BC5["Incident Recognizer\nrecurrence · severity thresholds\npattern matching over domain_variables"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 6 · GATE SYSTEM  (immune system)
+  %% ═══════════════════════════════════════════
+  subgraph GATES["🛡️  Gate System — Immune System  (test-gates.json)"]
+    G1["immediate tier\nblocks: commit\nwatch_paths triggers STALE on edit"]
+    G2["before-merge tier\nblocks: PR merge"]
+    G3["before-deploy tier\nblocks: deploy\nexpires_hours  (infra gates auto-stale)"]
+    GS["4 States\nCLEAN  ·  DIRTY  ·  STALE  ·  NEEDS-RUN"]
+    GA["Gate Advisor Verdict\nPROCEED  /  WARN  /  BLOCKED"]
+    G1 & G2 & G3 --> GS --> GA
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 7 · MCP SERVER  (brainstem)
+  %% ═══════════════════════════════════════════
+  subgraph MCP["⚡  MCP Server — Brainstem  (neurogrim-mcp)"]
+    M1["get_health_score\npersona + hat aware\nreturns full AgentOutput JSON"]
+    M2["get_trajectory\nvelocity + acceleration for domain or unified"]
+    M3["get_recommendations\nprioritized action list"]
+    M4["validate_registry\nweight sum · domain definitions · schema"]
+    M5["get_local_awareness\nmachine-specific tool paths + quirks"]
+    M6["record_subagent_outcome\nappends → subagent-outcomes.jsonl\nrecomputes subagent-health CMDB"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 8 · HAT SYSTEM  (endocrine layer)
+  %% ═══════════════════════════════════════════
+  subgraph HATS["🎩  Hat System — Endocrine Layer  (domain emphasis)"]
+    H1["engineer hat\ntest-health ×2.0  ·  code-quality ×1.5\nSuggest when: failing_tests &gt; 0"]
+    H2["reviewer hat\ncode-quality ×2.0  ·  test-health ×1.5\nSuggest when: lint_errors &gt; 0"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 9 · SKILLS  (motor neurons)
+  %% ═══════════════════════════════════════════
+  subgraph SKILLS["📚  Skills — Motor Neurons  (.claude/skills/)"]
+    SK1["brain.md\nhow to read + invoke the Brain"]
+    SK2["hats.md  ·  personas.md\nhow to wear hats + shape output depth"]
+    SK3["pilot-protocol.md\nlsp-brains/agent/1.0 wire contract\nopen-form: narrative + envelope block"]
+    SK4["subagent-patterns.md\nfan-out · staged convergence · hand-off"]
+    SK5["lsp.md  ·  lsp-grounded.md\nFind-*.ps1 command reference"]
+    SK6["what-next.md  ·  skill-chain.md\nprioritized action + multi-skill sequences"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 10 · PILOT AGENT  (conscious mind)
+  %% ═══════════════════════════════════════════
+  subgraph AGENT["🤖  Pilot Agent — Conscious Mind"]
+
+    OP["Pilot Agent\nwears hat  ·  declares persona\nreads skills before acting\nannounces: Wear Hat: &lt;hat&gt;"]
+
+    subgraph FLEET["Subagent Fleet — Reflex Arcs  (parallel workers)"]
+      SA1["Subagent A\nanalysis  ·  reviewer hat\nnarrative: structural critique"]
+      SA2["Subagent B\ninvestigation  ·  engineer hat\nnarrative: build + test findings"]
+      SA3["Subagent C\nvalidation  ·  reviewer hat\nnarrative: conformance verdict"]
+    end
+
+    PROTO["lsp-brains/agent/1.0\nOpen-Form Protocol\n1. Hat-shaped narrative prose\n2. &lt;!-- LSP-ENVELOPE:req-id --&gt;\n   { structured JSON envelope }\n&lt;!-- /LSP-ENVELOPE:req-id --&gt;"]
+
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 11 · OPERATIONAL MEMORY  (long-term learning)
+  %% ═══════════════════════════════════════════
+  subgraph MEMORY["🗺️  Operational Memory — Long-Term Learning  (gitignored runtime)"]
+    MM1["score-history.json\npoint-in-time snapshots → trajectory source"]
+    MM2["incident-ledger.json\nrecurrence tracking · pattern matching"]
+    MM3["proposal-ledger.json\nremediation log · SCHEMA_MISMATCH events"]
+    MM4["subagent-outcomes.jsonl\nper-invocation conformance event log\nrolling window → subagent-health CMDB"]
+    MM5["local-awareness.json\nmachine-specific tool paths + OS quirks\n(machine-local, never committed)"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 12 · AGENT OUTPUT
+  %% ═══════════════════════════════════════════
+  subgraph OUTPUT["📊  Agent Output — What Teams See"]
+    O1["Unified Score  0–100\nconfidence-weighted · hat-adjusted recs"]
+    O2["Domain Breakdown\neffective score + confidence per domain"]
+    O3["Trajectory\nimproving / stable / declining + velocity"]
+    O4["Prioritized Recommendations\nranked by hat emphasis + domain weight"]
+    O5["Hat-Shaped Narrative\nhuman-readable analysis from subagents"]
+  end
+
+  %% ═══════════════════════════════════════════
+  %% 13 · FRACTAL COMPOSITION  (optional)
+  %% ═══════════════════════════════════════════
+  subgraph FRACTAL["🌀  Fractal Composition — optional multi-project"]
+    FC1["Project Brain A  (child)\nown registry · own CMDBs"]
+    FC2["Project Brain B  (child)\nown registry · own CMDBs"]
+    FC3["Ecosystem Brain  (parent)\naggregates child scores\ncross-project incident patterns"]
+    FC1 & FC2 -->|"child score\nvia CMDB or MCP"| FC3
+  end
+
+  %% ═══════════════════════════════════════════
+  %% DATA FLOWS
+  %% ═══════════════════════════════════════════
+
+  %% Project → Sensory tools
+  PROJ -->|"scan on change\nor schedule"| SENSORY
+
+  %% Sensory tools → CMDBs  (one-to-one writes)
+  S1 -->|"writes"| CM1
+  S2 -->|"writes"| CM2
+  S3 -->|"writes"| CM3
+  S4 -->|"writes"| CM4
+
+  %% Registry → Brain Core  (config load)
+  REG -.->|"load config\non startup"| BRAIN
+
+  %% CMDBs → Brain Core  (score signals)
+  CM1 & CM2 & CM3 & CM4 & CM5 & CM6 & CM7 & CM8 & CM9 -->|"score + timestamp\n+ exported variables"| BRAIN
+
+  %% Memory → Brain Core  (history + incidents)
+  MM1 -->|"score history"| BC3
+  MM2 -->|"past incidents"| BC5
+
+  %% Brain Core → MCP Server
+  BRAIN -->|"scoring results\nAgentOutput"| MCP
+
+  %% Gate verdict → Agent
+  GA -->|"BLOCKED / PROCEED\nbefore action"| OP
+
+  %% MCP tools → Agent
+  M1 & M3 -->|"health score\n+ recommendations"| OP
+
+  %% Skills + Hats → Agent  (knowledge layer)
+  SKILLS -.->|"read skill before\nevery action"| OP
+  HATS -.->|"wear hat\nshapes emphasis"| OP
+
+  %% Agent → Subagent fleet  (fan-out)
+  OP -->|"fan-out\nparallel dispatch"| SA1
+  OP -->|"fan-out"| SA2
+  OP -->|"fan-out"| SA3
+
+  %% Subagents → Protocol  (open-form responses)
+  SA1 & SA2 & SA3 -->|"open-form response\nnarrative + envelope"| PROTO
+
+  %% Protocol → Agent  (convergence)
+  PROTO -->|"extract delimiter block\nvalidate JSON envelope\nconverge results"| OP
+
+  %% Record subagent outcomes
+  PROTO -->|"record_subagent_outcome"| M6
+  M6 -->|"append"| MM4
+  MM4 -->|"rolling 20 window\naggregation"| CM5
+
+  %% Agent → Output
+  OP --> OUTPUT
+
+  %% Feedback loops
+  OP -->|"proposals"| MM3
+  BRAIN -->|"score snapshot"| MM1

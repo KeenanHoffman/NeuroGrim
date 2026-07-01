@@ -1,0 +1,18 @@
+%% Source: PITCH.md — "LLM (general engine) vs Brain (project overlay)" block.
+%% Version-controllable sibling for the ```mermaid fence embedded inline in PITCH.md.
+flowchart LR
+    subgraph LLM["LLM — general engine (trained)"]
+        L1["English, code patterns"]
+        L2["Library APIs, generic best practice"]
+    end
+    subgraph Brain["Brain — project overlay (declared)"]
+        B1["Domain weights + gates"]
+        B2["Cross-domain correlations"]
+        B3["Culture invariants"]
+    end
+    Agent["Project-aware agent<br/>fluent + committed"]
+    LLM ==>|cognition| Agent
+    Brain ==>|commitments| Agent
+    style LLM fill:#fef3c7
+    style Brain fill:#dbeafe
+    style Agent fill:#d1fae5

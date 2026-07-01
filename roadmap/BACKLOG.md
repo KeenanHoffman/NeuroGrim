@@ -1148,8 +1148,8 @@ task set substantially more diverse than the original 12-task
 benchmark (candidate: N≥50 stratified across shapes with
 rubric-sensitivity controls).
 
-Full post-mortem:
-[`reports/reframe-post-mortem.md`](../.claude/experiments/brain-vs-control/reports/reframe-post-mortem.md).
+Full post-mortem: `reframe-post-mortem.md` (retired from the tree during
+the v5 doc reorg).
 Pre-registration discipline saved ~20 hrs engineering + ~$50-100
 API that would have gone into prototype + validation before the
 gate fired.
@@ -2221,8 +2221,9 @@ Spec: [`../docs/BROKER-CONTRACT.md`](../docs/BROKER-CONTRACT.md) +
 [`../../cereGrim/roadmap/ROADMAP.md`](../../cereGrim/roadmap/ROADMAP.md) S\*-T staging).
 IP boundary policy: [`../docs/PUBLIC-VS-PROPRIETARY.md`](../docs/PUBLIC-VS-PROPRIETARY.md).
 Visual reference: [`../docs/diagrams/DIAGRAM-V4-SPEC.md`](../docs/diagrams/DIAGRAM-V4-SPEC.md).
-v3 diagram: [`../docs/diagrams/broker-pattern.drawio.svg`](../docs/diagrams/broker-pattern.drawio.svg)
-(v4 update pending operator authoring).
+v4 diagram: [`../docs/diagrams/broker-pattern.mmd`](../docs/diagrams/broker-pattern.mmd)
+(rendered from `DIAGRAM-V4-SPEC.md`, 2026-06-30; retired v3 drawio export under
+`../docs/diagrams/archived/`).
 
 ---
 

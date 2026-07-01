@@ -1,9 +1,11 @@
 # NeuroGrim — Broker Pattern Diagram v4 Spec
 
-**Status:** v3 diagram (`broker-pattern.drawio.svg`) predates Phase 1–5 substrate
-deepenings. This doc is the **textual source-of-truth** for the v4 visual update —
-operator uses it to author the new drawio.svg. Once v4 lands as an SVG, this doc
-remains as the running rationale (what changed and why).
+**Status:** DIAGRAM UPDATED 2026-06-30. The v3 diagram (`broker-pattern.drawio.svg`)
+predated the Phase 1–5 substrate deepenings and has been retired to
+[`archived/broker-pattern.drawio.svg`](archived/broker-pattern.drawio.svg). This doc
+is the **textual source-of-truth**; the v4 visual is now rendered as a
+version-controllable Mermaid source at [`broker-pattern.mmd`](broker-pattern.mmd).
+This doc remains as the running rationale (what changed and why).
 
 The v3 visual shows the original 6-piece LLM-level + 3-piece terminal pattern with
 4 brokers + Workspace Manager + Effectors. v4 needs to incorporate the 10 building
@@ -197,17 +199,18 @@ authority hierarchy. Everything else is in the prose.
 
 ## Versioning
 
-Once the operator updates `broker-pattern.drawio.svg` to v4, this spec doc remains
-as the running rationale. Future diagram versions (v5, v6) get their own spec docs
-(`DIAGRAM-V5-SPEC.md`, etc.) describing the deltas from the prior version. v4 spec
-preserves the deltas from v3 forever.
+The v4 visual now lives as `broker-pattern.mmd` (Mermaid source), rendered from this
+spec. This doc remains as the running rationale. Future diagram versions (v5, v6) get
+their own spec docs (`DIAGRAM-V5-SPEC.md`, etc.) describing the deltas from the prior
+version. v4 spec preserves the deltas from v3 forever.
 
 ## Status (P-4)
 
-**Diagram update PENDING (as of 2026-06-24, Phase 8).** The textual spec in this
-document reflects the v4 state; the actual `broker-pattern.drawio.svg` file may still
-carry v3 labels (notably "Federation Broker" instead of "Topology Broker"). Prose
-wins when diagram and prose disagree. Operator authoring task: update the .drawio.svg
-file to match this spec; mark the status here as **DIAGRAM UPDATED YYYY-MM-DD** when
-done. Until updated, treat the v3 .drawio.svg as legacy reference + this doc as
-source of truth for current visual semantics.
+**DIAGRAM UPDATED 2026-06-30 (doc-v5 upgrade, Phase 3).** The v4 diagram was authored
+as `broker-pattern.mmd` (Mermaid flowchart) rendered from this spec — Topology Broker
+label, the Overlay/OverlayView/OverlayMesh tier split, the governance-vs-legal channel
+split, the peer-dialogue cycle, the authority hierarchy, the Frame stack, and building
+blocks #22a–#35. The stale v3 `broker-pattern.drawio.svg` was retired to
+[`archived/broker-pattern.drawio.svg`](archived/broker-pattern.drawio.svg) per the
+`skill-deprecation` archival-with-provenance convention. Prose still wins when diagram
+and prose disagree; `broker-pattern.mmd` is now the current visual source.

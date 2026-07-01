@@ -1,0 +1,17 @@
+%% Source: PITCH.md — "How it works" sensory→CMDB→Brain→score/gates→agent block.
+%% Version-controllable sibling for the ```mermaid fence embedded inline in PITCH.md.
+flowchart LR
+    Project["Project state<br/>code · CI · deps · secrets · docs"]
+    Sensors["Sensory tools<br/>(observe one domain each)"]
+    CMDB[".claude/*-cmdb.json"]
+    Brain["Brain"]
+    Score["Score + correlations"]
+    Gates["Governance gates<br/>(block / allow actions)"]
+    Agent["Agent<br/>(human or AI)"]
+    Project --> Sensors --> CMDB --> Brain
+    Brain --> Score --> Agent
+    Brain --> Gates --> Agent
+    Agent -.->|"informed action"| Project
+    style Brain fill:#dbeafe
+    style Score fill:#d1fae5
+    style Gates fill:#fef3c7

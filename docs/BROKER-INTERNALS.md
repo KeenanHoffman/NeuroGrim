@@ -784,7 +784,7 @@ work) which needs the multi-operator-roles infrastructure to be useful.
 
 ## 5. Worked example — the Work broker decomposed
 
-The Work broker is the obvious starter because [`SUBSTRATE-REUSE.md`](SUBSTRATE-REUSE.md)
+The Work broker is the obvious starter because `SUBSTRATE-REUSE.md`
 already marks it as ~80% shipped (`neurogrim_sensory::backlog::next_ready()` + the
 `neurogrim backlog next-ready` CLI). Lifting it into the framework:
 

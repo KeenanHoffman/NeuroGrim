@@ -14,7 +14,8 @@ boundary the pattern carves between LLM-class hardware and host-class hardware. 
 contract that the `harness-coherence` and `substrate-reuse` Brain domains in consuming
 projects (e.g. cereGrim) score against.
 
-The visual reference is [`diagrams/broker-pattern.drawio.svg`](diagrams/broker-pattern.drawio.svg).
+The visual reference is [`diagrams/broker-pattern.mmd`](diagrams/broker-pattern.mmd)
+(v4 Mermaid source, rendered from `diagrams/DIAGRAM-V4-SPEC.md`).
 This document is the prose of that diagram — when the two disagree, the prose wins
 (the diagram is generated from understanding; the contract is the understanding).
 

@@ -129,8 +129,9 @@ on. The framework's named specification lives in:
 - [`docs/BROKER-INTERNALS.md`](docs/BROKER-INTERNALS.md) — framework framing + 23
   building blocks across three layers + Pipeline primitive + Workflow Engine (cold-store
   atomicity) + four-tier tunability with reachability invariant.
-- [`docs/diagrams/broker-pattern.drawio.svg`](docs/diagrams/broker-pattern.drawio.svg) —
-  the visual reference (v3).
+- [`docs/diagrams/broker-pattern.mmd`](docs/diagrams/broker-pattern.mmd) —
+  the visual reference (v4 Mermaid source, rendered from `DIAGRAM-V4-SPEC.md`; the
+  retired v3 drawio export lives under `docs/diagrams/archived/`).
 
 The framework is the substrate consuming projects implement against. NeuroGrim publishes
 the *what a broker is and how to build one* substrate; consuming projects (cereGrim,
@@ -229,8 +230,9 @@ python-starter).
 > 22-task held-out set** — direct agreement with oracle dropped to
 > 40.9%, within-5-pts to 68.2%, both below the pre-registered kill
 > thresholds. The rule is therefore *indicative but not validated*.
-> Full post-mortem:
-> [`reframe-post-mortem.md`](../.claude/experiments/brain-vs-control/reports/reframe-post-mortem.md).
+> Full post-mortem: `reframe-post-mortem.md` (retired from the tree during
+> the v5 doc reorg; the surviving reports live under the ecosystem
+> `.claude/experiments/brain-vs-control/reports/`).
 
 > **Scope note — one-shot vs longitudinal value.** The experiments
 > this section summarizes are all single-turn: one task → one
