@@ -36,6 +36,11 @@ sibling of `neurogrim-core`, per the substrate inventory in
 
 ---
 
+### BRK-00-FRAMEWORK: Broker Framework — CANDIDATE
+**Type:** epic
+**Value:** The substrate every consuming harness builds on — a broker can be authored end-to-end against it with trace, governance, tunability, and replay surfaced automatically.
+**Priority:** Must
+
 ## Master table — all 35 BBs at a glance
 
 | ID | BB | Layer | Stage | Effort | Depends on | Status |
@@ -141,6 +146,7 @@ Layer C (18 BBs full or scaffold): #14, #15, #16 (trait), #17 (trait), #18 (scaf
 ### Layer A — Pattern primitives
 
 #### BRK-01-BROKER-TRAIT (BB #1) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** The `Broker` trait every broker implements. Defines `read_overlay()`,
 `legal_pipelines(state)`, `governance_pipelines()`, `tick(WorldEvent)`, role-set
 declaration.
@@ -152,6 +158,7 @@ pipeline list) registers + dispatches without panic; trait surface validated aga
 extend via composition; don't bloat it with default methods.
 
 #### BRK-02A-OVERLAY (BB #2a) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Generic `Overlay<T>` — read-only consumer-facing projection with
 atomic-swap updates, versioned read, no-torn-read enforcement.
 **Acceptance:** atomic-swap demonstrated under concurrent read+write (property test);
@@ -160,6 +167,7 @@ BROKER-CONTRACT §"Overlay contract" §4 + falls back to last-known-fitting Over
 **Reuse:** new code; consider `arc-swap` crate or similar.
 
 #### BRK-02B-WORKING-STATE (BB #2b) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Generic `WorkingState<W>` — broker-private full read/write surface
 not exposed to consumers.
 **Acceptance:** type compiles; access mediated via broker's internal pipelines only
@@ -167,6 +175,7 @@ not exposed to consumers.
 **Reuse:** new code; trivial wrapper.
 
 #### BRK-03-INTERNAL-SERVICE (BB #3) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** `InternalService` trait + tick subscription. Projects cold → working
 state; broker materializes curated subset into Overlay.
 **Acceptance:** trait + tick-subscription wiring + a reference InternalService impl
@@ -174,6 +183,7 @@ demonstrating cold→working→overlay projection cycle.
 **Reuse:** tick wiring may reuse `neurogrim_core::queue` subscription patterns.
 
 #### BRK-04-QUEUE (BB #4) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Reuse `neurogrim_core::queue` for inter-component messaging within
 brokers + cross-broker (via Topology).
 **Acceptance:** broker framework consumes `neurogrim_core::queue` via published API;
@@ -181,6 +191,7 @@ no new queue substrate authored; topic-naming convention documented (`_neurogrim
 **Reuse:** 100% existing.
 
 #### BRK-05-EXTERNAL-SERVICE (BB #5) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** `ExternalService` trait + queue-consumer scaffold. Ingests world
 events into cold store.
 **Acceptance:** trait + reference ExternalService that consumes a topic and writes to
@@ -189,6 +200,7 @@ cold store.
 reuse via adapter or borrow shape.
 
 #### BRK-06-COLD-STORE (BB #6) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Trait over SQLite/JSONL backends. Schema migration files consumed by
 BB #26.
 **Acceptance:** trait abstracts SQLite + JSONL backends transparently; per-broker cold
@@ -197,6 +209,7 @@ store path declared in manifest; schema version field present on every record.
 two backends. Likely 80% reuse.
 
 #### BRK-26-SCHEMA-MIGRATION (BB #26) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Per-broker `SchemaVersion` field + `SchemaVersionManifest` in cold
 store + `MigrationRunner` (Tier 3 bootstrap). Workflow resumption contract under
 stale SchemaVersion.
@@ -212,6 +225,7 @@ coexistence window operator-configurable.
 ### Layer B — Pipeline primitives
 
 #### BRK-07-PIPELINE (BB #7) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** `Pipeline` struct + Serde derives. Carries visibility (Surfaced |
 Internal), audit_class (capability | governance | meta-observation), tunability,
 params, preconditions, steps, governance, expected_effect, contract_version (BB #34).
@@ -220,6 +234,7 @@ deserialization from `BROKER-MANIFEST-SCHEMA.md` reference catalog works.
 **Reuse:** new struct.
 
 #### BRK-08-STEP (BB #8) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** `Step` enum — `Leaf(LeafOpId)` | `SubPipeline(PipelineId, ParamMap)`
 | `Guard(Predicate, Step)` | `Branch(Predicate, Step, Step)`.
 **Acceptance:** enum compiles; YAML deserialization matches spec; sub-pipeline calls
@@ -227,6 +242,7 @@ validate (broker_id/pipeline_id format for cross-broker per BB #27).
 **Reuse:** new enum.
 
 #### BRK-09-CATALOG (BB #9) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Per-broker Pipeline Catalog — YAML loader + hot reload + schema
 structure validation at load time + dispatch-time parameter validation.
 **Acceptance:** catalog loads from broker's cold-store-relative path; malformed YAML
@@ -236,6 +252,7 @@ up catalog changes without restart.
 **Reuse:** YAML loading via `serde_yaml`; rest is new.
 
 #### BRK-10-RUNNER (BB #10) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Pipeline Runner — executes pipelines, tracks state, handles
 suspension. The bootstrap layer (Tier 3 plain functions execute the Tier 1/2
 pipelines).
@@ -246,6 +263,7 @@ across simulated process restart.
 **Effort: LARGE** — core executor; gates everything Layer C.
 
 #### BRK-11-WORKFLOW (BB #11) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Workflow Engine — cold-store-as-truth + hot-store positions + resume.
 Single-transaction checkpoints (SQLite tx OR fsync'd JSONL append). Workflow.schema_version
 pinned at start.
@@ -256,6 +274,7 @@ under stale schema applies forward-migration or refuses cleanly.
 **Effort: LARGE** — workflow atomicity is load-bearing.
 
 #### BRK-12-TRACE-SINK (BB #12) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Trace format + write path + replay-against-historical-state harness.
 **Acceptance:** every pipeline dispatch produces a trace record; trace records carry
 projection_snapshot + dispatch parameters + outcome + audit_class; trace format is
@@ -263,6 +282,7 @@ versioned (`schema_version` field).
 **Reuse:** invocation-ledger JSONL pattern is the precedent.
 
 #### BRK-13-REPLAY (BB #13) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Three replay scopes (single-pipeline / broker-tick / workflow); CLI +
 library API; read-only by default with opt-in write-mode for golden regen. Subsumes
 test fixtures.
@@ -272,6 +292,7 @@ known fixture; write-mode requires explicit `--write-golden` flag.
 **Reuse:** new CLI surface; library trace-reader.
 
 #### BRK-25-CANCEL-HANDLER (BB #25) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Cancellation handler on every pipeline (optional `on_cancel: {steps,
 terminal_state, cancellation_depth_max}`). Framework guarantees handler runs even on
 kill-switch interrupt.
@@ -282,6 +303,7 @@ beyond depth-1 by default).
 **Reuse:** new; integration point with BB #11 Workflow Engine + BB #19 Governance.
 
 #### BRK-34-WPVC (BB #34) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Workflow-Pipeline Versioning Contract — `contract_version: N` per
 pipeline + `compatible_contracts: [N, N-1]` per workflow checkpoint + refuse on
 mismatch with `failure_reason: contract_version_mismatch`.
@@ -296,6 +318,7 @@ respected (`allow_backward_compatible_only` | `allow_forward_compatible_upgrades
 ### Layer C — Substrate composition
 
 #### BRK-14-REGISTRY (BB #14) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Broker Registry — discover/load brokers at startup; manifest schema
 with role-set declaration.
 **Acceptance:** registry loads brokers from operator-declared `brokers_dir` (per
@@ -305,6 +328,7 @@ composition.
 **Reuse:** new code.
 
 #### BRK-15-TICK (BB #15) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Tick Source — hook-driven + file-injection ticks; subscription API.
 **Acceptance:** brokers subscribe to tick events they need; PreToolUse hook fires a
 tick on demand; file-injection cadence (operator-configurable; default session-start)
@@ -313,6 +337,7 @@ fires on schedule.
 pattern (existing precedent).
 
 #### BRK-16-WORKSPACE-MGR (BB #16) — trait + spinal-cord defaults in S0-T — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Workspace Manager — canonical Embodiment broker; Effector
 subordination, Workspace Queue, real-time-vs-queued dispatch, cross-effector
 synchronization, cross-role sense-feedback routing, `allowed_during_shutdown`
@@ -325,6 +350,7 @@ validated against simulated LLM busy state.
 **Effort: LARGE** — Embodiment is its own coordination story.
 
 #### BRK-17-TOPOLOGY-BROKER (BB #17) — trait + spinal-cord defaults in S0-T — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Topology Broker — canonical Sense broker; cross-broker routing + ACL
 enforcement + per-consumer Topology OverlayView + ACL-mutation self-bypass invariant
 (Tier 3 plain functions; Untunable).
@@ -336,6 +362,7 @@ initial ACL definitions.
 **Effort: LARGE** — ACL discipline is precise.
 
 #### BRK-18-AWARENESS-SVC (BB #18) — scaffold in S0-T; hardened in S3-T — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Awareness Service — Sensory-Queue rate-limit/sanitize enforcer + the
 role-boundary guard for the Sense cross-role write path.
 **Acceptance (S0-T scaffold):** scaffold compiles; per-source rate-limit + schema
@@ -347,6 +374,7 @@ show drop counts.
 **Effort: LARGE**
 
 #### BRK-19-GOVERNANCE (BB #19) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Governance Composer — the set of Tier 2 governance pipelines
 (`check-trust-budget`, `check-kill-switch`, `arm-kill-switch`, `record-dispatch`,
 `record-outcome`, `enforce-rate-limit`); composed into surfaced pipelines via
@@ -358,6 +386,7 @@ governance composition for Surfaced pipelines applies all 4 base (trust + kill-s
 **Reuse:** new code; integration with BB #10.
 
 #### BRK-20-SKILL-FILTER (BB #20) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Skill Filter — rank/dedupe/learn-from-rejection; reachability
 channel split (`governance_pipelines()` sidecar separate from `legal_pipelines()`
 ranking); per-broker/per-pipeline/per-role hygiene classifier with `audit_class`
@@ -368,6 +397,7 @@ hygiene detects dead roles after N days (default 30) zero registered brokers.
 **Effort: LARGE** — the channel split is load-bearing for agent expressiveness.
 
 #### BRK-21-PROPOSAL-LEDGER (BB #21) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Reuse `.claude/brain/proposal-ledger.json` (shipped); add
 tuning-pipeline protocol + (per BB #33) `type: pipeline-proposal` entries.
 **Acceptance:** broker reads + writes proposal ledger via shipped infrastructure;
@@ -376,6 +406,7 @@ proposal in catalog atomically.
 **Reuse:** 100% shipped substrate; extension only.
 
 #### BRK-22-HOT-MAT (BB #22) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Hot-Store Materializer — writes per-broker Overlay state to
 `.claude/brain/broker/segments/overlay.md`; composed by Materializer Composer (#22a)
 into `current-projection.md`.
@@ -385,6 +416,7 @@ reads observable from CLAUDE.md auto-load).
 **Reuse:** file injection pattern is well-established; new code for segment format.
 
 #### BRK-22A-COMPOSER (BB #22a) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Materializer Composer — concatenates materializer segment files in
 operator-declared order into `current-projection.md`. Composition order declared in
 cluster manifest.
@@ -394,6 +426,7 @@ missing segment file produces empty section + diagnostic event (not a hard failu
 **Reuse:** new code; trivial concatenation logic.
 
 #### BRK-23-ROLE-SET (BB #23) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Role-set scaffolding — per-role defaults the framework wires
 automatically on broker registration (Sense / InnateAbility / Embodiment spinal
 cords); composes for multi-role brokers.
@@ -404,6 +437,7 @@ precedence.
 **Effort: MEDIUM** — the registration-time composition is fiddly.
 
 #### BRK-24-AWARE-MAT (BB #24) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Awareness Materializer — writes pipeline catalog routing signals
 (description + when_to_use per Surfaced pipeline + alive/dead/new hygiene status) to
 `.claude/brain/broker/segments/awareness-routing.md`; composed by Composer into
@@ -414,6 +448,7 @@ pipeline routing signal validated.
 **Reuse:** new code; segment format mirrors skill manifest format.
 
 #### BRK-11-WORKFLOW-STRESS (p5 test plan, r-o-1 validation) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 
 **Description:** Stress test the Workflow Engine's two-phase-commit ordering
 (R-O-1 closure in BB #27). Validates that cross-broker dispatches under
@@ -451,6 +486,7 @@ mock broker implementations that can be deliberately crashed; replay harness (BB
 exit criteria.
 
 #### BRK-04-COLD-STORE-CONTENTION (p6 test plan, r-o-4 validation) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 
 **Description:** Benchmark the per-broker SQLite file isolation default (R-O-4
 closure) against the originally-feared shared-file contention scenario.
@@ -479,6 +515,7 @@ level for operators.
 performance validation.
 
 #### BRK-35-FRAME-EVAL-COST (p7 test plan, r-o-5 validation) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 
 **Description:** Microbenchmark Frame stack evaluation cost under nested
 sub-pipeline dispatch (R-O-5 latency risk).
@@ -513,6 +550,7 @@ implemented); part of S1-T performance validation.
 ---
 
 #### BRK-27-CROSS-BROKER (BB #27) — contract in S0-T; impl in S1-T — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Cross-Broker Composition Policy — atomicity rule (cross-broker
 sub-pipelines within single workflow checkpoint); ACL governance via Topology Broker;
 trust-budget double-debit (both parties debit; same unit required);
@@ -526,6 +564,7 @@ refuses dispatch.
 **Effort: LARGE**
 
 #### BRK-28-DIAGNOSTICS (BB #28) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Diagnostics Collector — unified live observability (latency
 histograms P50/P95/P99 + dispatch counts + success/failure rates + governance-block
 frequency + broker-health indicators + trust-budget state per active unit). Emits to
@@ -538,6 +577,7 @@ sensor); broker-health indicators detectable when cold-store unavailable.
 **Effort: MEDIUM-LARGE**
 
 #### BRK-29-LIFECYCLE (BB #29) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Broker Lifecycle — `BrokerShutdown` pipeline (per-pipeline timeout
 not global; force-kill + on_cancel after timeout; cluster-pipeline
 `allowed_during_shutdown` discipline); `BrokerVersionTransition` (schema-compatible
@@ -548,6 +588,7 @@ hot-swap preserves in-flight workflows pinned to pre-swap version.
 **Effort: LARGE**
 
 #### BRK-30-ONBOARDING (BB #30) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Agent-Broker Onboarding Projection — runs once per broker-per-agent
 on first registration; surfaces broker purpose + role-set + top-N pipelines +
 governance posture + skill-body cross-refs. State persistence in
@@ -558,6 +599,7 @@ segment into `current-projection.md`; subsequent dispatches fall back to steady-
 projections; cold-store wipe detected + re-projection on next tick.
 
 #### BRK-31-CLUSTER-FED (BB #31) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Cluster Federation Topology — cross-CLUSTER federation (parallel to
 BB #27 at within-cluster level); transitive ACL composition; version cascade rules;
 bootstrap policy per cluster manifest.
@@ -568,6 +610,7 @@ inter_cluster_version_mismatch`.
 **Effort: LARGE** — cross-machine federation is its own coordination story.
 
 #### BRK-32-TELEMETRY (BB #32) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Operator Telemetry Summarizer — human-readable broker status summary
 (Markdown to `.claude/brain/broker-telemetry-summary.md`). Reads BB #28 + projection
 state + audit trail + governance-block frequencies. Sections: per-broker health
@@ -577,6 +620,7 @@ state, workflow checkpoint depths. Operator-tunable refresh cadence (default 60s
 human-readable form; cadence respected; markdown auto-loads via CLAUDE.md mechanism.
 
 #### BRK-33-PIPELINE-PROPOSAL (BB #33) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Pipeline Proposal Mechanism — extends BB #21 with `type:
 pipeline-proposal` entries; LLM (or operator) authors proposal; Awareness Materializer
 surfaces pending proposals; operator approval hot-reloads pipeline into catalog.
@@ -586,6 +630,7 @@ lands in catalog within one tick + governance compose applies to the new pipelin
 immediately.
 
 #### BRK-35-FRAME-STACK (BB #35) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Frame stack — typed Frame map; seven canonical Frame types
 (Hat/Stakes/Tempo/Mode/Confidence/Audience/Scope); inheritance (cluster → broker →
 role → pipeline → dispatch); consumption surfaces (Governance Composer / Skill
@@ -601,6 +646,7 @@ declared matrix; `active-frame-stack.md` segment surfaces in L1 context with
 **Effort: LARGE** — Frame stack is cross-cutting; touches many other BBs.
 
 #### BRK-36-AGENT-BEHAVIOR-OBS (BB #36) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Per-agent action-ledger keyed by `{agent_id, dispatch_id, broker_id,
 pipeline_id, outcome, governance_blocks_fired, frame_stack_snapshot}`. Closes the
 VISION-principle #21 (agents must perceive their own blind spots) + #22 (agents must
@@ -616,6 +662,7 @@ Materializer Composer segment slot.
 **Effort: MEDIUM**
 
 #### BRK-37-PIPELINE-DEPRECATION (BB #37) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Operator-side inverse of BB #33 Pipeline Proposal Mechanism. Cluster
 manifest declares `deprecated_pipelines: [{id, effective_date, archive_path, reason}]`;
 Pipeline Runner checks before `check-trust-budget`; workflows pinned to pre-effective-date
@@ -627,6 +674,7 @@ of replacement pipeline can carry implicit deprecation via `displaces:`.
 **Effort: MEDIUM**
 
 #### BRK-38-SENSOR-QUARANTINE (BB #38) — CANDIDATE
+**Epic:** BRK-00-FRAMEWORK
 **Description:** Operator surface for isolating + inspecting + restoring misbehaving
 custom sensors. Cluster manifest declares `quarantined_sources: [{source_id, reason,
 quarantine_date, test_mode_enabled}]`; Awareness Service enforcer routes quarantined
