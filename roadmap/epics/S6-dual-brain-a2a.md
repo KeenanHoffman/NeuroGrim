@@ -36,7 +36,13 @@ Renamed 2026-04-17 when A2A was adopted as the normative transport.
 
 ---
 
+### S6-DB: Dual Brain Agent-to-Agent — IN PROGRESS
+**Type:** epic
+**Value:** Lets peer Brains coordinate over an open, standardized protocol rather than a bespoke event format, so any conformant implementation in any language can participate.
+**Priority:** Could
+
 ### S6-DB-1: neurogrim-a2a Crate Scaffold — SHIPPED
+**Epic:** S6-DB
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** L
@@ -85,6 +91,7 @@ Agent Card, task client, task server, transport abstraction.
 ---
 
 ### S6-DB-2: Ecosystem Refactor to a2a + Subprocess Dispatch — SHIPPED
+**Epic:** S6-DB
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** XL
@@ -149,6 +156,7 @@ are now self-contained; no filesystem dependency on archived content.
 ---
 
 ### S6-DB-3: Brain a2a Server (Serve Self as Peer) — SHIPPED
+**Epic:** S6-DB
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** L
@@ -225,6 +233,7 @@ tests added during this closure).
 ---
 
 ### S6-DB-4: Dual Brain Pair Integration Test — SHIPPED
+**Epic:** S6-DB
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** M
@@ -290,6 +299,7 @@ the §9.7 request-response direction validated on real wire, not in-process.
 ---
 
 ### S6-DB-5: External Brain Reference Deployment — SHIPPED
+**Epic:** S6-DB
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** L (scoped down from original XL by targeting local Docker over cloud)
@@ -385,6 +395,7 @@ doc points at those options without pretending we ship cloud-specific IaC.
 ---
 
 ### S6-DB-6: (stretch) Python SDK a2a Helper — CANDIDATE
+**Epic:** S6-DB
 
 **Status:** Not started
 **Effort:** M
@@ -405,6 +416,8 @@ are more likely to be implemented in Rust/Go/TypeScript than Python.
 - [ ] Contract tests against `a2a-envelope-v1.schema.json`
 
 ### S6-DB-7: Ecosystem Brain at Session Root — IN PROGRESS
+**Epic:** S6-DB
+**MoSCoW:** Must
 
 **Status:** In progress (bootstrap) / Not started (operational A2A wiring)
 **Effort:** L
