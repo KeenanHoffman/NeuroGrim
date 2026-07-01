@@ -34,17 +34,24 @@
 //! claimed tokio::time; this aligns the doc with the implementation.
 
 use crate::governance::{GovernanceRefusal, PreDispatchSubgate};
-use crate::pipeline::Pipeline;
+use crate::pipeline::{ParamMap, Pipeline};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// Function type that derives the rate-limit scope key from a Pipeline.
+/// Function type that derives the rate-limit scope key from a Pipeline +
+/// the dispatch's params (**P5a** — params added so limits can key per-pane,
+/// not only per-pipeline).
 /// Examples:
-/// - `|p| p.id.clone()` — per-pipeline limits.
-/// - `|p| format!("{:?}", p.audit_class)` — per-audit-class limits.
-/// - `|p| "global".to_string()` — single global limit (rare).
-pub type ScopeKeyFn = Box<dyn Fn(&Pipeline) -> String + Send + Sync>;
+/// - `|p, _params| p.id.clone()` — per-pipeline limits.
+/// - `|p, _params| format!("{:?}", p.audit_class)` — per-audit-class limits.
+/// - `|_p, _params| "global".to_string()` — single global limit (rare).
+/// - `|p, params| format!("{}::{}", p.id,
+///   params.get("pane_id").and_then(|v| v.as_str()).unwrap_or("__global__"))`
+///   — **per-pane** limits (browser quotas): each pane gets its own window;
+///   pipelines with no `pane_id` fall back to a single shared `__global__`
+///   scope rather than mis-keying.
+pub type ScopeKeyFn = Box<dyn Fn(&Pipeline, &ParamMap) -> String + Send + Sync>;
 
 pub struct RateLimitSubgate {
     name: String,
@@ -100,8 +107,8 @@ impl PreDispatchSubgate for RateLimitSubgate {
         &self.name
     }
 
-    fn check(&self, pipeline: &Pipeline) -> Result<(), GovernanceRefusal> {
-        let key = format!("{}::{}", (self.scope_key_fn)(pipeline), self.bucket);
+    fn check(&self, pipeline: &Pipeline, params: &ParamMap) -> Result<(), GovernanceRefusal> {
+        let key = format!("{}::{}", (self.scope_key_fn)(pipeline, params), self.bucket);
         let now = Instant::now();
         let cutoff = now - self.window;
         let mut state = self.state.lock().expect("rate-limit state poisoned");
@@ -159,12 +166,12 @@ mod tests {
             "default",
             Duration::from_secs(60),
             3,
-            Box::new(|p| p.id.clone()),
+            Box::new(|p, _params| p.id.clone()),
         );
         let p = make_test_pipeline("t/x");
         // 3 dispatches in a row — all permitted.
         for _ in 0..3 {
-            subgate.check(&p).unwrap();
+            subgate.check(&p, &ParamMap::new()).unwrap();
         }
     }
 
@@ -175,12 +182,12 @@ mod tests {
             "default",
             Duration::from_secs(60),
             2,
-            Box::new(|p| p.id.clone()),
+            Box::new(|p, _params| p.id.clone()),
         );
         let p = make_test_pipeline("t/x");
-        subgate.check(&p).unwrap();
-        subgate.check(&p).unwrap();
-        let err = subgate.check(&p).unwrap_err();
+        subgate.check(&p, &ParamMap::new()).unwrap();
+        subgate.check(&p, &ParamMap::new()).unwrap();
+        let err = subgate.check(&p, &ParamMap::new()).unwrap_err();
         match err {
             GovernanceRefusal::Subgate { name, reason } => {
                 assert_eq!(name, "test-rate-limit");
@@ -197,15 +204,15 @@ mod tests {
             "default",
             Duration::from_secs(60),
             1,
-            Box::new(|p| p.id.clone()),
+            Box::new(|p, _params| p.id.clone()),
         );
         let p1 = make_test_pipeline("t/one");
         let p2 = make_test_pipeline("t/two");
         // p1 uses its budget; p2 still has its own.
-        subgate.check(&p1).unwrap();
-        assert!(subgate.check(&p1).is_err());
-        subgate.check(&p2).unwrap();
-        assert!(subgate.check(&p2).is_err());
+        subgate.check(&p1, &ParamMap::new()).unwrap();
+        assert!(subgate.check(&p1, &ParamMap::new()).is_err());
+        subgate.check(&p2, &ParamMap::new()).unwrap();
+        assert!(subgate.check(&p2, &ParamMap::new()).is_err());
     }
 
     #[test]
@@ -215,15 +222,15 @@ mod tests {
             "default",
             Duration::from_millis(50),
             1,
-            Box::new(|p| p.id.clone()),
+            Box::new(|p, _params| p.id.clone()),
         );
         let p = make_test_pipeline("t/x");
-        subgate.check(&p).unwrap();
-        assert!(subgate.check(&p).is_err());
+        subgate.check(&p, &ParamMap::new()).unwrap();
+        assert!(subgate.check(&p, &ParamMap::new()).is_err());
         // Wait for the window to expire.
         std::thread::sleep(Duration::from_millis(80));
         // Capacity restored.
-        subgate.check(&p).unwrap();
+        subgate.check(&p, &ParamMap::new()).unwrap();
     }
 
     #[test]
@@ -233,12 +240,71 @@ mod tests {
             "default",
             Duration::from_secs(60),
             5,
-            Box::new(|p| p.id.clone()),
+            Box::new(|p, _params| p.id.clone()),
         );
         let p = make_test_pipeline("t/x");
         assert_eq!(subgate.current_count("t/x::default"), 0);
-        subgate.check(&p).unwrap();
-        subgate.check(&p).unwrap();
+        subgate.check(&p, &ParamMap::new()).unwrap();
+        subgate.check(&p, &ParamMap::new()).unwrap();
         assert_eq!(subgate.current_count("t/x::default"), 2);
+    }
+
+    /// Per-pane scope key derived from `params` — a `pane_id`-aware
+    /// scope_key_fn used by both P5a tests below (mirrors the browser-quota
+    /// registration in the IDE).
+    fn per_pane_key() -> ScopeKeyFn {
+        Box::new(|p: &Pipeline, params: &ParamMap| {
+            format!(
+                "{}::{}",
+                p.id,
+                params
+                    .get("pane_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("__global__")
+            )
+        })
+    }
+
+    #[test]
+    fn rate_limit_keys_per_pane_via_params() {
+        // P5a — the scope_key_fn now receives the dispatch params, so a
+        // browser-style quota keys per-PANE: two panes running the SAME
+        // pipeline get independent windows.
+        let subgate = RateLimitSubgate::new(
+            "browser-quotas-mutate",
+            "mutate",
+            Duration::from_secs(60),
+            1,
+            per_pane_key(),
+        );
+        let p = make_test_pipeline("browser-dom-write/click");
+        let mut pane_a = ParamMap::new();
+        pane_a.insert("pane_id".to_string(), serde_json::json!("pane-A"));
+        let mut pane_b = ParamMap::new();
+        pane_b.insert("pane_id".to_string(), serde_json::json!("pane-B"));
+
+        // Pane A spends its single slot; a second A dispatch is refused.
+        subgate.check(&p, &pane_a).unwrap();
+        assert!(subgate.check(&p, &pane_a).is_err(), "pane A exhausted its window");
+        // Pane B is independent — its own window is still open.
+        subgate.check(&p, &pane_b).unwrap();
+        assert!(subgate.check(&p, &pane_b).is_err(), "pane B window is independent");
+    }
+
+    #[test]
+    fn rate_limit_missing_pane_id_falls_back_to_global_scope() {
+        // P5a — a non-browser pipeline (no pane_id in params) must not
+        // mis-key or panic; it collapses to a single shared `__global__`
+        // scope and the window still enforces deterministically.
+        let subgate = RateLimitSubgate::new(
+            "browser-quotas-mutate",
+            "mutate",
+            Duration::from_secs(60),
+            1,
+            per_pane_key(),
+        );
+        let p = make_test_pipeline("work-broker/next");
+        subgate.check(&p, &ParamMap::new()).unwrap();
+        assert!(subgate.check(&p, &ParamMap::new()).is_err());
     }
 }

@@ -333,7 +333,9 @@ impl PipelineRunner {
         //    `bypasses_kill_switch` so arm/disengage stay reachable while
         //    armed.
         if matches!(pipeline.visibility, Visibility::Surfaced) {
-            self.governance.pre_dispatch_checks_for(&pipeline)?;
+            // P5a — thread the dispatch params so per-pane subgates (browser
+            // quota / pane-budget) can key per-pane rather than per-pipeline.
+            self.governance.pre_dispatch_checks_for(&pipeline, &params)?;
         }
 
         // 3. Param validation (Wave 5+ elevates to JSON Schema; MVP minimal)

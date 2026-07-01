@@ -26,7 +26,7 @@
 //! `min_tier = Watch` so they refuse at Critical/Refuse).
 
 use crate::governance::{GovernanceRefusal, PreDispatchSubgate};
-use crate::pipeline::Pipeline;
+use crate::pipeline::{ParamMap, Pipeline};
 use std::sync::Arc;
 
 /// Pressure tiers for `SystemPressureSubgate`. Ordered: Healthy < Watch <
@@ -114,7 +114,10 @@ impl PreDispatchSubgate for SystemPressureSubgate {
         &self.name
     }
 
-    fn check(&self, _pipeline: &Pipeline) -> Result<(), GovernanceRefusal> {
+    // P5a — system pressure is a global fact; `params` (incl. any `pane_id`)
+    // is intentionally ignored: admission control refuses under load
+    // regardless of which pane dispatched.
+    fn check(&self, _pipeline: &Pipeline, _params: &ParamMap) -> Result<(), GovernanceRefusal> {
         let facts = self.provider.read();
         if facts.tier > self.min_tier {
             return Err(GovernanceRefusal::Subgate {
@@ -191,7 +194,7 @@ mod tests {
             PressureTier::Healthy,
             Arc::new(HealthyDefault),
         );
-        subgate.check(&make_pipeline()).unwrap();
+        subgate.check(&make_pipeline(), &ParamMap::new()).unwrap();
     }
 
     #[test]
@@ -202,9 +205,9 @@ mod tests {
             PressureTier::Watch,
             provider.clone(),
         );
-        subgate.check(&make_pipeline()).unwrap();
+        subgate.check(&make_pipeline(), &ParamMap::new()).unwrap();
         provider.set(PressureTier::Healthy);
-        subgate.check(&make_pipeline()).unwrap();
+        subgate.check(&make_pipeline(), &ParamMap::new()).unwrap();
     }
 
     #[test]
@@ -215,7 +218,7 @@ mod tests {
             PressureTier::Watch,
             provider.clone(),
         );
-        let err = subgate.check(&make_pipeline()).unwrap_err();
+        let err = subgate.check(&make_pipeline(), &ParamMap::new()).unwrap_err();
         match err {
             GovernanceRefusal::Subgate { name, reason } => {
                 assert_eq!(name, "test-pressure");
@@ -226,6 +229,6 @@ mod tests {
         }
         // Recovery: provider switches to Healthy → subgate allows again.
         provider.set(PressureTier::Healthy);
-        subgate.check(&make_pipeline()).unwrap();
+        subgate.check(&make_pipeline(), &ParamMap::new()).unwrap();
     }
 }

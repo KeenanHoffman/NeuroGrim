@@ -29,7 +29,7 @@
 //! - `arm-kill-switch` — OperatorOnly tunability; brokers opt-in by
 //!   including it in their catalog (Wave 5: Work Broker includes it).
 
-use crate::pipeline::{AuditClass, EffectClass, Pipeline, Tunability, Visibility};
+use crate::pipeline::{AuditClass, EffectClass, ParamMap, Pipeline, Tunability, Visibility};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -147,7 +147,18 @@ pub trait PreDispatchSubgate: Send + Sync {
     /// Decide whether to permit the dispatch. Return `Err(GovernanceRefusal
     /// ::Subgate { name, reason })` to block; pass `self.name().to_string()`
     /// as `name` so the refusal correctly identifies which subgate fired.
-    fn check(&self, pipeline: &Pipeline) -> Result<(), GovernanceRefusal>;
+    ///
+    /// **P5a — per-pane scoping:** `params` is the dispatch's `ParamMap` (the
+    /// same map the Runner validates + passes to leaf-ops). Subgates that key
+    /// per-request state — e.g. the browser quota + pane-budget subgates that
+    /// must key per **pane**, not per pipeline-id — read the discriminating
+    /// key (`pane_id`, …) out of `params`. Subgates whose decision is global
+    /// (system pressure) or pipeline-only (a plain per-pipeline rate limit)
+    /// simply ignore `params`. Pipelines that carry no such key (WorkBroker /
+    /// DocBroker / workspace / topology have no `pane_id`) must fall back to a
+    /// global/pipeline scope rather than mis-key or panic — see the IDE
+    /// `ScopedSubgate` / `PaneBudgetSubgate` fallback.
+    fn check(&self, pipeline: &Pipeline, params: &ParamMap) -> Result<(), GovernanceRefusal>;
 }
 
 /// Governance Composer — holds trust budget + kill switch state + a
@@ -252,7 +263,16 @@ impl GovernanceComposer {
     /// can dispatch even while armed (otherwise arming creates a permanent
     /// dead-end — operator can never disengage). Per V0-RETRO §C7 + ultra-
     /// pass U2 (B-64).
-    pub fn pre_dispatch_checks_for(&self, pipeline: &Pipeline) -> Result<(), GovernanceRefusal> {
+    ///
+    /// **P5a:** `params` (the dispatch's `ParamMap`) is threaded to every
+    /// subgate so per-request subgates (browser quota / pane-budget) can key
+    /// per-pane. The Runner passes the same `params` it validates + hands to
+    /// leaf-ops (`runner.rs` `dispatch_inner`).
+    pub fn pre_dispatch_checks_for(
+        &self,
+        pipeline: &Pipeline,
+        params: &ParamMap,
+    ) -> Result<(), GovernanceRefusal> {
         self.trust_budget.check()?;
         if !pipeline.bypasses_kill_switch {
             self.kill_switch.check()?;
@@ -265,7 +285,7 @@ impl GovernanceComposer {
             .read()
             .expect("pre_dispatch_subgates lock poisoned");
         for subgate in subgates.iter() {
-            subgate.check(pipeline)?;
+            subgate.check(pipeline, params)?;
         }
         Ok(())
     }
@@ -536,7 +556,7 @@ mod tests {
             fn name(&self) -> &str {
                 "always-allow"
             }
-            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+            fn check(&self, _: &Pipeline, _: &ParamMap) -> Result<(), GovernanceRefusal> {
                 Ok(())
             }
         }
@@ -547,7 +567,7 @@ mod tests {
             fn name(&self) -> &str {
                 "always-refuse"
             }
-            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+            fn check(&self, _: &Pipeline, _: &ParamMap) -> Result<(), GovernanceRefusal> {
                 self.counter
                     .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
                 Err(GovernanceRefusal::Subgate {
@@ -580,7 +600,7 @@ mod tests {
             when_to_use: String::new(),
             bypasses_kill_switch: false,
         };
-        let err = g.pre_dispatch_checks_for(&p).unwrap_err();
+        let err = g.pre_dispatch_checks_for(&p, &ParamMap::new()).unwrap_err();
         match err {
             GovernanceRefusal::Subgate { name, reason } => {
                 assert_eq!(name, "always-refuse");
@@ -606,7 +626,7 @@ mod tests {
             fn name(&self) -> &str {
                 "counter"
             }
-            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+            fn check(&self, _: &Pipeline, _: &ParamMap) -> Result<(), GovernanceRefusal> {
                 self.count
                     .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
                 Ok(())
@@ -631,7 +651,7 @@ mod tests {
             bypasses_kill_switch: false,
         };
         // Trust-budget should refuse before subgate runs
-        let err = g.pre_dispatch_checks_for(&p).unwrap_err();
+        let err = g.pre_dispatch_checks_for(&p, &ParamMap::new()).unwrap_err();
         assert!(matches!(err, GovernanceRefusal::TrustBudgetExhausted { .. }));
         assert_eq!(
             counter.count.load(std::sync::atomic::Ordering::Acquire),
@@ -655,7 +675,7 @@ mod tests {
             fn name(&self) -> &str {
                 self.name
             }
-            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+            fn check(&self, _: &Pipeline, _: &ParamMap) -> Result<(), GovernanceRefusal> {
                 self.count.fetch_add(1, Ordering::AcqRel);
                 Ok(())
             }
@@ -692,7 +712,7 @@ mod tests {
             when_to_use: String::new(),
             bypasses_kill_switch: false,
         };
-        g.pre_dispatch_checks_for(&p).unwrap();
+        g.pre_dispatch_checks_for(&p, &ParamMap::new()).unwrap();
         // First subgate was REPLACED — its counter never incremented.
         assert_eq!(first.count.load(Ordering::Acquire), 0);
         // Second subgate ran exactly once (NOT twice — no duplicate).
@@ -709,7 +729,7 @@ mod tests {
             fn name(&self) -> &str {
                 self.name
             }
-            fn check(&self, _: &Pipeline) -> Result<(), GovernanceRefusal> {
+            fn check(&self, _: &Pipeline, _: &ParamMap) -> Result<(), GovernanceRefusal> {
                 Ok(())
             }
         }
@@ -735,8 +755,8 @@ mod tests {
         let arm = pipelines.iter().find(|p| p.id == "t/arm-kill-switch").unwrap();
         let disengage = pipelines.iter().find(|p| p.id == "t/disengage-kill-switch").unwrap();
         // Both must pass pre_dispatch_checks_for even while armed
-        assert!(g.pre_dispatch_checks_for(arm).is_ok());
-        assert!(g.pre_dispatch_checks_for(disengage).is_ok());
+        assert!(g.pre_dispatch_checks_for(arm, &ParamMap::new()).is_ok());
+        assert!(g.pre_dispatch_checks_for(disengage, &ParamMap::new()).is_ok());
         // A non-bypass pipeline must be refused
         let non_bypass = Pipeline {
             id: "t/something-else".to_string(),
@@ -751,7 +771,7 @@ mod tests {
             when_to_use: String::new(),
             bypasses_kill_switch: false,
         };
-        let err = g.pre_dispatch_checks_for(&non_bypass).unwrap_err();
+        let err = g.pre_dispatch_checks_for(&non_bypass, &ParamMap::new()).unwrap_err();
         assert!(matches!(err, GovernanceRefusal::KillSwitchArmed { .. }));
     }
 }
