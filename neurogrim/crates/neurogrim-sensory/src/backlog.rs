@@ -811,13 +811,60 @@ pub async fn analyze_backlog(project_root: &str) -> Value {
     build_cmdb("check-backlog", score.clamp(0, 100) as u8, findings, Some(extras), None)
 }
 
-/// The PM broker, CLI face (IDE-BACKLOG-PM): the deterministic tiered
-/// next-ready dispatch over the parsed symbol model — the *same* ranking the
-/// IDE's `backlog.next_ready` runs, minus the runtime claim/lease + freshness
-/// overlay (IDE-local state). Lets any agent session pull work without the IDE;
-/// the markdown `stage` field is the coordination source of truth. Tiers:
-/// implement → groom → capture → surfaced-idle; never invents filler.
-pub fn next_ready(report: &BacklogReport) -> Value {
+/// Runtime state the IDE overlays on top of the markdown symbol model when it
+/// consumes the canonical ranker. The CLI passes `LiveState::default()` (empty),
+/// which is why the default `next_ready` envelope is unchanged.
+///
+/// - `claimed`: item ids a live agent session currently holds a claim/lease on.
+///   Treated as in-progress and excluded from candidates — a SUPERSET of the
+///   markdown `stage == "In-progress"` exclusion, not a replacement for it.
+/// - `done_overlay`: item ids the IDE knows are freshly done ahead of the
+///   markdown being re-scanned. Treated as done (freshness overlay on top of the
+///   stage-based `is_done`).
+#[derive(Debug, Clone, Default)]
+pub struct LiveState {
+    pub claimed: std::collections::HashSet<String>,
+    pub done_overlay: std::collections::HashSet<String>,
+}
+
+/// A single rankable candidate with its decomposed ranking key components.
+/// `lane`/`epic_priority_rank`/`moscow_rank`/`declared_ready` mirror the 5-tuple
+/// sort key (minus the tie-breaking source index). Emitted in sorted order.
+pub struct RankedItem<'a> {
+    pub item: &'a BacklogItem,
+    pub lane: u8,
+    pub epic_priority_rank: u8,
+    pub moscow_rank: u8,
+    pub declared_ready: bool,
+}
+
+/// The full ranking outcome: the sorted candidate list plus the reconciliation
+/// counts the envelope (CLI or IDE) reports.
+pub struct RankOutcome<'a> {
+    pub candidates: Vec<RankedItem<'a>>,
+    pub blocked: usize,
+    pub deferred: usize,
+    pub done_count: usize,
+    pub in_progress: usize,
+    pub defect_blocked: usize,
+}
+
+/// The canonical backlog ranking authority (IDE-BACKLOG-PM). Runs the tiered
+/// candidate reconciliation over the parsed symbol model + a `LiveState` overlay,
+/// returning candidates SORTED ascending by the 5-tuple key
+/// `(lane, epic_priority_rank, moscow_rank, declared_ready, source_idx)` plus the
+/// bucket counts. Both the CLI face (`next_ready`, empty `LiveState`) and the IDE
+/// (populated `LiveState`) consume this — one ranking, two envelopes.
+///
+/// Reconciliation (in loop order):
+/// - **done** = stage-based `is_done(it)` OR `live.done_overlay` membership →
+///   `done_count`, skip.
+/// - **in-progress** = `live.claimed` membership OR markdown `stage == "In-progress"`
+///   (deliberate correctness-superset) → `in_progress`, skip.
+/// - **deferred** = stage `Blocked`/`Deferred`, and Won't-MoSCoW → `deferred`, skip.
+/// - **dangling** held-back items → `defect_blocked`, skip (tier-3 groom targets).
+/// - **blocked** = has an unmet in-board dep → `blocked`, skip.
+pub fn rank_backlog<'a>(report: &'a BacklogReport, live: &LiveState) -> RankOutcome<'a> {
     use std::collections::{HashMap, HashSet};
     let items = &report.items;
     let ids: HashSet<&str> = items.iter().map(|i| i.id.as_str()).collect();
@@ -867,15 +914,19 @@ pub fn next_ready(report: &BacklogReport) -> Value {
     };
 
     type Key = (u8, u8, u8, u8, usize);
-    let mut candidates: Vec<(Key, &BacklogItem)> = Vec::new();
-    let (mut blocked, mut deferred, mut done_count, mut in_progress) = (0usize, 0usize, 0usize, 0usize);
+    let mut ranked: Vec<(Key, RankedItem<'a>)> = Vec::new();
+    let (mut blocked, mut deferred, mut done_count, mut in_progress, mut defect_blocked) =
+        (0usize, 0usize, 0usize, 0usize, 0usize);
     for (idx, it) in items.iter().enumerate() {
-        if is_done(it) {
+        // done: stage-based is_done, plus the IDE's freshness overlay.
+        if is_done(it) || live.done_overlay.contains(&it.id) {
             done_count += 1;
             continue;
         }
-        if it.stage == "In-progress" {
-            in_progress += 1; // being worked (markdown coordination) — not re-served
+        // in-progress: live claim OR markdown coordination stage (superset — both
+        // exclude, neither replaces the other).
+        if live.claimed.contains(&it.id) || it.stage == "In-progress" {
+            in_progress += 1;
             continue;
         }
         if is_deferred(it) {
@@ -888,7 +939,8 @@ pub fn next_ready(report: &BacklogReport) -> Value {
             continue;
         }
         if dangling_items.contains(it.id.as_str()) {
-            continue; // held back + tier-3 groom target
+            defect_blocked += 1; // held back + tier-3 groom target
+            continue;
         }
         let unmet = it.deps.iter().any(|d| ids.contains(d.as_str()) && !done_ids.contains(d.as_str()));
         if unmet {
@@ -905,19 +957,41 @@ pub fn next_ready(report: &BacklogReport) -> Value {
         } else {
             1
         };
-        candidates.push(((lane, eprio, mr, dr, idx), it));
+        ranked.push((
+            (lane, eprio, mr, dr, idx),
+            RankedItem { item: it, lane, epic_priority_rank: eprio, moscow_rank: mr, declared_ready: dr == 0 },
+        ));
     }
-    candidates.sort_by(|a, b| a.0.cmp(&b.0));
+    ranked.sort_by(|a, b| a.0.cmp(&b.0));
+    let candidates = ranked.into_iter().map(|(_, ri)| ri).collect();
+    RankOutcome { candidates, blocked, deferred, done_count, in_progress, defect_blocked }
+}
 
-    if let Some((key, it)) = candidates.first() {
-        let lane = key.0;
+/// The PM broker, CLI face (IDE-BACKLOG-PM): the deterministic tiered
+/// next-ready dispatch over the parsed symbol model — the *same* ranking the
+/// IDE's `backlog.next_ready` runs, minus the runtime claim/lease + freshness
+/// overlay (IDE-local state). Lets any agent session pull work without the IDE;
+/// the markdown `stage` field is the coordination source of truth. Tiers:
+/// implement → groom → capture → surfaced-idle; never invents filler.
+pub fn next_ready(report: &BacklogReport) -> Value {
+    // Default (CLI) path: no live runtime state. The IDE injects a populated
+    // `LiveState` via `rank_backlog` directly; here the empty default keeps the
+    // markdown `stage` field as the sole coordination source (byte-identical
+    // envelope to the pre-extraction implementation).
+    let o = rank_backlog(report, &LiveState::default());
+    let (blocked, deferred, done_count, in_progress) =
+        (o.blocked, o.deferred, o.done_count, o.in_progress);
+
+    if let Some(ri) = o.candidates.first() {
+        let it = ri.item;
+        let lane = ri.lane;
         return serde_json::json!({
             "tier": "implement", "ready": true,
             "item": { "id": it.id, "title": it.title, "type": it.item_type, "stage": it.stage,
                       "moscow": it.moscow, "epic": it.epic, "source_file": it.source_file, "line": it.line },
             "rationale": { "lane": lane, "pinned": lane == 0, "override_lane": lane == 1,
-                           "steering": lane == 2, "epic_priority_rank": key.1, "moscow_rank": key.2 },
-            "ready_count": candidates.len(),
+                           "steering": lane == 2, "epic_priority_rank": ri.epic_priority_rank, "moscow_rank": ri.moscow_rank },
+            "ready_count": o.candidates.len(),
             "explanation": format!("Next ready: {} — {}. Deps clear; not done/deferred.", it.id, it.title),
         });
     }
@@ -1269,5 +1343,70 @@ not an item (no id).
         let d = next_ready(&report);
         // Everything done + nothing open → capture (demand-driven refill).
         assert_eq!(d["tier"], "capture");
+    }
+
+    // The R1(Could)/R2(Must) fixture reused across the rank_backlog tests.
+    fn two_ready_report(dir: &TempDir) -> BacklogReport {
+        write(dir.path(), "BACKLOG.md", "\
+### R1: do the thing — READY
+**MoSCoW:** Could
+### R2: build the feature — READY
+**MoSCoW:** Must
+");
+        parse_backlog(dir.path())
+    }
+
+    #[test]
+    fn rank_backlog_empty_livestate_matches_next_ready() {
+        let dir = TempDir::new().unwrap();
+        let report = two_ready_report(&dir);
+        let o = rank_backlog(&report, &LiveState::default());
+        // Same top candidate + ready_count as the CLI envelope.
+        assert_eq!(o.candidates.first().unwrap().item.id, "R2", "Must outranks Could");
+        assert_eq!(o.candidates.len(), 2);
+        let d = next_ready(&report);
+        assert_eq!(d["item"]["id"], "R2");
+        assert_eq!(d["ready_count"], o.candidates.len());
+    }
+
+    #[test]
+    fn rank_backlog_claimed_id_excluded_as_in_progress() {
+        let dir = TempDir::new().unwrap();
+        let report = two_ready_report(&dir);
+        let live = LiveState {
+            claimed: std::collections::HashSet::from(["R2".to_string()]),
+            ..Default::default()
+        };
+        let o = rank_backlog(&report, &live);
+        // R2 is claimed → drops out; R1 becomes the top candidate.
+        assert_eq!(o.candidates.len(), 1);
+        assert_eq!(o.candidates.first().unwrap().item.id, "R1");
+        assert_eq!(o.in_progress, 1);
+    }
+
+    #[test]
+    fn rank_backlog_done_overlay_treats_id_as_done() {
+        let dir = TempDir::new().unwrap();
+        let report = two_ready_report(&dir);
+        let live = LiveState {
+            done_overlay: std::collections::HashSet::from(["R2".to_string()]),
+            ..Default::default()
+        };
+        let o = rank_backlog(&report, &live);
+        // R2 is done via the freshness overlay → drops out, done_count increments.
+        assert_eq!(o.candidates.len(), 1);
+        assert_eq!(o.candidates.first().unwrap().item.id, "R1");
+        assert_eq!(o.done_count, 1);
+    }
+
+    #[test]
+    fn rank_backlog_counts_defect_blocked_for_dangling_dep() {
+        let dir = TempDir::new().unwrap();
+        // Single item held back by a dangling dep → defect_blocked, no candidate.
+        write(dir.path(), "BACKLOG.md", "### X1: thing — READY\n· dep NOPE9\n");
+        let report = parse_backlog(dir.path());
+        let o = rank_backlog(&report, &LiveState::default());
+        assert!(o.candidates.is_empty());
+        assert_eq!(o.defect_blocked, 1);
     }
 }
