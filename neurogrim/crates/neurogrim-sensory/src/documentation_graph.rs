@@ -37,9 +37,9 @@ use rmcp::{
     model::{ServerCapabilities, ServerInfo},
     schemars, tool, tool_router, ServerHandler,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::path::Path;
 
 #[derive(Debug, Clone)]
@@ -117,14 +117,39 @@ pub struct GraphReport {
 
 pub async fn analyze_documentation_graph(project_root: &str) -> Value {
     let root = Path::new(project_root);
-    let report = build_graph(root);
-    let total_docs = report.docs.len();
-    let total_edges: usize = report.docs.values().map(|n| n.outbound.len()).sum();
-    let orphan_count = report.orphans.len();
-    let broken_count = report.broken_links.len();
-    let cycle_count = report.cycles.len();
+    // Doc-broker Phase 0: switch to the richer `DocReport` (front-matter +
+    // version-drift + reachability + stale-diagram model). Same CMDB id +
+    // domain binding ("check-documentation-graph" → `documentation-graph`).
+    let report = build_doc_report(root, default_anchor(), &default_doc_excludes());
+    let graph = &report.graph;
+    let total_docs = graph.docs.len();
+    let total_edges: usize = graph.docs.values().map(|n| n.outbound.len()).sum();
+    let orphan_count = graph.orphans.len();
+    let broken_count = graph.broken_links.len();
+    let cycle_count = graph.cycles.len();
 
-    // Score blend (see module-level doc).
+    // Layer A enrichment counts.
+    let front_door_drift_count = report
+        .version_drift
+        .iter()
+        .filter(|(p, _, _)| report.docs.get(p).map(|d| d.is_front_door).unwrap_or(false))
+        .count();
+    let drift_count = report.version_drift.len();
+    let non_front_drift = drift_count.saturating_sub(front_door_drift_count);
+    let stale_count = report
+        .docs
+        .values()
+        .filter(|d| {
+            d.staleness
+                .iter()
+                .any(|s| matches!(s, StalenessSignal::StatusStaleOrSuperseded))
+        })
+        .count();
+    let refs_deleted_count = report.references_to_deleted.len();
+    let stale_diagram_count = report.stale_diagrams.len();
+    let unreachable_count = report.unreachable_from_front_door.len();
+
+    // Existing blend (see module-level doc).
     let orphan_ratio = if total_docs == 0 {
         0.0
     } else {
@@ -133,7 +158,26 @@ pub async fn analyze_documentation_graph(project_root: &str) -> Value {
     let orphan_penalty = (orphan_ratio * 30.0).min(30.0);
     let broken_penalty = ((broken_count as f64) * 5.0).min(40.0);
     let cycle_penalty = ((cycle_count as f64) * 2.0).min(10.0);
-    let score: i32 = (100.0 - orphan_penalty - broken_penalty - cycle_penalty)
+
+    // Layer A penalties layered onto the orphan/broken/cycle blend.
+    // Front-door drift is heavier (gates every reading path).
+    let fd_drift_penalty = ((front_door_drift_count as f64) * 8.0).min(24.0);
+    let drift_penalty = ((non_front_drift as f64) * 3.0).min(15.0);
+    let stale_penalty = ((stale_count as f64) * 4.0).min(20.0);
+    let refs_deleted_penalty = ((refs_deleted_count as f64) * 5.0).min(20.0);
+    let stale_diagram_penalty = ((stale_diagram_count as f64) * 3.0).min(15.0);
+    let unreachable_penalty = ((unreachable_count as f64) * 2.0).min(15.0);
+
+    let score: i32 = (100.0
+        - orphan_penalty
+        - broken_penalty
+        - cycle_penalty
+        - fd_drift_penalty
+        - drift_penalty
+        - stale_penalty
+        - refs_deleted_penalty
+        - stale_diagram_penalty
+        - unreachable_penalty)
         .clamp(0.0, 100.0) as i32;
 
     let mut findings: Vec<Finding> = Vec::new();
@@ -159,7 +203,7 @@ pub async fn analyze_documentation_graph(project_root: &str) -> Value {
             points: -(orphan_penalty as i32),
             detail: Some(format!(
                 "{orphan_count} of {total_docs} docs have no inbound references — first 5: [{}]",
-                report.orphans.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+                graph.orphans.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
             )),
         });
     }
@@ -170,7 +214,7 @@ pub async fn analyze_documentation_graph(project_root: &str) -> Value {
             points: -(broken_penalty as i32),
             detail: Some(format!(
                 "{broken_count} broken outbound link(s) — first 5: [{}]",
-                report
+                graph
                     .broken_links
                     .iter()
                     .take(5)
@@ -190,6 +234,85 @@ pub async fn analyze_documentation_graph(project_root: &str) -> Value {
             )),
         });
     }
+    // ── Layer A enrichment findings ──────────────────────────────────
+    if drift_count > 0 {
+        findings.push(Finding {
+            name: "version_marker_drift".into(),
+            status: "warn".into(),
+            points: -((fd_drift_penalty + drift_penalty) as i32),
+            detail: Some(format!(
+                "{drift_count} doc(s) state a version that diverges from the anchor ({front_door_drift_count} front-door) — first 5: [{}]",
+                report
+                    .version_drift
+                    .iter()
+                    .take(5)
+                    .map(|(p, s, a)| format!("{p}: {s}≠{a}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        });
+    }
+    if stale_count > 0 {
+        findings.push(Finding {
+            name: "stale_or_superseded".into(),
+            status: "warn".into(),
+            points: -(stale_penalty as i32),
+            detail: Some(format!(
+                "{stale_count} doc(s) declare a stale/superseded/archived status in front-matter"
+            )),
+        });
+    }
+    if refs_deleted_count > 0 {
+        findings.push(Finding {
+            name: "references_to_deleted".into(),
+            status: "fail".into(),
+            points: -(refs_deleted_penalty as i32),
+            detail: Some(format!(
+                "{refs_deleted_count} supersedes/superseded-by reference(s) point at a missing file — first 5: [{}]",
+                report
+                    .references_to_deleted
+                    .iter()
+                    .take(5)
+                    .map(|(p, t)| format!("{p}->{t}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        });
+    }
+    if stale_diagram_count > 0 {
+        findings.push(Finding {
+            name: "stale_diagrams".into(),
+            status: "warn".into(),
+            points: -(stale_diagram_penalty as i32),
+            detail: Some(format!(
+                "{stale_diagram_count} diagram signal(s) (forbidden-term drift / pending-spec / missing-mmd) — first 5: [{}]",
+                report
+                    .stale_diagrams
+                    .iter()
+                    .take(5)
+                    .map(|d| format!("{}: {}", d.diagram, diag_reason_label(&d.reason)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        });
+    }
+    if unreachable_count > 0 {
+        findings.push(Finding {
+            name: "unreachable_from_front_door".into(),
+            status: "warn".into(),
+            points: -(unreachable_penalty as i32),
+            detail: Some(format!(
+                "{unreachable_count} doc(s) not reachable from any front door — first 5: [{}]",
+                report
+                    .unreachable_from_front_door
+                    .iter()
+                    .take(5)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        });
+    }
 
     let extras: Vec<(&str, Value)> = vec![
         ("total_docs", Value::Number(total_docs.into())),
@@ -197,6 +320,13 @@ pub async fn analyze_documentation_graph(project_root: &str) -> Value {
         ("orphan_count", Value::Number(orphan_count.into())),
         ("broken_link_count", Value::Number(broken_count.into())),
         ("cycle_count", Value::Number(cycle_count.into())),
+        // Layer A enrichment extras.
+        ("front_door_drift_count", Value::Number(front_door_drift_count.into())),
+        ("version_drift_count", Value::Number(drift_count.into())),
+        ("stale_count", Value::Number(stale_count.into())),
+        ("references_to_deleted_count", Value::Number(refs_deleted_count.into())),
+        ("stale_diagram_count", Value::Number(stale_diagram_count.into())),
+        ("unreachable_count", Value::Number(unreachable_count.into())),
     ];
 
     build_cmdb(
@@ -221,15 +351,41 @@ const SKIPPED_DIR_NAMES: &[&str] = &[
     ".rustup",
     "venv",
     ".venv",
+    // Doc-broker Phase 0 (2026-06-30): the NeuroGrim `vendor/` tree
+    // (rustsec-advisory-db) is ~1000 vendored advisory .md files — pure
+    // noise for the documentation graph. Dir-name skip; `archive`/`audit`/
+    // `.claude/skills/archived` are path-prefix excludes (`default_doc_excludes`).
+    "vendor",
 ];
 
-pub fn build_graph(root: &Path) -> GraphReport {
+/// The common documentation noise excluded from the doc-broker walk by
+/// default (doc-broker Phase 0). Each is a project-relative forward-slash
+/// PATH PREFIX matched by `is_excluded`. `vendor` is handled separately as
+/// a dir-name skip in `SKIPPED_DIR_NAMES`.
+pub fn default_doc_excludes() -> Vec<String> {
+    vec![
+        "archive".to_string(),
+        "audit".to_string(),
+        ".claude/skills/archived".to_string(),
+    ]
+}
+
+/// Whether a project-relative forward-slash `rel` falls under any exclude
+/// PATH PREFIX. Segment-aware: prefix `archive` matches `archive` and
+/// `archive/x.md` but NOT `archived-stuff.md`.
+fn is_excluded(rel: &str, excludes: &[String]) -> bool {
+    excludes.iter().any(|ex| {
+        !ex.is_empty() && (rel == ex.as_str() || rel.starts_with(&format!("{ex}/")))
+    })
+}
+
+pub fn build_graph(root: &Path, excludes: &[String]) -> GraphReport {
     let mut docs: BTreeMap<String, DocNode> = BTreeMap::new();
     let mut all_paths: BTreeSet<String> = BTreeSet::new();
 
     // First pass — collect every *.md path (project-relative,
     // forward-slash form) so we can resolve link targets.
-    walk_markdown(root, root, &mut |abs_path| {
+    walk_markdown(root, root, excludes, &mut |abs_path| {
         if let Some(rel) = relpath(root, abs_path) {
             all_paths.insert(rel);
         }
@@ -316,7 +472,7 @@ pub fn build_graph(root: &Path) -> GraphReport {
     }
 }
 
-fn walk_markdown(root: &Path, dir: &Path, visit: &mut impl FnMut(&Path)) {
+fn walk_markdown(root: &Path, dir: &Path, excludes: &[String], visit: &mut impl FnMut(&Path)) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return,
@@ -331,8 +487,15 @@ fn walk_markdown(root: &Path, dir: &Path, visit: &mut impl FnMut(&Path)) {
                 continue;
             }
         }
+        // Exclude-prefix prune (doc-broker Phase 0): skip any file/dir whose
+        // project-relative path falls under an exclude prefix.
+        if let Some(rel) = relpath(root, &path) {
+            if is_excluded(&rel, excludes) {
+                continue;
+            }
+        }
         if path.is_dir() {
-            walk_markdown(root, &path, visit);
+            walk_markdown(root, &path, excludes, visit);
         } else if path
             .extension()
             .and_then(|e| e.to_str())
@@ -507,6 +670,814 @@ fn compute_non_trivial_sccs(docs: &BTreeMap<String, DocNode>) -> Vec<Vec<String>
         .collect()
 }
 
+// ── Layer A: front-matter + freshness/version model (doc-broker) ────
+//
+// All net-new and pure. `build_doc_report` wraps `build_graph` (calls,
+// does not fork it) and re-reads each file for front-matter + body
+// version markers. `next_doc` is the tiered dispatcher mirroring
+// `backlog.rs::next_ready`. Nothing here is async; reads only.
+
+/// Declared lifecycle status from a doc's YAML front-matter. serde
+/// lowercase (`current`, `draft`, `stale`, `superseded`, `archived`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DocStatus {
+    Current,
+    Draft,
+    Stale,
+    Superseded,
+    Archived,
+}
+
+/// Which ecosystem version field governs a doc's stated version. serde
+/// lower/kebab (`ecosystem`, `spec`, `neurogrim`, `none`). `none` opts a
+/// doc out of version-drift checking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Anchor {
+    Ecosystem,
+    Spec,
+    Neurogrim,
+    None,
+}
+
+/// Parsed YAML front-matter (every field optional — honest-unknown).
+/// `raw_present:false` means no parseable front-matter fence was found
+/// (itself a mild signal).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FrontMatter {
+    pub doc_version: Option<String>,
+    pub date: Option<String>,
+    pub status: Option<DocStatus>,
+    pub supersedes: Vec<String>,
+    pub superseded_by: Option<String>,
+    pub anchored_to: Option<Anchor>,
+    pub owner: Option<String>,
+    pub front_door: bool,
+    pub raw_present: bool,
+}
+
+/// The raw deserialize target — all `Option`, container-`default`, so
+/// missing fields never error. Kebab-case maps `doc-version`,
+/// `superseded-by`, `anchored-to`, `front-door`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case", default)]
+struct RawFrontMatter {
+    doc_version: Option<String>,
+    date: Option<String>,
+    status: Option<DocStatus>,
+    supersedes: Option<Vec<String>>,
+    superseded_by: Option<String>,
+    anchored_to: Option<Anchor>,
+    owner: Option<String>,
+    front_door: Option<bool>,
+}
+
+/// Parse a YAML front-matter fence. Panic-free: ANY parse error or an
+/// absent fence yields `FrontMatter{raw_present:false, ..Default}`.
+pub fn parse_front_matter(text: &str) -> FrontMatter {
+    let body = text
+        .strip_prefix("---\n")
+        .or_else(|| text.strip_prefix("---\r\n"));
+    if let Some(rest) = body {
+        if let Some(end) = rest.find("\n---") {
+            let yaml = &rest[..end];
+            match serde_yaml::from_str::<RawFrontMatter>(yaml) {
+                Ok(raw) => {
+                    return FrontMatter {
+                        doc_version: raw.doc_version,
+                        date: raw.date,
+                        status: raw.status,
+                        supersedes: raw.supersedes.unwrap_or_default(),
+                        superseded_by: raw.superseded_by,
+                        anchored_to: raw.anchored_to,
+                        owner: raw.owner,
+                        front_door: raw.front_door.unwrap_or(false),
+                        raw_present: true,
+                    };
+                }
+                // Malformed / foreign YAML — treat as no front-matter.
+                Err(_) => return FrontMatter::default(),
+            }
+        }
+    }
+    FrontMatter::default()
+}
+
+/// The governing version anchor for the ecosystem at a point in time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EcosystemAnchor {
+    pub ecosystem_version: String,
+    pub spec_version: String,
+    pub neurogrim_version: String,
+    pub anchor_date: String,
+}
+
+/// Compile-time default matching today's aligned values (2026-05-09).
+pub fn default_anchor() -> EcosystemAnchor {
+    EcosystemAnchor {
+        ecosystem_version: "5.0".to_string(),
+        spec_version: "3.2".to_string(),
+        neurogrim_version: "5.0.0".to_string(),
+        anchor_date: "2026-05-09".to_string(),
+    }
+}
+
+/// Resolve the runtime anchor. For now: explicit override, else the
+/// compile-time default.
+// TODO(doc-broker Phase 1): parse a sentinel file (root `CLAUDE.md` /
+// `VERSION.toml`) for anchor values before falling back to the default.
+pub fn resolve_anchor(root: &Path, override_: Option<EcosystemAnchor>) -> EcosystemAnchor {
+    let _ = root;
+    override_.unwrap_or_else(default_anchor)
+}
+
+/// A freshness/staleness signal attached to a doc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StalenessSignal {
+    StatusStaleOrSuperseded,
+    VersionMarkerDrift { stated: String, anchor: String },
+    ReferencesDeleted(String),
+    Orphan,
+    BrokenLink(String),
+    Unreachable,
+    StaleDiagram(String),
+    NoFrontMatter,
+}
+
+/// Per-doc enrichment over the graph node.
+#[derive(Debug, Clone)]
+pub struct DocMeta {
+    pub path: String,
+    pub front_matter: FrontMatter,
+    pub staleness: Vec<StalenessSignal>,
+    pub is_front_door: bool,
+}
+
+/// Why a diagram is flagged stale (deterministic; no rendering).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagReason {
+    PendingSpec(String),
+    ForbiddenTermDrift(String),
+    MissingFromMmdConvention,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaleDiagram {
+    pub diagram: String,
+    pub reason: DiagReason,
+}
+
+/// The full documentation report: the graph plus the freshness/version
+/// model. Single source of truth for both [Sense]
+/// (`analyze_documentation_graph`) and [InnateAbility] (`next_doc`).
+#[derive(Debug, Clone)]
+pub struct DocReport {
+    pub graph: GraphReport,
+    pub docs: BTreeMap<String, DocMeta>,
+    pub anchor: EcosystemAnchor,
+    pub front_doors: Vec<String>,
+    pub unreachable_from_front_door: Vec<String>,
+    pub references_to_deleted: Vec<(String, String)>,
+    /// `(doc_path, stated_version, anchor_version)`.
+    pub version_drift: Vec<(String, String, String)>,
+    pub stale_diagrams: Vec<StaleDiagram>,
+}
+
+const RETIRED_DIAGRAM_TERMS: &[&str] = &["Federation Broker"];
+
+/// Which anchor field governs a doc, from its `anchored-to` front-matter
+/// (absent ⇒ ecosystem default; explicit `none` ⇒ opt out → `None`).
+enum AnchorKind {
+    Ecosystem,
+    Spec,
+    Neurogrim,
+}
+
+fn governing(fm: &FrontMatter) -> Option<AnchorKind> {
+    match fm.anchored_to {
+        Some(Anchor::None) => None,
+        Some(Anchor::Spec) => Some(AnchorKind::Spec),
+        Some(Anchor::Neurogrim) => Some(AnchorKind::Neurogrim),
+        Some(Anchor::Ecosystem) | None => Some(AnchorKind::Ecosystem),
+    }
+}
+
+fn anchor_value(kind: &AnchorKind, a: &EcosystemAnchor) -> String {
+    match kind {
+        AnchorKind::Ecosystem => a.ecosystem_version.clone(),
+        AnchorKind::Spec => a.spec_version.clone(),
+        AnchorKind::Neurogrim => a.neurogrim_version.clone(),
+    }
+}
+
+/// First ~3000 chars — version markers live near the top.
+fn head(text: &str) -> &str {
+    match text.char_indices().nth(3000) {
+        Some((i, _)) => &text[..i],
+        None => text,
+    }
+}
+
+/// Read a `[0-9.]+` version token starting at byte `start`, trimming a
+/// trailing dot. `None` if no digit is present.
+fn read_version_token(s: &str, start: usize) -> Option<String> {
+    let bytes = s.as_bytes();
+    let mut i = start;
+    let mut out = String::new();
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if c.is_ascii_digit() || c == '.' {
+            out.push(c);
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    let trimmed = out.trim_end_matches('.');
+    if trimmed.chars().any(|c| c.is_ascii_digit()) {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}
+
+/// First `v<x.y[.z]>` token at a word boundary (lowercased scan).
+fn first_v_version(s: &str) -> Option<String> {
+    let lower = s.to_lowercase();
+    let bytes = lower.as_bytes();
+    for i in 0..bytes.len() {
+        if bytes[i] == b'v' {
+            let boundary = i == 0 || !(bytes[i - 1] as char).is_ascii_alphanumeric();
+            if boundary && i + 1 < bytes.len() && (bytes[i + 1] as char).is_ascii_digit() {
+                if let Some(v) = read_version_token(&lower, i + 1) {
+                    return Some(v);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Version following a keyword (e.g. `spec v3.2`, `neurogrim 5.0.0`):
+/// skip whitespace + an optional `v`, then read the version token.
+fn version_after_keyword(s: &str, keyword: &str) -> Option<String> {
+    let lower = s.to_lowercase();
+    let kw = keyword.to_lowercase();
+    let bytes = lower.as_bytes();
+    let mut from = 0;
+    while let Some(rel) = lower[from..].find(&kw) {
+        let mut j = from + rel + kw.len();
+        while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
+            j += 1;
+        }
+        if j < bytes.len() && bytes[j] == b'v' {
+            j += 1;
+        }
+        while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
+            j += 1;
+        }
+        if j < bytes.len() && (bytes[j] as char).is_ascii_digit() {
+            if let Some(v) = read_version_token(&lower, j) {
+                return Some(v);
+            }
+        }
+        from = from + rel + kw.len();
+    }
+    None
+}
+
+fn scan_stated_version(text: &str, kind: &AnchorKind) -> Option<String> {
+    let h = head(text);
+    match kind {
+        AnchorKind::Spec => version_after_keyword(h, "spec"),
+        AnchorKind::Neurogrim => version_after_keyword(h, "neurogrim"),
+        AnchorKind::Ecosystem => first_v_version(h),
+    }
+}
+
+/// `0` = major-version gap (top priority), `1` = minor/patch gap, `2` =
+/// equal. Smaller sorts higher in the ascending dispatcher key.
+fn compute_anchor_distance(stated: &str, anchor: &str) -> u8 {
+    let major = |v: &str| v.split('.').next().and_then(|m| m.parse::<u32>().ok());
+    match (major(stated), major(anchor)) {
+        (Some(a), Some(b)) if a != b => 0,
+        _ if stated != anchor => 1,
+        _ => 2,
+    }
+}
+
+fn is_front_door(path: &str, fm: &FrontMatter) -> bool {
+    if fm.front_door {
+        return true;
+    }
+    let base = Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_uppercase();
+    matches!(
+        base.as_str(),
+        "CLAUDE.MD" | "README.MD" | "ROADMAP.MD" | "VISION.MD" | "SCAFFOLDING.MD"
+    ) || base.contains("AGENT-PRIMER")
+}
+
+fn reference_exists(root: &Path, graph: &GraphReport, target: &str) -> bool {
+    if graph.docs.contains_key(target) {
+        return true;
+    }
+    root.join(target.replace('/', std::path::MAIN_SEPARATOR_STR)).exists()
+}
+
+/// BFS over `outbound` from the front doors → the set of reachable docs
+/// (front doors included as roots).
+fn bfs_reachable(graph: &GraphReport, front_doors: &[String]) -> BTreeSet<String> {
+    let mut reached: BTreeSet<String> = BTreeSet::new();
+    let mut queue: VecDeque<String> = VecDeque::new();
+    for fd in front_doors {
+        if reached.insert(fd.clone()) {
+            queue.push_back(fd.clone());
+        }
+    }
+    while let Some(cur) = queue.pop_front() {
+        if let Some(node) = graph.docs.get(&cur) {
+            for t in &node.outbound {
+                if graph.docs.contains_key(t) && reached.insert(t.clone()) {
+                    queue.push_back(t.clone());
+                }
+            }
+        }
+    }
+    reached
+}
+
+fn status_label(s: &Option<DocStatus>) -> Option<String> {
+    s.as_ref().map(|st| {
+        match st {
+            DocStatus::Current => "current",
+            DocStatus::Draft => "draft",
+            DocStatus::Stale => "stale",
+            DocStatus::Superseded => "superseded",
+            DocStatus::Archived => "archived",
+        }
+        .to_string()
+    })
+}
+
+fn signal_label(s: &StalenessSignal) -> String {
+    match s {
+        StalenessSignal::StatusStaleOrSuperseded => "status-stale-or-superseded".to_string(),
+        StalenessSignal::VersionMarkerDrift { stated, anchor } => {
+            format!("version-marker-drift({stated} vs {anchor})")
+        }
+        StalenessSignal::ReferencesDeleted(t) => format!("references-deleted({t})"),
+        StalenessSignal::Orphan => "orphan".to_string(),
+        StalenessSignal::BrokenLink(t) => format!("broken-link({t})"),
+        StalenessSignal::Unreachable => "unreachable".to_string(),
+        StalenessSignal::StaleDiagram(d) => format!("stale-diagram({d})"),
+        StalenessSignal::NoFrontMatter => "no-front-matter".to_string(),
+    }
+}
+
+fn diag_reason_label(r: &DiagReason) -> String {
+    match r {
+        DiagReason::PendingSpec(s) => format!("pending-spec({s})"),
+        DiagReason::ForbiddenTermDrift(t) => format!("forbidden-term-drift({t})"),
+        DiagReason::MissingFromMmdConvention => "missing-from-mmd-convention".to_string(),
+    }
+}
+
+/// Walk every (non-skipped, non-excluded) file under `root`. Generalizes
+/// `walk_markdown` to all extensions for the diagram scan.
+fn walk_all_files(root: &Path, dir: &Path, excludes: &[String], visit: &mut impl FnMut(&Path)) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with('.') && name != ".claude" {
+                continue;
+            }
+            if SKIPPED_DIR_NAMES.contains(&name) {
+                continue;
+            }
+        }
+        if let Some(rel) = relpath(root, &path) {
+            if is_excluded(&rel, excludes) {
+                continue;
+            }
+        }
+        if path.is_dir() {
+            walk_all_files(root, &path, excludes, visit);
+        } else {
+            visit(&path);
+        }
+    }
+}
+
+fn parent_dir(rel: &str) -> String {
+    Path::new(rel)
+        .parent()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_default()
+}
+
+/// A small sibling walker over `*.svg` / `*.drawio` / `*.mmd` (+ `.md`
+/// for the mermaid-convention check). Deterministic, no rendering.
+fn build_stale_diagrams(
+    root: &Path,
+    excludes: &[String],
+    md_docs: &BTreeMap<String, DocNode>,
+) -> Vec<StaleDiagram> {
+    let mut diagrams: Vec<(String, String)> = Vec::new(); // (rel, text)
+    let mut mmd_dirs: BTreeSet<String> = BTreeSet::new(); // dirs containing a .mmd
+    let mut specs: Vec<(String, String, bool)> = Vec::new(); // (dir, rel, has_pending)
+
+    walk_all_files(root, root, excludes, &mut |abs| {
+        let rel = match relpath(root, abs) {
+            Some(r) => r,
+            None => return,
+        };
+        let name = Path::new(&rel)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let ext = Path::new(&rel)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .unwrap_or_default();
+        let is_drawio = name.ends_with(".drawio") || name.ends_with(".drawio.svg");
+        if ext == "svg" || ext == "mmd" || is_drawio {
+            let text = std::fs::read_to_string(abs).unwrap_or_default();
+            if ext == "mmd" {
+                mmd_dirs.insert(parent_dir(&rel));
+            }
+            diagrams.push((rel.clone(), text));
+        }
+        if name.ends_with("-spec.md") && name.contains("-v") {
+            let text = std::fs::read_to_string(abs).unwrap_or_default();
+            specs.push((parent_dir(&rel), rel.clone(), text.contains("PENDING")));
+        }
+    });
+
+    diagrams.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let mut out: Vec<StaleDiagram> = Vec::new();
+    for (rel, text) in &diagrams {
+        for term in RETIRED_DIAGRAM_TERMS {
+            if text.contains(term) {
+                out.push(StaleDiagram {
+                    diagram: rel.clone(),
+                    reason: DiagReason::ForbiddenTermDrift((*term).to_string()),
+                });
+            }
+        }
+        let dir = parent_dir(rel);
+        if let Some((_, spec_rel, _)) = specs.iter().find(|(p, _, pending)| *p == dir && *pending) {
+            out.push(StaleDiagram {
+                diagram: rel.clone(),
+                reason: DiagReason::PendingSpec(spec_rel.clone()),
+            });
+        }
+    }
+
+    // MissingFromMmdConvention: a `.md` embeds a ```mermaid fence but its
+    // directory has no sibling `.mmd`.
+    for path in md_docs.keys() {
+        let abs = root.join(path.replace('/', std::path::MAIN_SEPARATOR_STR));
+        let text = std::fs::read_to_string(&abs).unwrap_or_default();
+        if text.contains("```mermaid") && !mmd_dirs.contains(&parent_dir(path)) {
+            out.push(StaleDiagram {
+                diagram: path.clone(),
+                reason: DiagReason::MissingFromMmdConvention,
+            });
+        }
+    }
+
+    out.sort_by(|a, b| {
+        a.diagram
+            .cmp(&b.diagram)
+            .then(diag_reason_label(&a.reason).cmp(&diag_reason_label(&b.reason)))
+    });
+    out
+}
+
+/// Build the full `DocReport` — calls `build_graph` then re-reads each
+/// file for front-matter + body version markers, computes per-doc
+/// staleness, BFS reachability, and the stale-diagram model. Pure.
+pub fn build_doc_report(root: &Path, anchor: EcosystemAnchor, excludes: &[String]) -> DocReport {
+    let graph = build_graph(root, excludes);
+
+    // Broken links grouped by source doc.
+    let mut broken_by_src: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    for (src, tgt) in &graph.broken_links {
+        broken_by_src.entry(src.as_str()).or_default().push(tgt.clone());
+    }
+    let orphan_set: BTreeSet<&str> = graph.orphans.iter().map(|s| s.as_str()).collect();
+
+    let mut docs: BTreeMap<String, DocMeta> = BTreeMap::new();
+    let mut front_doors: Vec<String> = Vec::new();
+    let mut references_to_deleted: Vec<(String, String)> = Vec::new();
+    let mut version_drift: Vec<(String, String, String)> = Vec::new();
+
+    for path in graph.docs.keys() {
+        let abs = root.join(path.replace('/', std::path::MAIN_SEPARATOR_STR));
+        let text = std::fs::read_to_string(&abs).unwrap_or_default();
+        let fm = parse_front_matter(&text);
+        let is_fd = is_front_door(path, &fm);
+        if is_fd {
+            front_doors.push(path.clone());
+        }
+
+        let mut signals: Vec<StalenessSignal> = Vec::new();
+
+        // Declared status.
+        if matches!(
+            fm.status,
+            Some(DocStatus::Stale) | Some(DocStatus::Superseded) | Some(DocStatus::Archived)
+        ) {
+            signals.push(StalenessSignal::StatusStaleOrSuperseded);
+        }
+
+        // Version-marker drift (unless `anchored-to: none`).
+        if let Some(kind) = governing(&fm) {
+            if let Some(stated) = scan_stated_version(&text, &kind) {
+                let av = anchor_value(&kind, &anchor);
+                if stated != av {
+                    signals.push(StalenessSignal::VersionMarkerDrift {
+                        stated: stated.clone(),
+                        anchor: av.clone(),
+                    });
+                    version_drift.push((path.clone(), stated, av));
+                }
+            }
+        }
+
+        // Orphan (no inbound).
+        if orphan_set.contains(path.as_str()) {
+            signals.push(StalenessSignal::Orphan);
+        }
+
+        // Broken outbound links.
+        if let Some(tgts) = broken_by_src.get(path.as_str()) {
+            for t in tgts {
+                signals.push(StalenessSignal::BrokenLink(t.clone()));
+            }
+        }
+
+        // References to deleted (supersedes + superseded-by targets gone).
+        let mut refs: Vec<String> = fm.supersedes.clone();
+        if let Some(sb) = &fm.superseded_by {
+            refs.push(sb.clone());
+        }
+        for r in refs {
+            if !reference_exists(root, &graph, &r) {
+                signals.push(StalenessSignal::ReferencesDeleted(r.clone()));
+                references_to_deleted.push((path.clone(), r));
+            }
+        }
+
+        // No front-matter (mild).
+        if !fm.raw_present {
+            signals.push(StalenessSignal::NoFrontMatter);
+        }
+
+        docs.insert(
+            path.clone(),
+            DocMeta {
+                path: path.clone(),
+                front_matter: fm,
+                staleness: signals,
+                is_front_door: is_fd,
+            },
+        );
+    }
+
+    // Reachability from front doors → unreachable set (richer than orphan).
+    let reached = bfs_reachable(&graph, &front_doors);
+    let mut unreachable_from_front_door: Vec<String> = Vec::new();
+    for path in graph.docs.keys() {
+        if !reached.contains(path.as_str()) {
+            unreachable_from_front_door.push(path.clone());
+            if let Some(dm) = docs.get_mut(path) {
+                dm.staleness.push(StalenessSignal::Unreachable);
+            }
+        }
+    }
+
+    let stale_diagrams = build_stale_diagrams(root, excludes, &graph.docs);
+
+    DocReport {
+        graph,
+        docs,
+        anchor,
+        front_doors,
+        unreachable_from_front_door,
+        references_to_deleted,
+        version_drift,
+        stale_diagrams,
+    }
+}
+
+/// Tiered next-doc dispatcher mirroring `backlog.rs::next_ready`:
+/// deterministic, single item, never invents filler. Tiers (rank):
+/// 0 reconcile-front-door, 1 refresh-stale, 2 fix-broken-link,
+/// 3 update-diagram, 4 cover-orphan, 5 idle. Ranking key
+/// `(tier_rank, front_door_first, severity, anchor_distance, idx)`.
+pub fn next_doc(report: &DocReport) -> serde_json::Value {
+    type Key = (u8, u8, u8, u8, usize);
+
+    struct Cand {
+        key: Key,
+        tier: &'static str,
+        path: String,
+        status: Option<String>,
+        stated_version: Option<String>,
+        anchor_version: Option<String>,
+        is_front_door: bool,
+        signals: Vec<String>,
+        action: String,
+    }
+
+    let doc_index: HashMap<&str, usize> = report
+        .docs
+        .keys()
+        .enumerate()
+        .map(|(i, k)| (k.as_str(), i))
+        .collect();
+
+    let mut cands: Vec<Cand> = Vec::new();
+
+    // Tiers 0/1 (status/drift) + tier 4 (orphan/unreachable) from per-doc signals.
+    for (idx, (path, dm)) in report.docs.iter().enumerate() {
+        let has_status = dm
+            .staleness
+            .iter()
+            .any(|s| matches!(s, StalenessSignal::StatusStaleOrSuperseded));
+        let drift = dm.staleness.iter().find_map(|s| match s {
+            StalenessSignal::VersionMarkerDrift { stated, anchor } => {
+                Some((stated.clone(), anchor.clone()))
+            }
+            _ => None,
+        });
+        let status_str = status_label(&dm.front_matter.status);
+        let fdf = if dm.is_front_door { 0 } else { 1 };
+        let labels: Vec<String> = dm.staleness.iter().map(signal_label).collect();
+
+        if has_status || drift.is_some() {
+            let tier_rank = if dm.is_front_door { 0u8 } else { 1u8 };
+            let tier = if dm.is_front_door {
+                "reconcile-front-door"
+            } else {
+                "refresh-stale"
+            };
+            // severity: superseded 0 < drift 1.
+            let severity = if has_status { 0u8 } else { 1u8 };
+            let anchor_distance = match &drift {
+                Some((s, a)) => compute_anchor_distance(s, a),
+                None => 2,
+            };
+            let action = if dm.is_front_door {
+                format!("Reconcile front door `{path}` — align its status/version markers with the anchor.")
+            } else {
+                format!("Refresh `{path}` — update its status/version markers to the current anchor.")
+            };
+            cands.push(Cand {
+                key: (tier_rank, fdf, severity, anchor_distance, idx),
+                tier,
+                path: path.clone(),
+                status: status_str.clone(),
+                stated_version: drift.as_ref().map(|(s, _)| s.clone()),
+                anchor_version: drift.as_ref().map(|(_, a)| a.clone()),
+                is_front_door: dm.is_front_door,
+                signals: labels.clone(),
+                action,
+            });
+        }
+
+        let orphan = dm
+            .staleness
+            .iter()
+            .any(|s| matches!(s, StalenessSignal::Orphan | StalenessSignal::Unreachable));
+        if orphan {
+            cands.push(Cand {
+                key: (4, fdf, 3, 2, idx),
+                tier: "cover-orphan",
+                path: path.clone(),
+                status: status_str,
+                stated_version: None,
+                anchor_version: None,
+                is_front_door: dm.is_front_door,
+                signals: labels,
+                action: format!(
+                    "Cover `{path}` — add an inbound link from a reachable doc so it joins a reading path."
+                ),
+            });
+        }
+    }
+
+    // Tier 2 — broken links ∪ references-to-deleted.
+    for (src, tgt) in report
+        .graph
+        .broken_links
+        .iter()
+        .chain(report.references_to_deleted.iter())
+    {
+        let idx = doc_index.get(src.as_str()).copied().unwrap_or(usize::MAX);
+        let is_fd = report.docs.get(src).map(|d| d.is_front_door).unwrap_or(false);
+        cands.push(Cand {
+            key: (2, if is_fd { 0 } else { 1 }, 2, 2, idx),
+            tier: "fix-broken-link",
+            path: src.clone(),
+            status: None,
+            stated_version: None,
+            anchor_version: None,
+            is_front_door: is_fd,
+            signals: vec![format!("broken-link({tgt})")],
+            action: format!("Fix the broken reference `{tgt}` in `{src}` — repoint or remove it."),
+        });
+    }
+
+    // Tier 3 — stale diagrams.
+    for (i, sd) in report.stale_diagrams.iter().enumerate() {
+        let label = diag_reason_label(&sd.reason);
+        cands.push(Cand {
+            key: (3, 1, 2, 2, i),
+            tier: "update-diagram",
+            path: sd.diagram.clone(),
+            status: None,
+            stated_version: None,
+            anchor_version: None,
+            is_front_door: false,
+            signals: vec![label.clone()],
+            action: format!("Update the diagram `{}` — {}.", sd.diagram, label),
+        });
+    }
+
+    cands.sort_by(|a, b| a.key.cmp(&b.key));
+
+    if let Some(c) = cands.first() {
+        return serde_json::json!({
+            "tier": c.tier,
+            "ready": true,
+            "doc": {
+                "path": c.path,
+                "status": c.status,
+                "stated_version": c.stated_version,
+                "anchor_version": c.anchor_version,
+                "is_front_door": c.is_front_door,
+                "signals": c.signals,
+            },
+            "rationale": {
+                "tier_rank": c.key.0,
+                "front_door": c.key.1 == 0,
+                "severity": c.key.2,
+                "anchor_distance": c.key.3,
+            },
+            "action": c.action,
+            "explanation": format!(
+                "Next doc: {} ({}). Deterministic top of the reconcile queue; the broker never invents filler.",
+                c.path, c.tier
+            ),
+        });
+    }
+
+    // Tier 5 — idle (counts only; never a fabricated item).
+    let broken_count = report.graph.broken_links.len() + report.references_to_deleted.len();
+    let orphan_count = report
+        .docs
+        .values()
+        .filter(|d| d.staleness.iter().any(|s| matches!(s, StalenessSignal::Orphan)))
+        .count();
+    let drift_count = report.version_drift.len();
+    let stale_count = report
+        .docs
+        .values()
+        .filter(|d| {
+            d.staleness
+                .iter()
+                .any(|s| matches!(s, StalenessSignal::StatusStaleOrSuperseded))
+        })
+        .count();
+    let unreachable_count = report.unreachable_from_front_door.len();
+    let stale_diagram_count = report.stale_diagrams.len();
+    serde_json::json!({
+        "tier": "idle",
+        "ready": false,
+        "broken_count": broken_count,
+        "orphan_count": orphan_count,
+        "drift_count": drift_count,
+        "stale_count": stale_count,
+        "unreachable_count": unreachable_count,
+        "stale_diagram_count": stale_diagram_count,
+        "explanation": "Idle: all docs current, reachable, linked, and diagram-clean. The broker never invents filler.",
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -523,7 +1494,7 @@ mod tests {
     #[test]
     fn empty_project_returns_empty_report() {
         let dir = TempDir::new().unwrap();
-        let report = build_graph(dir.path());
+        let report = build_graph(dir.path(), &[]);
         assert!(report.docs.is_empty());
         assert!(report.orphans.is_empty());
         assert!(report.broken_links.is_empty());
@@ -553,7 +1524,7 @@ mod tests {
         write(dir.path(), "README.md", "[guide](./guide.md)");
         write(dir.path(), "guide.md", "[index](./README.md)");
         write(dir.path(), "lonely.md", "no links here");
-        let report = build_graph(dir.path());
+        let report = build_graph(dir.path(), &[]);
         assert_eq!(report.docs.len(), 3);
         // README is index-shaped → not an orphan even with 0 inbound.
         // guide has 1 inbound from README.
@@ -566,7 +1537,7 @@ mod tests {
     fn build_graph_flags_broken_markdown_links() {
         let dir = TempDir::new().unwrap();
         write(dir.path(), "README.md", "[gone](./missing.md)");
-        let report = build_graph(dir.path());
+        let report = build_graph(dir.path(), &[]);
         assert_eq!(report.broken_links.len(), 1);
         assert_eq!(report.broken_links[0].0, "README.md");
         assert!(report.broken_links[0].1.ends_with("missing.md"));
@@ -577,7 +1548,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         write(dir.path(), "a.md", "[b](./b.md)");
         write(dir.path(), "b.md", "[a](./a.md)");
-        let report = build_graph(dir.path());
+        let report = build_graph(dir.path(), &[]);
         assert_eq!(report.cycles.len(), 1);
         let scc: BTreeSet<&str> = report.cycles[0].iter().map(|s| s.as_str()).collect();
         assert_eq!(scc.len(), 2);
@@ -594,7 +1565,7 @@ mod tests {
             "[good](./real.md)\n[external](https://example.com/missing.md)",
         );
         write(dir.path(), "real.md", "back");
-        let report = build_graph(dir.path());
+        let report = build_graph(dir.path(), &[]);
         assert!(report.broken_links.is_empty());
     }
 
@@ -604,8 +1575,254 @@ mod tests {
         write(dir.path(), "README.md", "root");
         write(dir.path(), "node_modules/some-pkg/README.md", "should not be scanned");
         write(dir.path(), "target/debug/notes.md", "ditto");
-        let report = build_graph(dir.path());
+        let report = build_graph(dir.path(), &[]);
         assert_eq!(report.docs.len(), 1);
         assert!(report.docs.contains_key("README.md"));
+    }
+
+    // ── Layer A (doc-broker Phase 0) ────────────────────────────────
+
+    #[test]
+    fn parse_front_matter_valid() {
+        let text = "\
+---
+doc-version: \"5.0\"
+date: 2026-05-09
+status: current
+anchored-to: ecosystem
+supersedes:
+  - old/a.md
+  - old/b.md
+superseded-by: new/c.md
+owner: keenan
+front-door: true
+---
+
+# Body
+";
+        let fm = parse_front_matter(text);
+        assert!(fm.raw_present);
+        assert_eq!(fm.doc_version.as_deref(), Some("5.0"));
+        assert_eq!(fm.status, Some(DocStatus::Current));
+        assert_eq!(fm.anchored_to, Some(Anchor::Ecosystem));
+        assert_eq!(fm.supersedes, vec!["old/a.md".to_string(), "old/b.md".to_string()]);
+        assert_eq!(fm.superseded_by.as_deref(), Some("new/c.md"));
+        assert!(fm.front_door);
+    }
+
+    #[test]
+    fn parse_front_matter_absent_is_not_present() {
+        let fm = parse_front_matter("# Just a heading\n\nNo front-matter here.\n");
+        assert!(!fm.raw_present);
+        assert_eq!(fm, FrontMatter::default());
+    }
+
+    #[test]
+    fn parse_front_matter_malformed_never_panics() {
+        // Bad YAML inside a fence → raw_present:false, no panic.
+        let text = "---\n: : : not: valid: yaml: [unclosed\n---\nbody\n";
+        let fm = parse_front_matter(text);
+        assert!(!fm.raw_present);
+        // An unknown enum value also fails gracefully.
+        let bad_status = parse_front_matter("---\nstatus: nonsense\n---\nbody\n");
+        assert!(!bad_status.raw_present);
+    }
+
+    #[test]
+    fn exclude_prefix_and_vendor_skip_honored() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "README.md", "[g](./guide.md)");
+        write(dir.path(), "guide.md", "body");
+        write(dir.path(), "archive/x.md", "archived doc");
+        write(dir.path(), "vendor/y.md", "vendored doc");
+        let report = build_doc_report(dir.path(), default_anchor(), &default_doc_excludes());
+        assert!(report.docs.contains_key("README.md"));
+        assert!(report.docs.contains_key("guide.md"));
+        // archive/ is an exclude-prefix; vendor/ is a dir-name skip.
+        assert!(!report.docs.contains_key("archive/x.md"), "archive excluded");
+        assert!(!report.docs.contains_key("vendor/y.md"), "vendor skipped");
+    }
+
+    #[test]
+    fn version_drift_detected_and_sorts_top() {
+        let dir = TempDir::new().unwrap();
+        // README is a front door; states v3.0 against a 5.0 ecosystem anchor.
+        write(dir.path(), "README.md", "# Project\n\nThis is v3.0 of the thing.\n");
+        write(dir.path(), "guide.md", "no version here, just prose");
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        let readme = &report.docs["README.md"];
+        let drift = readme.staleness.iter().any(|s| {
+            matches!(s, StalenessSignal::VersionMarkerDrift { stated, anchor } if stated == "3.0" && anchor == "5.0")
+        });
+        assert!(drift, "README v3.0 vs anchor 5.0 → drift; signals: {:?}", readme.staleness);
+        assert!(report.version_drift.iter().any(|(p, s, a)| p == "README.md" && s == "3.0" && a == "5.0"));
+
+        // next_doc dispatches it as the top tier (front-door reconcile, major gap).
+        let d = next_doc(&report);
+        assert_eq!(d["tier"], "reconcile-front-door");
+        assert_eq!(d["doc"]["path"], "README.md");
+        assert_eq!(d["rationale"]["anchor_distance"], 0, "major-version gap = closest distance");
+        assert_eq!(d["ready"], true);
+    }
+
+    #[test]
+    fn anchored_to_none_opts_out_of_drift() {
+        let dir = TempDir::new().unwrap();
+        write(
+            dir.path(),
+            "README.md",
+            "---\nanchored-to: none\n---\n# Project\n\nThis is v3.0.\n",
+        );
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        assert!(report.version_drift.is_empty(), "anchored-to:none opts out");
+    }
+
+    #[test]
+    fn references_to_deleted_flagged() {
+        let dir = TempDir::new().unwrap();
+        write(
+            dir.path(),
+            "README.md",
+            "---\nsupersedes:\n  - old.md\n---\n# New doc\n",
+        );
+        // old.md does not exist on disk.
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        assert!(report
+            .references_to_deleted
+            .iter()
+            .any(|(p, t)| p == "README.md" && t == "old.md"));
+        assert!(report.docs["README.md"]
+            .staleness
+            .iter()
+            .any(|s| matches!(s, StalenessSignal::ReferencesDeleted(t) if t == "old.md")));
+    }
+
+    #[test]
+    fn reachability_distinct_from_orphan() {
+        let dir = TempDir::new().unwrap();
+        // A front door that links nowhere relevant.
+        write(dir.path(), "README.md", "the root");
+        // An island pair: island_a links island_b (so island_b has inbound,
+        // is NOT an orphan) but neither is reachable from README.
+        write(dir.path(), "island_a.md", "[b](./island_b.md)");
+        write(dir.path(), "island_b.md", "[a](./island_a.md)");
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+
+        // island_b is NOT an orphan (island_a links it) ...
+        assert!(!report.graph.orphans.contains(&"island_b.md".to_string()), "island_b has inbound");
+        // ... but it IS unreachable from the front door.
+        assert!(report.unreachable_from_front_door.contains(&"island_b.md".to_string()));
+        assert!(report.docs["island_b.md"]
+            .staleness
+            .iter()
+            .any(|s| matches!(s, StalenessSignal::Unreachable)));
+    }
+
+    #[test]
+    fn stale_diagram_forbidden_term_and_pending_spec() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "README.md", "root");
+        // A diagram still carrying the retired "Federation Broker" term.
+        write(
+            dir.path(),
+            "docs/diagrams/broker-pattern.drawio.svg",
+            "<svg><text>Federation Broker</text></svg>",
+        );
+        // A sibling V-spec marked PENDING (catches the stale diagram).
+        write(
+            dir.path(),
+            "docs/diagrams/DIAGRAM-V4-SPEC.md",
+            "# Diagram v4\n\nStatus: PENDING — not yet drawn.\n",
+        );
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        let has_forbidden = report.stale_diagrams.iter().any(|d| {
+            d.diagram == "docs/diagrams/broker-pattern.drawio.svg"
+                && matches!(&d.reason, DiagReason::ForbiddenTermDrift(t) if t == "Federation Broker")
+        });
+        let has_pending = report.stale_diagrams.iter().any(|d| {
+            d.diagram == "docs/diagrams/broker-pattern.drawio.svg"
+                && matches!(&d.reason, DiagReason::PendingSpec(_))
+        });
+        assert!(has_forbidden, "forbidden-term drift: {:?}", report.stale_diagrams);
+        assert!(has_pending, "pending-spec: {:?}", report.stale_diagrams);
+    }
+
+    #[test]
+    fn missing_mmd_convention_flagged() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "README.md", "root");
+        // A doc embedding a mermaid fence with no sibling .mmd.
+        write(
+            dir.path(),
+            "docs/arch.md",
+            "# Arch\n\n```mermaid\ngraph TD; A-->B;\n```\n",
+        );
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        assert!(report.stale_diagrams.iter().any(|d| {
+            d.diagram == "docs/arch.md" && matches!(d.reason, DiagReason::MissingFromMmdConvention)
+        }));
+    }
+
+    #[test]
+    fn next_doc_tiers_fire_in_priority_order() {
+        // A front-door drift (tier 0) outranks an orphan (tier 4).
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "README.md", "# Root\n\nv3.0 here.\n[g](./guide.md)");
+        write(dir.path(), "guide.md", "linked, current");
+        write(dir.path(), "stray.md", "orphan, no inbound");
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        let d = next_doc(&report);
+        assert_eq!(d["tier"], "reconcile-front-door", "front-door reconcile beats orphan");
+
+        // Remove the drift signal source → tier should fall to a lower-priority
+        // surviving signal. With only the orphan/unreachable stray, expect cover-orphan.
+        let dir2 = TempDir::new().unwrap();
+        write(dir2.path(), "README.md", "# Root\n[g](./guide.md)");
+        write(dir2.path(), "guide.md", "linked, current");
+        write(dir2.path(), "stray.md", "orphan");
+        let report2 = build_doc_report(dir2.path(), default_anchor(), &[]);
+        let d2 = next_doc(&report2);
+        assert_eq!(d2["tier"], "cover-orphan");
+        assert_eq!(d2["doc"]["path"], "stray.md");
+    }
+
+    #[test]
+    fn next_doc_fix_broken_link_tier() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "README.md", "[gone](./missing.md)");
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        let d = next_doc(&report);
+        assert_eq!(d["tier"], "fix-broken-link");
+        assert_eq!(d["doc"]["path"], "README.md");
+    }
+
+    #[test]
+    fn next_doc_idle_when_all_current_never_invents_filler() {
+        let dir = TempDir::new().unwrap();
+        // README front door → guide → back. Both current, reachable, linked.
+        write(dir.path(), "README.md", "[guide](./guide.md)");
+        write(dir.path(), "guide.md", "[home](./README.md)");
+        let report = build_doc_report(dir.path(), default_anchor(), &[]);
+        let d = next_doc(&report);
+        assert_eq!(d["tier"], "idle");
+        assert_eq!(d["ready"], false, "idle is never a fabricated item");
+        assert!(d.get("doc").is_none(), "idle returns counts, not a doc");
+        assert_eq!(d["broken_count"], 0);
+        assert_eq!(d["orphan_count"], 0);
+        assert_eq!(d["drift_count"], 0);
+        assert!(d["explanation"].as_str().unwrap().contains("never invents filler"));
+    }
+
+    #[tokio::test]
+    async fn analyze_documentation_graph_enriched_envelope() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), "README.md", "# Root\n\nv3.0 of the thing.\n");
+        let cmdb = analyze_documentation_graph(&dir.path().to_string_lossy()).await;
+        assert_eq!(cmdb["meta"]["updated_by"], "check-documentation-graph");
+        assert!(cmdb["score"].is_number());
+        // The enriched extras are present.
+        assert_eq!(cmdb["front_door_drift_count"], 1);
+        assert!(cmdb["stale_diagram_count"].is_number());
+        assert!(cmdb["unreachable_count"].is_number());
     }
 }
