@@ -366,7 +366,13 @@ pub fn default_doc_excludes() -> Vec<String> {
     vec![
         "archive".to_string(),
         "audit".to_string(),
-        ".claude/skills/archived".to_string(),
+        // `.claude/` is agent-infrastructure — skills (invoked by name, not
+        // linked → orphan-by-design), experiments, plans, brain data. It is not
+        // reading-path documentation, and skill "version" markers are
+        // methodology versions, not ecosystem-version claims. Excluding it keeps
+        // orphan/drift/reachability about real narrative docs. Skills have their
+        // own governance (capability-hygiene). Subsumes `.claude/skills/archived`.
+        ".claude".to_string(),
     ]
 }
 
@@ -440,8 +446,16 @@ pub fn build_graph(root: &Path, excludes: &[String]) -> GraphReport {
             if all_paths.contains(&resolved_md) {
                 outbound.push(resolved_md);
             } else if resolved.ends_with(".md") {
-                // Looks like a markdown link but target is missing.
-                broken.push(resolved);
+                // Not in the walked graph. If the target still EXISTS on disk
+                // (e.g. it lives under an excluded dir like `.claude/`), it's a
+                // valid external link, not broken — only flag genuinely-absent
+                // targets. This keeps exclusions from manufacturing false breaks.
+                let on_disk = root
+                    .join(resolved.replace('/', std::path::MAIN_SEPARATOR_STR))
+                    .is_file();
+                if !on_disk {
+                    broken.push(resolved);
+                }
             }
             // Other extensions (.png, .json, etc.) intentionally
             // ignored in Phase 1 — operator may have a mix of doc
@@ -480,7 +494,10 @@ fn walk_markdown(root: &Path, dir: &Path, excludes: &[String], visit: &mut impl 
     for entry in entries.filter_map(|e| e.ok()) {
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.starts_with('.') && name != ".claude" {
+            // Skip ALL dot-directories at any depth, including `.claude`
+            // (agent-infrastructure: skills/experiments/plans/brain — not
+            // reading-path documentation; skills are invoked by name, not linked).
+            if name.starts_with('.') {
                 continue;
             }
             if SKIPPED_DIR_NAMES.contains(&name) {
@@ -1057,7 +1074,10 @@ fn walk_all_files(root: &Path, dir: &Path, excludes: &[String], visit: &mut impl
     for entry in entries.filter_map(|e| e.ok()) {
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.starts_with('.') && name != ".claude" {
+            // Skip ALL dot-directories at any depth, including `.claude`
+            // (agent-infrastructure: skills/experiments/plans/brain — not
+            // reading-path documentation; skills are invoked by name, not linked).
+            if name.starts_with('.') {
                 continue;
             }
             if SKIPPED_DIR_NAMES.contains(&name) {
