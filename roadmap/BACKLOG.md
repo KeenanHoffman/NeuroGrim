@@ -91,7 +91,7 @@ These were the "NOT in scope" items from the S8-ABV-EXT epic (see
 `epics/S8-agent-behavior-extensions.md`). They're recognized as
 real future work; none is blocking current operations.
 
-### B-01: Promote `agent-behavior` past advisory weight — ABSORBED into S10-DOMAIN-PROMOTION
+### B-01: Promote `agent-behavior` past advisory weight — ABSORBED into s10-domain-promotion
 
 **Absorption** (2026-04-21). Generalized from agent-behavior-specific
 to a domain-promotion mechanism applicable to any advisory domain
@@ -1106,7 +1106,7 @@ AND Tier 2b realistic-dispatcher experiment validates that the
 ceiling is achievable by a real agent. Details in
 `C:/Users/koff0/.claude/plans/parallel-hugging-eich.md`.
 
-**Dependencies:** L2 harness complete (`0db4a41`); `analyze.py`
+**Dependencies:** l2 harness complete (`0db4a41`); `analyze.py`
 oracle extension (Tier 2a of the methodology-reframe plan).
 
 **Adversarial note.** One experiment with 12 tasks is not enough
@@ -1239,7 +1239,7 @@ experiment should isolate freshness.
 
 ---
 
-### B-17: L2 synthesis-under-multi-turn improvement — CANDIDATE
+### B-17: l2 synthesis-under-multi-turn improvement — CANDIDATE
 
 **Why it's here.** Phase 3 L2 repo-aware = 61.12 vs L1 = 73.88
 (−12.75 pts, CI does not cross 0). Agent self-routing to the brain_
@@ -1261,7 +1261,7 @@ CANDIDATE improvements to try:
 deprioritized behind the longitudinal-value focus — see
 ROADMAP.md Evidence + Hypothesis Posture).
 
-**Dependencies:** L2 harness complete (shipped at 0db4a41).
+**Dependencies:** l2 harness complete (shipped at 0db4a41).
 
 **Adversarial note.** The L2 repo-aware gap may not be worth closing
 if the Brain is primarily longitudinal. Single-turn synthesis
@@ -1398,7 +1398,7 @@ stall.
 
 ---
 
-### B-21: Native Rust license + ban-list sensor — CANDIDATE (deferred from E-SC-2)
+### B-21: Native Rust license + ban-list sensor — CANDIDATE (deferred from e-sc-2)
 
 **Why it's here.** E-SC-2's original scaffolding scope included a
 `cargo-deny`-style license + ban-list checker as part of the
@@ -1446,7 +1446,7 @@ information, not to over-build now.
 
 ---
 
-### B-22: Python lockfile formats — poetry.lock + Pipfile.lock — CANDIDATE (deferred from E-SC-3)
+### B-22: Python lockfile formats — poetry.lock + Pipfile.lock — CANDIDATE (deferred from e-sc-3)
 
 **Why it's here.** E-SC-3's locked decisions (2026-04-24) scoped
 Python lockfile coverage to `uv.lock` + `requirements*.txt` only,
@@ -1487,7 +1487,7 @@ deps. We may end up never needing this entry.
 
 ---
 
-### B-23: Brains-2.0 v2 enhancements — CANDIDATE (B2-deferred)
+### B-23: brains-2.0 v2 enhancements — CANDIDATE (b2-deferred)
 
 **Why it's here.** The Brains-2.0 scaffolding
 (`audit/BRAINS-2-0-CHARTER.md`) shipped v1 primitives with natural
@@ -1518,7 +1518,7 @@ trust-budget posture conservative:
    teeth.
 3. NOT BEFORE: E-B2-8 spec promotion to v3.0.
 
-**Dependencies.** Brains-2.0 campaign complete (E-B2-0..E-B2-8).
+**Dependencies.** brains-2.0 campaign complete (E-B2-0..E-B2-8).
 
 **Adversarial note.** v2 enhancements are deliberately deferred,
 not forgotten. The supply-chain campaign's R-1 (false-positive
@@ -1528,7 +1528,7 @@ quality.
 
 ---
 
-### B-24: Adjacent observability sensors — CANDIDATE (B2-adjacent)
+### B-24: Adjacent observability sensors — CANDIDATE (b2-adjacent)
 
 **Why it's here.** Two sensor ideas surfaced during Brains-2.0
 visionary discussion (2026-04-26) adjacent to the seven-direction
@@ -1560,7 +1560,7 @@ Specific, measurable, advisory.
 
 ---
 
-### B-25: Brain identity primitives — CANDIDATE (B2-deferred)
+### B-25: Brain identity primitives — CANDIDATE (b2-deferred)
 
 **Why it's here.** Brains-2.0 visionary discussion surfaced two
 adjacent ideas the plan-critic pass deliberately tabled as
@@ -1582,7 +1582,7 @@ premature:
 2. AND: A real identity-collision incident has occurred OR a
    governance dispute has surfaced.
 
-**Dependencies.** Brains-2.0 v3.0 publish (gives the four-Brain
+**Dependencies.** brains-2.0 v3.0 publish (gives the four-Brain
 ecosystem to a wider audience first).
 
 **Adversarial note.** "Solving a problem we don't have yet" is the
@@ -1592,7 +1592,7 @@ Identity primitives without an actual incident is over-engineering.
 
 ---
 
-### B-26: Active blocking / auto-rollback policies — CANDIDATE (B2-deferred)
+### B-26: Active blocking / auto-rollback policies — CANDIDATE (b2-deferred)
 
 **Why it's here.** Brains-2.0 visionary discussion surfaced
 active-blocking policies as a possible future direction. The locked
@@ -1611,7 +1611,7 @@ What it would add:
 2. AND: At least one published incident showed advisory-only was
    insufficient (operator dismissed signal, attack succeeded).
 
-**Dependencies.** Brains-2.0 v3.0 publish + operator-calibration
+**Dependencies.** brains-2.0 v3.0 publish + operator-calibration
 ledger demonstrates operator dismissal patterns.
 
 **Adversarial note.** The supply-chain campaign's R-1
@@ -1622,7 +1622,7 @@ Re-evaluate only with concrete incident evidence.
 
 ---
 
-### B-27: ML-based sensor models — CANDIDATE (B2-deferred)
+### B-27: ML-based sensor models — CANDIDATE (b2-deferred)
 
 **Why it's here.** Brains-2.0 visionary discussion considered
 embedding ML models in sensors (vs the current heuristic +
@@ -1645,7 +1645,7 @@ What it would add:
    weights or open training set).
 3. NOT BEFORE: Brains-2.0 is dogfood-stable.
 
-**Dependencies.** Brains-2.0 v3.0 publish + at least one sensor
+**Dependencies.** brains-2.0 v3.0 publish + at least one sensor
 with measurable ceiling-hit + clear model story (not opaque
 proprietary).
 
@@ -1684,7 +1684,7 @@ LLM-as-judge until explicitly justified otherwise.
 1. AND: A real adopter Brain (likely the user's PC-state pilot or a future enterprise adopter) needs cross-machine secret sharing.
 2. AND: The S14 `SecretBackend` trait has stabilized through real use.
 
-**Dependencies.** S14 ships first; the trait must already exist + have stable semantics.
+**Dependencies.** Stage 14 ships first; the trait must already exist + have stable semantics.
 
 **Adversarial note.** Each cloud KV adds operational complexity (auth chains, network failures, rate limits). Don't ship adapters for clouds we don't actually use. v4.x posture: trait is pluggable; adapters land as separate crates when needed.
 
@@ -1698,7 +1698,7 @@ LLM-as-judge until explicitly justified otherwise.
 1. AND: Operator feedback specifically asks for it (no current request).
 2. AND: a11y story is clear (keyboard reorder must remain available).
 
-**Dependencies.** Layout state shape is stable through S15.
+**Dependencies.** Layout state shape is stable through Stage 15.
 
 **Adversarial note.** Don't ship without keyboard-equivalent flow. ↑/↓ buttons stay; DnD is additive.
 
@@ -1712,7 +1712,7 @@ LLM-as-judge until explicitly justified otherwise.
 1. AND: A real adopter has multiple humans editing the same Brain.
 2. AND: S14 + S15 are stable enough to add an authn layer without re-architecting.
 
-**Dependencies.** S14 (encrypted secrets, since auth requires session keys), S15 (settings UI surfaces field-level RBAC).
+**Dependencies.** Stage 14 (encrypted secrets, since auth requires session keys), Stage 15 (settings UI surfaces field-level RBAC).
 
 **Adversarial note.** This is its own Stage (16+). Don't bolt onto S15 reactively. AuthN choices: OAuth vs SAML vs simple passphrase + WebAuthn. Decide explicitly.
 
@@ -1726,7 +1726,7 @@ LLM-as-judge until explicitly justified otherwise.
 1. AND: S15 is stable for ≥1 release.
 2. AND: An operator has accidentally clobbered something and asked "can I undo?"
 
-**Dependencies.** S13 (config-changes queue), S15 (UI to surface the timeline).
+**Dependencies.** Stage 13 (config-changes queue), Stage 15 (UI to surface the timeline).
 
 **Adversarial note.** Undo for some operations is dangerous (e.g., undo a secret revocation). Per-`action_type` "undoable: bool" classification needed before implementation. Audit timeline can ship independently of undo and is lower-risk.
 
@@ -1768,7 +1768,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-36: TSDB primitive + Plumbing UI — EPIC (v4.5)
+### B-36: TSDB primitive + Plumbing UI — EPIC (v4.5) — SHIPPED (iterations 1–3; iteration 4 reports/cross-Brain deferred, pull-when-needed)
 
 **Vision.** A first-class time-series store inside NeuroGrim, narrowly scoped to its mental model: pre-declared metric series with bounded tag dimensions, ingested automatically from existing bus topics, queryable via a small typed API. Plus a "Plumbing" page that surfaces NeuroGrim's internal substrate (TSDB, queue topics, SQLite stores, watchers, A2A connections) as observable + actionable operator surface.
 
@@ -1798,7 +1798,7 @@ LLM-as-judge until explicitly justified otherwise.
    - Ecosystem Brain queries children's TSDB over A2A.
    - Anomaly detection over stored series.
 
-**Dependencies.** Bus infrastructure (S13), SQLite backend (already in tree).
+**Dependencies.** Bus infrastructure (Stage 13), SQLite backend (already in tree).
 
 **Adversarial notes.**
 - Cardinality budgets matter from day one. Pre-declared tag shapes (not freeform Prometheus-style labels) keep the implementation simple AND prevent operator footguns.
@@ -1813,7 +1813,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-37: V5.5-MOD-DASH — Dashboard widget plugin trait — CANDIDATE (v5.5 successor)
+### B-37: v5.5-mod-dash — Dashboard widget plugin trait — CANDIDATE (v5.5 successor)
 
 **Problem.** v5 ships SDK + 3 modular conversions (scoring source, sensor, queue backend) but does NOT make dashboard widgets pluggable. v3.4 widget catalogue is hardcoded React + a fixed Rust schema. Custom dashboards (per-domain views, customer-specific layouts) require forking. Pre-plan source: `C:\Users\koff0\.claude\plans\i-would-like-you-curried-milner.md` §5a.
 
@@ -1827,7 +1827,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-38: V5.5-MOD-MCP — MCP tool plugin loading (dynamic) — CANDIDATE (v5.5 successor)
+### B-38: v5.5-mod-mcp — MCP tool plugin loading (dynamic) — CANDIDATE (v5.5 successor)
 
 **Problem.** v5 ships sensor plugins via cargo-feature gates (compile-time, static). MCP tools remain compile-time-only. Adopters who want to add MCP tools without forking core need a dynamic loading path. Pre-plan source: §5a.
 
@@ -1841,7 +1841,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-39: V5.5-MOD-TX — Transport runtime selection — CANDIDATE (v5.5 successor)
+### B-39: v5.5-mod-tx — Transport runtime selection — CANDIDATE (v5.5 successor)
 
 **Problem.** A2A `Transport` trait already exists ([transport.rs:56](../crates/neurogrim-a2a/src/transport.rs)) with `HttpSseTransport` (real) + `JsonRpcTransport` (stub). Today the Brain hardcodes HTTP+SSE. Future heterogeneous peer ecosystems (e.g., gRPC peers, JSON-RPC peers) need runtime transport selection driven by Agent Card content. Pre-plan source: §5a.
 
@@ -1855,7 +1855,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-40: V5.5-MOD-DYN — Dynamic .so/.dll plugin loading (sensors) — CANDIDATE (v5.5 successor)
+### B-40: v5.5-mod-dyn — Dynamic .so/.dll plugin loading (sensors) — CANDIDATE (v5.5 successor)
 
 **Problem.** v5 sensor discovery is via cargo-feature gates (compile-time, static). Some adopters may want to ship sensors without recompiling core (third-party closed-source sensors, hot-swap during dev). Pre-plan source: §5a.
 
@@ -1869,7 +1869,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-41: V6-DOM-CUSTOM — Per-domain custom CMDB types — CANDIDATE (v6 horizon)
+### B-41: v6-dom-custom — Per-domain custom CMDB types — CANDIDATE (v6 horizon)
 
 **Problem.** Today's CMDB shapes are hardcoded per-domain in `scored_domains` schema. Some adopters may want domain-specific CMDB shapes (e.g., a `compliance` domain that ships its own CMDB schema beyond the standard fields). Pre-plan source: `C:\Users\koff0\.claude\plans\i-would-like-you-curried-milner.md` §5b.
 
@@ -1881,19 +1881,19 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-42: V6-AGENT-CARD-V2 — Agent-card versioning trait — CANDIDATE (v6 horizon)
+### B-42: v6-agent-card-v2 — Agent-card versioning trait — CANDIDATE (v6 horizon)
 
 **Problem.** A2A Agent Card v1 is locked. Future v2 cards may need to coexist with v1 at runtime (federation crossing protocol versions). Today's string version-checks suffice; trait-based versioning is overkill until v2 actually exists. Pre-plan source: §5b.
 
 **Plan when:** AND: A2A v2 cards must coexist with v1 at runtime (federation crossing versions).
 
-**Dependencies.** A2A v2 spec drafted (LSP-Brains side); `neurogrim-a2a` v2 transport added.
+**Dependencies.** a2a v2 spec drafted (LSP-Brains side); `neurogrim-a2a` v2 transport added.
 
 **Adversarial note.** Low cost. String version-checks work fine until v2 ships. Adding versioning trait pre-emptively is the kind of premature abstraction v5 explicitly rejected.
 
 ---
 
-### B-43: V6-TRAJ-MODEL — Trajectory model abstraction — CANDIDATE (v6 horizon)
+### B-43: v6-traj-model — Trajectory model abstraction — CANDIDATE (v6 horizon)
 
 **Problem.** [`trajectory.rs`](../crates/neurogrim-core/src/trajectory.rs) ships a single algorithm (velocity + acceleration + classification). Customer might want a custom trajectory classifier (e.g., domain-specific weighted, ML-based). Pre-plan source: §5b.
 
@@ -1905,7 +1905,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-44: V6-DOM-COV — Per-test coverage as Brain domain (promotion from feature) — CANDIDATE (v6 horizon)
+### B-44: v6-dom-cov — Per-test coverage as Brain domain (promotion from feature) — CANDIDATE (v6 horizon)
 
 **Problem.** v5 V5-FOUND-3 ships per-test coverage as a test-selection *feature* (symbol→test map persisted at `.claude/brain/test-coverage-map.jsonl`). The map could be promoted to a Brain *domain* that scores test-suite blast radius coverage. Pre-plan source: §5b.
 
@@ -1913,13 +1913,13 @@ LLM-as-judge until explicitly justified otherwise.
 1. AND: V5-FOUND-3 symbol→test map is ≥6 months mature.
 2. AND: Map demonstrates predictive value for "blast radius" worth scoring as a domain (false-positive / false-negative measurements available).
 
-**Dependencies.** V5-FOUND-3 shipped + soaked; domain promotion process (S10).
+**Dependencies.** V5-FOUND-3 shipped + soaked; domain promotion process (Stage 10).
 
 **Adversarial note.** Map first, score later. v5 explicitly rejected "per-test coverage as a domain" because the map is useful before the score is. Promote only if predictive value is measured, not assumed.
 
 ---
 
-### B-45: V6-DOM-DIAG — Diagnostic synthesis as Brain domain — CANDIDATE (v6 horizon)
+### B-45: v6-dom-diag — Diagnostic synthesis as Brain domain — CANDIDATE (v6 horizon)
 
 **Problem.** v5 V5-FOUND-1 ships diagnostic synthesis as a `neurogrim diag synthesize` agent flow. The synthesized recommendations could be promoted to a Brain *domain* (`diag-readiness`?) that scores how well-instrumented the project is. Pre-plan source: §5b.
 
@@ -1927,7 +1927,7 @@ LLM-as-judge until explicitly justified otherwise.
 1. AND: V5-FOUND-1 agent's bottleneck recommendations prove valuable enough that scoring/calibration adds net value beyond raw read.
 2. AND: Diagnostics ledger is ≥6 months mature with real bottleneck-resolution traces.
 
-**Dependencies.** V5-FOUND-1 shipped + soaked; domain promotion process (S10).
+**Dependencies.** V5-FOUND-1 shipped + soaked; domain promotion process (Stage 10).
 
 **Adversarial note.** Read first, score later. v5 explicitly rejected this as premature. The agent reads diagnostics — it does not need a domain. Promote only if calibration delivers measurable value beyond plain read.
 
@@ -1955,7 +1955,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-47: V5.5-FOUND-CACHE — sccache for CI release-build paths (NOT local dev, NOT rust-cache@v2 overlap) — CANDIDATE (v5.5 horizon)
+### B-47: v5.5-found-cache — sccache for CI release-build paths (NOT local dev, NOT rust-cache@v2 overlap) — CANDIDATE (v5.5 horizon)
 
 **Problem.** V5-FOUND-2 plan (2026-05-03) initially called for sccache as a rustc wrapper in `.cargo/config.toml` to speed local dev-loop warm rebuilds (~30% target). Plan-critic 🔴 finding 2026-05-03: sccache forces `CARGO_INCREMENTAL=0` (errors otherwise per `mozilla/sccache#236`). For NeuroGrim's actual dev-loop pattern (small edit → re-run nearby tests), incremental compilation dominates the win envelope; sccache's cold-build advantage is irrelevant when cargo already has rmeta from 30 seconds ago. Plus: MSVC sccache has known preprocessing bugs (`mozilla/sccache#1725`); Defender real-time scan on `~/.cache/sccache/` is documented friction. CI cold builds DO benefit from caching, but our CI uses `Swatinem/rust-cache@v2` which restores `target/` between runs — that win is already captured. **The remaining sccache win-case is CI release-build paths** (where rust-cache@v2 doesn't apply because the target/ contents differ; release builds are full from-scratch compilations).
 
@@ -1972,7 +1972,7 @@ LLM-as-judge until explicitly justified otherwise.
 
 ---
 
-### B-48: V5.5-FOUND-SLO — Fix queue for SLO-violation tests tagged in V5-FOUND-2 Phase 4 — CANDIDATE (v5.5 horizon)
+### B-48: v5.5-found-slo — Fix queue for SLO-violation tests tagged in V5-FOUND-2 Phase 4 — CANDIDATE (v5.5 horizon)
 
 **Problem.** V5-FOUND-2 Phase 4 audits the workspace for tests violating the per-test wall-time SLO (5s investigate / 10s violate per Fork D1) and **tags violators with `#[ignore]` + `// SLO-violation: <duration>` comments**. V5-FOUND-2 deliberately ships tag-only — fixing slow tests is open-ended work (some are slow because they do real I/O honestly; some are slow because of inefficient setup; some need full rewrites) that would balloon V5-FOUND-2's M budget. This entry tracks the v5.5 fix queue: each tagged test gets triaged + fixed/optimized/moved to `benches/` per its individual situation.
 
@@ -2009,7 +2009,7 @@ Investigate-band test (1, comment-only — not tagged):
 
 ---
 
-### B-49: V5.5-SDK-SURFACE-CONFORMANCE-PINS — Add conformance-suite pins to `tests/sdk_surface_assertion.rs` (feature-gated) — CANDIDATE (v5.5 horizon)
+### B-49: v5.5-sdk-surface-conformance-pins — Add conformance-suite pins to `tests/sdk_surface_assertion.rs` (feature-gated) — CANDIDATE (v5.5 horizon)
 
 **Problem.** V5-SDK-1 Phase 4 shipped `crates/neurogrim-sdk/tests/sdk_surface_assertion.rs` as the compile-test gate that pins every re-exported trait method's signature mechanically (Option B per V5-SDK-1 Fork C, after `cargo-semver-checks` proved structurally blind to pure re-exports per rust#94338). The current file pins five trait surfaces (`Sensor`, `ScoringSource`, `QueueBackend`, `Transport`, `SecretBackend`) but **does NOT pin any of the conformance functions** — `run_factory_conformance` for any of the three suites, nor the `ConformanceReport` / `TestResult` types. After V5-SDK-2 partial Phase 2 gated those modules behind `#[cfg(feature = "conformance")]`, the gap is now feature-aware: a regression in any conformance method's signature compiles silently as long as the consumers happen not to use the changed signature. Plan-critic v2 caught the gap during V5-SDK-2 partial review (2026-05-03).
 
@@ -2026,7 +2026,7 @@ Investigate-band test (1, comment-only — not tagged):
 
 ---
 
-### B-50: V5.5-SDK-DOC-INCLUDE — Deduplicate Sensor walkthrough between lib.rs rustdoc and README via `#![doc = include_str!]` — CANDIDATE (v5.5 horizon)
+### B-50: v5.5-sdk-doc-include — Deduplicate Sensor walkthrough between lib.rs rustdoc and README via `#![doc = include_str!]` — CANDIDATE (v5.5 horizon)
 
 **Problem.** V5-SDK-2 partial Phase 4 inlined the writing-a-conformant-Sensor walkthrough into `crates/neurogrim-sdk/README.md` so adopters reading the SDK on crates.io get the full pattern without needing the source repo. The same walkthrough also lives at `crates/neurogrim-sdk/src/lib.rs:55–161` as the canonical rustdoc surface (visible via `cargo doc` / docs.rs). Two copies will drift over time.
 
@@ -2043,7 +2043,7 @@ Investigate-band test (1, comment-only — not tagged):
 
 ---
 
-### B-51: V5.5-FOUND-AGENT-RUNNER — Make AgentDrivenRunner real (LLM-orchestrated test selection) — CANDIDATE (v5.5 horizon)
+### B-51: v5.5-found-agent-runner — Make AgentDrivenRunner real (LLM-orchestrated test selection) — CANDIDATE (v5.5 horizon)
 
 **Problem.** V5-FOUND-4 originally planned a `TestRunner` trait with two impls — `NextestRunner` (concrete) and `AgentDrivenRunner` (stub initially). Plan-critic v1 (2026-05-04) caught that an aspirational stub-as-second-impl violates the v5-roadmap §A reshape rule (proposed VISION #20: "pluggability is justified by use, not aspiration") AND introduces a silent-green-CI hazard if the stub returns `Ok(empty_report)`. V5-FOUND-4 v5.0 ships with only `NextestRunner` real; AgentDrivenRunner is deferred here so the second-impl arrives only when there's real agent-orchestration work to ride on.
 
@@ -2065,7 +2065,7 @@ Investigate-band test (1, comment-only — not tagged):
 
 ---
 
-### B-52: V5.5-FOUND-RUNNER-FLAG — Add `--runner=<name>` CLI flag dispatch via TestRunnerRegistry — CANDIDATE (v5.5 horizon)
+### B-52: v5.5-found-runner-flag — Add `--runner=<name>` CLI flag dispatch via TestRunnerRegistry — CANDIDATE (v5.5 horizon)
 
 **Problem.** V5-FOUND-4 originally planned `--runner=nextest|agent` as a clap value-enum on the `neurogrim test` command. With AgentDrivenRunner deferred to B-51, only one runner exists at v5.0; adding the clap flag with one value (`Nextest`) would be ceremony without value. The wrapper currently dispatches via `Box<dyn TestRunner>` internally — the trait integration is validated, but operators have no surface to choose runners. B-52 closes that gap once a second runner exists.
 
@@ -2087,7 +2087,7 @@ Investigate-band test (1, comment-only — not tagged):
 
 ---
 
-### B-53: V5.5-DOC-TERMINOLOGY-CMDB — Sensory tool + CMDB for the `terminology-coherence` advisory domain — CANDIDATE (v5.5 horizon)
+### B-53: v5.5-doc-terminology-cmdb — Sensory tool + CMDB for the `terminology-coherence` advisory domain — CANDIDATE (v5.5 horizon)
 
 **Problem.** The ecosystem Brain's `terminology-coherence` advisory domain is registered at `D:\Brains\.claude\brain-registry.json:268-272` with `scoring_source.path = ".claude/terminology-coherence-cmdb.json"` (a **CMDB** — sensory-tool output following the cmdb-envelope-v1 schema), but no sensory tool currently emits that CMDB. The domain runs at advisory weight 0.0 and falls back to no-file behavior, so it's structurally registered but functionally inert. V5-DOC-2's epic Done-When called for "`terminology-coherence` advisory domain still passes (SDK / module / plugin / sensor / scoring source terms catalogued in `.claude/terminology-catalog.json`)" — but the domain expects a CMDB, not a free-form catalog, and creating any file at v5 without a sensory tool to maintain it is drift bait. v5.5 ships the sensory tool + CMDB shape together so the advisory domain becomes load-bearing.
 
@@ -2134,7 +2134,7 @@ sensor exists yet (the pattern + this file exist; the sensor is new-but-patterne
 **Reuse-vs-build (WU-0.0 audit, 2026-06-17):** REUSE (0 LOC) — CMDB envelope, Sensor trait + factory macro,
 CLI dispatch, domain declaration, `pulldown-cmark`. BUILD (~300–400 LOC) — the **multi-format** markdown
 walker + item parser (⚠ NeuroGrim `BACKLOG.md` is heading-sections `### B-XX:`; the IDE `ROADMAP.md` is
-epic **tables** `| ID | Subject | dep B0 |` — the parser handles both) + the `backlog-health` scoring.
+epic **tables** `| ID | Subject | dep b0 |` — the parser handles both) + the `backlog-health` scoring.
 ⚠ The sensor must take **explicit `--source` paths** (the IDE invokes `neurogrim` with cwd = the IDE repo;
 the backlog spans both repos' markdown).
 
@@ -2164,7 +2164,7 @@ the methodology lineage: `.claude/skills/archived/lsp.md` ("LSP-Powered Symbol S
 
 ---
 
-### B-55: BROKER-FRAMEWORK — 38-building-block broker pattern substrate — EPIC (2026-06-24, updated Phase 8)
+### B-55: BROKER-FRAMEWORK — 38-building-block broker pattern substrate — EPIC (2026-06-24, updated Phase 8) — CANDIDATE
 
 **Problem.** Eight phases of logical scaffolding (2026-06-21..24) produced a spec-stable
 broker pattern framework — a structured-store + deterministic-dispatcher substrate that
@@ -2539,11 +2539,11 @@ is a `bypasses_kill_switch: bool` field on `Pipeline` (Serde default false) that
 substrate's `check-kill-switch` governance pipeline reads — when true, the dispatch
 proceeds even while armed.
 
-**Plan when:** Phase A1.5 of the IDE full-lift plan. Blocking dependency for the
+**Plan when:** Phase a1.5 of the IDE full-lift plan. Blocking dependency for the
 A1 governance fixes (C7 from V0-RETROSPECTIVE) — without B-64, the C7 fix creates
 the dead-end.
 
-**Dependencies.** A1 (C7+C8 governance fixes) shares the same substrate code paths;
+**Dependencies.** a1 (c7+c8 governance fixes) shares the same substrate code paths;
 B-64 lands alongside or just before A1.
 
 **What B-64 delivers:**
