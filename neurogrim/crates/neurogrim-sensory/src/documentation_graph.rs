@@ -367,6 +367,12 @@ const SKIPPED_DIR_NAMES: &[&str] = &[
     // live reading-path documentation. Skip so superseded docs don't score as
     // orphan/drift/unreachable once moved under `archived/`.
     "archived",
+    // Doc-broker Phase 4 (2026-06-30): `data/explain/` holds CLI-served topic
+    // payloads (`neurogrim explain`) — include_str!'d, first-line `<!-- topic -->`
+    // header asserted by tests, carrying a methodology-version stamp (not an
+    // ecosystem-version claim). They can't take YAML front-matter, so skip the
+    // dir rather than let their stamp read as ecosystem drift.
+    "explain",
 ];
 
 /// The common documentation noise excluded from the doc-broker walk by
