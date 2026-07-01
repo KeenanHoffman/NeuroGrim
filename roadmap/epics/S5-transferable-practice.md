@@ -36,7 +36,13 @@ What remains is the human-facing deliverable: starter kit, documentation, extern
 
 ## Stories
 
+### S5-TP: Transferable Practice — IN PROGRESS
+**Type:** epic
+**Value:** Turns the pattern into a transferable specification and a product that teams outside this project can adopt — the generalization the roadmap exists to reach.
+**Priority:** Should
+
 ### S5-TP-1: Starter Kit / Template Project — SHIPPED
+**Epic:** S5-TP
 
 **Status:** Complete
 **Effort:** XL
@@ -66,6 +72,7 @@ A template directory (`starter-kit/`) someone can copy to adopt the pattern. Shi
 ---
 
 ### S5-TP-2: LSP Brains Specification + Documentation — SHIPPED
+**Epic:** S5-TP
 
 **Status:** Complete
 **Effort:** XL
@@ -98,6 +105,7 @@ Brain implementation must do. Also finalize the whitepaper and guides.
 ---
 
 ### S5-TP-3: Product Delivery + External Adoption — CANDIDATE
+**Epic:** S5-TP
 
 **Status:** Not started
 **Effort:** XL
@@ -125,6 +133,7 @@ methodology validation ("can you adopt this pattern without direct assistance?")
 ---
 
 ### S5-TP-4: Trajectory Intelligence — SHIPPED
+**Epic:** S5-TP
 
 **Status:** Complete
 **Effort:** L
@@ -149,6 +158,7 @@ to the Brain. The `-Mode trend` stub becomes a real feature.
 ---
 
 ### S5-TP-5: Human User Personas — SHIPPED
+**Epic:** S5-TP
 
 **Status:** Complete
 **Effort:** M
@@ -175,6 +185,7 @@ developer, specialist, product-manager) control output verbosity and field filte
 ---
 
 ### S5-TP-6: Zero-Config Base Brain — SHIPPED
+**Epic:** S5-TP
 
 **Status:** Complete
 **Effort:** M
@@ -197,6 +208,7 @@ Add auto-detect sensory tool that runs all 3 base sensory tools in a single pass
 ---
 
 ### S5-TP-7: Dual Brain Architecture Design — SHIPPED
+**Epic:** S5-TP
 
 **Status:** Complete
 **Effort:** L
@@ -231,6 +243,8 @@ Design the dual brain architecture — local brain (developer terminal) + extern
 ---
 
 ### S5-TP-8: Spec v2.1 Publication (Hybrid MCP + a2a) — IN PROGRESS
+**Epic:** S5-TP
+**MoSCoW:** Must
 
 **Status:** In progress
 **Effort:** L
@@ -283,6 +297,8 @@ spec deliverable; the implementation work lives in Stage 6.
 ---
 
 ### S5-TP-9: Cultural Substrate — IN PROGRESS
+**Epic:** S5-TP
+**MoSCoW:** Should
 
 **Status:** In progress
 **Effort:** M
@@ -327,6 +343,8 @@ of surface prompting; declaring culture beats ignoring it.
 ---
 
 ### S5-TP-10: LSP-Brains Brain — IN PROGRESS
+**Epic:** S5-TP
+**MoSCoW:** Should
 
 **Status:** In progress
 **Effort:** L
