@@ -29,7 +29,7 @@ conditions, temporal awareness, severity escalation, and rich narrative output.
 
 ## Stories
 
-### S1-DR-1: Composable Conditions (AND/OR/NOT)
+### S1-DR-1: Composable Conditions (AND/OR/NOT) — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -53,7 +53,7 @@ Must be backward-compatible with the 5 existing patterns.
 
 ---
 
-### S1-DR-2: Temporal Windows
+### S1-DR-2: Temporal Windows — SHIPPED
 
 **Status:** Complete
 **Effort:** L
@@ -75,7 +75,7 @@ Add temporal reasoning to conditions. "This gate has been dirty for >24h" or "sc
 
 ---
 
-### S1-DR-3: Severity Escalation
+### S1-DR-3: Severity Escalation — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -97,7 +97,7 @@ a warning. Five times is critical. The Brain escalates severity based on frequen
 
 ---
 
-### S1-DR-4: Narrative Output
+### S1-DR-4: Narrative Output — SHIPPED
 
 **Status:** Complete
 **Effort:** S

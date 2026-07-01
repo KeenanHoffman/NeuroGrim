@@ -46,7 +46,7 @@ front-door: false
 
 ## Stories
 
-### V5-FOUND-1: Diagnostic Monitor (instrumentation backbone) (~5–7 days)
+### V5-FOUND-1: Diagnostic Monitor (instrumentation backbone) (~5–7 days) — SHIPPED
 
 **Status:** **Complete (2026-05-02)** — 5 phases shipped (Phase 0 tracing-init centralization, Phase 1 ledger writer + schema, Phase 2 tracing Layer, Phase 3 instrumentation across 5 surfaces, Phase 4 `neurogrim diag report` CLI, Phase 5 V5-MOD-1 baseline capture). `synthesize` deferred to **V5-FOUND-1.1** — design carry-forward in `.claude/plans/v5-found-1-diagnostic-monitor.md` § V5-FOUND-1.1.
 **Effort:** L (actual: ~6 days, within estimate)
@@ -66,7 +66,7 @@ front-door: false
 - [x] Unit-test coverage for span emission, ledger append, malformed-line skip, privacy filter (≥4 negative paths per v5 conformance discipline) (32 new tests across `diagnostics_ledger`, `diagnostics_layer`, `diag` cmd; concurrent-writers test caught a real Windows-atomicity bug)
 - [x] **S15 scoring round-trip baseline captured** in `roadmap/data/v5-scoring-baseline-2026-05-02.json` (must land before V5-MOD-1 begins — V5-MOD-1's 5% perf gate compares against this baseline). Captured pre-S15-ship per the operator pin (2026-05-01); recapture-trigger files listed in the baseline JSON. Distribution: `p50_ms=16, p95_ms=18, p99_ms=18, max_ms=18` over 30 measured runs (debug build, NeuroGrim's own registry, 19 domains). V5-MOD-1's perf-gate ceiling: `p95_ms ≤ 19`.
 
-### V5-FOUND-1.1: Diagnostic Synthesis (deferred follow-on, ~2–3 days)
+### V5-FOUND-1.1: Diagnostic Synthesis (deferred follow-on, ~2–3 days) — DEFERRED
 
 **Status:** Planned (deferred 2026-05-02 from V5-FOUND-1 per plan-critic finding)
 **Effort:** S–M
@@ -121,7 +121,7 @@ front-door: false
 - **What surprised the implementation:** the parser unit-test fixtures used a fabricated `--- STDERR: <binary> <test> ---` block-marker format that doesn't match real nextest output (`stdout ───` / `stderr ───` / `────────────`). Live smoke test caught it; both the parser and the fixtures are now real-format.
 - **What's NOT done that the plan called for:** Phase 3 build cache (intentional — Fork B revision deferred to v5.5 B-47).
 
-### V5-FOUND-3: Change-driven test selection (per-test coverage) (~5–7 days)
+### V5-FOUND-3: Change-driven test selection (per-test coverage) (~5–7 days) — DEFERRED
 
 **Status:** **⏸ DEFERRED 2026-05-03 to v5.1/v6** — Windows host coverage-toolchain gap. Phase 0 partial work shipped (commit `39d7295`); remainder pending operator-environment decision (install VS Build Tools / install `xwin` / pick up at v5.1 / push to v6). See § V5-FOUND-3 deferral note below.
 **Effort:** L (scope unchanged on re-entry; toolchain prereq added)
@@ -160,7 +160,7 @@ front-door: false
 
 **Plan record:** [`.claude/plans/v5-found-3-coverage-selection.md`](../../.claude/plans/v5-found-3-coverage-selection.md) — v2 plan with all 3 plan-critic 🔴 blockers absorbed (Fork B per-test→binary-level, mutual-exclusion guards added, exit-code semantics specified); 1 🟡→🟢 (mtime→mtime+blake3 hybrid); operator-pinned 6 forks (A1/B1'/C1/D2/E1/F1). Preserved verbatim for re-entry.
 
-### V5-FOUND-4: TestRunner trait (minimal modular testing surface) (~2–3 days)
+### V5-FOUND-4: TestRunner trait (minimal modular testing surface) (~2–3 days) — SHIPPED
 
 **Status:** **✅ COMPLETE 2026-05-04** — 6 phase commits (`cf6e0cf` Phase 0, `985b7e6` Phase 1, `7060bf3` Phase 2, `ae5604c` Phase 3, `8b98599` Phase 4, plus this Phase 5 close-out). Effort actual: ~1 day, well under the 2–3d S estimate. Plan-critic absorbed two methodology blockers pre-implementation (AgentDrivenRunner stub fails proposed-#20 reshape rule; Fork D1 silent-green-CI hazard) by deferring AgentDrivenRunner + the `--runner=` CLI flag to v5.5 BACKLOG (B-51, B-52).
 **Effort:** S (actual: ~1 day)

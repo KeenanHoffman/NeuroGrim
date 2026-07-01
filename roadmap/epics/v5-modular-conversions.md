@@ -46,7 +46,7 @@ front-door: false
 
 ## Stories
 
-### V5-MOD-1: ScoringSource trait + factory registry (~7–10 days)
+### V5-MOD-1: ScoringSource trait + factory registry (~7–10 days) — SHIPPED
 
 **Status:** **COMPLETE** 2026-05-02 — Phases 0–6 shipped + Phase 7 close-out
 **Effort:** M (final ~9.5 days planned, 8 commits + close-out)
@@ -67,13 +67,13 @@ front-door: false
 
 **Done when:**
 - [x] `ScoringSource` trait defined in `neurogrim-core/src/scoring_source.rs` *(Phase 1, commit `41b2310`)*
-- [x] Factory registry: hand-rolled `HashMap<&str, Box<dyn ScoringSourceFactory>>` (NOT `inventory`); built-in **cmdb, a2a, function** factories preserved *(Phase 2, commit `b2d0949`; A2A factory lives in `neurogrim-ecosystem` to keep `neurogrim-core`'s dep graph acyclic)*
+- [x] Factory registry: hand-rolled `HashMap<&str, Box<dyn ScoringSourceFactory>>` (NOT `inventory`); built-in **cmdb, a2a, function** factories preserved *(Phase 2, commit `b2d0949`; A2A factory lives in `neurogrim-ecosystem` to keep `neurogrim-core`'s crate graph acyclic)*
 - [x] Conformance test suite — 8 cross-cutting tests in `neurogrim_core::scoring_source_conformance::run_factory_conformance` covering happy path + negative paths (skeletal config, concurrent safety, idempotency, factory panic, source-name stability); per-source negative-path tests (malformed JSON, missing field, BOM, unreachable endpoint, etc.) live in each source's own module *(Phase 5, commit `3e4d5d2`)*
 - [x] Example out-of-tree crate `examples/scoring-source-prom/` registers successfully without forking core; passes the conformance suite *(Phase 6, commit `0955b4d`)*
 - [⚠️] **Performance gate:** strict 5%-of-baseline (p95 ≤ 19 ms) ceiling failed Phase 3; pivoted to plan-documented Option A fallback per "Architectural decision" above. Fallback IS measurably faster than Phase 3 on the dev host but absolute baseline unverifiable due to system drift. Full result: `roadmap/data/v5-mod-1-perf-result-2026-05-02.json`. Theme B continuation gated by this file's verdict; operator-pin on Option A satisfies the gate's intent (architectural fix in place).
 - [x] LSP-Brains spec sync — `METHODOLOGY-EVOLUTION.md` lines 1118 + 1135 updated to reflect the `ScoringSource` → `ScoringSourceConfig` rename *(Phase 7 close-out, this commit)*
 
-### V5-MOD-2: Sensory plugin interface (cargo-feature gates) (~10–14 days)
+### V5-MOD-2: Sensory plugin interface (cargo-feature gates) (~10–14 days) — SHIPPED
 
 **Status:** **COMPLETE** 2026-05-02 — Phases 0-6 + Phase 7 close-out (8 commits)
 **Effort:** L (final ~12 days planned, actual ~12 days)
@@ -96,7 +96,7 @@ front-door: false
 
 **Registration mechanism:** hand-rolled `HashMap<&'static str, Box<dyn SensorFactory>>` (same substrate V5-MOD-1 used; Subagent 2's pre-flight rejected `inventory` for both stories). The 21 built-in factory blocks live in a centralized `neurogrim-sensory/src/sensor_impls.rs` (plan deviation: planned per-module, shipped centralized — single edit to add a new sensor, all 21 impls visible in one screen).
 
-**Conformance suite:** 10 cross-cutting tests in `neurogrim_core::sensor_conformance::run_factory_conformance` covering factory contract (T1-T3), async safety (T4-T5), CMDB envelope shape (T6 hand-rolled structural check), score range (T7), meta block well-formedness (T8), 30-second timeout (T9), idempotency (T10). Hand-rolled instead of full `jsonschema` validation to avoid adding a transitive dep that every third-party `Sensor` author would pay for; `cargo xtask schema-drift-check` (Phase 0) catches schema drift between vendored copy and canonical LSP-Brains copy.
+**Conformance suite:** 10 cross-cutting tests in `neurogrim_core::sensor_conformance::run_factory_conformance` covering factory contract (T1-T3), async safety (T4-T5), CMDB envelope shape (T6 hand-rolled structural check), score range (T7), meta block well-formedness (T8), 30-second timeout (T9), idempotency (T10). Hand-rolled instead of full `jsonschema` validation to avoid adding a transitive package that every third-party `Sensor` author would pay for; `cargo xtask schema-drift-check` (Phase 0) catches schema drift between vendored copy and canonical LSP-Brains copy.
 
 **Done when:**
 - [x] `Sensor` trait defined in `neurogrim-core/src/sensor.rs` *(Phase 1, commit `d1d82d0`)*
@@ -110,7 +110,7 @@ front-door: false
 - [x] Example out-of-tree sensor crate `examples/sensor-readme-quality/` registers + passes conformance *(Phase 6, commit `459d9ec`)*
 - [x] Spec impl alignment: LSP-Brains spec §F (MCP sensory tools) updated to reflect plugin shape *(Phase 7 close-out, this commit)*
 
-### V5-MOD-3: Queue backend factory (low-cost win) (~3–5 days)
+### V5-MOD-3: Queue backend factory (low-cost win) (~3–5 days) — SHIPPED
 
 **Status:** **COMPLETE** 2026-05-02 — Phases 0–5 + Phase 6 close-out (7 commits)
 **Effort:** S (final ~5 days planned, actual ~5 days)

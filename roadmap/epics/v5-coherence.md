@@ -40,7 +40,7 @@ front-door: false
 
 ## Stories
 
-### V5-DOC-1: Modular composition guide (~7–10 days)
+### V5-DOC-1: Modular composition guide (~7–10 days) — SHIPPED
 
 **Status:** **✅ COMPLETE 2026-05-04** — 6 phase commits (`b43049c` Phase 0 plan + plan-critic absorption, `a499b72` Phase 1 skeleton + 6-trait diagram, `da6e84f` Phase 2 recipes 1–3, `7f12c67` Phase 3 recipe 4 + deferral framing, `8a440bc` Phase 4 cross-refs + horizon section, plus this Phase 5 close-out). Effort actual: ~1 day, well under the 7–10d M estimate (prose-shaped lift-from-example-crates work, not new code — that's not under-delivery, it's the natural shape of the task per plan v2's effort-honesty note).
 **Effort:** M (actual: ~1 day)
@@ -65,7 +65,7 @@ front-door: false
 - **Plan deviations:** none. Final 756 lines vs. 300-400 plan target — overage is load-bearing per plan-critic methodology agent C5 ("explicit deferral callout") and suggestion 6 (capability-gap horizon). Not under-delivery on size; faithful execution of the absorbed plan-critic findings.
 - **What's NOT done that the original epic called for:** the Done-When line about "CI builds all code samples in the guide" was reinterpreted via Fork E1 — the workspace CI gate covers the cited example crates; the manual snippet-match step bridges the prose-vs-code gap. A doctest-harness approach (Fork E2, automated character-by-character snippet-match check) is deferred to v5.5 polish if drift becomes empirically common — tracked as a candidate addition to BACKLOG B-50 (V5.5-SDK-DOC-INCLUDE).
 
-### V5-DOC-2: VISION + spec alignment (~3–5 days)
+### V5-DOC-2: VISION + spec alignment (~3–5 days) — SHIPPED
 
 **Status:** **✅ COMPLETE 2026-05-04** — 6 phase commits (`74e1ba5` Phase 0 plan + plan-critic absorption; `3f9f9d8` Phase 1 dual-review verdict A1 → A3a; `f3297ee` Phase 2 VISION.md + cross-ref sweep; `2918303` LSP-Brains submodule Phase 3 spec §9.8 + v3.0 → v3.1; `7dae51b` Phase 4 BACKLOG B-53; `185ed91` Phase 5 CHANGELOG + verifications; plus this Phase 6 close-out). Effort actual: ~1 day, well under the 3–5d S estimate. **Theme D ✅ COMPLETE 2026-05-04; v5 is SHIPPABLE — gated only on workspace CI green + operator tag creation.**
 **Effort:** S (actual: ~1 day)

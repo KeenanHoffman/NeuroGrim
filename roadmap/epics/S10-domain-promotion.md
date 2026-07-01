@@ -86,7 +86,7 @@ generalizes the mechanism so other advisory domains (`git-health`,
 
 ---
 
-### S10-DP-1: Operator Audit Runbook + Spec Subsection
+### S10-DP-1: Operator Audit Runbook + Spec Subsection — SHIPPED
 
 **Status:** **Complete** (2026-04-21) — shipped in NeuroGrim `483e80a` (445-line runbook at `docs/domain-promotion-audit.md` covering audit protocol, two-profile Haiku/Sonnet ladder, eight pass criteria, five-branch failure classification, rollback procedure, post-promotion cadence, tabletop decision flowchart, and governance note on generalization to other advisory domains) and LSP-Brains `56bf97c` (spec §15.5 "Promotion path" subsection with SHALL-level requirements + METH-EV §13 governance-via-evidence entry + v2.5 additive changelog bump).
 **Effort:** S
@@ -149,7 +149,7 @@ grounded definition.
 
 ---
 
-### S10-DP-2: Promotion + Rollback CLI + Ledger
+### S10-DP-2: Promotion + Rollback CLI + Ledger — SHIPPED
 
 **Status:** **Complete** (2026-04-21) — shipped in LSP-Brains `8d4ceff` (domain-promotion-ledger-v1 schema with three entry types: promotion / rollback / failed-attempt) and ecosystem `4c8195d` (`promotion_ledger.py` with ABV_OPERATOR guard + three-way folding; `registry.py` with three rebalance strategies preserving sum=1.0; `abv-run promote` + `abv-run rollback` CLI with audit-evidence enforcement, registry backup, --dry-run preview, --record-failed-attempt path; 59 new tests across promotion_ledger / registry / promote_cli).
 **Effort:** M
@@ -222,7 +222,7 @@ governed way + an append-only ledger that records the decision.
 
 ---
 
-### S10-DP-3: Score-Swing Detection + Proposal Surfacing
+### S10-DP-3: Score-Swing Detection + Proposal Surfacing — SHIPPED
 
 **Status:** **Complete** (2026-04-21) — shipped in ecosystem `049a381` (`swing_detector.py` with `classify_swing` + zero-stddev fallback, ISO 8601 timestamp parser tolerating Z/offset/nanosecond variants, `detect_post_promotion_swing` with baseline/recent windowing; `abv-run promotion-watch` CLI reading score-history + promotion-ledger; 27 new tests). Deliberately does NOT auto-write to NeuroGrim's Rust-managed proposal-ledger (external writes would race the scoring pipeline); operators review the report + decide. Exit 4 on blocker for CI visibility.
 **Effort:** S
@@ -275,7 +275,7 @@ human-initiated; the detector just says "consider rolling back."
 
 ---
 
-### S10-DP-4 (pending-operator): Dog-food flip in NeuroGrim
+### S10-DP-4 (pending-operator): Dog-food flip in NeuroGrim — DEFERRED
 
 **Status:** **Pending B-08 remediation** (2026-04-22) — audit #1
 was attempted against live Haiku 4.5 + Sonnet 4.5 via
@@ -347,7 +347,7 @@ abv-run promote agent-behavior \
 
 ---
 
-### S10-DP-5: Spec update — Promotion Path normatively documented
+### S10-DP-5: Spec update — Promotion Path normatively documented — SHIPPED
 
 **Absorbed into S10-DP-1** above. See S10-DP-1's LSP-Brains spec
 §15.5 and METH-EV §13 deliverables.

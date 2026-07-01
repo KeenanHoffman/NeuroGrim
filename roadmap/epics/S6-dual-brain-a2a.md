@@ -36,11 +36,11 @@ Renamed 2026-04-17 when A2A was adopted as the normative transport.
 
 ---
 
-### S6-DB-1: neurogrim-a2a Crate Scaffold
+### S6-DB-1: neurogrim-a2a Crate Scaffold — SHIPPED
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** L
-**Depends on:** S5-TP-8 (schemas must exist)
+**Depends on:** s5-tp-8 (schemas must exist)
 
 Created the `neurogrim-a2a` Rust crate with the A2A protocol primitives: envelope,
 Agent Card, task client, task server, transport abstraction.
@@ -84,11 +84,11 @@ Agent Card, task client, task server, transport abstraction.
 
 ---
 
-### S6-DB-2: Ecosystem Refactor to A2A + Subprocess Dispatch
+### S6-DB-2: Ecosystem Refactor to a2a + Subprocess Dispatch — SHIPPED
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** XL
-**Depends on:** S6-DB-1, S4-FC-* (Stage 4 complete)
+**Depends on:** S6-DB-1, s4-fc-* (Stage 4 complete)
 
 Implemented fractal composition dispatch across both transports. Shipped as **two
 coordinated pieces** to honor the "zero I/O" invariant on `neurogrim-core`:
@@ -148,7 +148,7 @@ are now self-contained; no filesystem dependency on archived content.
 
 ---
 
-### S6-DB-3: Brain A2A Server (Serve Self as Peer)
+### S6-DB-3: Brain a2a Server (Serve Self as Peer) — SHIPPED
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** L
@@ -224,7 +224,7 @@ tests added during this closure).
 
 ---
 
-### S6-DB-4: Dual Brain Pair Integration Test
+### S6-DB-4: Dual Brain Pair Integration Test — SHIPPED
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** M
@@ -289,7 +289,7 @@ the §9.7 request-response direction validated on real wire, not in-process.
 
 ---
 
-### S6-DB-5: External Brain Reference Deployment
+### S6-DB-5: External Brain Reference Deployment — SHIPPED
 
 **Status:** **Complete** (2026-04-17)
 **Effort:** L (scoped down from original XL by targeting local Docker over cloud)
@@ -384,7 +384,7 @@ doc points at those options without pretending we ship cloud-specific IaC.
 
 ---
 
-### S6-DB-6: (stretch) Python SDK A2A Helper
+### S6-DB-6: (stretch) Python SDK a2a Helper — CANDIDATE
 
 **Status:** Not started
 **Effort:** M
@@ -404,11 +404,11 @@ are more likely to be implemented in Rust/Go/TypeScript than Python.
 - [ ] Example peer Brain in `sdk-python/examples/peer.py`
 - [ ] Contract tests against `a2a-envelope-v1.schema.json`
 
-### S6-DB-7: Ecosystem Brain at Session Root
+### S6-DB-7: Ecosystem Brain at Session Root — IN PROGRESS
 
 **Status:** In progress (bootstrap) / Not started (operational A2A wiring)
 **Effort:** L
-**Depends on:** S5-TP-8 (schemas), S5-TP-9 (culture), S5-TP-10 (LSP-Brains Brain to talk to)
+**Depends on:** s5-tp-8 (schemas), s5-tp-9 (culture), s5-tp-10 (LSP-Brains Brain to talk to)
 
 `D:\Brains\` becomes an **ecosystem Brain** that coordinates NeuroGrim (code) and
 LSP-Brains (spec) as peers. **Pure A2A** transport — no subagent middle tier (rejected

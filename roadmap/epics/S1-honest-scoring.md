@@ -29,7 +29,7 @@ to participate.
 
 ## Stories
 
-### S1-HS-1: Floor and Multiplier Scoring Models
+### S1-HS-1: Floor and Multiplier Scoring Models — SHIPPED
 
 **Status:** Complete
 **Effort:** L
@@ -59,7 +59,7 @@ diagnostic modes (health, agent), floor for action-oriented modes (recommend, ga
 
 ---
 
-### S1-HS-2: Confidence-Weighted Unified Score
+### S1-HS-2: Confidence-Weighted Unified Score — SHIPPED
 
 **Status:** Complete
 **Effort:** L
@@ -86,7 +86,7 @@ trustworthy — running a drift check visibly improves the score because confide
 
 ---
 
-### S1-HS-3: Advisory Domain Promotion Criteria
+### S1-HS-3: Advisory Domain Promotion Criteria — SHIPPED
 
 **Status:** Complete
 **Effort:** S

@@ -163,7 +163,7 @@ Mirrors the existing `disposition.rs:48` and `calibration_ledger.rs:306` writer 
 - [ ] Bounded channel cap (capacity 64) prevents memory growth from idle subscribers
 - [ ] ts-rs bindings for new DTOs
 
-### S13-B-3: SQLite persistent backend (5 days, opt-in)
+### S13-B-3: SQLite persistent backend (5 days, opt-in) — DEFERRED
 
 **What:** Trait `QueueBackend` in `neurogrim-core`. Implementations: `JsonlBackend` (default), `SqliteBackend`. Per-topic config in `<brain>/.claude/brain/queue-config.yaml`:
 
@@ -235,7 +235,7 @@ Approving emits on `_neurogrim/approval-resolutions` queue with operator handle 
 - [ ] Operator handle threaded through approval emission
 - [ ] vitest coverage for the approval flow
 
-### S13-B-7: CLI inspection (3 days) — 🟡 PARTIAL (list/tail/publish/stats/compact shipped; migrate/inspect deferred until B-3; auto-compaction scheduler deferred)
+### S13-B-7: CLI inspection (3 days) — 🟡 PARTIAL (list/tail/publish/stats/compact shipped; migrate/inspect deferred until S13-B-3; auto-compaction scheduler deferred)
 
 **What:** `neurogrim queue` subcommand:
 
@@ -250,7 +250,7 @@ Approving emits on `_neurogrim/approval-resolutions` queue with operator handle 
 - [ ] All 6 subcommands + tests
 - [ ] CLI parity with HTTP endpoints documented
 
-### S13-B-9: Cross-Brain queue subscription via A2A (4 days, post-refinement) — 🟡 PARTIAL (schema additive field shipped; population + a2a-discover prose + cross-process test deferred)
+### S13-B-9: Cross-Brain queue subscription via a2a (4 days, post-refinement) — 🟡 PARTIAL (schema additive field shipped; population + a2a-discover prose + cross-process test deferred)
 
 **What:** Surface each Brain's pubsub endpoint as a discoverable A2A capability. Add `queue_endpoints` to the Agent Card schema (additive; older peers ignore it). Cross-Brain consumers connect via A2A transport with bearer auth (reuses existing token store).
 

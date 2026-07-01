@@ -55,7 +55,7 @@ evidence (EXT-3).
 
 ---
 
-### S8-ABV-EXT-1: Calibration Audit
+### S8-ABV-EXT-1: Calibration Audit — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** M
@@ -99,7 +99,7 @@ refuses to emit a trustworthy CMDB when the live judge has drifted.
 
 ---
 
-### S8-ABV-EXT-2: Multi-Judge Consensus
+### S8-ABV-EXT-2: Multi-Judge Consensus — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** M
@@ -141,7 +141,7 @@ and gives operators signal on which criteria are inherently noisy.
 
 ---
 
-### S8-ABV-EXT-3: Execution-Based Rubrics
+### S8-ABV-EXT-3: Execution-Based Rubrics — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** L

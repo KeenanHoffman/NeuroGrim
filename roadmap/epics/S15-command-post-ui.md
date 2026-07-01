@@ -63,7 +63,7 @@ front-door: false
 
 ## Stories
 
-### S15-C-1: Multi-page dashboard infrastructure (5 days) — 🟡 PARTIAL (schema authored + backward-compat read; full router/sidebar auto-population deferred to session 2 with C-6)
+### S15-C-1: Multi-page dashboard infrastructure (5 days) — 🟡 PARTIAL (schema authored + backward-compat read; full router/sidebar auto-population deferred to session 2 with S15-C-6)
 
 **What:** Extend v3.5 widget catalog. A "page" is now a named layout. Brain config has:
 
@@ -91,7 +91,7 @@ Sidebar navigation auto-populates from declared pages. Per-page persistence in `
 - [ ] TanStack Router routes auto-derived from pages map
 - [ ] Migration helper: `neurogrim dashboard-pages migrate` rewrites old → new shape
 
-### S15-C-2: Built-in Services page (5 days) — 🟡 PARTIAL (v1: read-only fleet view; v2 expansion: in-dashboard peer log tail viewer modal — operators no longer drop to a terminal for `tail -f <peer>.log`. Manual re-probe + on-demand sensor refresh remain deferred — re-probe is mostly redundant with the federation page's 30s refetch; sensor refresh requires spawning arbitrary child processes which is its own piece.)
+### S15-C-2: Built-in Services page (5 days) — 🟡 PARTIAL (v1: read-only fleet view; v2 expansion: in-dashboard peer log tail viewer modal — operators no longer drop to a terminal for `tail -f <peer>.log`. Manual re-probe + on-demand sensor refresh remain deferred; re-probe is mostly redundant with the federation page's 30s refetch; sensor refresh requires spawning arbitrary child processes which is its own piece.)
 
 **What:** Extract v3.5 `PeerActions` into a full page. Show per-peer process list (reads from `services.jsonl`), per-service log tail (5-second poll OR SSE-pushed), manual re-probe + sensor refresh actions (carry-over from v3.5.1 backlog).
 
@@ -142,7 +142,7 @@ Schema source: Rust struct → JSON Schema (auto-generate via `schemars` crate, 
 - [ ] Form generator on frontend handles object/array/string/number/boolean/enum *(v3 — pairs with the schemars piece above)*
 - [ ] Conflict detection ships with diff UI *(v3 — current behavior: reload-on-conflict via the etag mismatch banner from v1)*
 
-### S15-C-5: Built-in Settings page — other configs (4 days) — 🟡 PARTIAL (read-only viewers for culture + queue-config + publish-gates pointer shipped; editors deferred until C-4's form generator + S14-S-6's passphrase flow land)
+### S15-C-5: Built-in Settings page — other configs (4 days) — 🟡 PARTIAL (read-only viewers for culture + queue-config + publish-gates pointer shipped; editors deferred until S15-C-4's form generator + S14-S-6's passphrase flow land)
 
 **What:**
 - `culture.yaml` viewer (read-only — culture changes are a contract, not a setting; explained inline)

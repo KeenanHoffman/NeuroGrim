@@ -76,7 +76,7 @@ After review, "always encrypted in transit" was added as a defense-in-depth requ
 
 ## Stories
 
-### S14-S-1: New `neurogrim-secrets` crate (5 days)
+### S14-S-1: New `neurogrim-secrets` crate (5 days) — SHIPPED
 
 **What:** New workspace member at `crates/neurogrim-secrets/`.
 
@@ -102,7 +102,7 @@ pub struct SecretStore {
 - [ ] 12+ unit tests covering set/get/delete/list, zeroize-on-drop, missing-key
 - [ ] Integration test: round-trip a known value through OS-native, verify it's there, delete, verify gone
 
-### S14-S-2: OS-native credential adapter (4 days)
+### S14-S-2: OS-native credential adapter (4 days) — SHIPPED
 
 **What:** Use the [`keyring` Rust crate](https://crates.io/crates/keyring) (mature, ~10M downloads). Wraps DPAPI / Keychain / libsecret behind a single API.
 
@@ -116,7 +116,7 @@ Service-name convention: `neurogrim-{brain_id}-{secret_id}`. Failure modes docum
 - [ ] Fallback behavior documented per platform
 - [ ] WSL setup doc: `apt install gnome-keyring libsecret-1-0 dbus-x11`
 
-### S14-S-3: Encrypted file fallback (4 days)
+### S14-S-3: Encrypted file fallback (4 days) — SHIPPED
 
 **What:** ChaCha20Poly1305 for content (via `chacha20poly1305` crate); PBKDF2-derived master key (via `pbkdf2` crate); salt + nonce per secret. Master key sourced from operator-provided passphrase (entered into dashboard's secret-entry form once per session; held only in encrypted memory after).
 
@@ -136,7 +136,7 @@ Service-name convention: `neurogrim-{brain_id}-{secret_id}`. Failure modes docum
 - [ ] Forward-compat: version field allows future format migration
 - [ ] Documentation: format reference + threat-model section
 
-### S14-S-4: claude-proxy migration to OS-native (5 days)
+### S14-S-4: claude-proxy migration to OS-native (5 days) — DEFERRED
 
 **What:** Migrate `CLAUDE_PROXY_UPSTREAM_KEY` from env var to OS-native lookup on startup. Provide one-time `proxy-cli secret import-from-env` helper for existing operators. Encrypt audit log entries at rest with rotating session keys (one log file per rotation period; default daily). Update README + threat-model.
 
@@ -166,7 +166,7 @@ Service-name convention: `neurogrim-{brain_id}-{secret_id}`. Failure modes docum
 
 **v5 (deferred):** `neurogrim secrets tls-cert import <path>` for operator-supplied real-CA certs (production behind a reverse proxy); private key stored via `SecretBackend` instead of a 0600 file (multi-user host deployments). The bundled cert lifecycle covers the dev-loopback case end-to-end without these.
 
-### S14-S-5: `secret_fetch` MCP tool (4 days)
+### S14-S-5: `secret_fetch` MCP tool (4 days) — SHIPPED
 
 **What:** New MCP tool `secret_fetch(key: String, scope?: String) -> {proxy_token, expires_at}`. Default autonomy `Approve` (every secret fetch requires explicit operator approval through the S13 approvals queue). Per-secret override allows `Notify` for low-sensitivity secrets (public API endpoints with rate limits but no auth).
 
@@ -179,7 +179,7 @@ Returned token is single-use, expires in 60s, can only be passed to claude-proxy
 - [ ] Approval round-trip: agent calls `secret_fetch` → MCP middleware (S13) routes to approvals queue → operator approves via UI → tool returns proxy token → agent uses token in single API call → token expires
 - [ ] Documentation: end-to-end flow diagram in `secrets.md` explain topic
 
-### S14-S-6: UI secret-entry surface (5 days)
+### S14-S-6: UI secret-entry surface (5 days) — DEFERRED
 
 **What:** New page `/brains/:id/secrets` (lives in v3.5 multi-page routing). Lists declared secrets from `secret-refs.yaml` with status: `present | missing | expired | rotated_at <date>`.
 
@@ -195,7 +195,7 @@ Returned token is single-use, expires in 60s, can only be passed to claude-proxy
 - [ ] vitest covers the form + state transitions
 - [ ] Manual smoke verifies value never appears in browser console, server logs, or dashboard ledger
 
-### S14-S-7: Audit-log decryption tooling (2 days)
+### S14-S-7: Audit-log decryption tooling (2 days) — DEFERRED
 
 **What:** `neurogrim audit decrypt --key-file <path> [--from <ts>] [--to <ts>]` for incident-response. Key file is OS-native-stored; only operators with credential-store access can decrypt. Output is human-readable JSONL stream.
 
@@ -203,7 +203,7 @@ Returned token is single-use, expires in 60s, can only be passed to claude-proxy
 - [ ] CLI subcommand + tests
 - [ ] Documentation: incident-response runbook in `secrets.md`
 
-### S14-S-8: `secrets-readiness` advisory domain (3 days)
+### S14-S-8: `secrets-readiness` advisory domain (3 days) — SHIPPED
 
 **What:** New domain registered in NeuroGrim's own + adopter Brain registries. Reads `secret-refs.yaml` + `SecretStore` state; emits findings:
 

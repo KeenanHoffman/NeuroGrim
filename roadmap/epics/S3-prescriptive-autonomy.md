@@ -33,11 +33,11 @@ critical path and gives the fractal composition stage (new S4) a parent Brain wi
 
 ## Stories
 
-### S3-PA-1: Autonomy Gradient Definition
+### S3-PA-1: Autonomy Gradient Definition — SHIPPED
 
 **Status:** Complete
 **Effort:** L
-**Depends on:** S1-LB (outcome data exists), S2-IC-1 (interface contract for audit trail)
+**Depends on:** s1-lb (outcome data exists), S2-IC-1 (interface contract for audit trail)
 **Completed:** 2026-04-10
 
 Define which classes of action the Brain can auto-execute and which require human approval.
@@ -74,7 +74,7 @@ The gradient is: fully automatic → auto with notification → present for appr
 
 ---
 
-### S3-PA-2: Proposal Confidence Thresholds
+### S3-PA-2: Proposal Confidence Thresholds — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -111,7 +111,7 @@ High-confidence proposals can be auto-executed. Low-confidence proposals require
 
 ---
 
-### S3-PA-3: Human-in-the-Loop Boundaries
+### S3-PA-3: Human-in-the-Loop Boundaries — SHIPPED
 
 **Status:** Complete
 **Effort:** M

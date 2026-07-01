@@ -36,7 +36,7 @@ auto-execute) and fractal composition (a parent must know the child's output sha
 
 ## Stories
 
-### S2-IC-1: Brain Interface Contract
+### S2-IC-1: Brain Interface Contract — SHIPPED
 
 **Status:** Complete
 **Effort:** L
@@ -64,7 +64,7 @@ is declared as code and validated in tests.
 
 ---
 
-### S2-IC-2: Domain-Agnostic Scoring
+### S2-IC-2: Domain-Agnostic Scoring — SHIPPED
 
 **Status:** Complete
 **Effort:** XL
@@ -91,7 +91,7 @@ to add a custom domain by editing only `brain-registry.json` — no `.ps1` modif
 
 ---
 
-### S2-IC-3: Consumer Output Contracts
+### S2-IC-3: Consumer Output Contracts — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -116,7 +116,7 @@ communication-as-interface principle (Design Principle #8) made concrete.
 
 ---
 
-### S2-IC-4: Truth Separation Architecture
+### S2-IC-4: Truth Separation Architecture — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -144,7 +144,7 @@ as the bridge between runtime truth and agent reasoning.
 
 ---
 
-### S2-IC-5: File Interpretation Registry
+### S2-IC-5: File Interpretation Registry — CANDIDATE
 
 **Status:** Not started
 **Effort:** L

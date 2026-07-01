@@ -36,7 +36,7 @@ What remains is the human-facing deliverable: starter kit, documentation, extern
 
 ## Stories
 
-### S5-TP-1: Starter Kit / Template Project
+### S5-TP-1: Starter Kit / Template Project — SHIPPED
 
 **Status:** Complete
 **Effort:** XL
@@ -49,7 +49,7 @@ A template directory (`starter-kit/`) someone can copy to adopt the pattern. Shi
 
 **Key decisions (13 architectural decisions from 2-round adversary review):**
 - AD3: All domains use `scoring_source.type = "cmdb"` — zero PS code per domain
-- AD5: Sensory tools in PowerShell (not bash) — single-runtime dependency
+- AD5: Sensory tools in PowerShell (not bash) — single-runtime constraint
 - AD9: Path resolution uses `$PSScriptRoot`-relative, not `.git`-walking (CRITICAL)
 - AD10: `Get-ArtifactFreshness` kept as stub returning 'unknown' (safe with empty `$artifactList`)
 - AD11: Example incident pattern uses `conditions: {}` (no domain variable refs)
@@ -65,7 +65,7 @@ A template directory (`starter-kit/`) someone can copy to adopt the pattern. Shi
 
 ---
 
-### S5-TP-2: LSP Brains Specification + Documentation
+### S5-TP-2: LSP Brains Specification + Documentation — SHIPPED
 
 **Status:** Complete
 **Effort:** XL
@@ -97,7 +97,7 @@ Brain implementation must do. Also finalize the whitepaper and guides.
 
 ---
 
-### S5-TP-3: Product Delivery + External Adoption
+### S5-TP-3: Product Delivery + External Adoption — CANDIDATE
 
 **Status:** Not started
 **Effort:** XL
@@ -124,7 +124,7 @@ methodology validation ("can you adopt this pattern without direct assistance?")
 
 ---
 
-### S5-TP-4: Trajectory Intelligence
+### S5-TP-4: Trajectory Intelligence — SHIPPED
 
 **Status:** Complete
 **Effort:** L
@@ -148,7 +148,7 @@ to the Brain. The `-Mode trend` stub becomes a real feature.
 
 ---
 
-### S5-TP-5: Human User Personas
+### S5-TP-5: Human User Personas — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -174,7 +174,7 @@ developer, specialist, product-manager) control output verbosity and field filte
 
 ---
 
-### S5-TP-6: Zero-Config Base Brain
+### S5-TP-6: Zero-Config Base Brain — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -196,7 +196,7 @@ Add auto-detect sensory tool that runs all 3 base sensory tools in a single pass
 
 ---
 
-### S5-TP-7: Dual Brain Architecture Design
+### S5-TP-7: Dual Brain Architecture Design — SHIPPED
 
 **Status:** Complete
 **Effort:** L
@@ -230,11 +230,11 @@ Design the dual brain architecture — local brain (developer terminal) + extern
 
 ---
 
-### S5-TP-8: Spec v2.1 Publication (Hybrid MCP + A2A)
+### S5-TP-8: Spec v2.1 Publication (Hybrid MCP + a2a) — IN PROGRESS
 
 **Status:** In progress
 **Effort:** L
-**Depends on:** — (independent of other S5 stories)
+**Depends on:** — (independent of other Stage 5 stories)
 
 Publish LSP Brains spec v2.1 with the hybrid MCP + A2A protocol split. MCP scope is
 narrowed to sensory tool invocation (§3.7, Appendix F) and Brain-as-tool-to-LLM. A2A
@@ -282,7 +282,7 @@ spec deliverable; the implementation work lives in Stage 6.
 
 ---
 
-### S5-TP-9: Cultural Substrate
+### S5-TP-9: Cultural Substrate — IN PROGRESS
 
 **Status:** In progress
 **Effort:** M
@@ -326,7 +326,7 @@ of surface prompting; declaring culture beats ignoring it.
 
 ---
 
-### S5-TP-10: LSP-Brains Brain
+### S5-TP-10: LSP-Brains Brain — IN PROGRESS
 
 **Status:** In progress
 **Effort:** L

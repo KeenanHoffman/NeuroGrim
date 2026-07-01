@@ -207,7 +207,7 @@ hooks, add hats.
 |-------|------|--------|--------|
 | S5-TP-1 | Starter Kit / Template Project | **Complete** (archived 2026-04-17) | XL |
 | S5-TP-2 | LSP Brains Specification + Documentation | **Complete** | XL |
-| S5-TP-3 | Product Delivery + External Adoption | **Post-publication milestone** (re-framed 2026-04-23; see note below) | XL |
+| S5-TP-3 | Product Delivery + External Adoption | **CANDIDATE** — post-publication milestone (re-framed 2026-04-23; see note below) | XL |
 | S5-TP-4 | Trajectory Intelligence | **Complete** | L |
 | S5-TP-5 | Human User Personas | **Complete** | M |
 | S5-TP-6 | Zero-Config Base Brain | **Complete** | M |
@@ -268,7 +268,7 @@ parent/child fractal composition gains A2A as a RECOMMENDED transport alongside 
 | S6-DB-3 | Brain A2A Server (Serve Self as Peer) | **Complete** (CLI subcommands + Agent Card + real scoring pipeline wired; 2 URL bugs fixed live; 173 workspace tests green) | L |
 | S6-DB-4 | Dual Brain Pair Integration Test | **Complete** (2 real subprocesses on loopback; 3 tests; 176 workspace tests green) | M |
 | S6-DB-5 | External Brain Reference Deployment | **Complete** (local Docker; 145 MB image; dual-brain pair via compose; auth mandate documented) | L |
-| S6-DB-6 | (stretch) Python SDK A2A Helper | Not started | M |
+| S6-DB-6 | (stretch) Python SDK A2A Helper | CANDIDATE (stretch; not started) | M |
 | S6-DB-7 | Ecosystem Brain at Session Root | **Complete** (bootstrap shipped in earlier session; ecosystem .claude/ registry + 6 domains + sync-ecosystem skill + CLAUDE.md) | L |
 
 **Stage 6 is DONE when:**

@@ -38,7 +38,7 @@ operations on children and escalate risky ones to the human.
 
 ## Stories
 
-### S4-FC-1: Child Brain Registration
+### S4-FC-1: Child Brain Registration — SHIPPED
 
 **Status:** Complete
 **Effort:** L
@@ -68,7 +68,7 @@ script + its interface version + dependency relationships. Adding a child projec
 
 ---
 
-### S4-FC-2: Parent Score Aggregation
+### S4-FC-2: Parent Score Aggregation — SHIPPED
 
 **Status:** Complete
 **Effort:** XL
@@ -101,11 +101,11 @@ a stale child score drags the parent's confidence down.
 
 ---
 
-### S4-FC-3: Cross-Project Incident Patterns
+### S4-FC-3: Cross-Project Incident Patterns — SHIPPED
 
 **Status:** Complete
 **Effort:** L
-**Depends on:** S4-FC-1, S4-FC-2, S1-DR (composable conditions)
+**Depends on:** S4-FC-1, S4-FC-2, s1-dr (composable conditions)
 **Completed:** 2026-04-10
 
 Incident patterns that reference child Brain domain variables. The correlation engine
@@ -133,7 +133,7 @@ dependency cascades.
 
 ---
 
-### S4-FC-4: External State as First-Class Citizen
+### S4-FC-4: External State as First-Class Citizen — SHIPPED
 
 **Status:** Complete
 **Effort:** L

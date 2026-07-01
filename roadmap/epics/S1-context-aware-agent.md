@@ -29,11 +29,11 @@ differently at dinner vs. a board meeting.
 
 ## Stories
 
-### S1-CA-1: Hat Definitions
+### S1-CA-1: Hat Definitions — SHIPPED
 
 **Status:** Complete
 **Effort:** M
-**Depends on:** none (design can start before S1-LB completes)
+**Depends on:** none (design can start before s1-lb completes)
 
 Define 3+ well-specified hats. Each hat has: a mindset, domain emphasis weights, and
 operational focus. Replace or evolve `personas.md`.
@@ -51,7 +51,7 @@ operational focus. Replace or evolve `personas.md`.
 
 ---
 
-### S1-CA-2: Hat-Specific Domain Emphasis
+### S1-CA-2: Hat-Specific Domain Emphasis — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -73,7 +73,7 @@ filtering recommendations.
 
 ---
 
-### S1-CA-3: Context-Aware Hat Suggestion
+### S1-CA-3: Context-Aware Hat Suggestion — SHIPPED
 
 **Status:** Complete
 **Effort:** S
@@ -94,7 +94,7 @@ the operator hat." Unreviewed IAM bindings? "Consider the security hat."
 
 ---
 
-### S1-CA-4: Hat Memory
+### S1-CA-4: Hat Memory — SHIPPED
 
 **Status:** Complete
 **Effort:** M

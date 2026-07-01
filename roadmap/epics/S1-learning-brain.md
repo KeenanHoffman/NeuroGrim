@@ -33,11 +33,11 @@ switching.
 
 ## Stories
 
-### S1-LB-1: Proposal Ledger
+### S1-LB-1: Proposal Ledger — SHIPPED
 
 **Status:** Complete
 **Effort:** M
-**Depends on:** none (can begin once S1-honest-scoring is in progress)
+**Depends on:** none (can begin once s1-honest-scoring is in progress)
 
 Record every `-Mode propose` output with timestamp, proposals, and pre-score.
 When a gate clears or score changes, record the post-score.
@@ -56,7 +56,7 @@ When a gate clears or score changes, record the post-score.
 
 ---
 
-### S1-LB-2: Outcome Correlation
+### S1-LB-2: Outcome Correlation — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -78,7 +78,7 @@ average +8. Smoke tests average +4. Topology updates average +2."
 
 ---
 
-### S1-LB-3: Recommendation Boosting
+### S1-LB-3: Recommendation Boosting — SHIPPED
 
 **Status:** Complete
 **Effort:** M
@@ -100,7 +100,7 @@ The Brain stops recommending actions that don't help.
 
 ---
 
-### S1-LB-4: Session Continuity (Context Layer)
+### S1-LB-4: Session Continuity (Context Layer) — SHIPPED
 
 **Status:** Complete
 **Effort:** L

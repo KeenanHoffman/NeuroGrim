@@ -45,7 +45,7 @@ front-door: false
 
 ## Stories
 
-### S12-G-1: Slow-benchmark surgery (1 day)
+### S12-G-1: Slow-benchmark surgery (1 day) — SHIPPED
 
 **What:** Mark `crates/neurogrim-cli/tests/context_overhead.rs` and `crates/neurogrim-cli/tests/phase_15_benchmark.rs` integration tests with `#[ignore]` and put them behind `#[cfg(feature = "benchmarks")]`. Add a `benchmarks` feature flag to `neurogrim-cli/Cargo.toml`.
 
@@ -129,7 +129,7 @@ gates:
 
 **Status:** Complete as a standalone CLI with ack flow. e2e gate type ships as `deferred` until S12-G-5 wires the Playwright harness — adopters can declare e2e gates in their manifest today and they'll be visible in the ledger without driving exit code (deferred is non-blocking by design). Two extension sub-commands reserved for future stories: `publish-gate list` (read ledger) and `publish-gate inspect <gate-id>` (gate detail) — out of scope for v1.
 
-### S12-G-5: Playwright E2E foundation (4 days) — ✅ SHIPPED
+### S12-G-5: Playwright e2e foundation (4 days) — ✅ SHIPPED
 
 **What:** New directory `crates/neurogrim-dashboard/frontend/e2e/` with `playwright.config.ts`. Headless Chromium only (Webkit fallback documented). Total run-time constraint enforced (test files >30s fail the build via custom matcher). Three initial smoke specs: `overview-loads.spec.ts`, `federation-page.spec.ts`, `layout-edit.spec.ts`.
 

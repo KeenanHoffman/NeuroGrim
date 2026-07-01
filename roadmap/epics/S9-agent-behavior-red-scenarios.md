@@ -91,7 +91,7 @@ is consistent with a judge that can only say green.
 
 ---
 
-### S9-ABV-RED-1: Schema + Harness Extension
+### S9-ABV-RED-1: Schema + Harness Extension — SHIPPED
 
 **Status:** **Complete** (2026-04-21) — shipped in LSP-Brains `236f31b` (spec §15.3 "Red samples" subsection + v2.4 changelog + METH-EV §12 + schema extensions) and ecosystem `b70da80` (harness: `RedSample` dataclass, `classify_red_miss`, `--skip-red-calibration` CLI flag, `judge-integrity:red-miss` CMDB finding, 27 new tests).
 **Effort:** M
@@ -157,7 +157,7 @@ influence whether the CMDB is written as `status: "trusted"` vs
 
 ---
 
-### S9-ABV-RED-2: Red-Sample Library + Failure-Mode Taxonomy
+### S9-ABV-RED-2: Red-Sample Library + Failure-Mode Taxonomy — SHIPPED
 
 **Status:** **Complete** (2026-04-21) — shipped in NeuroGrim `b778626` (docs/agent-behavior-red-taxonomy.md — 285 lines covering six modes + canary, authoring checklist, retirement discipline) and ecosystem `a80e668` (13 red samples across 6 scenarios + 10-test library coverage suite + skill update + CEO-template README update).
 **Effort:** M
@@ -223,7 +223,7 @@ an agent problem.
 
 ---
 
-### S9-ABV-RED-3: Judge-Integrity Ledger + `refine-judge-integrity` Skill
+### S9-ABV-RED-3: Judge-Integrity Ledger + `refine-judge-integrity` Skill — SHIPPED
 
 **Status:** **Complete** (2026-04-21) — shipped in LSP-Brains `cbf971f` (skill mirror + gitignore), NeuroGrim `1716a66` (skill mirror + gitignore), and ecosystem `a7c3e4c` (`judge_integrity_ledger.py` with append-only discipline + privacy allow-list + ABV_OPERATOR triage guard, `abv-run judge-integrity list|triage` CLI, calibrator auto-append wiring, `refine-judge-integrity.md` skill across all three Brain dirs, worked-example extension, 16 new tests).
 **Effort:** S
@@ -309,7 +309,7 @@ After human triage, a new entry (not an edit — append-only) carries:
 
 ---
 
-### S9-ABV-RED-4: Mock-Bad-Agent Red Mode
+### S9-ABV-RED-4: Mock-Bad-Agent Red Mode — SHIPPED
 
 **Status:** **Complete** (2026-04-21) — shipped in LSP-Brains `bd8119b` (red-mode-report-v1 schema + skill mirror), NeuroGrim `3b9822b` (taxonomy Architecture B section + skill mirror), and ecosystem `f9b10b6` (adversary prompts library with 7 entries, `mock_adversary.py` loader, `red_mode.py` orchestrator with canary gate, `abv-run red-mode` CLI subcommand, 35 new tests, worked-example extension with cost/cadence table). Promoted from BACKLOG B-06 mid-epic per operator request.
 **Effort:** L

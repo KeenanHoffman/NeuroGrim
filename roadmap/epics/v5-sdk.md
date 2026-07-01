@@ -39,7 +39,7 @@ front-door: false
 
 ## Stories
 
-### V5-SDK-1: neurogrim-sdk crate (extraction, not invention) (~7–10 days)
+### V5-SDK-1: neurogrim-sdk crate (extraction, not invention) (~7–10 days) — SHIPPED
 
 **Status:** **COMPLETE** 2026-05-03 (~5 actual days; came in under estimate because Theme B's hand-off notes pre-loaded the taxonomy work). Five phases shipped as commits:
 - Phase 0 (setup + audit): `f27eed1`
@@ -49,7 +49,7 @@ front-door: false
 - Phase 5 (this epic close-out): `<this commit>`
 
 **Effort:** M
-**Depends on:** V5-MOD-1, V5-MOD-2, V5-MOD-3, ~~V5-FOUND-4~~ (Fork A1: deferred `TestRunner` to SDK 0.2.0)
+**Depends on:** V5-MOD-1, V5-MOD-2, V5-MOD-3, ~~V5-FOUND-4~~ (Fork a1: deferred `TestRunner` to SDK 0.2.0)
 
 **What:** Extract a thin SDK crate from `neurogrim-core`. Re-exports stable contract types only: `Sensor`, `ScoringSource`, `QueueBackend`, `Transport`, `TestRunner`, plus core types (`DomainDefinition`, `BrainRegistry`, etc.). Versioned independently; follows semver. `neurogrim-core` can break internals; `neurogrim-sdk` cannot break trait shapes without major-version bump.
 
@@ -120,7 +120,7 @@ V5-SDK-2's conformance fixture for `QueueBackend` should re-export `neurogrim_co
 
 **Conformance test renamed `concurrent_appends_dont_panic`:** V5-MOD-3 Phase 4 caught a known JsonlBackend TOCTOU race (`len()` then `append`) via the original `append_returns_unique_offsets` check. Renamed and weakened to "no panic + no error + no deadlock"; backends with stronger transactional guarantees (SqliteBackend, MemoryQueueBackend) verify offset uniqueness via per-backend tests, not the cross-cutting suite. SDK consumers writing transactional backends can add an `_unique_offsets` test in their own crate's `tests/` if needed.
 
-### V5-SDK-2: SDK conformance suites (distributed) (~3–5 days)
+### V5-SDK-2: SDK conformance suites (distributed) (~3–5 days) — SHIPPED
 
 **Status:** **✅ COMPLETE 2026-05-04** — all three deliverables shipped. Feature-gate (1) + walkthrough (3) via the original 6-commit V5-SDK-2 partial (`bb09869` Phase 0 → `ff88739` Phase 5); TestRunner conformance suite (2) closed today by V5-FOUND-4 Phase 4 (this commit). The originally-deferred deliverable now ships against a real impl (`NextestRunner` from V5-FOUND-4 Phase 2, commit `7060bf3`); the SDK exposes the trait surface always-on at `neurogrim_sdk::{TestRunner,TestRunnerFactory,TestRunnerRegistry,TestSelection,TestRunReport,TestFailure}` and the conformance suite at `neurogrim_sdk::test_runner_conformance` (gated by the `conformance` feature alongside the other 3 V5-MOD-1/2/3 suites). Was ◐ PARTIAL COMPLETE 2026-05-04 between the original V5-SDK-2 close-out and V5-FOUND-4 Phase 4.
 **Effort:** S — actual ~1 day (well under the 3–5 day estimate; plan-critic absorbed two rounds of consumer-set + dev-dep posture findings before any code changed).
@@ -128,7 +128,7 @@ V5-SDK-2's conformance fixture for `QueueBackend` should re-export `neurogrim_co
 
 **Scope-reduction note (2026-05-03):** V5-SDK-1 Fork C1 chose to re-export the conformance suites at v0.1.0 rather than defer to V5-SDK-2 — the 3 suites are reachable today as `neurogrim_sdk::{sensor_conformance, scoring_source_conformance, queue_backend_conformance}::run_factory_conformance`. The `compile_test_re_exports.rs` test verifies this. **What V5-SDK-2 still needs to deliver:**
 1. Optional `#[cfg(feature = "conformance")]` feature-gating to keep dev-deps (currently `tokio` — promoted from dev-dep to runtime at V5-MOD-1 Phase 5 because the conformance suite uses `tokio::spawn` + `tokio::time::timeout` in its public API) out of production builds. Today the conformance modules are reachable unconditionally; consumers building without dev-tools may carry the dev-dep transitively. **SHIPPED 2026-05-04** (V5-SDK-2 partial Phases 1–3, commits `7bafe59`, `c410eb2`, `fa19288`).
-2. The `TestRunner` conformance suite (deferred per V5-SDK-1 Fork A1 + V5-FOUND-4 dependency). **STILL DEFERRED** — V5-FOUND-4 is gated on V5-FOUND-3 (deferred 2026-05-03 — Windows coverage-toolchain gap).
+2. The `TestRunner` conformance suite (deferred per V5-SDK-1 Fork A1 + V5-FOUND-4 gating). **STILL DEFERRED** — V5-FOUND-4 is gated on V5-FOUND-3 (deferred 2026-05-03 — Windows coverage-toolchain gap).
 3. End-to-end documentation walkthrough lifting `examples/sensor-constant-score/tests/conformance.rs` verbatim into the SDK README's "writing a conformant Sensor" section. Currently the SDK README points consumers at the example crate; V5-SDK-2 inlines the walkthrough. **SHIPPED 2026-05-04** (V5-SDK-2 partial Phase 4, commit `c19f406`).
 
 **What:** Originally — promote per-trait conformance suites from Theme B epics into the SDK crate as `#[cfg(feature = "conformance")]` test fixtures. **Revised** — feature-gate the already-shipped re-exports, add the missing `TestRunner` suite when V5-FOUND-4 lands, inline the walkthrough docs. Most of the "conformance fixtures distributed" Done-When was satisfied by V5-SDK-1.
@@ -147,7 +147,7 @@ V5-SDK-2's conformance fixture for `QueueBackend` should re-export `neurogrim_co
 **V5-SDK-2 partial retrospective (2026-05-04):**
 
 - **Plan record:** [`.claude/plans/v5-sdk-2-partial.md`](../../.claude/plans/v5-sdk-2-partial.md) — v3 plan, two plan-critic rounds, all 3 🔴 blockers absorbed (consumer-set extends to neurogrim-sensory + neurogrim-ecosystem; 3 of 4 examples depend on neurogrim-core not neurogrim-sdk; 7th consumer is the SDK's own `compile_test_re_exports.rs:48-65`).
-- **Forks pinned:** A1 (feature name `conformance`) / B1 (default OFF — VISION proposed-#20) / C1 (no change to `tempfile`) / D2 (`[dev-dependencies]` posture, default flipped from D1 post-plan-critic) / F1 (Sensor walkthrough only; ScoringSource + QueueBackend stay rustdoc-only with brief README pointers — explicit scope-reduction tension documented). Fork E dropped from v1 (surface-assertion has zero conformance pins today).
+- **Forks pinned:** A1 (feature name `conformance`) / B1 (default OFF — VISION proposed-#20) / C1 (no change to `tempfile`) / D2 (dev-dep-table posture, default flipped from D1 post-plan-critic) / F1 (Sensor walkthrough only; ScoringSource + QueueBackend stay rustdoc-only with brief README pointers — explicit scope-reduction tension documented). Fork E dropped from v1 (surface-assertion has zero conformance pins today).
 - **Plan deviations:** none. Plan v3 absorbed all plan-critic findings before implementation; phases ran clean.
 - **Outcome:** production `cargo build --workspace` is now tokio-free for crates that don't carry tokio for other reasons; CI's `cargo nextest run` continues to exercise every conformance test through `[dev-dependencies]` activation. README adopters get the full Sensor pattern inlined; ScoringSource + QueueBackend walkthroughs reachable via `cargo doc` / docs.rs.
 - **What's NOT done that the original V5-SDK-2 epic called for:** TestRunner conformance suite (deliverable 2). Gated on V5-FOUND-4 → V5-FOUND-3 deferral chain. v5.1 + v6 successor pipelines carry the work.

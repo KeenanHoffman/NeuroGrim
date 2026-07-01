@@ -72,7 +72,7 @@ gated via a feedback ledger.
 
 ---
 
-### S7-ABV-1: Methodology + Schemas
+### S7-ABV-1: Methodology + Schemas — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** S
@@ -101,7 +101,7 @@ schemas. No code.
 
 ---
 
-### S7-ABV-2: Harness MVP
+### S7-ABV-2: Harness MVP — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** M
@@ -156,7 +156,7 @@ agent-behavior-runner/
 
 ---
 
-### S7-ABV-3: Five V1 Scenarios + Gold Samples
+### S7-ABV-3: Five v1 Scenarios + Gold Samples — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** M
@@ -192,7 +192,7 @@ points on every sample.
 
 ---
 
-### S7-ABV-4: Brain Integration
+### S7-ABV-4: Brain Integration — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** S
@@ -222,7 +222,7 @@ CMDB-backed domain.
 
 ---
 
-### S7-ABV-5: Feedback Ledger + Refine Skill
+### S7-ABV-5: Feedback Ledger + Refine Skill — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** S
@@ -252,7 +252,7 @@ it, skills get refined, reruns verify the delta.
 
 ---
 
-### S7-ABV-6: Operator Docs + Worked Example
+### S7-ABV-6: Operator Docs + Worked Example — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** S
@@ -282,7 +282,7 @@ it, skills get refined, reruns verify the delta.
 
 ---
 
-### S7-ABV-7: Ecosystem Wiring + e2e-sim Scenario
+### S7-ABV-7: Ecosystem Wiring + e2e-sim Scenario — SHIPPED
 
 **Status:** **Complete** (2026-04-21)
 **Effort:** S

@@ -49,13 +49,13 @@ concern.
 
 ## What Shipped
 
-| Work item | Artifact |
-|---|---|
-| DP-1 | [docs/cli-mode.md](../../docs/cli-mode.md) — `.mcp.json` opt-out pattern + mode-selection rubric. |
-| DP-2 | [docs/cli-sensory-surface.md](../../docs/cli-sensory-surface.md) — 7-tool MCP↔CLI mapping with args, output shapes, gaps. |
-| DP-3 | [.claude/skills/cli-mode/SKILL.md](../../.claude/skills/cli-mode/SKILL.md) — agent-facing skill routing Bash instead of MCP tool calls. |
-| DP-4 | [neurogrim-cli/tests/context_overhead.rs](../../neurogrim/crates/neurogrim-cli/tests/context_overhead.rs) — `tiktoken-rs`-based benchmark; report at `roadmap/data/b09-bench-2026-04-22.json`. |
-| DP-5 | [CLAUDE.md](../../CLAUDE.md) "Tool Invocation Mode" section + [README.md](../../README.md) mode table. |
+| Work item | Artifact | Status |
+|---|---|---|
+| DP-1 | [docs/cli-mode.md](../../docs/cli-mode.md) — `.mcp.json` opt-out pattern + mode-selection rubric. | SHIPPED |
+| DP-2 | [docs/cli-sensory-surface.md](../../docs/cli-sensory-surface.md) — 7-tool MCP↔CLI mapping with args, output shapes, gaps. | SHIPPED |
+| DP-3 | [.claude/skills/cli-mode/SKILL.md](../../.claude/skills/cli-mode/SKILL.md) — agent-facing skill routing Bash instead of MCP tool calls. | SHIPPED |
+| DP-4 | [neurogrim-cli/tests/context_overhead.rs](../../neurogrim/crates/neurogrim-cli/tests/context_overhead.rs) — `tiktoken-rs`-based benchmark; report at `roadmap/data/b09-bench-2026-04-22.json`. | SHIPPED |
+| DP-5 | [CLAUDE.md](../../CLAUDE.md) "Tool Invocation Mode" section + [README.md](../../README.md) mode table. | SHIPPED |
 
 ## Benchmark Results
 
