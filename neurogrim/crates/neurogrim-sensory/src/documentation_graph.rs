@@ -362,6 +362,11 @@ const SKIPPED_DIR_NAMES: &[&str] = &[
     // valid in the RENDERED project, false-broken only in-tree. Skip the
     // payload dirs so they aren't scored as ecosystem docs.
     "init-templates",
+    // Doc-broker Phase 4 (2026-06-30): any `archived/` dir at any depth holds
+    // retired docs kept for provenance (skill-deprecation convention) — not
+    // live reading-path documentation. Skip so superseded docs don't score as
+    // orphan/drift/unreachable once moved under `archived/`.
+    "archived",
 ];
 
 /// The common documentation noise excluded from the doc-broker walk by
