@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Pilot Protocol — Full Guide
 
 Deep reference for the `pilot-protocol/SKILL.md` skill. The skill carries

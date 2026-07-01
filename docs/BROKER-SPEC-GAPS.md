@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Broker Spec — Discovered Gap Ledger
 
 > **Pre-implementation status.** The 38-BB broker framework spec is feature-complete

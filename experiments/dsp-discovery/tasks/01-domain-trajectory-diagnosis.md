@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Task 01 — Domain Trajectory Diagnosis
 
 > **The premise:** an operator (or higher-level agent) asks a NeuroGrim

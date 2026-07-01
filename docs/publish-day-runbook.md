@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Publish-Day Runbook — NeuroGrim `3.0.0`
 
 The exact sequence of commands the operator runs on publish day.

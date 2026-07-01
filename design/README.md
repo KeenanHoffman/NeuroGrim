@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # NeuroGrim Design System
 
 > **Methodology entry point.** Brand-wide design system shipping with NeuroGrim — the canonical source for visual language across the IDE, dashboard, CLI, and future surfaces.

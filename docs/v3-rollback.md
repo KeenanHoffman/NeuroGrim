@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # v3.0 Per-Primitive Rollback Procedures
 
 **Status:** Authored 2026-04-27 alongside the E-B2-8 release-readiness epic.

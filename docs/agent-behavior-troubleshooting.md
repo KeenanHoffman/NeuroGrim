@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Agent-Behavior Verification — Troubleshooting Playbook
 
 When the `agent-behavior` domain misbehaves, it's almost always one of

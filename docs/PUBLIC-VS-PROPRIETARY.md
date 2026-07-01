@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Public vs. Proprietary — IP Boundary Policy
 
 This document pins where the IP boundary lives for the **broker pattern** documented in

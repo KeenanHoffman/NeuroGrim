@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Broker Harness — Operator Demo Procedure (S*-T MVP)
 
 > **Wave 5.5 deliverable.** End-to-end procedure for running the V0 broker

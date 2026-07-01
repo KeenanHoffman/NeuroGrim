@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Epic: Agent Coordination Bus + Hard Gates — Stage 13
 
 **Stage:** 13

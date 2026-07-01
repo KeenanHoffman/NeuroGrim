@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Test SLO
 
 V5-FOUND-2 (2026-05-03) introduced a per-test wall-time SLO for the NeuroGrim

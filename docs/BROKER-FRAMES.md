@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # NeuroGrim — Broker Frames
 
 **Status:** SPEC-STABLE (Phase 5 closure). The Frame primitive is now BB #35

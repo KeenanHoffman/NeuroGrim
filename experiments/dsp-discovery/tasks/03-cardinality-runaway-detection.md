@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Task 03 — Cardinality Runaway Detection
 
 > **The premise:** *"Are any TSDB series approaching cardinality cliff?

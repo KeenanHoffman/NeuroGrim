@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # supply-chain-vigilance — Layer 2 Deep-Signal Sensors
 
 The `supply-chain-vigilance` sensor is NeuroGrim's Layer 2

@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Broker Framework — Operator Onboarding Guide
 
 > **Status: tiered onboarding (R-X-10 closure, Phase 9).** The framework has 38

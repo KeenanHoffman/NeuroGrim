@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # LSP Brains — The Full Body
 
 Architecture reference diagram for team adoption. Maps every component to its nervous

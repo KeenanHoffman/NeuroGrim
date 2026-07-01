@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # NeuroGrim — Broker Wrapping
 
 How adopters wrap existing capabilities (MCP tools, NeuroGrim sensors) as brokers — and

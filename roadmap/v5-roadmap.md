@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # v5 Roadmap — "Everything is Lego" (adversary-reviewed)
 
 > **🚀 v5 SHIPPABLE 2026-05-04** — All four themes complete or honestly deferred:

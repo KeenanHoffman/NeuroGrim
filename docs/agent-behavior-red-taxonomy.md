@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Agent-Behavior Red-Sample Failure-Mode Taxonomy
 
 **Status:** v1 (S9-ABV-RED-2, 2026-04-21). Additive taxonomy — new

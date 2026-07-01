@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Broker Framework Backlog (38 building blocks)
 
 The implementation backlog for the broker framework specified across

@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # DESIGN-SQL.md — Proposed shape for SQL-DSP v0
 
 > *Pre-prototype design. Subject to change as tasks expose what

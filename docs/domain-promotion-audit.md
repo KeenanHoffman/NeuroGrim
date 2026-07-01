@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Domain Promotion Audit Runbook
 
 **Who this is for:** operators deciding whether to promote an advisory-

@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Epic: B-09 CLI-Mode Sensory Access (Power-User Alternative to MCP)
 
 **Stage:** Mini-epic (not a full Stage — promoted from backlog B-09)

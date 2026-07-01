@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # supply-chain-sca — Native-Rust Software Composition Analysis
 
 The `supply-chain-sca` sensor is NeuroGrim's Layer 1 supply-chain

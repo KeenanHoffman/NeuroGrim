@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Judge Calibration Profiles
 
 **Purpose.** Empirical log of how each judge model + thinking-level

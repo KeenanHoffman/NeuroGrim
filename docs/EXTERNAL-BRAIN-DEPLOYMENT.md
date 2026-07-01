@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # External Brain Reference Deployment (S6-DB-5)
 
 This is the **reference deployment** for running NeuroGrim as an A2A peer

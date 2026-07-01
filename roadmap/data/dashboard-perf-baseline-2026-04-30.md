@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Dashboard performance baseline — 2026-04-30
 
 **Captured immediately after the v4.4 dogfooding session** (items A/B/C/D/E

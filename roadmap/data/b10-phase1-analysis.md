@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # B-10 Phase 1 Analysis — 2026-04-22
 
 > ## ⚠ CORRECTION BANNER (added 2026-04-22, same day) — READ FIRST

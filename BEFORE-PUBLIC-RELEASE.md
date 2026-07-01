@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Before Public Release — Pre-Publish Readiness Checklist
 
 **Status: 🟢 v3.0.0 stable — both master gates closed; remaining gates are operator-controlled.**

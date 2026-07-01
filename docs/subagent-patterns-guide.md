@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Subagent Patterns — Full Guide
 
 This is the deep reference for the `subagent-patterns/SKILL.md` skill. The skill

@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: draft
+anchored-to: none
+front-door: false
+---
+
 # NeuroGrim — Broker Contract
 
 > **Status: DRAFT until 6 months post-launch (R-X-14 closure, Phase 9).** Spec is

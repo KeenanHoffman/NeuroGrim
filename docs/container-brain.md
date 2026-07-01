@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Running NeuroGrim in containers (optional)
 
 NeuroGrim's day-one usage runs your Brain natively on the host —

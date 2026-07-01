@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # NeuroGrim — Cluster Manifest Schema
 
 The canonical schema for cluster manifest TOML files. Where per-broker manifests

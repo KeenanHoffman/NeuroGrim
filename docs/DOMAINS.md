@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Domains
 
 A domain is the unit of concern in LSP Brains. Each domain owns a single aspect of project health,

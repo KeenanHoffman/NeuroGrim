@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Task 04 — Skill Decay With Context
 
 > **The premise:** *"Which skills haven't been invoked in 30 days, and

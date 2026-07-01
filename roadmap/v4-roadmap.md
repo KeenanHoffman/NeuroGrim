@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # v4.x Roadmap — Command Post
 
 **Span:** Stages 12 → 15, releases v4.0 → v4.3, ~7-8 months end-to-end

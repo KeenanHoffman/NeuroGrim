@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Brain Capability Audit — 2026-04-23
 
 **Purpose:** For each Brain capability currently shipped in NeuroGrim +

@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # hello-brain — minimal NeuroGrim example
 
 A tiny project with a pre-configured Brain registry, intended for

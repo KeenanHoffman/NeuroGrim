@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Invocation Ledger — Setup Guide
 
 The invocation ledger captures every `Skill` tool call in a Claude Code

@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # CLI Sensory Surface — MCP Tool ↔ CLI Subcommand Mapping
 
 This document lets an agent reproduce any NeuroGrim MCP tool call via

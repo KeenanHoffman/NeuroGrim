@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # Epic: Prescriptive Autonomy
 
 **Stage:** 3 — Prescriptive Autonomy (promoted from original Stage 4)

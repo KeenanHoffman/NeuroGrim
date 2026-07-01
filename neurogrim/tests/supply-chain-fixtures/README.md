@@ -1,3 +1,11 @@
+---
+doc-version: 1.0
+date: 2026-06-30
+status: current
+anchored-to: none
+front-door: false
+---
+
 # supply-chain-fixtures — Calibration Fixture Library (E-SC-8)
 
 This directory holds the **calibration fixtures** for NeuroGrim's
